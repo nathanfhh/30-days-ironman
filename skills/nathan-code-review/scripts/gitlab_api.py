@@ -39,7 +39,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -188,6 +188,64 @@ def _endpoint_of(url: str) -> str:
     return urllib.parse.urlsplit(url).path or url
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect automatically.
+
+    Two independent reasons, either one sufficient.
+
+    A 3xx from any endpoint this tool calls means something is wrong, and
+    following it destroys the evidence: the classic case is an API call sent to
+    a web path, which redirects to /users/sign_in, so the error you finally see
+    carries a status from the sign-in page while your error message still names
+    the URL you asked for. Debugging that costs far more than the redirect saves.
+
+    And urllib re-sends every request header to the redirect target — it strips
+    only content-length and content-type, whatever the target host is (see
+    HTTPRedirectHandler.redirect_request in the stdlib). Following a redirect
+    would therefore carry PRIVATE-TOKEN somewhere we never chose to send it.
+    requests is only marginally better: it drops Authorization across hosts, but
+    a custom header like PRIVATE-TOKEN is not covered there either.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def _redirect_target_of(location: str) -> str:
+    """Describe a redirect target without echoing its query string.
+
+    Unlike _endpoint_of, the host is kept: whether the redirect leaves this
+    GitLab instance is the single most useful thing about it. The query string
+    is dropped for the same reason _endpoint_of drops it — a Location is
+    server-controlled, and an error message is the one place a credential in a
+    URL would get copied into a log or a bug report.
+    """
+    parts = urllib.parse.urlsplit(location)
+    if not parts.netloc:
+        return parts.path or location
+    return f"{parts.scheme}://{parts.netloc}{parts.path}"
+
+
+def _describe_redirect(status: int, url: str, location: str | None) -> str:
+    target = _redirect_target_of(location) if location else "（回應未附 Location）"
+    message = (
+        f"GitLab 回應 HTTP {status} 轉址至 {target}（endpoint: {_endpoint_of(url)}）。"
+        "本工具不自動跟隨轉址，以免把 PRIVATE-TOKEN 送到非預期的位址、"
+        "並讓錯誤指向真正的來源。"
+    )
+    if location and "sign_in" in location:
+        message += (
+            "\n轉址目標是登入頁，代表這個請求被當成未登入處理——token 沒有被讀到，"
+            "而不是權限不足。最常見的原因是把 API 呼叫送到了 web 路徑："
+            "PRIVATE-TOKEN 只有 /api/v4/ 底下的端點認得，"
+            "web 路徑（例如 /{group}/{project}/uploads/...）只認 session cookie。"
+        )
+    return message
+
+
 def _describe_http_error(status: int, url: str) -> str:
     endpoint = _endpoint_of(url)
     if status in (401, 403):
@@ -236,7 +294,7 @@ def http_request(
     for attempt in range(1, attempts + 1):
         request = urllib.request.Request(url, data=data, headers=headers, method=method.upper())
         try:
-            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with _OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                 raw = response.read()
                 response_headers = {k.lower(): v for k, v in response.headers.items()}
                 if not accept_json:
@@ -250,6 +308,12 @@ def http_request(
                         f"GitLab 回應不是合法的 JSON（endpoint: {_endpoint_of(url)}）：{exc}"
                     ) from exc
         except urllib.error.HTTPError as exc:
+            if 300 <= exc.code < 400:
+                # _NoRedirect turns every 3xx into an HTTPError. Never retried:
+                # a redirect is deterministic, so a second attempt returns it again.
+                raise ApiError(
+                    _describe_redirect(exc.code, url, exc.headers.get("Location"))
+                ) from exc
             message = _describe_http_error(exc.code, url)
             if is_idempotent and exc.code in RETRYABLE_STATUSES and attempt < attempts:
                 last_error = ApiError(message)
@@ -331,7 +395,26 @@ def fetch_mr(target: dict[str, Any], token: str) -> dict[str, Any]:
 
 
 def extract_attachments(description: str | None, target: dict[str, Any]) -> list[dict[str, str]]:
-    """Find [name](/uploads/{secret}/{filename}) links in an MR description."""
+    """Find [name](/uploads/{secret}/{filename}) links in an MR description.
+
+    The URL built here is the **API** one:
+
+        {api_base}/projects/{project_path_encoded}/uploads/{secret}/{filename}
+
+    not the browser one (https://{host}/{project_path}/uploads/...), and the
+    difference is not cosmetic. GitLab has two front doors with two separate
+    credentials: /api/v4/* is the Grape API and honours PRIVATE-TOKEN, while
+    every other path is the Rails web app and authenticates with the
+    _gitlab_session cookie. The web app does not know what PRIVATE-TOKEN is —
+    it ignores the header, treats the request as anonymous, and 302s to
+    /users/sign_in. What comes back after that redirect is either a 404 (if the
+    request carried Accept: application/json, since the sign-in page has no
+    JSON representation) or, far worse, 200 with the sign-in page's HTML, which
+    a downloader will happily save under the attachment's filename.
+
+    The filename keeps whatever percent-encoding the description had; CJK
+    attachment names arrive already encoded and must not be decoded here.
+    """
     results: list[dict[str, str]] = []
     seen: set[str] = set()
     for match in ATTACHMENT_PATTERN.finditer(description or ""):
@@ -343,10 +426,32 @@ def extract_attachments(description: str | None, target: dict[str, Any]) -> list
         results.append(
             {
                 "name": name,
-                "url": f"https://{target['host']}/{target['project_path']}{relative}",
+                "url": f"{target['api_base']}/projects/{target['project_path_encoded']}{relative}",
             }
         )
     return results
+
+
+def reject_html_error_page(raw: bytes, content_type: str, filename: str) -> None:
+    """Refuse to save an HTML page under an attachment's name.
+
+    The failure this guards against does not look like a failure. An auth
+    redirect ends at a sign-in page that answers 200 with a body, so a
+    downloader that writes whatever it received produces a file with the right
+    name and the wrong content, and nothing downstream can tell: the review
+    then reads `<!DOCTYPE html>` where it expected a requirement spec.
+
+    Only an attachment that is itself HTML may legitimately look like this.
+    """
+    if filename.lower().endswith((".html", ".htm")):
+        return
+    head = raw[:512].lstrip().lower()
+    looks_like_page = head.startswith((b"<!doctype html", b"<html"))
+    if "text/html" in content_type.lower() or looks_like_page:
+        raise ApiError(
+            "下載回來的是一個 HTML 頁面而不是附件本身（通常是 GitLab 的登入頁）。"
+            "檔案未寫入磁碟，以免把錯誤的內容存成看起來正確的檔名。"
+        )
 
 
 def safe_filename(name: str, fallback: str) -> str:
@@ -376,7 +481,7 @@ def parse_timestamp(value: str | None) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -521,7 +626,8 @@ def cmd_attachments(args: argparse.Namespace) -> int:
         }
         try:
             # accept_json=False: uploads are arbitrary binary (images, PDFs, md).
-            raw, _ = http_request(url, token, method="GET", accept_json=False)
+            raw, response_headers = http_request(url, token, method="GET", accept_json=False)
+            reject_html_error_page(raw, response_headers.get("content-type", ""), filename)
             local_path.write_bytes(raw)
         except (ApiError, OSError) as exc:
             # One failed attachment must not abort the review; record and continue.

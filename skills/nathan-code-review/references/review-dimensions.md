@@ -11,6 +11,7 @@ they are not the whole of what a review looks at.
 ## Contents
 
 - [Before the checklist: critical operation enumeration](#before-the-checklist-critical-operation-enumeration)
+- [The requirement document is also under review](#the-requirement-document-is-also-under-review)
 - [Is PHI in scope?](#is-phi-in-scope)
 - [A — 風格 / Style](#a--風格--style)
 - [B — 簡潔 / Simplicity](#b--簡潔--simplicity)
@@ -49,6 +50,32 @@ list. `grep` is what settles it: before asserting "all" or "none", grep. See
 An operation where some paths are guarded and others are not is a finding, and
 the unguarded path is the evidence.
 
+## The requirement document is also under review
+
+When the merge request carries a specification — an attachment, a linked design
+doc, a decision log — you read it to judge whether the implementation covers what
+was asked for. That is one direction. The other direction is the document itself:
+**is it consistent with itself?**
+
+Look for a section that still describes a mechanism a later section replaced; a
+decision log whose entries contradict the prose they point at; a reference to a
+constant or a flag that no longer exists in the code. These appear naturally in a
+document that has been revised across several review rounds, and they survive
+precisely because everyone checks the document against the code and nobody checks
+it against itself.
+
+The trap is that a correct implementation makes the contradiction feel harmless.
+It is not. Once this merges, the document is the ground truth the next maintainer
+reads — and if they open the stale section first, they will change working code
+to match a design that was already abandoned. Reconciling the two versions in
+your head and moving on is exactly the failure mode: you resolved it for
+yourself, not for them.
+
+Severity follows what happens to someone who acts on the wrong section: usually a
+**Nit**, and a **Suggestion** when the contradiction covers a safety, security,
+or data-integrity rule. The fix is to name both places and say which one is
+current.
+
 ## Is PHI in scope?
 
 Several rules below escalate when patient-identifiable data is in reach. Decide
@@ -73,15 +100,27 @@ than guess whether you considered it.
 3. **`pathlib` over `os`** for path manipulation.
 4. **Names match behaviour.** A function whose name promises less, more, or
    other than what it does is the defect, not the name.
-5. **Booleans read positively.** `enabled`, not `disabled` — double negatives at
+5. **A literal that looks like a typo has to defend itself.** When a constant's
+   value differs from its own name, or from the spelling of a neighbouring
+   constant, by only a character or two — `SPECIAL_SAT_VALS_PAR_ID =
+   "MO08SpecialSetVals"` sitting next to `SAT_VALS_PAR_ID = "MO08SatVals"` — the
+   next maintainer will read it as a slip and helpfully correct it. Values
+   dictated by something outside this codebase (a `par_id`, an external API's
+   field name, a vendor's code) cannot survive that. They need a comment saying
+   this is not a mistake, and where the value came from.
+
+   Missing that comment is a **Nit**. It is a **Suggestion** when correcting the
+   value would fail silently rather than loudly — a lookup that quietly returns
+   nothing is far worse here than one that raises.
+6. **Booleans read positively.** `enabled`, not `disabled` — double negatives at
    call sites are where the misreadings happen.
-6. **A changed signature with a stale docstring or type hint is Critical.** The
+7. **A changed signature with a stale docstring or type hint is Critical.** The
    documentation now actively lies to the next caller, which is worse than
    having none.
-7. **Readability threshold.** If you had to read a block several times to
+8. **Readability threshold.** If you had to read a block several times to
    understand it, that is the finding: ask for a comment explaining *why*, not a
    rewrite.
-8. **Comments that restate the code** should go. They cost maintenance and drift
+9. **Comments that restate the code** should go. They cost maintenance and drift
    out of sync.
 
 ## B — 簡潔 / Simplicity
