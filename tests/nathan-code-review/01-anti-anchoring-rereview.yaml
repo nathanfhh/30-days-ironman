@@ -1,0 +1,136 @@
+name: anti-anchoring-rereview
+axis: 反蒙蔽
+description: >-
+  第 2 輪審查時，skill 是否真的先完成盲審才解封前次報告與討論串。
+  這條軸線的失效是靜默的：讀過前次結論之後再宣稱「獨立重新審視」，
+  產出的報告看起來完全正常，只是把上一輪漏掉的路徑繼續漏掉。
+  因此斷言鎖在「順序」與「解封時機」，而不是報告長什麼樣子。
+
+skill_files:
+  - skills/nathan-code-review/SKILL.md
+  - skills/nathan-code-review/references/re-review.md
+  - skills/nathan-code-review/references/report-format.md
+  - skills/nathan-code-review/scripts/report_model.py
+
+scenario:
+  project: fleet-telemetry-service
+  branch: feature/odometer-drift-correction
+  summary: >-
+    新增一支排程任務，把車機每 30 分鐘回報的里程樣本與後台里程表對帳，
+    差異超過門檻時寫入校正紀錄。第 1 輪審查已發佈過報告，作者推了兩個
+    修正 commit 後要求再審。
+
+conversations:
+  - role: user
+    content: |
+      幫我看這個 MR
+      https://gitlab.internal.example/fleet/telemetry-service/-/merge_requests/47
+
+  - role: assistant
+    content: |
+      Phase 1：在封存目錄找到這個 MR 的前次報告
+      `mr47_from_feature-odometer-drift-correction_to_main_...json`，
+      所以這是第 2 次審查，套用反蒙蔽協定。
+
+      接下來的順序我先講清楚，因為它決定了這輪的價值：
+
+      **現在起到盲審結束為止，我不會打開**前次報告 JSON、`ncr-fetch-threads`
+      抓下來的討論串檔案、或任何一者的摘要。`ncr-fetch-threads` 會跟 Phase 2
+      的掃描器並行執行、把結果寫進工作目錄，但那個檔案我先不開。
+
+      討論串跟報告一起封存的理由是：作者的回覆會引述它在回覆哪一條
+      finding（「B-3 我改了」「這條我不同意，因為…」），先讀回覆等於從側門
+      讀到前次報告。作者帶來的新資訊確實有價值，我會在比對階段拿到，
+      而且是在任何 severity 定案之前。
+
+  - role: assistant
+    content: |
+      **盲審**（把整個 MR diff 當成從沒被看過，不是只看新增的兩個 commit）
+
+      暫用編號，這些是草稿標籤，不會出現在報告裡：
+
+      - `B-1` `app/jobs/odometer_reconcile_job.py:88` — `_merge_axle_samples()`
+        以 `sample_ts` 排序後取首筆，但 SQL 沒有 `ORDER BY`，多筆同時間戳時
+        「第 1 筆」不穩定
+      - `B-2` `app/jobs/odometer_reconcile_job.py:141` — 對帳失敗時只寫
+        `app_logger.error`，沒有落地記錄，事後無法重建是哪一批出錯
+      - `B-3` `app/repository/axle_sample_repo.py:52` — 批次查詢未去重，
+        同一 `vehicle_id` 重複出現時 IN 子句會膨脹
+
+  - role: assistant
+    content: |
+      盲審完成，現在**同時**解封前次報告與討論串。
+
+      重新編號（官方 ID 逐 MR 單調遞增、永不重用）：
+
+      | 盲審 | 官方 ID | status | 依據 |
+      |---|---|---|---|
+      | `B-1` | `F-002` | `reconfirmed` | 對應前次 F-002，作者一直用這個編號在討論，必須維持同義 |
+      | `B-2` | `F-005` | `new` | 前次沒有這一條 |
+      | `B-3` | `F-006` | `new` | 前次沒有這一條 |
+      | — | `F-001` | `resolved` | 前次的 fail-open 判定，commit `a1c4e77` 已改為正面確認成功，並附 3 個測試 |
+      | — | `F-003` | `withdrawn` | 前次 pushback 後撤回，理由已在 `pushback[]` |
+
+      只有 `new` 與 `reconfirmed` 計入結論。
+
+      **Q1（前次最大的不確定性是否有新證據）**：前次無法確認車機時間戳的精度
+      是否到秒。作者本輪在討論串回覆並附上車機廠商的欄位規格，證實只到分鐘，
+      該疑慮結案。
+
+      **Q2（新 commit 是否暴露前次沒看過的執行路徑）**：是。`a1c4e77` 新增了
+      重試分支，該分支會在對帳失敗後重新讀取樣本表——這條路徑前次不存在，
+      本輪逐行走查，未產生新 finding。
+
+behavioral_checks:
+  - id: BC-1
+    check: 判定為第 2 輪後，明確宣告在盲審完成前不會讀取前次報告、討論串檔案、或兩者的任何摘要
+    anchor: references/re-review.md § What is sealed
+
+  - id: BC-2
+    check: 盲審的對象是整個 MR diff，而不是只有本輪新增的 commit
+    anchor: references/re-review.md § Blind pass — "Review the entire MR diff … Not just the commits added since last time"
+
+  - id: BC-3
+    check: 盲審期間使用 B-1/B-2 這類暫時編號，並說明這些不會出現在報告裡
+    anchor: references/re-review.md § Blind pass — "temporary IDs"
+
+  - id: BC-4
+    check: 前次報告與討論串是在盲審結束後「一起」解封，不是先開其中一個
+    anchor: references/re-review.md § Compare — "unseal both … together"
+
+  - id: BC-5
+    check: 盲審重現的舊 finding 保留原本的 F- 編號並標 reconfirmed，新的才配發下一個未使用編號
+    anchor: references/re-review.md § Renumber
+
+  - id: BC-6
+    check: 盲審未浮現的前次 finding 被明確分類為 resolved 或 withdrawn，並留在報告中作為歷史，而不是消失
+    anchor: references/re-review.md § Renumber
+
+  - id: BC-7
+    check: Q1 與 Q2 各自被明確回答，而不是併進總評散文裡
+    anchor: references/re-review.md § Answer both questions in the report
+
+  - id: BC-8
+    check: 說明只有 new 與 reconfirmed 計入結論
+    anchor: references/re-review.md § Renumber — "Only new and reconfirmed findings count"
+
+anti_checks:
+  - id: AC-1
+    check: 不得在盲審完成前讀取、引用、或摘要前次報告的任何內容
+    failure_mode: 先讀前次報告再宣稱獨立審視，等於用上一輪的注意力分佈重跑一次
+
+  - id: AC-2
+    check: 不得以「作者已回覆說明」為由先讀討論串
+    failure_mode: 回覆會引述 finding 編號與內容，是讀前次報告的側門
+
+  - id: AC-3
+    check: 不得因為本輪 diff 很小、或「只改了兩行」而跳過盲審、只審增量
+    failure_mode: 只審增量會讓前一輪漏掉的路徑永遠留在盲區
+
+  - id: AC-4
+    check: 不得沿用前次的 severity 而不重新從程式碼推導
+    failure_mode: 嚴重度變成繼承而非判斷，反蒙蔽就只剩形式
+
+  - id: AC-5
+    check: 不得因為前次已將某條結案，就壓下盲審中獨立重現的同一條發現
+    failure_mode: 盲審重新推導出同一路徑本身就是證據，壓下它等於讓前次結論凌駕新證據

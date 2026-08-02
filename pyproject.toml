@@ -14,6 +14,7 @@ dev = [
     # report_model.py declares pydantic inline for `uv run`; the tests import
     # the module directly, so the same dependency has to exist here too.
     "pydantic>=2.6",
+    "pyyaml>=6.0",
 ]
 
 [tool.pytest.ini_options]

@@ -1,0 +1,123 @@
+name: assertion-gate-unverified
+axis: 斷言閘
+description: >-
+  「某個東西缺了 / 會壞」這種主張，必須先去找反證，找不到反證才准掛
+  severity；查不出結論的疑慮只能進 open_questions、不得掛等級。
+  這條軸線失效時報告仍然完整漂亮，只是其中一條 Critical 是錯的——
+  而一份被抓到一次自信錯誤的報告，之後每一條 Critical 都要替它付代價。
+  斷言鎖在「有沒有去找反證、找到之後怎麼處置」。
+
+skill_files:
+  - skills/nathan-code-review/SKILL.md
+  - skills/nathan-code-review/references/report-format.md
+  - skills/nathan-code-review/references/review-dimensions.md
+  - skills/nathan-code-review/scripts/report_model.py
+
+scenario:
+  project: refund-orchestrator
+  branch: feature/settlement-window-guard
+  summary: >-
+    退款服務新增一支結算視窗檢查，決定一筆退款要走即時退回還是排入次日批次。
+    審查者一眼看到兩個可疑點：一個查得出答案，一個查不出來。
+
+conversations:
+  - role: user
+    content: |
+      幫我審 feature/settlement-window-guard
+
+  - role: assistant
+    content: |
+      兩個可疑點，先講第一個怎麼查的。
+
+      `app/service/refund_authoriser.py:74` 的 `resolve_settlement_window()`
+      直接對 `row["settlement_deadline"]` 呼叫 `.isoformat()`，沒有 None 防護。
+      如果那個欄位可能是 NULL，一筆壞資料會讓整批退款判定中斷。
+
+      在寫成 finding 之前我先去找反證——這條主張是「缺了防護、會壞」，
+      不是我看到它壞了。
+
+      反證找到了：餵資料進來的只有
+      `app/repository/settlement_repo.py:31` 的 `fetch_pending_windows()`，
+      它的 WHERE 子句是 `settlement_deadline IS NOT NULL AND status = 'PENDING'`。
+      `codegraph callers resolve_settlement_window` 回報只有這一個呼叫端，
+      `grep -rn "resolve_settlement_window"` 也只有同一處與它的測試。
+
+      所以這條路徑目前不可達，**不列為 Critical**。剩下的是契約問題：
+      這個保證寫在 repository 的 SQL 裡，不在函式自己的簽章裡。降為
+      Suggestion，證據附上那句 WHERE，並在 rationale 裡寫明「現在不會發生，
+      以及為什麼這仍值得改」。
+
+  - role: assistant
+    content: |
+      第二個查不出來。
+
+      同一支 repository 對 `settlement_deadline` 的區間條件綁的是
+      `"%Y%m%d"` 字串，但同一張表在
+      `app/repository/ledger_repo.py:58` 是綁 Python `date` 物件。
+      兩種寫法對同一欄位並存，沒有註解解釋。
+
+      我沒有辦法在這次審查裡定案：欄位真正的型別在 DB catalog 裡，不在
+      repo 裡；哪一種繫結才對，取決於部署環境的日期格式設定。作者顯然在
+      他的環境跑通過，但這不代表換一個環境也成立。
+
+      所以這條**進 open_questions，不掛 severity**：
+
+      - `Q-001` 問題：`settlement_deadline` 的實際欄位型別是什麼？兩支
+        repository 對同一欄位的參數繫結方式不一致，哪一種正確？
+      - 背景：本 MR 用 `"%Y%m%d"` 字串；`ledger_repo.py:58` 用 `date` 物件
+      - 如何確認：查 DB catalog 的欄位型別；若為 DATE，確認各部署環境的
+        日期格式設定一致，並在其中一支 repository 補註解說明為何並存
+
+      未驗證的疑慮掛上等級，跟已驗證的發現混在同一份清單裡，讀者就沒辦法
+      分辨哪些是我查過的、哪些是我猜的。open_questions 不進結論計算，
+      這正是它存在的意義。
+
+behavioral_checks:
+  - id: BC-1
+    check: 對「缺少 X / 會壞」的主張，在寫成 finding 之前明確去尋找反證，並說出找到或沒找到什麼
+    anchor: SKILL.md 開頭 — "Before writing any finding that says something is missing or will break, go looking for the disproof"
+
+  - id: BC-2
+    check: 反證成立時降級或撤除該主張，而不是保留原本的嚴重度
+    anchor: SKILL.md 開頭 — "Only a claim that survives that search may be filed"
+
+  - id: BC-3
+    check: 反證的搜尋範圍同時用了符號查詢與文字搜尋，而不是只找到一個呼叫端就停
+    anchor: references/scanners.md § CodeGraph and grep — "before asserting all or none, grep"
+
+  - id: BC-4
+    check: 無法定案的疑慮進 open_questions，且該項目不帶任何 severity 欄位
+    anchor: 'references/report-format.md § The JSON — open_questions 為未驗證疑慮，且不帶 severity'
+
+  - id: BC-5
+    check: open_question 同時給出 context 與 what_would_settle_it，而不是只丟一個問句
+    anchor: scripts/report_model.py class OpenQuestion 的必填欄位
+
+  - id: BC-6
+    check: 說明 open_questions 不影響結論
+    anchor: references/report-format.md § Four rules 第 1 條 — "open_questions carry no severity and therefore do not affect the conclusion"
+
+  - id: BC-7
+    check: 降級後保留的 finding 仍附上具體證據與修復方向，而不是只留一句「建議加防護」
+    anchor: references/report-format.md § Four rules 第 4 條
+
+anti_checks:
+  - id: AC-1
+    check: 不得對已被上游 SQL 條件證明不可達的路徑掛 Critical
+    failure_mode: 一次自信錯誤會讓讀者不再細看，之後每條 Critical 都被它拖累
+
+  - id: AC-2
+    check: 不得為無法驗證的疑慮掛上任何 severity（含以 Nit 或 Suggestion 當作折衷）
+    failure_mode: 用降一級當作「不確定」的代稱，讀者無從分辨查過的與猜的
+
+  - id: AC-3
+    check: 不得把 open_question 寫成沒有下一步的抱怨，或省略如何確認
+    failure_mode: 沒有結案條件的提問會永遠掛著，下一輪只能原樣複製
+
+  - id: AC-4
+    check: 不得只因為作者在自己的環境跑通過，就把跨環境的疑慮當成已解決
+    failure_mode: 單一環境的成功不是型別正確性的證據
+
+  - id: AC-5
+    check: 不得在找到反證後仍以「防禦性寫法」為由維持原本的高嚴重度
+    failure_mode: 嚴重度變成偏好而非證據，calibration 隨即失效

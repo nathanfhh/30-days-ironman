@@ -49,6 +49,21 @@ uv run pytest tests/test_gitlab_api.py -v
 
 寫新測試時：`Reply(status=..., body=..., headers=..., delay=...)` 排隊給 stub server，`stub_server.requests` 拿回實際收到的請求。要測重試就掛 `fast_retries` fixture，否則真的 backoff 會讓每個測試多花好幾秒。
 
+## 行為回歸測試（「跑 eval」）
+
+`uv run pytest` 測腳本；`tests/nathan-code-review/` 測**文件**。skill 是散文，改一段話會讓三個檔案外的行為悄悄消失，而單元測試看不到——程式碼一行都沒動。
+
+**當使用者說「跑 eval」時**：
+
+1. 收集 `tests/nathan-code-review/*.yaml`
+2. **每個 case 平行派出一個 subagent**（單一訊息內多個 Agent 呼叫），prompt 用 `tests/nathan-code-review/judge.md` 的內容，並附上該 case 的 YAML
+3. judge 讀該 case 的 `skill_files`、讀 golden conversation，逐條判定 `behavioral_checks` 與 `anti_checks`，每條附一句理由
+4. 匯整成總表（case × result × checks 通過數）＋失敗明細＋`drift_notes`
+
+judge 一定要是 subagent，不能由主 agent 自己判——剛改完 skill 的人腦中有作者意圖，會把「我知道我想講什麼」誤讀成「文件講清楚了」，而那正是要測的東西。
+
+**改 skill 前先跑一次當 baseline，改完重跑；baseline 過的 check 失守就 revert。** 完整的 gate 規則、豁免條件與維護慣例見 `tests/nathan-code-review/README.md`。
+
 ## 離線是設計前提，不是降級情境
 
 執行環境可能沒有網路，所以這是硬性規則而不是「盡量」：
