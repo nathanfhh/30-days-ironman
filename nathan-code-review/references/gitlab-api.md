@@ -1,0 +1,128 @@
+# GitLab API
+
+`scripts/gitlab_api.py` implements everything here. Prefer calling it over
+composing requests by hand — several of the details below are ones a language
+model reliably gets wrong.
+
+```bash
+uv run scripts/gitlab_api.py parse       <mr-url>
+uv run scripts/gitlab_api.py whoami      --host <host>
+uv run scripts/gitlab_api.py mr          <mr-url>
+uv run scripts/gitlab_api.py attachments <mr-url> --dest <dir>
+uv run scripts/gitlab_api.py discussions <mr-url> [--since <iso8601>]
+uv run scripts/gitlab_api.py discussion  <mr-url> --id <discussion_id>
+uv run scripts/gitlab_api.py post-report <mr-url> --body-file <markdown>
+uv run scripts/gitlab_api.py reply       <mr-url> --id <discussion_id> --body-file <markdown>
+```
+
+## Host, base URL, and auth
+
+The host comes from the merge request URL itself, so there is no instance to
+configure: `baseUrl = https://{host}/api/v4`.
+
+The token is read from `GITLAB_TOKEN`, falling back to `NCR_GITLAB_TOKEN`, and
+sent as a `PRIVATE-TOKEN` header. If neither is set, stop and tell the user in
+zh-TW which variable to set and that it needs `api` scope. Do not attempt to
+continue in a degraded mode — every step of `mr` mode depends on it.
+
+The token is never written to a file, never echoed, and never appears in the
+report.
+
+## Parsing the URL
+
+```
+https://gitlab.example.com/his/abc/abc-backend/-/merge_requests/61
+        └──── host ─────┘ └── project path ──┘                └iid┘
+```
+
+`project_path` must be percent-encoded before it goes into a URL path. Encode it
+with `urllib.parse.quote(path, safe="")` — hand-substituting `/` for `%2F` is
+where this goes wrong, because it silently leaves other characters unescaped.
+Alternatively use the numeric project id from the MR response.
+
+**`id` versus `iid`.** Every merge request has two numbers. `id` is unique across
+the whole instance — a large number that means nothing to a human. `iid` is the
+per-project number starting from 1, and it is the one at the end of the URL. The
+endpoints below all take `iid`.
+
+## Endpoints
+
+### Confirm the token, and who you are
+
+`GET /user`
+
+Run before anything else. Establishes that the token works and which account
+would be attributed for any comment posted later.
+
+### Fetch the merge request
+
+`GET /projects/:id/merge_requests/:merge_request_iid`
+
+Fields taken from the response: `title`, `description`, `source_branch`,
+`target_branch`, `web_url`, `project_id`.
+
+The diff is **not** taken from the API. It is computed from the clone — see
+`workspace-paths.md`.
+
+### Download attachments
+
+`GET /projects/:id/uploads/:secret/:filename`
+
+Attachments in the MR description appear as `[name](/uploads/{secret}/{filename})`.
+They are usually the requirement spec or screenshots, which makes them the
+material for judging whether the implementation actually covers what was asked
+for — often the only place that question can be answered at all.
+
+Download each one and handle it by extension: `.md` / `.txt` read against the
+diff for requirement coverage, images viewed. A single attachment that fails to
+download is noted in the report and the review continues; it is not fatal.
+
+### Discussions
+
+`GET  /projects/:id/merge_requests/:merge_request_iid/discussions`
+`POST /projects/:id/merge_requests/:merge_request_iid/discussions`
+`GET  /projects/:id/merge_requests/:merge_request_iid/discussions/:discussion_id`
+`POST /projects/:id/merge_requests/:merge_request_iid/discussions/:discussion_id/notes`
+
+The report is published as a **discussion** — a thread that can be replied to and
+resolved. The response gives back a `discussion_id`, and the root note gives a
+`created_at`; both are written into the report's `publication` block, and they
+are the two handles the next round needs: the index for retrieving the author's
+replies, and the cutoff time T.
+
+On a re-review, list the discussions and take replies made after T. When the
+`discussion_id` is already known, fetching the single discussion is the cheaper
+call — it returns that thread's replies instead of everything on the MR.
+
+Replying to the author uses the last endpoint.
+
+### Individual notes
+
+`GET  /projects/:id/merge_requests/:merge_request_iid/notes`
+`POST /projects/:id/merge_requests/:merge_request_iid/notes`
+
+For one-off remarks. **The report is never published this way** — an individual
+note cannot be replied to as a thread or marked resolved, which is exactly what
+the report needs to support.
+
+### Notes versus discussions
+
+A note is the atom; a discussion is the container. Every note lives inside some
+discussion, without exception — including the system-generated ones ("added 1
+commit"). What differs is the container:
+
+- **Individual note discussion** — holds exactly one note. The UI's "Comment"
+  button. Cannot be threaded, cannot be resolved.
+- **Thread** — holds a root note plus replies. The UI's "Start thread". Can be
+  replied to and resolved. A variant carries a `position` anchoring it to a
+  specific line of the diff; that is the inline comment familiar from code
+  review.
+
+## Writes require a human
+
+The heaviest rule in this skill. Every outward-facing, irreversible action —
+posting the report, replying to an author, any `POST` — goes through the user
+first. Show the draft in the conversation, wait for approval, then send.
+
+You never call a write endpoint on your own initiative, and approval for one post
+is not approval for the next one.

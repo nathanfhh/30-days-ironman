@@ -1,0 +1,3 @@
+# macOS Finder metadata — this directory is shared with a macOS host, so these
+# reappear on their own.
+.DS_Store

@@ -1,0 +1,4 @@
+# Tooling caches — created by running ruff/ty against scripts/, never part of the skill.
+.ruff_cache/
+__pycache__/
+*.pyc
