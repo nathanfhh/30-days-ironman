@@ -49,6 +49,20 @@ uv run pytest tests/test_gitlab_api.py -v
 
 寫新測試時：`Reply(status=..., body=..., headers=..., delay=...)` 排隊給 stub server，`stub_server.requests` 拿回實際收到的請求。要測重試就掛 `fast_retries` fixture，否則真的 backoff 會讓每個測試多花好幾秒。
 
+## 離線是設計前提，不是降級情境
+
+執行環境可能沒有網路，所以這是硬性規則而不是「盡量」：
+
+- **測試不得連外。** 所有 HTTP 走 `tests/conftest.py` 的 in-process stub（綁 `127.0.0.1`）；`gitlab.example.com` 之類的字串只是 fixture，從來沒被撥出去。掃描相關的測試用丟進 `PATH` 前面的假執行檔餵固定輸出，所以連 ruff/ty/oxlint 有沒有裝都不影響。驗證方式：
+
+  ```bash
+  uv run --offline pytest
+  ```
+
+- **工具不得為了掃描安裝任何東西。** 特別是不要為了讓 `ty` 解析第三方型別而去 `uv sync`：那會執行受審分支控制的程式碼（PEP 517 build backend 由對方的 `pyproject.toml` 指定），而且需要網路。`ty` 的 `bare` 模式是正常模式，報告如實揭露即可，細節見 `references/scanners.md`。
+
+唯一需要網路的是**開發環境初始化**（`uv sync` 裝 pytest/pydantic）。`uv.lock` 有進版控，之後就能 `uv run --offline`。
+
 ## Lint
 
 ```bash

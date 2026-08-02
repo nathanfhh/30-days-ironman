@@ -31,6 +31,32 @@ run.
 files it produces phantom errors about imports it cannot see. So the scan is
 project-wide and the *attribution* is what narrows it — not the scan.
 
+## ty's inference mode, and the one thing you must not do
+
+The digest reports `sub.ty.mode`:
+
+- **`resolved`** — the reviewed repository already had a virtualenv, so
+  third-party types were available.
+- **`bare`** — it did not. Inference covered the project's own code and the
+  standard library, and nothing else. Every third-party import is unresolvable,
+  so `unresolved-import` fires once per import across the whole project; the
+  runner sets those aside into `sub.ty.suppressed` and they are **not**
+  findings. Glance at them for an import path that looks project-internal —
+  that one would be real — and forward nothing else from them.
+
+**Do not install anything to improve this.** Not `uv sync`, not `pip install`,
+not a virtualenv you create yourself. Installing the reviewed project's
+dependencies executes code the merge request's author controls, because a
+source distribution builds through a PEP 517 backend named in the branch's own
+`pyproject.toml`. It also assumes network access this environment may not have.
+Setting an environment up is the operator's decision, taken outside a review.
+
+`bare` is the normal mode, not a broken one — it still catches the type errors
+that matter here, which are the ones in the changed code's own contracts. What
+it cannot see is type errors at third-party call sites. **Say which mode ran**,
+either way; a scan that could not resolve types and does not admit it reads as
+a clean run.
+
 ## Attribution
 
 Three buckets:
@@ -56,5 +82,6 @@ Does `git log` show it as long-standing? Say which evidence you used.
 - bucket 2: the same, plus the causal link to the change
 - bucket 3: counts per tool, one summary line
 - per-tool status, with reasons for anything not run
+- `ty`'s mode, and how many `unresolved-import` diagnostics were set aside
 
 Do not assign Critical / Suggestion / Nit.

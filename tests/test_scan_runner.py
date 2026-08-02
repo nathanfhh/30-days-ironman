@@ -1,0 +1,241 @@
+"""Tests for skills/nathan-code-review/scripts/scan_runner.py.
+
+The linters are replaced with fake executables placed ahead of everything on
+PATH. That keeps the suite offline and independent of whether ruff/ty/oxlint
+happen to be installed, and — more usefully — lets a test produce the outputs
+that actually caused trouble: oxlint's non-JSON "nothing to lint" line, and a
+ty run in which every third-party import is unresolvable.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import stat
+from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture
+def fake_tool(tmp_path, monkeypatch):
+    """Install a fake executable that prints fixed output and exits with a code."""
+    bin_dir = tmp_path / "fakebin"
+    bin_dir.mkdir(exist_ok=True)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+
+    def install(name: str, *, stdout: str = "", stderr: str = "", exit_code: int = 0) -> Path:
+        script = bin_dir / name
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            f"sys.stdout.write({stdout!r})\n"
+            f"sys.stderr.write({stderr!r})\n"
+            f"sys.exit({exit_code})\n",
+            encoding="utf-8",
+        )
+        script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        return script
+
+    return install
+
+
+@pytest.fixture
+def repo(tmp_path):
+    root = tmp_path / "repo"
+    (root / "app").mkdir(parents=True)
+    (root / "app" / "x.py").write_text("import requests\n", encoding="utf-8")
+    return root
+
+
+def _venv(root: Path) -> None:
+    """Make a directory look enough like a virtualenv for the mode check."""
+    (root / ".venv").mkdir(parents=True, exist_ok=True)
+    (root / ".venv" / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
+
+
+# --------------------------------------------------------------------------
+# Rule-directory selection
+# --------------------------------------------------------------------------
+
+
+class TestExtensionsOf:
+    """Path.suffix alone silently under-selects rulesets on compound names."""
+
+    @pytest.mark.parametrize(
+        ("name", "expected_member"),
+        [
+            ("config.yaml.sample", ".yaml"),
+            ("values.yml.j2", ".yml"),
+            ("settings.json.tmpl", ".json"),
+            ("app.py.in", ".py"),
+            ("plain.py", ".py"),
+        ],
+    )
+    def test_finds_a_meaningful_suffix_behind_a_trailing_one(
+        self, scan_runner, name, expected_member
+    ):
+        assert expected_member in scan_runner.extensions_of(name)
+
+    def test_recognises_dockerfile_variants(self, scan_runner):
+        assert "Dockerfile" in scan_runner.extensions_of("deployment/Dockerfile.prod")
+        assert "Dockerfile" in scan_runner.extensions_of("Dockerfile")
+
+    def test_a_sample_config_now_selects_the_yaml_ruleset(self, scan_runner):
+        """The concrete regression: config.yaml.sample used to select nothing."""
+        extensions = scan_runner.diff_extensions({"config.yaml.sample": [(1, 2)]})
+        assert "yaml" in scan_runner.select_rule_dirs(extensions)
+
+    def test_generic_is_always_selected(self, scan_runner):
+        assert "generic" in scan_runner.select_rule_dirs(set())
+
+
+# --------------------------------------------------------------------------
+# ty: inference mode
+# --------------------------------------------------------------------------
+
+
+class TestTyEnvironment:
+    def test_a_repo_without_a_virtualenv_is_bare(self, scan_runner, repo):
+        mode, note = scan_runner.ty_environment(repo)
+        assert mode == "bare"
+        assert "bare" in note
+
+    def test_an_existing_virtualenv_is_used(self, scan_runner, repo):
+        _venv(repo)
+        mode, note = scan_runner.ty_environment(repo)
+        assert mode == "resolved"
+        assert ".venv" in note
+
+    def test_a_directory_named_venv_without_the_marker_does_not_count(self, scan_runner, repo):
+        (repo / ".venv").mkdir()  # no pyvenv.cfg
+        assert scan_runner.ty_environment(repo)[0] == "bare"
+
+    def test_it_never_creates_anything(self, scan_runner, repo):
+        before = sorted(p.name for p in repo.iterdir())
+        scan_runner.ty_environment(repo)
+        assert sorted(p.name for p in repo.iterdir()) == before
+
+
+TY_OUTPUT = (
+    "app/x.py:1:8: error[unresolved-import] Cannot resolve imported module `requests`\n"
+    "app/x.py:9:5: error[unresolved-import] Cannot resolve imported module `pydantic`\n"
+    "app/x.py:20:7: error[invalid-argument-type] Expected `date`, found `date | None`\n"
+)
+
+
+class TestTyBareMode:
+    """unresolved-import in bare mode is an environment artefact, not a defect."""
+
+    def _run(self, scan_runner, repo, fake_tool):
+        # Exit 2 on the json attempt forces the concise fallback ty really uses.
+        fake_tool("ty", stdout=TY_OUTPUT, exit_code=1)
+        return scan_runner._run_ty(repo)
+
+    def test_unresolved_imports_are_set_aside_not_reported(self, scan_runner, repo, fake_tool):
+        status, entries, _ = self._run(scan_runner, repo, fake_tool)
+        assert status["mode"] == "bare"
+        assert [e["rule"] for e in entries] == ["invalid-argument-type"]
+        assert len(status["suppressed"]) == 2
+
+    def test_setting_them_aside_is_disclosed(self, scan_runner, repo, fake_tool):
+        status, _, _ = self._run(scan_runner, repo, fake_tool)
+        joined = " ".join(status["notes"])
+        assert "bare" in joined
+        assert "unresolved-import 2 件" in joined
+
+    def test_they_are_kept_for_a_human_to_look_at(self, scan_runner, repo, fake_tool):
+        """Dropping them entirely would hide a genuinely wrong import path."""
+        status, _, _ = self._run(scan_runner, repo, fake_tool)
+        assert {e["rule"] for e in status["suppressed"]} == {"unresolved-import"}
+
+    def test_a_resolved_run_keeps_unresolved_imports_as_real_findings(
+        self, scan_runner, repo, fake_tool
+    ):
+        _venv(repo)
+        fake_tool("ty", stdout=TY_OUTPUT, exit_code=1)
+        status, entries, _ = self._run(scan_runner, repo, fake_tool)
+        assert status["mode"] == "resolved"
+        assert len(entries) == 3
+        assert status["suppressed"] == []
+
+    def test_the_mode_is_always_stated_even_when_nothing_was_suppressed(
+        self, scan_runner, repo, fake_tool
+    ):
+        fake_tool("ty", stdout="", exit_code=0)
+        status, entries, _ = scan_runner._run_ty(repo)
+        assert status["mode"] == "bare"
+        assert entries == []
+        assert any("bare" in note for note in status["notes"])
+
+
+# --------------------------------------------------------------------------
+# oxlint: nothing to lint is not a failure
+# --------------------------------------------------------------------------
+
+
+class TestOxlintNothingToLint:
+    MARKER = "No files found to lint"
+
+    @pytest.mark.parametrize("stream", ["stdout", "stderr"])
+    def test_no_javascript_is_skipped_not_an_error(self, scan_runner, repo, fake_tool, stream):
+        """It prints a bare line that is not JSON; parsing it used to say error."""
+        fake_tool("oxlint", exit_code=1, **{stream: self.MARKER + "\n"})
+        status, entries, _ = scan_runner._run_oxlint(repo)
+        assert status["status"] == "skipped"
+        assert entries == []
+
+    def test_the_reason_is_stated(self, scan_runner, repo, fake_tool):
+        fake_tool("oxlint", stderr=self.MARKER + "\n", exit_code=1)
+        status, _, _ = scan_runner._run_oxlint(repo)
+        assert status["skipped_reason"].strip()
+
+    def test_real_diagnostics_are_still_parsed(self, scan_runner, repo, fake_tool):
+        payload = {
+            "diagnostics": [
+                {
+                    "filename": str(repo / "app" / "a.js"),
+                    "code": "no-unused-vars",
+                    "severity": "warning",
+                    "message": "unused",
+                    "labels": [{"span": {"line": 3}}],
+                }
+            ]
+        }
+        fake_tool("oxlint", stdout=json.dumps(payload), exit_code=1)
+        status, entries, _ = scan_runner._run_oxlint(repo)
+        assert status["status"] == "ok"
+        assert [e["rule"] for e in entries] == ["no-unused-vars"]
+
+    def test_genuinely_broken_output_is_still_an_error(self, scan_runner, repo, fake_tool):
+        """The fix must not turn every parse failure into a quiet skip."""
+        fake_tool("oxlint", stdout="not json at all", exit_code=1)
+        status, _, _ = scan_runner._run_oxlint(repo)
+        assert status["status"] == "error"
+
+
+# --------------------------------------------------------------------------
+# Missing tools never become a clean result
+# --------------------------------------------------------------------------
+
+
+class TestMissingToolsAreDisclosed:
+    @pytest.mark.parametrize(
+        ("tool", "runner"), [("ruff", "_run_ruff"), ("ty", "_run_ty"), ("oxlint", "_run_oxlint")]
+    )
+    def test_an_absent_tool_is_skipped_with_a_reason(
+        self, scan_runner, repo, tmp_path, monkeypatch, tool, runner
+    ):
+        monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+        status, entries, _ = getattr(scan_runner, runner)(repo)
+        assert status["status"] == "skipped"
+        assert tool in status["skipped_reason"]
+        assert entries == []
+
+    def test_an_unexpected_exit_code_is_an_error_not_a_clean_scan(
+        self, scan_runner, repo, fake_tool
+    ):
+        fake_tool("ruff", stdout="", stderr="internal panic", exit_code=2)
+        status, entries, _ = scan_runner._run_ruff(repo)
+        assert status["status"] == "error"
+        assert entries == []

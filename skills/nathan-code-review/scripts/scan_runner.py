@@ -304,16 +304,29 @@ def parse_unified_diff(diff_path: Path) -> dict[str, list[tuple[int, int]]]:
     return ranges
 
 
+def extensions_of(path: str) -> set[str]:
+    """Every suffix of a filename, plus the Dockerfile marker.
+
+    All of them, not just the last one. ``Path("config.yaml.sample").suffix``
+    is ``.sample``, so a file that is plainly YAML would select no YAML rules —
+    and under-selecting a ruleset fails *silently*: the scan finds nothing and
+    reads as clean. Compound names like this are routine for configuration
+    (``.yaml.sample``, ``.yml.j2``, ``.json.tmpl``, ``.py.in``).
+
+    Over-selecting only costs scan time, so the trade is one-sided.
+    """
+    name = Path(path).name
+    found = {suffix.lower() for suffix in Path(name).suffixes}
+    if name.startswith("Dockerfile"):
+        found.add("Dockerfile")
+    return found
+
+
 def diff_extensions(changed: dict[str, list[tuple[int, int]]]) -> set[str]:
     """Extensions (and Dockerfile markers) present on the new side of the diff."""
     found: set[str] = set()
     for path in changed:
-        name = Path(path).name
-        if name.startswith("Dockerfile"):
-            found.add("Dockerfile")
-        suffix = Path(path).suffix.lower()
-        if suffix:
-            found.add(suffix)
+        found |= extensions_of(path)
     return found
 
 
@@ -330,10 +343,7 @@ def repo_extensions(root: Path) -> set[str]:
         if not path.is_file():
             continue
         seen += 1
-        if path.name.startswith("Dockerfile"):
-            found.add("Dockerfile")
-        if path.suffix:
-            found.add(path.suffix.lower())
+        found |= extensions_of(path.name)
     return found
 
 
@@ -698,11 +708,48 @@ TY_OK_EXIT_CODES = frozenset({0, 1})
 # nothing to lint), >1 real failure.
 OXLINT_OK_EXIT_CODES = frozenset({0, 1})
 
+# oxlint prints this instead of JSON when the tree holds no JS/TS at all.
+OXLINT_NO_FILES_MARKER = "No files found to lint"
+
 # ty --output-format concise: "path:line:col: severity[rule] message".
 _TY_LINE_RE = re.compile(
     r"^(?P<file>[^:]+(?::[^:\d][^:]*)*):(?P<line>\d+):(?P<col>\d+):\s+"
     r"(?P<severity>error|warning|info)(?:\[(?P<rule>[^\]]+)\])?\s*(?P<message>.*)$"
 )
+
+# In bare mode every third-party import is unresolvable, so this rule fires
+# once per import across the whole project and says nothing about the change.
+TY_UNRESOLVED_IMPORT_RULE = "unresolved-import"
+
+
+def ty_environment(root: Path) -> tuple[str, str]:
+    """Report whether ty can resolve third-party types. Never creates anything.
+
+    Installing the reviewed project's dependencies would buy full type
+    inference at two prices this skill will not pay.
+
+    It would execute code the merge request's author controls: a source
+    distribution builds through a PEP 517 backend, which is arbitrary code, and
+    the ``pyproject.toml`` naming that backend is part of the branch under
+    review. A tool whose whole purpose is reading untrusted branches must not
+    install from them.
+
+    And it would require network access. The environments this runs in cannot
+    be assumed to have any, so a design that needs a download to work correctly
+    is a design that silently degrades in the place it matters.
+
+    So the mode is a fact about the environment, reported honestly, rather than
+    something the scan reaches out and changes. Setting an environment up is
+    the operator's decision, taken outside this tool.
+    """
+    for candidate in (root / ".venv", root / "venv"):
+        if (candidate / "pyvenv.cfg").is_file():
+            return "resolved", f"使用受審 repo 既有的虛擬環境 {candidate.name}/，第三方型別已解析。"
+    return "bare", (
+        "受審 repo 沒有可用的虛擬環境，ty 以 bare 模式執行："
+        "第三方型別未解析，推導範圍僅專案內部與標準庫。"
+        "本工具不會為了掃描而安裝相依（安裝會執行受審分支控制的程式碼，且需要網路）。"
+    )
 
 
 def _sub_entry(
@@ -838,7 +885,8 @@ def _run_ty(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
             None,
         )
 
-    notes: list[str] = []
+    mode, mode_note = ty_environment(root)
+    notes: list[str] = [mode_note]
     base = ["ty", "check"]
     for excluded in EXCLUDED_DIRS:
         base += ["--exclude", excluded]
@@ -939,8 +987,33 @@ def _run_ty(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
             )
         raw_payload = {"format": "concise-text", "stdout": result.stdout, "stderr": result.stderr}
 
+    # In bare mode unresolved-import is an artefact of the environment, not a
+    # property of the code. Left in, it buries the real diagnostics: on a
+    # project of any size it fires once per third-party import, which was 173
+    # of 297 diagnostics the last time this ran. Dropped silently, a genuinely
+    # wrong import path would disappear with it — so they are set aside and
+    # reported separately, for a human to glance at rather than to act on.
+    suppressed: list[dict[str, Any]] = []
+    if mode == "bare":
+        kept: list[dict[str, Any]] = []
+        for entry in entries:
+            (suppressed if entry["rule"] == TY_UNRESOLVED_IMPORT_RULE else kept).append(entry)
+        entries = kept
+        if suppressed:
+            notes.append(
+                f"bare 模式下抑制 unresolved-import {len(suppressed)} 件，不列為發現；"
+                "若其中有專案內部的匯入路徑，仍值得人工確認（見 suppressed）。"
+            )
+
     return (
-        {"status": "ok", "exit_code": result.exit_code, "skipped_reason": "", "notes": notes},
+        {
+            "status": "ok",
+            "exit_code": result.exit_code,
+            "skipped_reason": "",
+            "notes": notes,
+            "mode": mode,
+            "suppressed": suppressed,
+        },
         entries,
         raw_payload,
     )
@@ -978,9 +1051,22 @@ def _run_oxlint(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
 
     notes: list[str] = []
     # oxlint reuses exit code 1 for "found lint errors" and for "no files to
-    # lint"; the latter is normal in a Python-only repo, so it is a note.
-    if "No files found to lint" in result.stderr:
-        notes.append("oxlint 在此 repo 找不到可檢查的 JS/TS 檔案。")
+    # lint", and prints the latter as a bare line that is not JSON. Parsing it
+    # as JSON fails, which used to surface as status=error — reporting a broken
+    # scanner on every Python-only repository, which is most of them here.
+    # Nothing to lint is not a failure and not a clean bill of health either:
+    # it is `skipped`, with the reason stated.
+    if OXLINT_NO_FILES_MARKER in result.stderr or OXLINT_NO_FILES_MARKER in result.stdout:
+        return (
+            {
+                "status": "skipped",
+                "exit_code": result.exit_code,
+                "skipped_reason": "此 repo 沒有 oxlint 可檢查的 JS/TS 檔案。",
+                "notes": notes,
+            },
+            [],
+            {"stdout": result.stdout, "stderr": result.stderr},
+        )
 
     if result.exit_code not in OXLINT_OK_EXIT_CODES:
         return (
@@ -1091,6 +1177,16 @@ def run_lint(root: Path, out_prefix: Path, diff_path: Path | None) -> dict[str, 
             "truncated": truncated,
             "notes": sub_notes,
         }
+        # ty reports which inference mode it ran in, and what it set aside as a
+        # consequence. Both belong in the digest: a scan that could not resolve
+        # third-party types has to say so rather than read as a clean run.
+        if status_block.get("mode"):
+            sub[name]["mode"] = status_block["mode"]
+        suppressed = status_block.get("suppressed") or []
+        if suppressed:
+            suppressed_capped, _ = cap_entries(suppressed)
+            sub[name]["counts"]["suppressed"] = len(suppressed)
+            sub[name]["suppressed"] = suppressed_capped
 
     statuses = {block["status"] for block in sub.values()}
     # The envelope status is the best outcome any sub-tool achieved; per-tool

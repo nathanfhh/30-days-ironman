@@ -92,6 +92,13 @@ extensions present in the diff:
 `generic/` is always included — it holds cross-language rules (hardcoded
 credentials, insecure transport) that apply whatever the file type.
 
+Match on **every** suffix a filename has, not just the last one:
+`config.yaml.sample` ends in `.sample`, and matching only that selects no YAML
+rules for a file that is plainly YAML. The same goes for `.yml.j2`,
+`.json.tmpl`, `.py.in`. Under-selecting a ruleset fails silently — the scan
+finds nothing and reads as clean — while over-selecting only costs scan time,
+so lean towards including a directory when in doubt.
+
 ```bash
 opengrep scan \
   --config {rules}/python --config {rules}/generic ... \
@@ -132,6 +139,46 @@ results:
 
 **Missing:** each is independent. `ruff` absent does not stop `oxlint`; record a
 separate `scans[]` entry per tool.
+
+**oxlint with nothing to lint.** On a Python-only repository oxlint prints a
+bare `No files found to lint` line instead of JSON and exits 1. That is
+`status: skipped` with the reason stated — not `error`, which would report a
+broken scanner on nearly every repository here, and not `ok`, which would claim
+a clean JavaScript scan that never ran.
+
+### ty's inference mode — and why nothing is ever installed
+
+`ty` needs the project's dependencies installed to resolve third-party types.
+This skill does not install them, and will not. It detects and discloses the
+mode instead:
+
+| Mode | When | What it means |
+|---|---|---|
+| `resolved` | the reviewed repo already has a `.venv` | third-party types available |
+| `bare` | it does not | inference covers the project's own code and the standard library only |
+
+Two independent reasons, either one sufficient.
+
+**Installing executes the code under review.** A source distribution builds
+through a PEP 517 backend, which is arbitrary code, and the `pyproject.toml`
+naming that backend is part of the branch being reviewed. A tool whose entire
+purpose is reading untrusted branches must not install from them; that turns
+the reviewer's machine into the target.
+
+**Installing needs a network.** These reviews run in environments that may not
+have one. A design that is only correct after a download degrades silently in
+exactly the place it matters.
+
+In `bare` mode every third-party import is unresolvable, so `unresolved-import`
+fires once per import — 173 of 297 diagnostics on the run this rule came from.
+The runner sets them aside into `sub.ty.suppressed`, rather than forwarding them
+(they bury the real diagnostics) or dropping them (a genuinely wrong import path
+would vanish with them). They are for a human to glance at, not to file.
+
+What `bare` costs is type errors at third-party call sites. What it keeps is the
+changed code's own type contracts — which, after diff attribution, is nearly all
+of what reaches a report anyway. So it is the normal mode, not a broken one, and
+the report says which mode ran either way.
 
 ## CodeGraph and grep
 

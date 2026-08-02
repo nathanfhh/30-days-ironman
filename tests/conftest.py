@@ -70,6 +70,11 @@ def render_report() -> ModuleType:
     return load_script("render_report")
 
 
+@pytest.fixture(scope="session")
+def scan_runner() -> ModuleType:
+    return load_script("scan_runner")
+
+
 # --------------------------------------------------------------------------
 # Stub HTTP server
 # --------------------------------------------------------------------------
