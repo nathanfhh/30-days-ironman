@@ -1,3 +1,19 @@
 # macOS Finder metadata — this directory is shared with a macOS host, so these
 # reappear on their own.
 .DS_Store
+
+# uv's virtualenv. Recreated by `uv sync`; never shared.
+.venv/
+
+# uv.lock is deliberately NOT ignored. The dev toolchain (pytest, pydantic) is
+# what the test suite runs against, and a lockfile is what makes "the tests pass
+# on my machine" mean something on someone else's machine. The skills' own
+# scripts pin their runtime dependencies inline (PEP 723) and do not read it.
+
+# Tooling caches.
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

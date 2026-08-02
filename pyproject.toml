@@ -1,0 +1,29 @@
+[project]
+name = "thirty-days-ironman"
+version = "0.1.0"
+description = "Claude Code skills, and the tests that keep their scripts honest."
+requires-python = ">=3.11"
+# The skills' scripts are PEP 723 single files that declare their own
+# dependencies inline and run under `uv run <script>`. Nothing here is imported
+# by them at runtime, so the project itself needs no dependencies.
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    # report_model.py declares pydantic inline for `uv run`; the tests import
+    # the module directly, so the same dependency has to exist here too.
+    "pydantic>=2.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+# Stated rather than inferred. ruff reads `requires-python` when this is absent,
+# so adding this file silently changed which version-gated rules fire on the
+# skills' scripts — code that had not changed. Pinning it here means the next
+# edit to `requires-python` is a deliberate decision about the floor, not an
+# accidental change to the lint result.
+target-version = "py311"
