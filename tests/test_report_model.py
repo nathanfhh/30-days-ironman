@@ -302,6 +302,38 @@ class TestPhiTrigger:
         build(_report(meta=meta))
 
 
+class TestProcessDirectedText:
+    """Text aimed at the review process has to be named, not just resisted."""
+
+    def test_absent_is_valid_and_defaults_to_not_detected(self, build, report_model):
+        report = build(_report())
+        assert report.meta.process_directed_text.detected is False
+
+    def test_detected_requires_a_locatable_reference(self, build):
+        meta = _report()["meta"] | {
+            "process_directed_text": {"detected": True, "evidence": []}
+        }
+        with pytest.raises(ValidationError):
+            build(_report(meta=meta))
+
+    def test_detected_with_evidence_is_accepted(self, build):
+        meta = _report()["meta"] | {
+            "process_directed_text": {
+                "detected": True,
+                "evidence": ["app/api/guest_export.py:12"],
+                "note": "註解要求略過資安面向",
+            }
+        }
+        build(_report(meta=meta))
+
+    def test_recording_it_does_not_move_the_conclusion(self, build):
+        """It is a disclosure, not a finding — it must not act like one."""
+        meta = _report()["meta"] | {
+            "process_directed_text": {"detected": True, "evidence": ["a/b.py:1"]}
+        }
+        build(_report(meta=meta, conclusion="Approved"))
+
+
 class TestScans:
     @pytest.mark.parametrize("status", ["skipped", "error"])
     def test_a_scan_that_did_not_run_must_state_why(self, build, status):

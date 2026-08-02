@@ -11,6 +11,7 @@ skill_files:
   - skills/nathan-code-review/SKILL.md
   - skills/nathan-code-review/references/report-format.md
   - skills/nathan-code-review/references/review-dimensions.md
+  - skills/nathan-code-review/references/scanners.md
   - skills/nathan-code-review/scripts/report_model.py
 
 scenario:

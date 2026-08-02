@@ -9,6 +9,7 @@ suite so that breakage surfaces as a red test rather than as a confusing eval.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,24 @@ class TestCaseShape:
             assert check.get("anchor", "").strip(), (
                 f"{check['id']} 沒有 anchor，無法判斷它在驗證 skill 的哪一條規則"
             )
+
+    def test_anchors_only_cite_files_the_judge_was_given(self, path):
+        """An anchor pointing outside skill_files is an unanswerable check.
+
+        The judge may only read the files the case lists, so a check anchored
+        to a document it was never handed can only be marked fail — and the
+        report then reads as a skill regression when the real fault is the
+        case. Both cases in the first eval run had exactly this defect.
+        """
+        case = _load(path)
+        given = {Path(rel).name for rel in case["skill_files"]}
+        for check in case["behavioral_checks"]:
+            cited = re.findall(r"[\w./-]+\.(?:md|py)", check["anchor"])
+            for name in {Path(c).name for c in cited}:
+                assert name in given, (
+                    f"{check['id']} 的 anchor 引用 {name}，但它不在 skill_files 裡——"
+                    f"judge 讀不到，這條註定 fail"
+                )
 
     def test_anti_checks_state_the_failure_they_catch(self, path):
         for check in _load(path)["anti_checks"]:

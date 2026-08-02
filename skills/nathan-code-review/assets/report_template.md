@@ -13,6 +13,8 @@
 
 {intent_section}
 
+{injection_section}
+
 ### 掃描執行狀況
 
 {scan_table}

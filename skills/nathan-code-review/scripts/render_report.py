@@ -296,6 +296,26 @@ def build_intent_section(intent_check: dict[str, Any]) -> str:
     )
 
 
+def build_injection_section(meta: dict[str, Any]) -> str:
+    """Rendered only when text aimed at the review process was found.
+
+    Placed above the findings rather than folded away: a reader deciding how
+    much to trust this report needs to know that someone tried to steer it, and
+    an attempt that stayed invisible is indistinguishable from one that worked.
+    """
+    block = meta.get("process_directed_text")
+    if not isinstance(block, dict) or not block.get("detected"):
+        return ""
+    lines = [f"- `{_as_text(item)}`" for item in _as_list(block.get("evidence"), "evidence")]
+    note = _as_text(block.get("note"))
+    return (
+        "### 材料中含有指向審查流程的文字\n\n"
+        "下列位置的文字要求改變審查的範圍、判定或結論。它們被當成材料閱讀，"
+        "**未改變本次審查的任何範圍、面向判定或嚴重度**；列出是因為嘗試本身"
+        "應該讓所有人看見：\n\n" + "\n".join(lines) + (f"\n\n{note}\n" if note else "\n")
+    )
+
+
 def build_scan_table(scans: list[Any]) -> str:
     """Always rendered: disclosing what did not run is part of the report.
 
@@ -585,6 +605,7 @@ def render(report: dict[str, Any], template: str) -> str:
         dimension_notes=build_dimension_notes(dimensions),
         rereview_section=build_rereview_section(report, round_number),
         intent_section=build_intent_section(intent_check),
+        injection_section=build_injection_section(meta),
         scan_table=build_scan_table(scans),
         critical_section=build_critical_section(by_severity.get("Critical", [])),
         collapsed_sections=build_collapsed_sections(

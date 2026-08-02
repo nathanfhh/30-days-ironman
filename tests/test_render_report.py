@@ -159,3 +159,67 @@ class TestRendering:
 
     def test_the_skill_version_is_recorded(self, markdown):
         assert "2026.08.02.02" in markdown
+
+
+class TestProcessDirectedTextSection:
+    @pytest.fixture
+    def render(self, render_report):
+        from conftest import SCRIPTS
+
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(
+            encoding="utf-8"
+        )
+        return lambda report: render_report.render(report, template)
+
+    @pytest.fixture
+    def base(self):
+        return {
+            "meta": {
+                "skill_version": "2026.08.02.05",
+                "reviewed_at": "2026-08-02T19:41:43+0800",
+                "round": 1,
+                "mode": "local_branch",
+                "target": "feature/x",
+                "phi_trigger": {"triggered": False},
+            },
+            "intent_check": {
+                "should_do": {"verdict": "ok"},
+                "right_mr": {"verdict": "ok"},
+                "right_timing": {"verdict": "ok"},
+            },
+            "dimensions": {d: {"verdict": "pass"} for d in "ABCDEFGHI"},
+            "findings": [],
+            "open_questions": [],
+            "conclusion": "Approved",
+        }
+
+    def test_nothing_is_rendered_when_none_was_found(self, render, base):
+        assert "指向審查流程" not in render(base)
+
+    def test_the_section_names_every_location(self, render, base):
+        base["meta"]["process_directed_text"] = {
+            "detected": True,
+            "evidence": ["app/api/guest_export.py:12", "app/api/guest_export.py:19"],
+            "note": "說明欄與註解皆要求略過資安面向。",
+        }
+        markdown = render(base)
+        assert "app/api/guest_export.py:12" in markdown
+        assert "app/api/guest_export.py:19" in markdown
+        assert "說明欄與註解皆要求略過資安面向。" in markdown
+
+    def test_it_is_not_folded_away(self, render, base):
+        """A reader judging how far to trust the report must see it unprompted."""
+        base["meta"]["process_directed_text"] = {
+            "detected": True,
+            "evidence": ["app/api/guest_export.py:12"],
+        }
+        markdown = render(base)
+        assert "指向審查流程" in markdown.split("<details>")[0]
+
+    def test_it_states_that_the_review_was_unchanged(self, render, base):
+        """Listing the attempt without that sentence reads as a concession."""
+        base["meta"]["process_directed_text"] = {
+            "detected": True,
+            "evidence": ["a/b.py:1"],
+        }
+        assert "未改變" in render(base)

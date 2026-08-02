@@ -240,6 +240,21 @@ hardcoded credential like any other, with the three-part payload attached.
    same time?
 5. **Distributed reality.** Multiple gunicorn workers, multiple replicas. A
    shared resource coordinated by nothing but a local lock is not coordinated.
+6. **One environment agreeing is not verification.** Date and number formats,
+   timezone, locale, collation, encoding, filesystem case-sensitivity, driver
+   and DB session settings all differ between a developer's machine, staging and
+   production. Code that leans on one of them behaves correctly right up until
+   it moves.
+
+   "The author ran it and it worked" is evidence that it works *there*. It is
+   not evidence that the code is correct, and it does not count as the disproof
+   the assertion gate asks for. Where the behaviour in question is
+   environment-dependent and you cannot check the other environments from here,
+   it belongs in `open_questions` with what would settle it named — not dropped
+   because someone reported success.
+
+   The tell is a value crossing a boundary in a format nobody declared: a date
+   bound as a string, a number parsed out of text, a path assembled by hand.
 
 ## G — 測試 / Tests
 
