@@ -8,8 +8,11 @@
 
 ## 安裝
 
+安裝器在 repo 根目錄，不在這個資料夾裡——它處理的是 Claude Code 的佈署，
+不是這個 skill 的內容：
+
 ```bash
-./install.sh
+../../install.sh nathan-code-review
 ```
 
 建立兩處 symlink：`~/.claude/skills/nathan-code-review` 指向本目錄，
