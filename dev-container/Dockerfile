@@ -86,4 +86,13 @@ ENV TZ=Asia/Taipei \
 
 WORKDIR /home/nathan/code-review
 
-CMD ["bash"]
+# entrypoint 放最後：改 script 只會 invalidate 這幾層，不會 bust 上面的工具安裝 cache。
+# 最後一層寫入 build time 給 entrypoint 啟動時顯示。
+USER root
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh && \
+    date -Iseconds > /etc/image-build-time
+USER nathan
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["claude", "--dangerously-skip-permissions"]
