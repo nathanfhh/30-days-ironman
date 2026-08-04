@@ -17,6 +17,7 @@ CRED_FILE=""
 if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
     # 優先序 1：token 環境變數直接透傳（-e 不帶值 = 取用 host 目前的值）
     RUN_ENV+=(-e CLAUDE_CODE_OAUTH_TOKEN)
+    echo "🔑 憑證來源：CLAUDE_CODE_OAUTH_TOKEN 環境變數"
 elif [ "$(uname)" = "Darwin" ]; then
     # 優先序 2：macOS 把憑證鎖在 Keychain，解出成 Linux 版認得的檔案
     #（第一次執行會跳出 Keychain 授權視窗，按「允許」）
@@ -27,6 +28,7 @@ elif [ "$(uname)" = "Darwin" ]; then
         CRED_FILE=~/.claude/.credentials.json
         # 憑證檔只是給容器用的明文複本，退出時刪掉（macOS 本體仍用 Keychain）
         trap '[ -n "$CRED_FILE" ] && rm -f "$CRED_FILE"' EXIT
+        echo "🔑 憑證來源：macOS Keychain（已解出至 ~/.claude/.credentials.json，退出時自動刪除）"
     else
         rm -f ~/.claude/.credentials.json
         echo "❌ Keychain 沒有 Claude Code 憑證，也沒設定 CLAUDE_CODE_OAUTH_TOKEN。" >&2
@@ -40,6 +42,7 @@ else
         echo "   先在 host 登入一次 claude，或 export CLAUDE_CODE_OAUTH_TOKEN 再執行。" >&2
         exit 1
     fi
+    echo "🔑 憑證來源：Linux host 的 ~/.claude/.credentials.json"
 fi
 
 # Opengrep 規則（A4 軌道）：opengrep binary 不內建規則，從 host 的 semgrep-rules clone 餵。
