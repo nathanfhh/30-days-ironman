@@ -8,11 +8,16 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
     DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::https::Verify-Peer=false install -y ca-certificates && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        curl git jq tzdata shellcheck && \
+        curl git jq tzdata shellcheck vim && \
     ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
     echo "Asia/Taipei" > /etc/timezone && \
     rm -rf /var/lib/apt/lists/* && \
     useradd -m -s /bin/bash -d /home/nathan nathan
+
+# UTF-8 locale：POSIX locale 下 bash readline 會丟棄多位元組輸入（中文打不出來），
+# opengrep 的 frozen Python 也會用 ascii codec 讀規則檔而炸掉。
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 USER nathan
 
