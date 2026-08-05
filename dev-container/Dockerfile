@@ -8,7 +8,7 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
     DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::https::Verify-Peer=false install -y ca-certificates && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        curl git jq tzdata shellcheck vim && \
+        curl git jq tzdata shellcheck vim openssh-client && \
     ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
     echo "Asia/Taipei" > /etc/timezone && \
     rm -rf /var/lib/apt/lists/* && \
@@ -82,7 +82,42 @@ RUN curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/ins
 ENV TZ=Asia/Taipei \
     FORCE_COLOR=1 \
     TERM=xterm-256color \
-    COLORTERM=truecolor
+    COLORTERM=truecolor \
+    SSH_AUTH_SOCK=/ssh/ssh_sock
+
+# run wrapper 會把 host 的 ssh-agent socket 掛到 /ssh/ssh_sock；上面那個 ENV 讓容器裡的
+# git／ssh 不用任何設定就找得到它。
+# ⚠ 沒掛載時這個變數仍然有值，`ssh-add -l` 會回「Error connecting to agent: No such
+#   file or directory」。那是「這條路沒接」，不是「設定壞了」——兩者的外顯訊息一樣。
+# known_hosts 有兩層來源，runtime 優先：
+#
+#   1.（預設）run wrapper 把 host 的 ~/.ssh/known_hosts 唯讀掛到同一個路徑。
+#      信任決策留在 host——使用者本來就連過那台 GitLab、TOFU 早就做完了。
+#   2.（選配）build 時 ssh-keyscan 烘進來，給「沒有 host known_hosts」的環境（CI、
+#      全新機器）當備援：
+#          docker build --build-arg GITLAB_SSH_HOST=gitlab.example.com .
+#      掛載會蓋過這一份，所以兩者同時存在時以 host 的為準。
+#
+# ⚠ 為什麼不預設烘：ssh-keyscan 是 TOFU（第一次連就信任），而 build time 正是你
+#   最沒有能力驗證那把 key 的時間點。被中間人就把假的 host key 烘進 image，之後
+#   每一次連線都信任它，外表還看起來像「已經設定好了」。內網 GitLab 更麻煩——
+#   build 機器不在內網時 keyscan 根本抓不到。所以這裡失敗只警告、不擋 build。
+#
+# ⚠ 真正該避免的反射動作是 StrictHostKeyChecking=no。那不是設定 known_hosts，
+#   那是把中間人偵測整個關掉。
+ARG GITLAB_SSH_HOST=""
+RUN mkdir -p /home/nathan/.ssh && chmod 700 /home/nathan/.ssh && \
+    if [ -n "$GITLAB_SSH_HOST" ]; then \
+        if ssh-keyscan -t rsa,ed25519,ecdsa "$GITLAB_SSH_HOST" \
+             > /home/nathan/.ssh/known_hosts 2>/dev/null \
+           && [ -s /home/nathan/.ssh/known_hosts ]; then \
+            chmod 600 /home/nathan/.ssh/known_hosts; \
+            echo "known_hosts: 已收錄 $GITLAB_SSH_HOST ✓"; \
+        else \
+            rm -f /home/nathan/.ssh/known_hosts; \
+            echo "⚠️  build 時連不到 $GITLAB_SSH_HOST，未烘入 known_hosts；改由 run wrapper 掛載 host 的那份。"; \
+        fi; \
+    fi
 
 WORKDIR /home/nathan/code-review
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 啟動 ncr-dev-container 的 wrapper：解決兩件事——憑證怎麼進容器、Opengrep 規則怎麼進容器。
+# 啟動 ncr-dev-container 的 wrapper：解決三件事——CLI 憑證怎麼進容器、
+# git 的 SSH 憑證怎麼進容器、Opengrep 規則怎麼進容器。
 #
 # 憑證來源優先序：
 #   1. CLAUDE_CODE_OAUTH_TOKEN 環境變數（設了就直接透傳進容器，不碰 Keychain）
@@ -13,6 +14,16 @@ IMAGE=ncr-dev-container
 RUN_ENV=()
 RUN_MOUNTS=()
 CRED_FILE=""
+STARTED_AGENT=0
+
+# 單一 cleanup。⚠ bash 的 trap 是**覆蓋**不是疊加：同一個訊號註冊第二次，第一個就沒了。
+# 憑證檔與 ssh-agent 兩件善後必須寫在同一個函式裡，分開註冊會讓先註冊的那件默默不執行。
+cleanup() {
+    [ -n "$CRED_FILE" ] && rm -f "$CRED_FILE"
+    [ "$STARTED_AGENT" = "1" ] && ssh-agent -k >/dev/null 2>&1
+    return 0
+}
+trap cleanup EXIT
 
 if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
     # 優先序 1：token 環境變數直接透傳（-e 不帶值 = 取用 host 目前的值）
@@ -25,9 +36,8 @@ elif [ "$(uname)" = "Darwin" ]; then
          > ~/.claude/.credentials.json 2>/dev/null \
        && [ -s ~/.claude/.credentials.json ]; then
         chmod 600 ~/.claude/.credentials.json
+        # 憑證檔只是給容器用的明文複本，退出時由 cleanup() 刪掉（macOS 本體仍用 Keychain）
         CRED_FILE=~/.claude/.credentials.json
-        # 憑證檔只是給容器用的明文複本，退出時刪掉（macOS 本體仍用 Keychain）
-        trap '[ -n "$CRED_FILE" ] && rm -f "$CRED_FILE"' EXIT
         echo "🔑 憑證來源：macOS Keychain（已解出至 ~/.claude/.credentials.json，退出時自動刪除）"
     else
         rm -f ~/.claude/.credentials.json
@@ -55,6 +65,57 @@ if [ -d "$RULES_DIR/.git" ]; then
 else
     echo "⚠️  找不到 $RULES_DIR，本場 Opengrep（A4）無規則可用。"
     echo "   取得規則：git clone https://github.com/semgrep/semgrep-rules.git $RULES_DIR"
+fi
+
+# git 的 SSH 憑證：轉發 host 的 ssh-agent socket，而不是把 ~/.ssh 掛進去。
+# 差別是「能力」與「秘密」——容器只能請 agent 簽章，拿不到私鑰本體；
+# 掛目錄則是把長效私鑰交出去（容器內同 uid、有 shell ＝ 可讀可帶走）。
+#
+# ⚠ 爆炸半徑跟 CLI 憑證不同：CLI 憑證只能拿去呼叫模型，SSH agent 能以你的身分
+#   認證**所有信任那把 key 的主機**——內網 git、正式機、跳板機。而容器篩不掉
+#   agent 裡的任何一把 key。要限縮請在 host 端另起一個只加了受限 key 的 agent，
+#   把 SSH_AUTH_SOCK 指過去再執行本腳本。
+#
+# 不想轉發：NCR_NO_SSH_AGENT=1 ./run-ncr-dev-container.sh
+if [ -n "${NCR_NO_SSH_AGENT:-}" ]; then
+    echo "🔒 已停用 SSH agent 轉發（NCR_NO_SSH_AGENT）；容器內走 SSH 的 git 操作會失敗。"
+elif [ -z "${SSH_AUTH_SOCK:-}" ]; then
+    # host 上沒有 agent，起一個暫時的。⚠ 只有「自己起的」才由自己收掉，
+    # 見 cleanup()：host 本來就有 agent 時去 ssh-agent -k，殺掉的是使用者原本那個，
+    # 他之後每一個終端機的 git 都會壞，而且不會知道是誰弄的。
+    if eval "$(ssh-agent -s)" >/dev/null 2>&1; then
+        STARTED_AGENT=1
+        # 不指定檔名：ssh-add 會載入預設的那幾把（id_ed25519 / id_ecdsa / id_rsa …），
+        # 寫死 id_rsa 會讓只有 ed25519 的人（現在的預設）安靜地拿不到金鑰。
+        # ⚠ set -e：ssh-add 失敗不該讓整個腳本死掉，SSH 只是選配。
+        if ssh-add >/dev/null 2>&1; then
+            echo "🔐 SSH：host 沒有 agent，已臨時起一個並載入預設金鑰（退出時關閉）"
+        else
+            echo "⚠️  SSH：ssh-add 沒有載入任何金鑰（可能沒有預設金鑰，或需要 passphrase）。"
+            echo "   容器內走 SSH 的 git 操作會失敗；先在 host 執行 ssh-add 再重跑。"
+        fi
+    else
+        echo "⚠️  SSH：起不了 ssh-agent，本場不轉發。"
+    fi
+else
+    echo "🔐 SSH：轉發 host 現有的 agent（$SSH_AUTH_SOCK）"
+fi
+
+# socket 掛載。⚠ 不能加 :ro——連 unix socket 需要寫權限，唯讀會 EACCES，掛了等於沒掛。
+# ⚠ 路徑不能寫死：systemd/gnome-keyring 起的在 /run/user/<uid>/…，
+#   ssh-agent -s 起的在 /tmp/ssh-XXXX/agent.<pid>，每次都不一樣，只能靠 $SSH_AUTH_SOCK。
+if [ -z "${NCR_NO_SSH_AGENT:-}" ] && [ -S "${SSH_AUTH_SOCK:-}" ]; then
+    RUN_MOUNTS+=(-v "$SSH_AUTH_SOCK":/ssh/ssh_sock)
+fi
+
+# known_hosts 唯讀掛進去。容器裡第一次 git over SSH 會停在 host key 驗證的互動提示，
+# 而這是個非互動環境——結果不是問你要不要信任，是直接失敗。
+# 用 host 現成的檔案，不把任何主機的 public key 烘進 image。
+if [ -f ~/.ssh/known_hosts ]; then
+    RUN_MOUNTS+=(-v ~/.ssh/known_hosts:/home/nathan/.ssh/known_hosts:ro)
+else
+    echo "⚠️  找不到 ~/.ssh/known_hosts，容器內第一次連 GitLab 會因 host key 未知而失敗。"
+    echo "   先在 host 執行一次：ssh-keyscan -t rsa,ed25519 <your-gitlab-host> >> ~/.ssh/known_hosts"
 fi
 
 # 把「現在所在的資料夾」掛進容器的工作目錄：在要審查的專案根目錄執行本腳本。
