@@ -63,7 +63,11 @@ if [ -d "$RULES_DIR/.git" ]; then
     git -C "$RULES_DIR" pull --ff-only 2>/dev/null || echo "⚠️  semgrep-rules 更新失敗，沿用現有版本"
     RUN_MOUNTS+=(-v "$RULES_DIR":/home/nathan/semgrep-rules:ro)
 else
-    echo "⚠️  找不到 $RULES_DIR，本場 Opengrep（A4）無規則可用。"
+    # ⚠ 變數後面接全形標點時一定要加大括號。macOS 內建 bash 3.2 在 LC_CTYPE="UTF-8"
+    #（Terminal 的常見預設，而且不是合法 locale 名）下，會把全形字元的首位元組當成
+    #   識別字的一部分，`$RULES_DIR，` 被讀成變數 `RULES_DIR\xEF`——set -u 直接 unbound。
+    #   ASCII 標點沒這問題，所以這個 bug 只在中文訊息裡出現。
+    echo "⚠️  找不到 ${RULES_DIR}，本場 Opengrep（A4）無規則可用。"
     echo "   取得規則：git clone https://github.com/semgrep/semgrep-rules.git $RULES_DIR"
 fi
 
@@ -98,7 +102,7 @@ elif [ -z "${SSH_AUTH_SOCK:-}" ]; then
         echo "⚠️  SSH：起不了 ssh-agent，本場不轉發。"
     fi
 else
-    echo "🔐 SSH：轉發 host 現有的 agent（$SSH_AUTH_SOCK）"
+    echo "🔐 SSH：轉發 host 現有的 agent（${SSH_AUTH_SOCK}）"
 fi
 
 # socket 掛載。⚠ 不能加 :ro——連 unix socket 需要寫權限，唯讀會 EACCES，掛了等於沒掛。

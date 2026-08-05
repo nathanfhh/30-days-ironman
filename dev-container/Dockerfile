@@ -115,7 +115,7 @@ RUN mkdir -p /home/nathan/.ssh && chmod 700 /home/nathan/.ssh && \
             echo "known_hosts: 已收錄 $GITLAB_SSH_HOST ✓"; \
         else \
             rm -f /home/nathan/.ssh/known_hosts; \
-            echo "⚠️  build 時連不到 $GITLAB_SSH_HOST，未烘入 known_hosts；改由 run wrapper 掛載 host 的那份。"; \
+            echo "⚠️  build 時連不到 ${GITLAB_SSH_HOST}，未烘入 known_hosts；改由 run wrapper 掛載 host 的那份。"; \
         fi; \
     fi
 
