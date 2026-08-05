@@ -74,6 +74,33 @@ else
     echo "   取得規則：git clone --depth 1 https://github.com/semgrep/semgrep-rules.git ${RULES_DIR}"
 fi
 
+# Trivy DB（A2 軌道）：trivy binary 不內建弱點資料庫，第一次掃描才去 ghcr.io 抓
+#（下載約 60MB，解開後落地超過 1GB）。DB 跟 semgrep-rules 一樣由 host 供給，理由有二：
+#   1. 容器用完即丟——每場重抓、重解一次是純浪費
+#   2. 限制模式的白名單沒有 ghcr.io——牆內抓不到，A2 軌道會整場空轉
+# 做法：啟動前在**牆外**更新一次（獨立的一次性容器，entrypoint 被繞過、不套防火牆、
+# 跑完即棄），再把 cache 目錄 mount 進審查容器。更新失敗（離線、逾時）→ 沿用既有 DB
+# 並警告；連既有 DB 都沒有 → 警告，A2 軌道本場會依 skill 的降級規則處理（skip + 揭露）。
+#
+# 用獨立目錄、不共用 host 自己的 ~/.cache/trivy：host 若也裝著 trivy，兩邊版本不同時
+# DB schema 可能不相容，隔離開來誰也不會弄壞誰。
+TRIVY_CACHE_DIR="$HOME/.cache/ncr-trivy"
+mkdir -p "$TRIVY_CACHE_DIR"
+# --entrypoint bash：繞過 image 的互動式啟動選單，只跑更新就退出。
+# timeout 給硬上限——網路半死不活時，不讓「更新 DB」變成「卡住啟動」。
+if docker run --rm --entrypoint bash \
+    -v "$TRIVY_CACHE_DIR":/home/nathan/.cache/trivy \
+    "$IMAGE" -c 'timeout -k 10 180 trivy image --download-db-only' >/dev/null 2>&1; then
+    echo "🗃️  Trivy DB 已更新（${TRIVY_CACHE_DIR}）"
+elif [ -s "$TRIVY_CACHE_DIR/db/trivy.db" ]; then
+    echo "⚠️  Trivy DB 更新失敗，沿用既有版本"
+else
+    echo "⚠️  Trivy DB 更新失敗且沒有既有 cache，本場 Trivy（A2）無 DB 可用。"
+fi
+# 不加 :ro——trivy 除了 DB 還會往同一個 cache 寫掃描的分析結果。DB 的完整性不靠唯讀，
+# 靠「更新在牆外做、審查容器在牆內連不到 ghcr.io」這個順序保證。
+RUN_MOUNTS+=(-v "$TRIVY_CACHE_DIR":/home/nathan/.cache/trivy)
+
 # git 的 SSH 憑證：轉發 host 的 ssh-agent socket，而不是把 ~/.ssh 掛進去。
 # 差別是「能力」與「秘密」——容器只能請 agent 簽章，拿不到私鑰本體；
 # 掛目錄則是把長效私鑰交出去（容器內同 uid、有 shell ＝ 可讀可帶走）。
