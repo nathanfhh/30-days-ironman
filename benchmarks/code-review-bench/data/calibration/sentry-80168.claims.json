@@ -1,0 +1,89 @@
+{
+  "slug": "sentry-80168",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "TestProcessDetectors.setUp is a no-op override that only calls super().setUp(), a leftover remnant from merging StatefulDetectorHandlerTestMixin into BaseDetectorHandlerTest."
+    },
+    {
+      "claim_id": "c002",
+      "text": "Is MetricAlertDetectorHandler being left as `pass` a deliberate placeholder (pending a future stateful implementation), or was it an oversight when the base class was changed?"
+    },
+    {
+      "claim_id": "c003",
+      "text": "Docstring says this returns a list of DetectorEvaluationResult, but the method now returns a dict keyed by DetectorGroupKey. Consider updating the docstring to match the new return type."
+    },
+    {
+      "claim_id": "c004",
+      "text": "build_handler's detector_type parameter is never passed by any of its ten call sites in the file, making it a dead/unused parameter left over from the test refactor."
+    },
+    {
+      "claim_id": "c005",
+      "text": "Mutable class attribute counter_names should be annotated with typing.ClassVar"
+    },
+    {
+      "claim_id": "c006",
+      "text": "The test helper parameter name `type` in create_detector_and_conditions shadows the builtin `type`, and reads awkwardly since `type` in this codebase is also a Detector field name and a GroupType concept."
+    },
+    {
+      "claim_id": "c007",
+      "text": "build_mock_occurrence_and_event hardcodes the same id for every call, and IssueOccurrence.__eq__ only compares by id, so all occurrences from this helper compare as equal regardless of fingerprint or group_key, making multi-group test assertions unable to distinguish between occurrences for different groups"
+    },
+    {
+      "claim_id": "c008",
+      "text": "This expected occurrence is built with the wrong group key/value, so the test can pass without validating the new hook inputs."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Was removing the duplicate-group-key detection and its logger.error call a deliberate transfer of responsibility to each handler, or just incidental cleanup once the return type became a dict? If deliberate, is the new \"keys must be unique and match result.group_key\" contract documented anywhere?"
+    },
+    {
+      "claim_id": "c010",
+      "text": "On line 196, the expected occurrence for group_2 is built with value=6 when the data packet has group_2=10 - this only passes because value is never used in occurrence construction"
+    },
+    {
+      "claim_id": "c011",
+      "text": "The occurrence is sent to Kafka before commit_state_updates() runs; if the commit fails, will the next data packet re-produce the same occurrence (a duplicate issue) rather than just a duplicate resolve as before?"
+    },
+    {
+      "claim_id": "c012",
+      "text": "The `import builtins` / `builtins.type[GroupType]` workaround (needed because the Detector model has a field literally named `type`, which shadows the builtin inside the class body) is correct but has no explanatory comment, making it likely a future \"cleanup\" will revert it back to `type[GroupType]` and break CI again."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Inconsistent value parameter in test: data packet specifies {\"group_1\": 6, \"group_2\": 10} but build_mock_occurrence_and_event for group_2 is called with value=6 instead of value=10"
+    },
+    {
+      "claim_id": "c014",
+      "text": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated."
+    },
+    {
+      "claim_id": "c015",
+      "text": "Unused value parameter in build_mock_occurrence_and_event helper function"
+    },
+    {
+      "claim_id": "c016",
+      "text": "The new test assertions on IssueOccurrence are effectively empty: IssueOccurrence.__eq__ only compares `id`, and the test helper build_mock_occurrence_and_event hardcodes the same id string for every occurrence it builds, so any two occurrences produced by the helper compare equal regardless of fingerprint, group_key, priority, or other content \u2014 meaning this PR's main new assertions verify nothing, as demonstrated by two tests whose expected values already don't match what's actually produced yet still pass."
+    },
+    {
+      "claim_id": "c017",
+      "text": "Detector.project_id is still hardcoded to return 1; now that this change wires up actually producing and sending IssueOccurrence to Kafka, what mechanism prevents occurrences from being written against project 1 before a real project_id is added to the model?"
+    },
+    {
+      "claim_id": "c018",
+      "text": "In test_state_results_multi_group, the second occurrence is built with value=6 even though group_2 has a value of 10 in the data packet, so the test won't catch regressions in how value is threaded into build_occurrence_and_event_data"
+    },
+    {
+      "claim_id": "c019",
+      "text": "This assertion allows extra Kafka publishes, so the test no longer catches duplicate occurrence production."
+    },
+    {
+      "claim_id": "c020",
+      "text": "A TODO comment (\"This will be a stateful detector when we build that abstraction\") describing work that this very PR completed was left in place instead of being removed."
+    },
+    {
+      "claim_id": "c021",
+      "text": "TestEvaluateGroupKeyValue.test_dedupe passes wrong group key ('val1') to build_mock_occurrence_and_event, causing fingerprint mismatch with the key ('group_key') passed to evaluate_group_key_value, breaking the assertion"
+    }
+  ]
+}

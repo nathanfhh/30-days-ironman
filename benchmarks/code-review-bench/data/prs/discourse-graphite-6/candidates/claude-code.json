@@ -1,0 +1,4 @@
+[
+  "The `website_name` attribute is not included in `untrusted_attributes`, so it remains visible to anonymous users viewing TL0 profiles even though `website` is correctly hidden, leaking website information that should be restricted",
+  "`include_website_name` method (line 153) is missing the trailing `?` - ActiveModel::Serializer requires the method to be named `include_website_name?` for conditional attribute inclusion, causing `website_name` to always be serialized instead of being conditionally omitted"
+]

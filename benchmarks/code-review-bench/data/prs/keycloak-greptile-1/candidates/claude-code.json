@@ -1,0 +1,3 @@
+[
+  "UsernameForm.java:47 calls isConditionalPasskeysEnabled() with no arguments, but the method requires a UserModel parameter after commit 3214b18 changed the signature to isConditionalPasskeysEnabled(UserModel user), causing a compilation error. The fix is to call isConditionalPasskeysEnabled(context.getUser()) instead."
+]

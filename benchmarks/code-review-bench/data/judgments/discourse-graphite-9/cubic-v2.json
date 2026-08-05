@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-9",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Same issue: lazy `@loaded_locales ||= []` is outside LOAD_MUTEX, so concurrent threads race on initialisation."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Same issue: locale is not normalised to a Symbol before the include? check, so a String triggers a redundant reload."
+    }
+  ]
+}

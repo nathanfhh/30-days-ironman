@@ -1,0 +1,149 @@
+{
+  "slug": "keycloak-40940",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.98,
+      "severity": "Low",
+      "cluster": "test-typo-groupUuuids",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:121,130,151",
+      "reason": "The new test declares `List<String> groupUuuids` with three 'u's and uses that spelling at every reference; it is a plain typo in a newly added identifier."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "test-stop-flag-no-finally",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:151-155",
+      "reason": "`groupUuuids.forEach(... .remove())` is followed by `deletedAll.set(true)` with no try/finally, so any exception from remove() propagates out of the test with the flag still false and the reader thread's `while (!deletedAll.get())` loop never terminating."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "test-polls-all-groups",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:143; integration/admin-client/.../GroupsResource.java:80-83",
+      "reason": "The 4-arg overload is groups(search, first, max, briefRepresentation), so `null, 0, Integer.MAX_VALUE, true` does request every group in the realm, and it is issued in a tight loop with no sleep. Factually accurate, though the wide page arguably widens the race window on purpose."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "grouputils-parentmodel-npe",
+      "evidence": "services/src/main/java/org/keycloak/utils/GroupUtils.java:46-58; services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java:97,111-113",
+      "reason": "`GroupModel parentModel = session.groups().getGroupById(realm, currGroup.getParentId())` is passed straight to `toRepresentation(...)` and `populateSubGroupCount(parentModel, parent)` with no null check, and getGroupById can return null under the same concurrent-deletion race. populateHierarchy defaults to true; the new test only creates top-level groups (parentId null) so the loop is never entered there."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "trailing-whitespace",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:117",
+      "reason": "`git show HEAD | grep '^+.*[ \\t]$' | cat -A` shows one added line consisting of exactly four spaces. Nothing in the poms (no checkstyle/spotless/formatter plugin) would fail the build over it, but the whitespace is really there."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "test-group-leakage",
+      "evidence": "test-framework/core/src/main/java/org/keycloak/testframework/annotations/InjectRealm.java:19; test-framework/core/.../ManagedRealm.java:59-70; test-framework/junit5-config/src/main/resources/junit-platform.properties",
+      "reason": "Both sub-questions are answerable from the tree: @InjectRealm defaults to LifeCycle.CLASS so the realm is shared by every method in GroupTest, and junit-platform.properties does not enable parallel execution. The test also registers no ManagedRealm cleanup task, so a partial delete loop does leave up to 100 'Test Group N' groups behind for sibling methods. Impact is limited since no other method in the class asserts on the whole-realm group list."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "groupadapter-subgroupsstream-overloads-npe",
+      "evidence": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:256,262,268",
+      "reason": "Lines 256/262/268 are exactly `return modelSupplier.get().getSubGroupsStream(...)`. modelSupplier is a LazyModel over getGroupModel(), which returns cacheSession.getGroupDelegate().getGroupById(realm, cached.getId()) and can be null after a concurrent delete — the identical shape the PR just guarded two lines below at getSubGroupsCount()."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "test-stop-flag-no-finally",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:138-155",
+      "reason": "Same defect as c002, with the consequences spelled out: the thread is created with `new Thread(...).start()` and inherits the non-daemon status of the JUnit thread, so on a failing remove() it spins on the admin endpoint forever and holds the JVM open."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "test-weak-assertion",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:143,157",
+      "reason": "The polling call's `List<GroupRepresentation>` return value is discarded and the only assertion is `assertThat(caughtExceptions, Matchers.empty())`, so the test never inspects subGroupCount in the response — the exact field the GroupAdapter change now populates (as null) on the race path."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "groupadapter-subgroupsstream-overloads-npe",
+      "evidence": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:256,262,268",
+      "reason": "Same finding as c007, with the endpoint named. The three overloads are unguarded `modelSupplier.get()` dereferences and the children endpoint reaches getSubGroupsStream(search, exact, first, max), so the same race still yields a 500."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "test-thread-not-joined",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:138-157",
+      "reason": "The Thread reference is not even held, so there is no join() before `assertThat(caughtExceptions, Matchers.empty())`. A poll already in flight when deletedAll flips can add to caughtExceptions after the assertion has run, silently losing the very failure the test exists to catch."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "groupadapter-subgroupsstream-overloads-npe",
+      "evidence": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:254-268",
+      "reason": "Same finding as c007/c010; the cited 254-268 range covers the three overload declarations and their unguarded modelSupplier.get() calls."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "unrelated-changes-bundled",
+      "evidence": "PR-CHECKLIST.md; model/infinispan/.../entities/CachedGroup.java:56; services/src/main/java/org/keycloak/utils/GroupUtils.java",
+      "reason": "Every factual leg checks out: PR-CHECKLIST.md does say 'The PR does not contain changes not relevant to the GitHub Issue'; CachedGroup.getRealm() implements InRealm.getRealm() so @Override is cosmetic; and `git grep groupMatchesSearchOrIsPathElement HEAD~1` shows the GroupUtils copy was private and already uncalled, i.e. dead-code removal, not part of the NPE fix (commit message: 'Closes #40368')."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "test-reproduces-original-npe",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:135-157",
+      "reason": "The readable half is true — there is no barrier, latch or sleep tying a poll to the delete window, only two unsynchronised loops. Whether that still fails reliably on an unpatched build is a runtime property of the cache-invalidation timing; settling it needs the test run repeatedly against HEAD~1 in CI."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "getsubgroupscount-returns-null-contract",
+      "evidence": "server-spi/src/main/java/org/keycloak/models/GroupModel.java:293-300; model/infinispan/.../GroupAdapter.java:272-276; services/src/main/java/org/keycloak/utils/GroupUtils.java:90",
+      "reason": "The GroupModel javadoc says verbatim '@return The number of groups beneath this group. Never returns {@code null}.' and the PR now returns null from the override, so the contract is broken. The NPE half is weaker: the only production caller is populateSubGroupCount, which passes it to setSubGroupCount(Long), so the immediate effect is a null subGroupCount in the API response rather than an unboxing NPE. Returning 0L would honour the contract."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "test-typo-groupUuuids",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:121,130,151",
+      "reason": "Same typo as c001; the identifier appears three times in the new method (declaration, add, forEach)."
+    }
+  ]
+}

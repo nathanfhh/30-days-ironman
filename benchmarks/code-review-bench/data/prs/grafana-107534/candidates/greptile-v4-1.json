@@ -1,0 +1,5 @@
+[
+  "Double application of applyTemplateVariables/ad hoc filters: applyTemplateVariables is called upfront, then again in DataSourceWithBackend.query() which unconditionally calls it. For parsed log queries with ad hoc filters, addFilterAsLabelFilter has no duplicate-detection guard, causing duplicate label filters like `| env=`prod` | env=`prod``",
+  "Triple application of applyTemplateVariables in shard-split path: runShardSplitQuery calls applyTemplateVariables, then dispatches to runSplitQuery which calls it again, then datasource.runQuery calls DataSourceWithBackend.query() which calls it a third time, causing ad hoc filters to be added multiple times per sub-request",
+  "Test asserts call count (toHaveBeenCalledTimes(5)) which encodes the multi-pass symptom rather than the intended behavior - any future optimization removing redundant calls will break the test even though behavior improves. Should assert what the query looks like after interpolation instead"
+]

@@ -1,0 +1,9 @@
+[
+  "Hardcoding maxSizeKB to 10MB ignores the per-type max_*_size_kb site settings, so the client can accept files the server rejects or reject files when admins allow >10MB",
+  "The hardcoded 10MB limit for images likely shouldn't apply to attachment uploads",
+  "Using a fixed 10.megabytes download cap ignores SiteSetting.max_image_size_kb and can cause instance configuration to be bypassed or prevent larger configured limits",
+  "The same 10MB constant is duplicated in multiple places, risking client/server limit drift",
+  "The downsize loop only shrinks to ~33% of the original after 5 iterations (0.8^5), so a 10MB image may still exceed max_image_size_kb and proceed to Upload.create_for despite the comment promising automatic reduction",
+  "If OptimizedImage.downsize fails and returns false, the loop keeps retrying and the oversized file continues",
+  "There are two self.downsize method definitions where the latter overrides the former and changes the signature, which will raise ArgumentError for callers still passing max_width, max_height (e.g. app/jobs/regular/resize_emoji.rb)"
+]

@@ -1,0 +1,26 @@
+{
+  "slug": "discourse-graphite-4",
+  "tool": "augment",
+  "n_golden": 6,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Same issue: discourseUrl.indexOf(e.origin) substring check is bypassable by an attacker-controlled lookalike origin."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Same issue: targetOrigin is request.referer (a full URL) where an origin is required, breaking the resize handshake."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 3,
+      "confidence": 0.8,
+      "reasoning": "Matches the XSS half of the golden: url interpolated unescaped into the raw HTML anchor."
+    }
+  ]
+}

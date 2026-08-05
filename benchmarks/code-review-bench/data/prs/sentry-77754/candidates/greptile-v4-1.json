@@ -1,0 +1,5 @@
+[
+  "Stale default: `timezone.now()` evaluated at module load time - `queued: datetime = timezone.now()` evaluates once when the module is first imported, so every `AssignmentSource` instance created without an explicit `queued` value will share the exact same timestamp. Should use `field(default_factory=timezone.now)` instead.",
+  "Need to add `field` to the imports: `from dataclasses import asdict, dataclass, field`",
+  "The `assignment_source` parameter added to the `sync_status_outbound` abstract method is never passed by the `sync_status_outbound` task and has no effect today - it's unused dead code that should either have a TODO comment or be removed"
+]

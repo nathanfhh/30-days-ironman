@@ -1,0 +1,4 @@
+[
+  "remove_member calls group.users.delete(user_id) which performs a direct SQL DELETE bypassing ActiveRecord callbacks including counter_cache, causing group.user_count to become stale after member removal. Should use group.remove(User.find(user_id)) instead which properly triggers counter cache updates.",
+  "totalPages is computed as Math.floor(user_count / limit) + 1 which produces an off-by-one error when user_count is an exact multiple of limit (e.g., 100/50 gives 3 instead of 2), allowing users to navigate to an empty page. Should use Math.ceil(user_count / limit) instead."
+]

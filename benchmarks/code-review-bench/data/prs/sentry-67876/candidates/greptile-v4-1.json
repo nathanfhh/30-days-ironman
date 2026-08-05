@@ -1,0 +1,4 @@
+[
+  "Unguarded dict access `integration.metadata[\"sender\"][\"login\"]` will raise KeyError for integrations created before this PR or without a webhook sender event, causing a 500 instead of showing the graceful error page",
+  "`get_user_info` calls `resp.raise_for_status()` internally which raises HTTPError for non-2xx GitHub API responses (401, 429, 5xx), but the call is not wrapped in try/except, causing a 500 instead of rendering the error page"
+]

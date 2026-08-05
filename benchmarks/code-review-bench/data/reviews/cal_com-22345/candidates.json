@@ -1,0 +1,81 @@
+{
+  "slug": "cal_com-22345",
+  "issues": [
+    {
+      "text": "The new InsightsBookingServicePublicOptions type flattens scope to \"user\"|\"org\"|\"team\" with an optional teamId instead of the validated discriminated union, so { scope: \"org\", teamId } compiles but zod strips teamId and the caller silently gets authorization for the whole org — a fail-open widening the type system no longer prevents.",
+      "zh": "新的 InsightsBookingServicePublicOptions 解除了 scope 與 teamId 的關聯，可能靜默放大授權範圍",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "When safeParse fails the constructor just sets this.options to null and the authorization condition becomes 1=0, so malformed options are indistinguishable from a user who genuinely has no data; the failure should at least be logged.",
+      "zh": "建議 :62-63 的驗證失敗不要只吞掉——至少 log 一行，讓「授權條件變成 1=0」在觀測上可分辨於「這個人真的沒有資料」。",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The two Caching tests (authorization conditions / filter conditions) were deleted wholesale while cachedAuthConditions, cachedFilterConditions and their undefined checks remain in the implementation; the sister service's test file still has the identical Caching describe, so this is a one-sided loss of coverage rather than a deliberate policy.",
+      "zh": "Caching 測試整段被刪除，但 cache 實作還在",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The only test that actually sends the generated SQL to Postgres uses scope: \"user\", which is the one branch with no array parameter; the newly introduced `= ANY(...)` in the org and team branches is only checked by toEqual structural comparison and has never been parsed or executed by the database.",
+      "zh": "唯一真的執行產生出來的 SQL 的測試用的是 user scope，而 user scope 正好是唯一沒有 ANY(...) 的分支",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Column names that used to be typed identifiers on Prisma.BookingTimeStatusDenormalizedWhereInput are now string literals inside SQL templates, so a rename of the denormalized view (which has changed at least five times historically) will compile and pass CI and only fail at runtime.",
+      "zh": "欄位名變成 raw SQL 字串常值，schema 改名的失敗時機從編譯期挪到執行期",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Now that the service returns a SQL fragment instead of running findMany, the injected readonlyPrisma (the INSIGHTS_DATABASE_URL read replica) no longer governs where the query runs — the caller picks the client, and the test in this very diff executes the query with the main @calcom/prisma client.",
+      "zh": "service 不再負責執行查詢，readonlyPrisma（insights 讀取副本）就沒有東西保證了",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The same reduce-based 'join Prisma.Sql parts with a separator' block is repeated verbatim in three places (AND for filters, OR for the org and team authorization conditions); Prisma.join already does this and the logic should be a single helper.",
+      "zh": "同一段 reduce join 重複三次",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "All three copies contain a dead `if (index === 0) return condition;` branch: with no initialValue, reduce's callback is first invoked with index 1, so the check is never true and merely suggests a first-element special case that does not exist.",
+      "zh": "而且三處都帶著永遠執行不到的 index === 0 分支",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "getBaseConditions branches four ways on authConditions, but getAuthorizationConditions always returns a Prisma.Sql (NOTHING_CONDITION when nothing matches), which is always truthy, so the `else if (filterConditions)` branch and the NOTHING_CONDITION fallback are unreachable and imply a null case that cannot occur.",
+      "zh": "getBaseConditions 的四路分支有兩路不可能走到",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "The trailing `else { return NOTHING_CONDITION; }` in buildAuthorizationConditions is unreachable too, since this.options is a three-member discriminated union and TypeScript narrows to never there; an exhaustiveness check would be more useful.",
+      "zh": "buildAuthorizationConditions 的尾端 else 也是",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "Assertions now toEqual the Prisma.Sql instance's internal strings/values, pinning the tests to the exact generated SQL text, so a harmless reformat (an extra pair of parentheses, or switching the reduce to Prisma.join as recommended) turns them red while the real risk — whether the SQL runs in Postgres — stays untested.",
+      "zh": "斷言改成對 Prisma.Sql 做結構比對，把測試綁死在括號寫法上",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does binding a JavaScript integer array as a single parameter in `\"teamId\" = ANY(${teamIds})` resolve correctly to an integer array in Postgres via the Prisma query engine, or is an explicit ::int[] cast needed? The repo's only precedents bind string arrays.",
+      "zh": "`\"teamId\" = ANY(${teamIds})` 這種把 JavaScript 整數陣列當單一參數綁進 ANY() 的寫法，經過 Prisma query engine 之後在 Postgres 上會正確解析成整數陣列嗎？還是需要顯式 cast？"
+    },
+    {
+      "text": "Is this migration to Prisma.sql scheduled in the same release as migrating the three places that actually query BookingTimeStatusDenormalized and the isomorphic InsightsRoutingService, or has the migration stopped halfway? The service currently has no production caller.",
+      "zh": "把 InsightsBookingService 遷到 Prisma.sql，是否已經和後續遷移三個實際查 BookingTimeStatusDenormalized 的地方、以及同構的 InsightsRoutingService，排在同一個 release 裡？"
+    }
+  ]
+}

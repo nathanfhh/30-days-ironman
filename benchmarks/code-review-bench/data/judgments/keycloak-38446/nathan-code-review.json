@@ -1,0 +1,26 @@
+{
+  "slug": "keycloak-38446",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 23,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 16,
+      "confidence": 0.85,
+      "reasoning": "Both flag that the recovery codes JSON is deserialized into a raw List so element types are unchecked, which is the first half of the golden comment."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 22,
+      "confidence": 0.6,
+      "reasoning": "The golden's second half is the unguarded Optional.get() on RecoveryAuthnCodesUtils.getCredential(user); the candidate raises the same unchecked Optional.get() calls in the login bean blowing up at runtime, though it frames the trigger as exhausted codes rather than an empty Optional."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Same issue: the model built by createFromValues never gets setId, so getId() is null and downstream removal-by-id comparisons never match."
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  "`TotalDocs()` iterates `b.cache` without acquiring `b.cacheMu.RLock()`, while `BuildIndex` concurrently writes to the map under `cacheMu.Lock()`. In Go, this is a fatal race \u2014 the runtime will panic with 'concurrent map read and map write'. `TotalDocs` must hold the read lock while iterating the map.",
+  "Removing the broad lock allows concurrent `BuildIndex` calls for the same key to race. Two goroutines can simultaneously build the same index \u2014 for file-backed indices this calls `bleve.New` on the same directory path (risking I/O errors or corruption), and in all cases the second writer silently overwrites the first. Consider a per-key lock or a check-before-build pattern (e.g., `sync.Map` of in-flight keys) to prevent duplicate concurrent builds for the same `NamespacedResource`.",
+  "Removing per-request `Init()` checks means `Stop()` no longer blocks later RPCs; the server can still serve requests after shutdown starts.",
+  "Skipping this integration test for postgres removes coverage for the storage-server startup and `/metrics` path on a supported backend. That hides regressions instead of fixing the Drone-specific failure."
+]

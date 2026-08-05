@@ -1,0 +1,26 @@
+{
+  "slug": "discourse-graphite-5",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.85,
+      "reasoning": "Matches the float-vs-flexbox half: floats on children of the new flex container are ignored."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.9,
+      "reasoning": "Matches the second half: removing the float-based right alignment breaks .panel in the ERB header where it is not a flex item."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Same issue: -ms-align-items is not a real property; -ms-flex-align is the correct IE prefix."
+    }
+  ]
+}

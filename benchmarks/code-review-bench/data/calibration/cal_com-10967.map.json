@@ -1,0 +1,336 @@
+{
+  "slug": "cal_com-10967",
+  "claims": [
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "The optional chaining on mainHostDestinationCalendar?.integration is redundant since you already check mainHostDestinationCalendar in the ternary condition.",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "The same always-false fallback in GoogleCalendarService.deleteEvent makes calendarId undefined, and the downstream `calendarId ? calendarId : defaultCalendarId` silently falls back to \"primary\", so events created in a specific calendar are deleted from primary instead, leaving undeletable orphan events while cal.com reports success.",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "Changing CalendarEvent.destinationCalendar from `DestinationCalendar | null` to `DestinationCalendar[] | null` is a breaking change to the outgoing webhook payload, shipped with no version field, no compatibility window and no changelog entry.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 17,
+      "text": "A behavioural refactor spanning 22 files and the booking create/update/cancel paths ships with no new tests \u2014 the only test change is one webhook e2e snapshot expectation flipped from null to [] \u2014 leaving multi-calendar fan-out, the empty-destinationCalendar Google Meet fallback and legacy credentialId-null rows uncovered.",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 11,
+      "text": "In requestReschedule.handler.ts lines 240-242, the second optional chain in bookingToReschedule?.destinationCalendar is redundant since bookingToReschedule is already checked in the truthy branch",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 21,
+      "text": "handleNewBooking replaces the SchedulingType enum comparison with the literal array `[\"COLLECTIVE\", \"ROUND_ROBIN\"].includes(...)` while the same file still uses `SchedulingType.ROUND_ROBIN` elsewhere, mixing two styles and losing compile-time protection if the enum is renamed.",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "GoogleCalendarService.createEvent now picks the calendar with `find((cal) => cal.credentialId === credentialId)`, but DestinationCalendar.credentialId is nullable in the schema, so existing rows with a null credentialId match nothing and `selectedCalendar || \"primary\"` creates the event in the primary calendar instead of the user's configured externalId.",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 7,
+      "text": "Lines 1063-1067 in handleNewBooking initialize evt.destinationCalendar to null when neither eventType nor organizerUser has a destination calendar, and lines 1077-1079 use optional chaining so teamDestinationCalendars are never appended. Collective events where only secondary hosts have calendars will be created with no destination calendars",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "In handleCancelBooking the recurring-cancellation block, which already iterates over all of the user's calendar credentials and all updatedBookings, is now nested inside the new per-reference `for (const reference of bookingCalendarReference)` loop, so with N calendar references the same set of delete calls is executed N times.",
+      "claim_id": "c009"
+    },
+    {
+      "source": "golden",
+      "golden_index": 3,
+      "tool": null,
+      "text": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "In handleNewBooking, evt.destinationCalendar is set to null when neither the event type nor the organizer has one, and the following `evt.destinationCalendar?.push(...teamDestinationCalendars)` is then a silent no-op, so the team members' destination calendars are dropped without any error or log \u2014 exactly the COLLECTIVE case this change is meant to fix.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 5,
+      "text": "The loadUsers function in handleNewBooking.ts was refactored and the organization select was removed from the dynamic user query, which could break organization-related user lookups",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 11,
+      "text": "After the change the webhook payload has three coexisting shapes for the same field \u2014 BOOKING_REJECTED now sends [], BOOKING_CREATED and BOOKING_REQUESTED still send null, and configured bookings send an array \u2014 with nothing documenting it for consumers.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 25,
+      "text": "How many rows in the production DestinationCalendar table have credentialId NULL? That determines whether F-004 immediately affects existing users and whether a backfill migration is needed before merging.",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "Silent no-op drops team-member calendars when organizer has no destination calendar - `evt.destinationCalendar` is set to `null` when neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` is set, so the optional-chaining `?.push()` is a no-op and `teamDestinationCalendars` is silently discarded",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 0,
+      "text": "In createAllCalendarEvents, the else branch (line 380) calls createEvent(c, event) without passing destination.externalId as the third argument, unlike the if-branch, causing externalCalendarId to be undefined for the legacy fallback path and potentially breaking future update/delete operations",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 16,
+      "text": "All three credential lookups sit inside per-destination / per-reference loops and issue one `prisma.credential.findUnique` per iteration, an N+1 query pattern on the latency-sensitive synchronous booking create and cancel paths; a single findMany with `id IN (...)` would do.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 14,
+      "text": "The new try/catch around loadUsers replaces the original error text with a generic 500 \"Unable to load users\" and rewrites every HttpError to 400, so specific messages and status codes (e.g. 404) are lost in both the response and the logs.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 6,
+      "text": "Lines 449-458 in handleCancelBooking ignore the current reference and use updBooking.references.find(), so each updated booking contributes at most one _calendar reference. In collective bookings with one calendar reference per host, the first host gets hit repeatedly while other hosts' events are never deleted. This branch also switches back to bookingToDelete.user.credentials, dropping a DB-fetched team credential",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 23,
+      "text": "The three new `prisma.credential.findUnique({ where: { id } })` lookups fetch a credential (including its OAuth key) by id with no userId/teamId scoping, unlike the previous code which searched only within the caller's own credential set \u2014 is this widening to cross-user credential access deliberately required by the multi-calendar feature, and if so where should the boundary be drawn?",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 15,
+      "text": "The \"look in the in-memory credentials, otherwise fetch from the DB and hand-map the fields\" block is duplicated almost verbatim three times (EventManager.ts twice, handleCancelBooking.ts once), past the rule-of-three threshold for extracting a shared helper, and the hand-mapping risks silently dropping fields such as app.slug.",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 4,
+      "text": "Lines 338-380 in EventManager iterate event.destinationCalendar but each provider call still receives the full destination array, causing providers that read the first entry to create every collective event on the first host's calendar instead of the current destination",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 5,
+      "text": "Lines 511-542 in EventManager can leave credential undefined when a saved credentialId no longer resolves, causing updateEvent(credential, ...) to throw and lines 597-608 to convert that single stale reference into a failure result for every calendar update in the booking",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 18,
+      "text": "Variables that became arrays keep singular names \u2014 `bookingCalendarReference` is now the result of `.filter()` and is tested with `.length > 0`, and `calendarReference` is typed `PartialReference[]` \u2014 which reads as if a single object were being inspected.",
+      "claim_id": "c024"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "In updateAllCalendarEvents the credential is only assigned when both `credentialFromDB && credentialFromDB.app?.slug` hold, yet `updateEvent(credential, ...)` is called unconditionally, so a missing credential passes undefined into updateEvent and throws a TypeError that escapes the function's own catch \u2014 unlike createAllCalendarEvents, which guards the identical case with `if (credential)`.",
+      "claim_id": "c025"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 2,
+      "text": "selectedCalendar can be undefined when no destination calendar matches credentialId, but later code uses it directly (e.g., calendar.events.patch({ calendarId: selectedCalendar, ... })) which can result in invalid Google API calls or missed patching when falling back to primary for the initial insert",
+      "claim_id": "c026"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "loadUsers in handleNewBooking is rewritten wholesale even though it has nothing to do with the destinationCalendar change, making it one of the largest structural changes in the PR and adding review cost for no related benefit.",
+      "claim_id": "c027"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 20,
+      "text": "The comment `// Find in calEventRaw.destinationCalendar the one with the same credentialId` in GoogleCalendarService is separated from the code it describes by a blank line and merely restates the next line instead of explaining why credentialId is matched and why the fallback is primary.",
+      "claim_id": "c028"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 24,
+      "text": "When eventType.destinationCalendar and a team member's destinationCalendar point at the same calendar, does the un-deduplicated array produce two duplicate events on that calendar (teamDestinationCalendars is pushed without de-duplication and createAllCalendarEvents does not compare entries)?",
+      "claim_id": "c029"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 13,
+      "text": "The rewritten dynamic-booking prisma select drops `organization: { select: { slug: true } }`, but IsFixedAwareUser still declares `organization: { slug: string }` and only compiles because of an `as IsFixedAwareUser[]` cast, so the type lies and any future `user.organization.slug` read will be undefined.",
+      "claim_id": "c030"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 10,
+      "text": "updateEvent and deleteEvent in Office365CalendarService don't match the Calendar interface: updateEvent is missing the externalCalendarId parameter, and deleteEvent is missing both event and externalCalendarId parameters. This causes createEvent to correctly use calendar-specific endpoints but updateEvent and deleteEvent always use the default calendar path",
+      "claim_id": "c031"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 1,
+      "text": "If reference.credentialId points to a missing/removed credential and the DB lookup doesn't return an app slug, credential can remain falsy and updateEvent(credential, ...) will throw - need to handle the credential not found case before calling updateEvent",
+      "claim_id": "c032"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 22,
+      "text": "In packages/lib/CalendarService.ts the destructuring `const [mainHostDestinationCalendar] = event?.destinationCalendar ?? []` is placed inside a reduce callback, recomputing the same value on every iteration instead of being hoisted out.",
+      "claim_id": "c033"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "In createAllCalendarEvents the branch for destinations without a credentialId calls `createEvent(c, event)` and omits the third `externalId` argument (the sibling branch passes `destination.externalId`), so EventResult.externalId is empty and the booking reference is written without externalCalendarId.",
+      "claim_id": "c034"
+    },
+    {
+      "source": "golden",
+      "golden_index": 4,
+      "tool": null,
+      "text": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+      "claim_id": "c035"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "Potential null reference if mainHostDestinationCalendar is undefined if evt.destinationCalendar is null or an empty array ",
+      "claim_id": "c036"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 1,
+      "text": "In updateAllCalendarEvents (line 542), updateEvent(credential, ...) is called without checking if credential is defined, causing a runtime error if both in-memory lookup and DB fallback fail",
+      "claim_id": "c037"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 19,
+      "text": "The name `mainHostDestinationCalendar` promises the host's calendar but is only `destinationCalendar[0]`, which in a COLLECTIVE event is the event type's calendar rather than any host's, misleading maintainers into thinking \"which host is the main one\" has already been handled.",
+      "claim_id": "c038"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 0,
+      "text": "`externalId` is never forwarded to the provider create call, so multi-host creates still target the first destination calendar instead of each host's calendar",
+      "claim_id": "c039"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 6,
+      "text": "Multiple places use destructuring like [first] = array without guarding against undefined before property access",
+      "claim_id": "c040"
+    },
+    {
+      "source": "golden",
+      "golden_index": 2,
+      "tool": null,
+      "text": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+      "claim_id": "c041"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 2,
+      "text": "Lines 128, 164, 192, and 237 in LarkCalendarService select event.destinationCalendar[0] blindly which targets the first calendar, incorrect in collective flows where multiple destination calendars with different credentials exist",
+      "claim_id": "c042"
+    }
+  ]
+}

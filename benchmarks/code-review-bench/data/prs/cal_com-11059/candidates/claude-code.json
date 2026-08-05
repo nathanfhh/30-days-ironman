@@ -1,0 +1,6 @@
+[
+  "In zoho-bigin/lib/CalendarService.ts, refreshOAuthTokens on line 93 is passed credentialId (credential.id, the database row ID) instead of credential.userId, causing incorrect user lookup when credential sync is enabled",
+  "In salesforce/lib/CalendarService.ts, the getClient method refreshes the OAuth token and saves it to the database, but then creates the jsforce.Connection using the stale credentialKey.access_token and credentialKey.instance_url from the original credential instead of the freshly obtained accessTokenParsed.data values",
+  "minimumTokenResponseSchema uses [z.string().toString()] as computed property keys which evaluate to '[object Object]' instead of dynamic key matchers, causing the schema to strip all properties except access_token from parsed token data when APP_CREDENTIAL_SHARING_ENABLED is true",
+  "Lines 25-27 inject the literal string 'refresh_token' as a dummy value when no refresh_token is present, which for Office365 overwrites the valid existing refresh_token via the spread on line 264 of CalendarService.ts, breaking subsequent token refreshes"
+]

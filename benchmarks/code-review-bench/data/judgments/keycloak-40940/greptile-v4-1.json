@@ -1,0 +1,20 @@
+{
+  "slug": "keycloak-40940",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both say the reader thread is not joined before the assertion, so exceptions caught in its last iteration can race past the assert."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 3,
+      "confidence": 0.6,
+      "reasoning": "Same issue expressed as its fix: hold the thread in a local variable so join() can be called before asserting."
+    }
+  ]
+}

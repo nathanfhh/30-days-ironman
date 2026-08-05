@@ -1,0 +1,57 @@
+[
+  {
+    "tool": "cubic-v2",
+    "ours_f1": 0.6153846153846153,
+    "upstream_f1": {
+      "anthropic_claude-opus-4-5-20251101": 0.6184210526315789,
+      "anthropic_claude-sonnet-4-5-20250929": 0.6143790849673202,
+      "openai_gpt-5.2": 0.5901639344262295
+    },
+    "upstream_spread": 0.028257118205349374,
+    "ours_vs_upstream_mean": 0.0077299247095724555
+  },
+  {
+    "tool": "augment",
+    "ours_f1": 0.5259740259740261,
+    "upstream_f1": {
+      "anthropic_claude-opus-4-5-20251101": 0.535031847133758,
+      "anthropic_claude-sonnet-4-5-20250929": 0.5337423312883436,
+      "openai_gpt-5.2": 0.4955223880597015
+    },
+    "upstream_spread": 0.03950945907405645,
+    "ours_vs_upstream_mean": 0.004541837146758487
+  },
+  {
+    "tool": "greptile-v4-1",
+    "ours_f1": 0.4437086092715232,
+    "upstream_f1": {
+      "anthropic_claude-opus-4-5-20251101": 0.44000000000000006,
+      "anthropic_claude-sonnet-4-5-20250929": 0.40390879478827363,
+      "openai_gpt-5.2": 0.39498432601880873
+    },
+    "upstream_spread": 0.04501567398119133,
+    "ours_vs_upstream_mean": 0.030744235669162345
+  },
+  {
+    "tool": "coderabbit",
+    "ours_f1": 0.35944700460829493,
+    "upstream_f1": {
+      "anthropic_claude-opus-4-5-20251101": 0.35240274599542326,
+      "anthropic_claude-sonnet-4-5-20250929": 0.37054631828978624,
+      "openai_gpt-5.2": 0.33263157894736844
+    },
+    "upstream_spread": 0.03791473934241779,
+    "ours_vs_upstream_mean": 0.007586790197435633
+  },
+  {
+    "tool": "claude-code",
+    "ours_f1": 0.3588039867109635,
+    "upstream_f1": {
+      "anthropic_claude-opus-4-5-20251101": 0.3758389261744967,
+      "anthropic_claude-sonnet-4-5-20250929": 0.34810126582278483,
+      "openai_gpt-5.2": 0.3304347826086957
+    },
+    "upstream_spread": 0.045404143565801025,
+    "ours_vs_upstream_mean": 0.007345661842304396
+  }
+]

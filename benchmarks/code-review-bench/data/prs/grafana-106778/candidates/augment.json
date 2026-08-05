@@ -1,0 +1,5 @@
+[
+  "promResponse.data.groups.at(0)?.rules.map(...) can still throw if groups is empty because optional chaining only applies to the .rules access, not the subsequent .map - need to guard groups.at(0)/rules before mapping to avoid runtime crash when API returns no groups",
+  "Component-level doc comment says loader fetches from 'Prometheus and Ruler endpoints' but implementation now only calls the Prometheus API - comment is outdated and misleading",
+  "In rules.map(...), the grafana branch returns <GrafanaRuleListItem /> without a key prop, even though key is available from ruleWithOrigin - missing keys can cause incorrect React reconciliation when the list updates"
+]

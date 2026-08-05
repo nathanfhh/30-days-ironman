@@ -1,0 +1,14 @@
+{
+  "slug": "keycloak-greptile-1",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both identify isConditionalPasskeysEnabled/ConditionalPasskeysEnabled being invoked without the required UserModel argument."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.85,
+     "reasoning": "Both identify that the new user != null check prevents conditional passkey setup on the initial, unidentified login page."},
+    {"golden_index": 1, "candidate_index": 2, "confidence": 0.85,
+     "reasoning": "Same underlying issue restated: the null-user login path no longer gets conditional passkey UI populated."}
+  ]
+}

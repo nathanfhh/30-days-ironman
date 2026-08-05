@@ -1,0 +1,7 @@
+[
+  "isinstance(process, multiprocessing.Process) is always False for processes created via multiprocessing.get_context('spawn'), because SpawnProcess does not inherit from multiprocessing.Process. This means unhealthy processes are never killed before being restarted, and processes are never terminated during join(). Should use multiprocessing.process.BaseProcess or check not isinstance(process, threading.Thread) instead.",
+  "default=1 for flusher_processes forces the flusher back to a single process. Should leave unset so the existing SpanFlusher default can scale to the assigned shard count.",
+  "time.sleep(0.1) delay is a no-op because test_basic already monkeypatches time.sleep to lambda _: None, so it does not actually give the flusher thread time to run.",
+  "Inconsistent metric tag key: 'shards' used on wait_produce metric vs 'shard' used on flusher.produce and segment_size_bytes metrics. This will split metrics across two different tag keys in the monitoring system.",
+  "When the deadline is exceeded, break exits the loop and skips calling terminate() on the remaining flusher processes. Those processes will keep running (potentially flushing stale data) until the parent process exits. Should terminate all remaining processes before breaking."
+]

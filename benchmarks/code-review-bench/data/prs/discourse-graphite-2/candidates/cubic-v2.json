@@ -1,0 +1,4 @@
+[
+  "Rendering {{title}} inside HTML translation creates an XSS vulnerability on the unsubscribe page because the title is interpolated and inserted with triple-stash without escaping",
+  "Template is named for a nested topic.unsubscribe route, but the router/controller/view use the top-level topicUnsubscribe route, so the new page content will not be picked up unless the template is renamed to match that route"
+]

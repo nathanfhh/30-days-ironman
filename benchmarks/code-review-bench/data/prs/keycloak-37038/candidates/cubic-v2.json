@@ -1,0 +1,6 @@
+[
+  "`groupResource.getId()` returns the authorization resource's internal ID, but `hasPermission()` uses its argument as a resource name via `resourceStore.findByName(server, groupId)`. For group resources, the name is the actual group ID. This means the lookup will fail to match, and the returned set will contain resource IDs instead of group IDs. Use `groupResource.getName()` instead.",
+  "The feature guard only checks the V1 flag (`ADMIN_FINE_GRAINED_AUTHZ`), but this cleanup listener is also needed when V2 (`ADMIN_FINE_GRAINED_AUTHZ_V2`) is enabled. When a deployment runs V2 without V1, this listener is never registered, so removed roles, clients, and groups will leave orphaned permission resources.",
+  "Privilege escalation: `canManage()` grants manage access to users who only have VIEW permission. The `AdminPermissionsSchema.VIEW` scope should be removed so only `MANAGE` scope is checked, consistent with `canManage(GroupModel group)`.",
+  "This drops support for V2's global group-view permission. `canView(group)` does not include the realm-wide `canView()` check, so flat group listings can become empty for admins who have global Groups VIEW/MANAGE but no per-group grants."
+]

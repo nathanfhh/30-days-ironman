@@ -1,0 +1,12 @@
+{
+  "slug": "keycloak-33832",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both identify getBouncyCastleProvider() actually returning the default JDK keystore's provider (SUN) rather than BouncyCastle."},
+    {"golden_index": 1, "candidate_index": 3, "confidence": 0.9,
+     "reasoning": "Both identify the earlier standalone ASN1Encoder.create().write(...) calls as dead code whose results are discarded, since the actual encoding happens in the return statement."}
+  ]
+}

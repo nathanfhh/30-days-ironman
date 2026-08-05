@@ -1,0 +1,4 @@
+[
+  "QueryData (and the other request methods) dereference req without a nil guard, but other middlewares in this stack defensively handle req == nil; if a nil request ever propagates here this will panic",
+  "TestLogger.FromContext returns a fresh logger instance, so call sites like m.logger.FromContext(ctx).Info(...) won't record logs on the original TestLogger value that tests typically assert against"
+]

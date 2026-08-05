@@ -1,0 +1,12 @@
+{
+  "slug": "discourse-graphite-1",
+  "tool": "greptile-v4-1",
+  "n_golden": 3,
+  "n_candidates": 4,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.95,
+     "reasoning": "Both identify the duplicate downsize method definition where the second overrides the first and breaks callers using separate width/height args."},
+    {"golden_index": 1, "candidate_index": 2, "confidence": 0.8,
+     "reasoning": "Both flag the hardcoded 10MB/10*1024KB size limit overriding the admin-configured per-type max size setting."}
+  ]
+}

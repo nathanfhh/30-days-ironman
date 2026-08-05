@@ -1,0 +1,7 @@
+[
+  "When Init() fails in NewResourceServer(), the function returns (nil, err) without calling cancel(), leaking the context created at line 229 and any goroutines spawned during partial initialization",
+  "The error is logged twice with identical message 'error initializing resource server' - once at line 260 (new) and once inside Init() at line 314 (existing)",
+  "TotalDocs() in bleve.go iterates b.cache without holding b.cacheMu.RLock(), while BuildIndex() writes to b.cache under cacheMu.Lock() - concurrent map iteration and map write is undefined behavior that can cause a fatal runtime panic",
+  "In searchSupport.init() when initWorkers > 1, the errgroup goroutines concurrently write to the shared err variable (line 190 uses = instead of :=) - if one goroutine sets err=someError and another sets err=nil, the error is silently lost",
+  "In searchSupport.init() when initWorkers > 1, totalBatchesIndexed++ (line 189) is a non-atomic increment from multiple concurrent goroutines, causing a data race"
+]

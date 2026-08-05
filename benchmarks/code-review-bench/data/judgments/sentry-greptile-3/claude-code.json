@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-greptile-3",
+  "tool": "claude-code",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.92,
+      "reasoning": "Both identify that the outer closure's dataset is passed instead of scoped_dataset to the upsampling eligibility check."
+    }
+  ]
+}

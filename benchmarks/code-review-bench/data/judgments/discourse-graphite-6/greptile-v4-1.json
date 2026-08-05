@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-6",
+  "tool": "greptile-v4-1",
+  "n_golden": 1,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.7,
+      "reasoning": "Matches the second half of the golden: using << on a string literal mutates/raises; should use + or interpolation."
+    }
+  ]
+}

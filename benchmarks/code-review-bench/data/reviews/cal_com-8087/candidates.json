@@ -1,0 +1,61 @@
+{
+  "slug": "cal_com-8087",
+  "issues": [
+    {
+      "text": "appStore's 28 dynamic `import()` calls are all triggered immediately when the object literal is evaluated, so nothing is actually deferred; 27 of these promises are never awaited by anyone, creating an unhandled-rejection risk.",
+      "zh": "appStore 的 28 個 import() 在模組求值當下就全部發動，沒有任何東西被延後載入",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "Three `Array.prototype.forEach` callbacks were changed to async functions, so the outer try/catch around them no longer works — errors thrown inside (e.g. from getCalendar) are now silently dropped instead of being logged or surfaced.",
+      "zh": "三處 forEach 的 callback 被改成 async，外層 try/catch 對這段程式碼已經失效",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "Two adjacent branches in handleCancelBooking handle the same delete-and-collect pattern in opposite ways; the recurring-booking branch still uses forEach(async...) and pushes its result into apiDeletes after Promise.all has already read that array, so the deletion is neither awaited nor observed.",
+      "zh": "handleCancelBooking 兩個相鄰分支對同一個 pattern 做了相反的處理，recurring 分支的刪除結果收不進 apiDeletes",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "getCalendarCredentials remains a synchronous function, but the `calendar` field on its returned object is now a Promise instead of `Calendar | null`, which is misleading given the field name and the unchanged type alias consumers rely on.",
+      "zh": "getCalendarCredentials 仍是同步函式，但回傳物件的 calendar 欄位現在是一個 Promise",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The hand-maintained list of 28 apps in packages/app-store/index.ts has no gating test to keep it in sync with the generated app list.",
+      "zh": "手維護的 28 筆 app 清單沒有守門測試",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "A commented-out example entry was translated into the new import syntax but still points to a directory that doesn't exist.",
+      "zh": "註解掉的 example 條目指向不存在的目錄",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "getVideoAdapters awaits inside a loop; once F-001's fix (switching to thunks) lands, this loop will become genuinely sequential module loading instead of a no-op await.",
+      "zh": "getVideoAdapters 在迴圈內 await，F-001 修好之後會變成真的序列載入",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "On cal.com's actual deployment runtime (Next.js server / Vercel serverless), will an unhandled rejected promise be swallowed, logged, or will it terminate the process?",
+      "zh": "在 cal.com 實際部署的 runtime（Next.js server / Vercel serverless）上，一個沒有被任何人 await 的 rejected promise 會被吞掉、被記錄，還是會終止 process？"
+    },
+    {
+      "text": "What is the actual measured impact of this change on cold start time and server bundle size?",
+      "zh": "這次改動對 cold start 時間與 server bundle 大小的實際影響是多少？"
+    },
+    {
+      "text": "Does `tsc --noEmit` still pass on this branch, especially around the union type formed by the 28 module namespaces at the six `await appStore[...]` call sites?",
+      "zh": "全 repo 的 `tsc --noEmit` 在這個分支上是否仍然通過？特別是六個 `await appStore[...]` 位置上那個 28 個 module namespace 組成的 union 型別。"
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "slug": "discourse-graphite-3",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "The new errors field in the POST /users response is a hash keyed by field name, which has the same name but a different shape than the existing errors (a string array) used elsewhere in the same controller."
+    },
+    {
+      "claim_id": "c002",
+      "text": "There is no test coverage for the new errors/values response fields added to UsersController that the frontend depends on."
+    },
+    {
+      "claim_id": "c003",
+      "text": "There is no test coverage for EmailValidator's short-circuit branch that skips should_block? when the email already has other validation errors."
+    },
+    {
+      "claim_id": "c004",
+      "text": "Email.downcase() only lowercases the domain part, not the local part, so using it won't fix the case-sensitivity issue - need to use full downcase instead"
+    },
+    {
+      "claim_id": "c005",
+      "text": "Case-sensitive email lookup in BlockedEmail.should_block? creates bypass risk - User@Example.com can bypass a block on user@example.com"
+    },
+    {
+      "claim_id": "c006",
+      "text": "Should a blocked registration attempt reveal to the requester that the specific email address is on the block list, since the current response allows enumerating the list?"
+    },
+    {
+      "claim_id": "c007",
+      "text": "The new EmailValidator file is missing a trailing newline at end of file."
+    },
+    {
+      "claim_id": "c008",
+      "text": "pushObject(result.values.email) will add null/undefined if the server response omits values.email or returns it blank, leaving a non-string entry in rejectedEmails - should ensure value is present before caching"
+    },
+    {
+      "claim_id": "c009",
+      "text": "Potential duplicate entries in rejectedEmails array if user submits same blocked email multiple times"
+    },
+    {
+      "claim_id": "c010",
+      "text": "No updated specs for the changes to UsersController#create"
+    },
+    {
+      "claim_id": "c011",
+      "text": "BlockedEmail.should_block_email? method has side effects during a read operation - it updates statistics even when just checking if an email should be blocked. This could cause race conditions in concurrent environments and makes the method name misleading."
+    },
+    {
+      "claim_id": "c012",
+      "text": "Consider using the new user.email.blocked translation key instead of user.email.invalid for blocked email validation messages"
+    },
+    {
+      "claim_id": "c013",
+      "text": "Extra blank lines at start/end of describe block in email_validator_spec.rb violate RuboCop Layout/EmptyLinesAroundBlockBody convention"
+    },
+    {
+      "claim_id": "c014",
+      "text": "should_block? returns nil instead of false when no matching record exists, violating the predicate-method (?) convention of always returning a boolean."
+    },
+    {
+      "claim_id": "c015",
+      "text": "rejectedEmails is declared in the class body, so the Ember.A([]) array actually lives on the prototype and is shared across all controller instances."
+    },
+    {
+      "claim_id": "c016",
+      "text": "BlockedEmail.should_block? should use email.downcase when querying to ensure case-insensitive matching"
+    },
+    {
+      "claim_id": "c017",
+      "text": "email_validator.rb file is missing a trailing newline"
+    },
+    {
+      "claim_id": "c018",
+      "text": "Normalize the email before querying in BlockedEmail.should_block?; otherwise blocked addresses can be bypassed by changing case"
+    },
+    {
+      "claim_id": "c019",
+      "text": "Em.A([]) defined directly on the class body creates a shared mutable array across all instances of CreateAccountController, causing rejected emails from one instance to bleed into every other instance - should be initialized in init hook instead"
+    },
+    {
+      "claim_id": "c020",
+      "text": "Missing regression test covering nil/blank value when whitelist/blacklist settings are present to ensure validation doesn't raise unexpectedly"
+    },
+    {
+      "claim_id": "c021",
+      "text": "email_in_restriction_setting? calls value =~ regexp which will raise if value is nil (e.g., missing email param) even though presence validation would already fail - need to guard validate_each / email_in_restriction_setting? against blank/nil values"
+    },
+    {
+      "claim_id": "c022",
+      "text": "UsersController#create now returns user.errors.to_hash which could potentially leak internal validation details"
+    },
+    {
+      "claim_id": "c023",
+      "text": "Rejected email cached with server-normalised casing causes case-sensitivity mismatch - server stores downcased email but client checks rejectedEmails.contains(email) against raw input, allowing users to bypass client-side guard by retyping with different casing"
+    },
+    {
+      "claim_id": "c024",
+      "text": "The new EmailValidator uses the `and` keyword instead of `&&` in a conditional, which is a low-precedence pitfall."
+    },
+    {
+      "claim_id": "c025",
+      "text": "Regex pattern @(#{domains}) only matches domain suffixes, not full domains. evil.example.com would match whitelist entry example.com."
+    },
+    {
+      "claim_id": "c026",
+      "text": "BlockedEmail model needs email normalization via before_validation callback to downcase emails before storage"
+    },
+    {
+      "claim_id": "c027",
+      "text": "Missing newline at end of file which will cause noisy diffs and may trigger linter warnings"
+    },
+    {
+      "claim_id": "c028",
+      "text": "The field-level error message shown for a blocked email is a generic \"invalid\", inconsistent with the specific server message shown in the flash."
+    },
+    {
+      "claim_id": "c029",
+      "text": "How will the blocked_emails table actually be populated, given there is no admin UI, rake task, or seed data to insert records?"
+    },
+    {
+      "claim_id": "c030",
+      "text": "The blocked-email lookup does a case-sensitive string comparison, so changing the case of one letter in a blocked address bypasses the block entirely."
+    },
+    {
+      "claim_id": "c031",
+      "text": "EmailValidator no longer rejects malformed email addresses, so validates :email, email: true can now accept values like sam@sam or sam"
+    },
+    {
+      "claim_id": "c032",
+      "text": "The computed property depends on rejectedEmails.@each but @each is mainly for observing per-item properties and can be unreliable for array membership changes with primitive items like strings - may not recompute when pushObject is called depending on Ember version"
+    },
+    {
+      "claim_id": "c033",
+      "text": "set_defaults is declared as a public instance method even though it is only meant to be used as an internal before_validation callback."
+    },
+    {
+      "claim_id": "c034",
+      "text": "The new BlockedEmail model name collides conceptually with the existing User#blocked concept (suspended accounts), which refers to something different."
+    },
+    {
+      "claim_id": "c035",
+      "text": "The return value of record.save when updating match_count is discarded, so if the save ever fails validation, the stats silently stop updating with no signal."
+    },
+    {
+      "claim_id": "c036",
+      "text": "No updated specs for the modified User model validations"
+    }
+  ]
+}

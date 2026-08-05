@@ -1,0 +1,73 @@
+{
+  "slug": "discourse-graphite-6",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "A 133-character nested ternary expression combined with a complex elsif condition makes the same-organization decision logic hard to read and verify."
+    },
+    {
+      "claim_id": "c002",
+      "text": "The include_website_name method is missing the required ? suffix. Rails serializers expect include_ methods to end with ? for conditional attribute inclusion, a convention followed by other methods in this serializer. Without it, the website_name attribute may not be conditionally included as intended. Additionally, the '.' << website_host string concatenation should be replaced with '.' + website_host or '.#{website_host}' to avoid mutating string literals, which can lead to issues."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The untrusted_attributes list in the serializer spec was not updated to include website_name, so there is no regression test guarding the field-masking bug."
+    },
+    {
+      "claim_id": "c004",
+      "text": "The `include_website_name` method needs to apply the same `restrict_user_fields?` guard as `website`, otherwise the derived URL label can bypass the existing hidden-profile-field check"
+    },
+    {
+      "claim_id": "c005",
+      "text": "The `website_name` attribute is not included in `untrusted_attributes`, so it remains visible to anonymous users viewing TL0 profiles even though `website` is correctly hidden, leaking website information that should be restricted"
+    },
+    {
+      "claim_id": "c006",
+      "text": "website_name re-parses the same URI up to twice and re-splits the host by '.' up to six times within a single call, which is redundant computation."
+    },
+    {
+      "claim_id": "c007",
+      "text": "There is no test asserting that website_name is absent from the payload when the user hasn't set a website."
+    },
+    {
+      "claim_id": "c008",
+      "text": "URI parsed up to three times per call - URI(website.to_s) is called multiple times to get host and path, should parse once and cache the result"
+    },
+    {
+      "claim_id": "c009",
+      "text": "Is the asymmetry in the reverse case (website is a subdomain of the instance domain) intentional, i.e. should the same-domain-family check be bidirectional?"
+    },
+    {
+      "claim_id": "c010",
+      "text": "The rescue modifier on URI parsing (`rescue nil`) catches all StandardError, not just URI::InvalidURIError, so a website value containing a space silently makes website_name return nil and hides the entire website UI element (a behavioral regression from the previous frontend implementation)."
+    },
+    {
+      "claim_id": "c011",
+      "text": "There is no test covering the elsif branch that the code comment itself describes (www.example.com vs forum.example.com), which is the most logically complex part of the new method."
+    },
+    {
+      "claim_id": "c012",
+      "text": "Can Discourse.current_hostname ever include a port (e.g. localhost:3000)? If so, all comparisons would fall into the 'different domain' branch on non-standard-port deployments since URI#host never includes a port."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Empty string website_host not guarded - URI.host can return empty string for file:/// or data: URIs, and the nil check won't catch this, causing unnecessary serialization of empty website_name"
+    },
+    {
+      "claim_id": "c014",
+      "text": "The new website_name serializer attribute is not added to untrusted_attributes, so it bypasses the existing rule that hides fields like website from anonymous viewers of a TL0 user's profile, defeating an existing anti-spam protection."
+    },
+    {
+      "claim_id": "c015",
+      "text": "In website_name, the logic doesn't cover the case where the instance host is the apex domain (e.g. example.com) but the user website is a subdomain (e.g. www.example.com/user); in that case this branch returns only www.example.com without the path. Subdomains of the instance domain may need to include the path as well."
+    },
+    {
+      "claim_id": "c016",
+      "text": "The 'same organization' heuristic (equal label count plus matching domain after dropping the first label) misjudges two-level public suffixes like com.br or co.uk as the same organization, causing an unrelated external domain to be shown with its full path."
+    },
+    {
+      "claim_id": "c017",
+      "text": "Sibling-subdomain case (Case 2 elsif branch) is untested - the branch handling hosts with same number of segments and more than two has no spec coverage"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  "`end` variable uses `slotStartTime` instead of `slotEndTime` - copy-paste error where `end` is computed identically to `start`, so the check `end > workingHour.endTime` can never catch a slot that starts within working hours but extends past the end",
+  "Dayjs object identity comparison instead of value comparison - `dayjs(...) === dayjs(...)` compares object references and always returns `false`, so the intended 'empty override' guard will never trigger. Should use `.isSame()` instead",
+  "UTC offset sign is negated \u2014 `utcOffset() * -1` moves override boundaries in the wrong direction for non-UTC organizers, causing incorrect day-boundary checks and wrong slot-range filtering",
+  "Working-hours check blocks slot if it falls outside ANY single entry, not ALL entries - if a user has two working-hour windows and the slot sits inside the second window, it will still be rejected because the first entry's check evaluates to true. Should use `some()` to allow slot if at least one working-hour entry fully contains it"
+]

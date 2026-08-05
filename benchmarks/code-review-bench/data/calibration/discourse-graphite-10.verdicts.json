@@ -1,0 +1,482 @@
+{
+  "slug": "discourse-graphite-10",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "spec-stray-blank-lines",
+      "evidence": "spec/models/topic_spec.rb:1399-1400, spec/models/embeddable_host_spec.rb:37-39",
+      "reason": "The new `describe \"expandable_first_post?\"` block opens with a blank line and closes with one, and embeddable_host_spec's describe block does the same; that is exactly what Layout/EmptyLinesAroundBlockBody flags. The repo ships no .rubocop.yml, so the rule is not actually enforced here, but the stray lines are really there."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "plural-hydration-unconditional-assign",
+      "evidence": "app/assets/javascripts/discourse/models/store.js.es6:196-201 vs 202-207",
+      "reason": "_lookupSubType returns undefined when the id is absent from the sideloaded collection (store.js.es6:157-187). The singular branch only assigns and deletes the raw key when hydration succeeded; the plural branch assigns the mapped array and deletes obj[k] unconditionally, so missing records become undefined holes and the original ids are gone."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "host-regex-tld-length",
+      "evidence": "app/models/embeddable_host.rb:2",
+      "reason": "Ran the literal regex against sample hosts: 'example.software' and 'example.museum' both fail because of `[a-z]{2,5}`. The model has no custom validation message either, so the admin only sees the generic 'is invalid'."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "spec-typo-emeddable",
+      "evidence": "spec/models/topic_spec.rb:1407",
+      "reason": "The added block reads `describe 'with an emeddable host' do` — 'embeddable' is misspelled."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "host-port-never-matches",
+      "evidence": "app/models/embeddable_host.rb:2,5-8,15",
+      "reason": "The format regex explicitly allows `(:[0-9]{1,5})?` and before_validation only strips the scheme and the path, so 'example.com:3000' saves intact. record_for_host then compares `lower(host)` to `URI(...).host`, which I confirmed in ruby returns 'example.com' with no port — the stored row can never match."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "controller-specs-inheritance-only",
+      "evidence": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:1-9, spec/controllers/admin/embedding_controller_spec.rb:1-9",
+      "reason": "Both new specs contain a single example asserting `Controller < Admin::AdminController`. No create/update/destroy request is exercised, so the nil-record path (embeddable_hosts_controller.rb:8-13) and the nil-host NoMethodError are untested."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "fabricator-files-swapped",
+      "evidence": "spec/fabricators/category_fabricator.rb:1-3, spec/fabricators/embeddable_host_fabricator.rb:1-27",
+      "reason": "category_fabricator.rb now holds only `Fabricator(:embeddable_host)` and embeddable_host_fabricator.rb holds :category/:diff_category/:happy_category/:private_category. Fabrication loads the whole spec/fabricators directory, so nothing breaks — the filenames are simply wrong."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "private-category-fabricator-after-build",
+      "evidence": "spec/fabricators/embeddable_host_fabricator.rb:17-27",
+      "reason": "This is the pre-existing :private_category fabricator relocated byte-for-byte from category_fabricator.rb; the diff changes none of it. Every caller (spec/components/guardian_spec.rb:278, spec/models/invite_spec.rb:132, spec/controllers/topics_controller_spec.rb:757, spec/models/topic_spec.rb:1455, spec/controllers/posts_controller_spec.rb:840) passes `group:`, so the described raise does not occur."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "embedding-serializer-sideload",
+      "evidence": "app/serializers/application_serializer.rb:2, app/serializers/user_serializer.rb:73, app/assets/javascripts/discourse/models/user.js.es6:303-311",
+      "reason": "ApplicationSerializer declares `embed :ids, include: true` at class level, and EmbeddingSerializer inherits it; the per-association `embed: :ids` does not turn root embedding off. The identical pattern on UserSerializer's featured_user_badges is relied on by the client, which reads the sideloaded root `user_badges` array — so the embeddable_hosts array is sideloaded and hydration works."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Critical",
+      "cluster": "migration-unguarded-row-index",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11",
+      "reason": "`execute(...)[0]['id']` runs before the `if category_id == 0` fallback. PG::Result#[] raises IndexError on an empty result, and the join only matches when a site_settings row named embed_category exists whose value equals a category name — which is false on fresh installs and on every site that left embed_category at its '' default. Sibling migrations guard exactly this (20140715190552_remove_uncategorized_parents.rb:4 checks `uncat && uncat[0] && uncat[0]['value']`; 20130625170842_remove_access_password.rb:4 checks `result[0] and ...`)."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "edit-seeds-categoryid-from-hydrated-category",
+      "evidence": "app/assets/javascripts/admin/components/embeddable-host.js.es6:26-27, app/assets/javascripts/discourse/models/store.js.es6:163-165, app/models/site.rb:46-48",
+      "reason": "_lookupSubType resolves category via Discourse.Category.findById, which returns undefined when the id is not in the client-side category list — and Site#categories omits the uncategorized category when allow_uncategorized_topics is false, which is exactly the id the server assigns by default. edit() then sets categoryId to undefined and save() posts category_id: undefined, which the controller silently rewrites to uncategorized."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "delete-action-no-error-handling",
+      "evidence": "app/assets/javascripts/admin/components/embeddable-host.js.es6:43-51",
+      "reason": "The delete action chains only `.then(...)` on destroyRecord, while save() in the same file ends with `.catch(popupAjaxError)`. A rejected destroy leaves the row rendered and shows the user nothing."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "expandable-first-post-spec-vacuous",
+      "evidence": "app/models/topic.rb:864, spec/models/topic_spec.rb:1403-1405",
+      "reason": "expandable_first_post? is now `SiteSetting.embed_truncate? && has_topic_embed?` — it no longer consults embeddable hosts at all. The retained example 'is false if embeddable_host is blank' lost its setup line and now passes because embed_truncate defaults to false, so it asserts nothing about its stated subject."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "host-lookup-case-normalization",
+      "evidence": "app/models/embeddable_host.rb:15",
+      "reason": "The SQL side lowercases the column but the bind value is passed through unchanged. I confirmed in ruby that URI('http://EvilTrout.com/x').host returns 'EvilTrout.com', so a mixed-case referer host fails a comparison that was clearly written to be case-insensitive; it needs `host.downcase`."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "icon-only-buttons-no-title",
+      "evidence": "app/assets/javascripts/admin/templates/components/embeddable-host.hbs:9-10,16-17, app/assets/javascripts/discourse/components/d-button.js.es6:6-13",
+      "reason": "d-button binds `translatedTitle` to the title attribute, which is empty unless a `title` key is passed; the four new icon-only buttons pass none, so they render as buttons with no accessible name. Sibling admin templates do pass title (backups_index.hbs:24,27), and no admin.embedding key exists for save/cancel/delete."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "migration-raw-sql-interpolation",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:25",
+      "reason": "`VALUES ('#{h}', ...)` splices the setting value straight into the statement with no quoting; a host containing an apostrophe terminates the literal and aborts the migration. The repo's own precedent escapes first — 20140929204155_migrate_tos_setting.rb:12 calls PG::Connection.escape_string before interpolating."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "replace-first-underscore-only",
+      "evidence": "app/assets/javascripts/discourse/adapters/rest.js.es6:22",
+      "reason": "String.prototype.replace with a string pattern replaces only the first match, so it works for 'embeddable_host' (one underscore) and silently fails the ADMIN_MODELS lookup for any future two-underscore type; a /_/g regex is needed."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "serializer-redundant-readers",
+      "evidence": "app/serializers/embeddable_host_serializer.rb:4-14, app/serializers/embedding_serializer.rb:5-7",
+      "reason": "`attributes :id, :host, :category_id` already generates readers that delegate to read_attribute_for_serialization, so the three explicit `def x; object.x; end` methods (and EmbeddingSerializer's `id`) are exact duplicates of the generated behaviour."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Critical",
+      "cluster": "migration-unguarded-row-index",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-16",
+      "reason": "Both `[0]['id']` on the categories join and `[0]['value']` on the uncategorized_category_id lookup index a PG::Result without checking cmd_tuples; PG::Result#[] raises IndexError when empty. The uncategorized_category_id row is only inserted by db/fixtures/001_categories.rb, which runs after migrations, so it can be absent too."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "store-test-wrong-fixture-id",
+      "evidence": "test/javascripts/models/store-test.js.es6:110-118, test/javascripts/helpers/create-pretender.js.es6:227-229",
+      "reason": "The test calls store.find('fruit', 2) but asserts colors [1,2], which are apple's (id 1) color_ids; banana (id 2) has [3]. The pretender handler for '/fruits/:id' ignores request.params and always returns fruits[0], so the test can neither fail on a wrong id nor verify per-record hydration."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "migration-deletes-source-settings",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:31",
+      "reason": "The final statement deletes the embeddable_hosts and embed_category rows it just read, inside a `def change` whose `execute` calls are irreversible. If the unescaped/unnormalized insert produced wrong rows, the original configuration is unrecoverable."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "migration-raw-sql-interpolation",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:25",
+      "reason": "Same unparameterized `VALUES ('#{h}', #{category_id}, ...)` interpolation; the value originates from an admin-editable site setting, so it is attacker-influenced input reaching raw SQL."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "host-regex-tld-length",
+      "evidence": "app/models/embeddable_host.rb:2",
+      "reason": "Confirmed by running the regex: `[a-z]{2,5}` rejects 'example.museum' and 'example.software'. Same defect as c003."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "migration-raw-sql-interpolation",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:21-26",
+      "reason": "Interpolation is unescaped as described, and `val.split(\"\\n\")` keeps interior empty strings, so a setting value with a blank line inserts a row with host = '' into a column declared NOT NULL but not checked for blankness."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "migration-force-true",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:3",
+      "reason": "`force: true` is the established pattern in this repo (16 of 110 migrations use it, e.g. 20150325190959_create_queued_posts.rb, 20150318143915_create_directory_items.rb), and Rails never re-runs a recorded migration, so the 'data loss on re-run' consequence cannot occur for a table this migration itself introduces."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "unused-i18n-edit-key",
+      "evidence": "config/locales/client.en.yml:2497",
+      "reason": "Grepping app/assets/javascripts for 'admin.embedding' finds confirm_delete, title, host, category and add_host in use; `edit` is referenced nowhere — the edit button is icon-only with no label or title."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "controller-nil-record",
+      "evidence": "app/controllers/admin/embeddable_hosts_controller.rb:8-15,20-21",
+      "reason": "`EmbeddableHost.where(id: params[:id]).first` returns nil for an unknown id; update then reaches `host.host = ...` and destroy calls `host.destroy`, both NoMethodError on nil, giving a 500 instead of a 404."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "resources-without-only",
+      "evidence": "config/routes.rb:146, app/controllers/admin/embeddable_hosts_controller.rb:4-15",
+      "reason": "The controller implements only create/update/destroy, but a bare `resources` declares all seven routes. The repo does restrict elsewhere (config/routes.rb:122-129 uses `only:` for staff_action_logs, screened_emails, screened_urls)."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "host-regex-uppercase-Z-anchor",
+      "evidence": "app/models/embeddable_host.rb:2",
+      "reason": "Verified in ruby: \"example.com\\n\" matches the regex because \\Z permits a trailing newline, where \\z would not. A stored host with a trailing newline would then never match record_for_host's exact comparison."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "migration-raw-sql-interpolation",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:25",
+      "reason": "Same finding as c016/c022 — the embeddable_hosts site setting value is interpolated into the INSERT with no quoting or escaping."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "end-to-end-unverified",
+      "evidence": "test/javascripts/, spec/controllers/admin/embedding_controller_spec.rb",
+      "reason": "The embedded factual part is true — the diff adds no acceptance test and the two new controller specs only check inheritance — but 'does the screen work end-to-end' is a runtime question. Settling it needs the app booted with gems and node_modules, or an added acceptance test that drives /admin/customize/embedding."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "unused-let-host",
+      "evidence": "spec/controllers/embed_controller_spec.rb:5",
+      "reason": "`let(:host) { \"eviltrout.com\" }` survives, but every `SiteSetting.embeddable_hosts = host` that referenced it was replaced by Fabricate(:embeddable_host) in this diff; nothing in the file reads `host` any more."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Critical",
+      "cluster": "migration-unguarded-row-index",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11",
+      "reason": "site_settings only holds rows for settings changed from their default, and embed_category defaults to '' (config/site_settings.yml, removed in this diff). The INNER JOIN therefore returns zero rows on any site that never customized it — and on fresh installs where categories is empty — and [0]['id'] raises IndexError, aborting rake db:migrate."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "store-find-singleton",
+      "evidence": "app/assets/javascripts/discourse/models/store.js.es6:64-73, app/assets/javascripts/admin/routes/admin-embedding.js.es6:2-4",
+      "reason": "store.find branches on `typeof findArgs === \"object\"`; with findArgs undefined that is false, so it takes the else branch and returns _hydrate(type, result['embedding'], result) — a single record, not a ResultSet. The custom adapter (admin/adapters/embedding.js.es6) supplies the fixed path, so no id is needed."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "feed-poll-loses-embed-category",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:37, app/models/topic_embed.rb:38-45, config/site_settings.yml (embed_category removed)",
+      "reason": "The mechanism is stated loosely — PollFeed does reach EmbeddableHost matching, via TopicEmbed.import — but the consequence holds: the category now comes solely from a matching EmbeddableHost row for the feed item's URL, and feed-polling sites that never registered the feed host lose the embed_category setting with no replacement, so imported topics land in uncategorized."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "store-test-wrong-fixture-id",
+      "evidence": "test/javascripts/models/store-test.js.es6:110-118, test/javascripts/helpers/create-pretender.js.es6:227-229",
+      "reason": "Same defect as c020: the '/fruits/:id' pretender returns fruits[0] regardless of the requested id, so find('fruit', 2) is asserted against apple's data."
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "no-unique-index-on-host",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:3-7, app/models/embeddable_host.rb:2-15",
+      "reason": "The migration adds no index at all and the model declares only validates_format_of, so nothing prevents two rows with the same host. record_for_host's `.first` then picks an arbitrary row, making which category applies nondeterministic."
+    },
+    {
+      "claim_id": "c038",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "controller-specs-inheritance-only",
+      "evidence": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:5-7",
+      "reason": "Same observation as c006 — the only example is the `< Admin::AdminController` assertion; no CRUD action is invoked."
+    },
+    {
+      "claim_id": "c039",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "plural-hydration-null-ids",
+      "evidence": "app/assets/javascripts/discourse/models/store.js.es6:197",
+      "reason": "`obj[k].map(...)` is reached for any key matching /(.+)_ids$/ with no type check, so a JSON null (or a scalar) for that key throws a TypeError inside hydration. The singular branch has no equivalent exposure because it just passes the value along."
+    },
+    {
+      "claim_id": "c040",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "nil-host-before-validation",
+      "evidence": "app/models/embeddable_host.rb:5-8, app/controllers/admin/embeddable_hosts_controller.rb:20",
+      "reason": "The before_validation block calls `self.host.sub!` unguarded; I confirmed nil.sub! raises NoMethodError. save_host assigns params[:embeddable_host][:host] straight through, so a create/update posted without a host 500s inside validation instead of returning a validation error."
+    },
+    {
+      "claim_id": "c041",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "fabricator-files-swapped",
+      "evidence": "spec/fabricators/category_fabricator.rb:1-3, spec/fabricators/embeddable_host_fabricator.rb:1-27",
+      "reason": "Same finding as c007 — the two files' contents are exchanged."
+    },
+    {
+      "claim_id": "c042",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "migration-no-host-normalization",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:25, app/models/embeddable_host.rb:5-8,15",
+      "reason": "The raw INSERT bypasses the model, so values the old host_list setting accepted with a scheme or path ('https://example.com/1234' — the very shape the new specs fabricate) are stored verbatim. record_for_host compares them to URI(...).host, a bare hostname, so migrated rows stop matching and embedding silently breaks after upgrade."
+    },
+    {
+      "claim_id": "c043",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "host-port-never-matches",
+      "evidence": "app/models/embeddable_host.rb:2,5-8,15",
+      "reason": "Both halves check out: before_validation strips `/.*$` before validates_format_of runs, so the regex's `(\\/.*)?` branch is unreachable, and the `(:[0-9]{1,5})?` branch permits a port that URI(...).host never produces, so such a row can never match."
+    },
+    {
+      "claim_id": "c044",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "host-regex-rejects-localhost",
+      "evidence": "app/models/embeddable_host.rb:2",
+      "reason": "Verified by running the regex: 'localhost' does not match, because a literal dot plus a 2-5 letter TLD is mandatory. Embedding on a local dev host cannot be registered (embed_controller.rb:60 has a dev-admin bypass, but only for admins in Rails.env.development?)."
+    },
+    {
+      "claim_id": "c045",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "duplicate-before-filters",
+      "evidence": "app/controllers/admin/admin_controller.rb:3-4, app/controllers/admin/embeddable_hosts_controller.rb:3, app/controllers/admin/embedding_controller.rb:3",
+      "reason": "The redundancy is real — Admin::AdminController already declares both filters and neither subclass needs to repeat them. The stated consequence is wrong though: ActiveSupport::Callbacks de-duplicates symbol filters (CallbackChain#append_one removes duplicates before pushing), so they run once, not twice."
+    },
+    {
+      "claim_id": "c046",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dead-map-fallback",
+      "evidence": "app/assets/javascripts/discourse/models/store.js.es6:197-200",
+      "reason": "`hydrated` is the return value of Array#map, which is always an array, so the `|| []` alternative can never be taken. It reads as a guard against a failure mode that does not exist, while the failure that does exist (undefined elements inside the array) is unhandled."
+    },
+    {
+      "claim_id": "c047",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "replace-first-underscore-only",
+      "evidence": "app/assets/javascripts/discourse/adapters/rest.js.es6:22",
+      "reason": "Same defect as c017; the worked example is correct — 'my_embedded_host'.replace('_','-') yields 'my-embedded_host', which is not in ADMIN_MODELS, so basePath would return '/' instead of '/admin/'."
+    },
+    {
+      "claim_id": "c048",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "client-category-from-local-state",
+      "evidence": "app/assets/javascripts/admin/components/embeddable-host.js.es6:30-38, app/controllers/admin/embeddable_hosts_controller.rb:21-25",
+      "reason": "save_host rewrites a blank category_id to SiteSetting.uncategorized_category_id, but the callback sets `category` from the component's own categoryId — Discourse.Category.findById(null) is undefined — instead of from the serialized response, so the row renders with an empty category badge while the server has persisted uncategorized."
+    },
+    {
+      "claim_id": "c049",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Medium",
+      "cluster": "embed-category-name-vs-id",
+      "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11, lib/topic_creator.rb:110-121",
+      "reason": "The asymmetry the question points at is real and checkable: the migration joins `s.value = c.name`, i.e. it only handles a category name, while the code that consumed the setting (TopicCreator#find_category) accepted an integer or numeric string id as well. Sites that stored an id therefore get no match and fall back to uncategorized, losing their configuration."
+    },
+    {
+      "claim_id": "c050",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dead-embedding-save-path",
+      "evidence": "app/assets/javascripts/admin/controllers/admin-embedding.js.es6:4-6, config/routes.rb:139, app/controllers/admin/embedding_controller.rb:9-11",
+      "reason": "Grepping the templates shows no {{action \"saveChanges\"}} anywhere under admin/templates for this screen — embedding.hbs only wires addHost — so the saveChanges action, the PUT route and EmbeddingController#update are never exercised; saving happens per row through embeddable-host.js.es6."
+    },
+    {
+      "claim_id": "c051",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "dead-embedding-save-path",
+      "evidence": "app/controllers/admin/embedding_controller.rb:9-11",
+      "reason": "update's body is identical to show's: it re-serializes the OpenStruct built by fetch_embedding and never reads params or writes anything, so a PUT reports success while persisting nothing."
+    },
+    {
+      "claim_id": "c052",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "replace-first-underscore-only",
+      "evidence": "app/assets/javascripts/discourse/adapters/rest.js.es6:22",
+      "reason": "Same defect as c017/c047 — string-pattern replace touches only the first underscore."
+    },
+    {
+      "claim_id": "c053",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "plural-hydration-null-ids",
+      "evidence": "app/assets/javascripts/discourse/models/store.js.es6:196-197",
+      "reason": "Same defect as c039 — the branch is entered on the key name alone and calls .map without an Array.isArray check, so a null or scalar value throws."
+    }
+  ]
+}

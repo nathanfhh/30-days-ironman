@@ -1,0 +1,6 @@
+[
+  "SiteSetting.default_locale.to_sym is called without nil-safety guard, which will raise NoMethodError if default_locale is nil - should use safe navigation operator (SiteSetting.default_locale&.to_sym)",
+  "Use direct include instead of send(:include, ...) for I18n::Backend::Pluralization - Ruby 2.1+ makes include public on Module/Class",
+  "Use direct include instead of send(:include, ...) for I18n::Backend::Fallbacks - Ruby 2.1+ makes include public on Module/Class",
+  "protect_from_forgery should be configured with 'with: :exception' to properly handle Cross-Site Request Forgery"
+]

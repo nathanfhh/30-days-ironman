@@ -1,0 +1,14 @@
+{
+  "slug": "keycloak-36882",
+  "tool": "cubic-v2",
+  "n_golden": 1,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both flag that picocli.exit() calls System.exit() directly, an inappropriate hard JVM termination path for this condition."
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+[
+  "AccessTokenContext constructor (line 73) validates grantType twice via requireNonNull, never validating rawTokenId, so a null raw ID silently produces corrupted token IDs like 'onrtac:null'",
+  "The isAccessTokenId() test matcher in AssertEvents has an inverted condition (missing '!') causing the matcher to approve every wrong grant type",
+  "The isAccessTokenId() test matcher has wrong substring range (3,5) instead of (4,6), extracting the wrong characters for grant-type validation"
+]

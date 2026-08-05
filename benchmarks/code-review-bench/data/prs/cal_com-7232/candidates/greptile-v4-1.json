@@ -1,0 +1,5 @@
+[
+  "Single try-catch wrapping entire cancellation loop causes all remaining reminders to be skipped if any single SendGrid call fails, allowing emails to be sent instead of cancelled",
+  "immediateDelete=true leaves stale DB record after SendGrid cancel call succeeds because function returns without deleting the WorkflowReminder row, causing CRON to later try cancelling an already-cancelled batch_id",
+  "Missing method filter in remindersToCancel query - fetches all cancelled WorkflowReminder rows regardless of method, which could cause SendGrid batch-cancel API to be called with Twilio SID if SMS path changes"
+]

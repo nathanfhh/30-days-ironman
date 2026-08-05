@@ -1,0 +1,226 @@
+## 審查結論：Request Changes
+
+> Critical 1 · Suggestion 3 · Nit 3 · 未驗證提問 3
+> nathan-code-review 2026.08.02.05 · 第 1 次審查
+
+### 總評
+
+| A 風格 | B 簡潔 | C 安全 |
+|:--:|:--:|:--:|
+| ❌ | ❌ | ✅ |
+
+| D API 慣例 | E 架構 | F 資料取用與資料庫 |
+|:--:|:--:|:--:|
+| — | ✅ | ❌ |
+
+| G 測試 | H 非 Python 檔 | I 回溯分析 |
+|:--:|:--:|:--:|
+| ❌ | ✅ | ❌ |
+
+- **A 風格**（未通過）：config/initializers/i18n.rb:1 的載入順序註解宣告了一個沒有被任何機制保證的前提；translate_accelerator.rb 新增的 nil 防禦只加在一半的地方。詳見 F-004、F-007。
+- **B 簡潔**（未通過）：fallback 順序在 server（config/initializers/i18n.rb:17）與 client（lib/js_locale_helper.rb:79-85）各寫了一次；另有一段無法生效的 .compact 與一個從不存值的 Hash 子類別。詳見 F-003、F-005。
+- **D API 慣例**（不適用）：本次變更沒有新增或修改任何 HTTP endpoint、route、URL 或 request/response schema；ApplicationController 只動到 before_filter :set_locale 的內部實作，對外 API 介面不變。
+- **F 資料取用與資料庫**（未通過）：translate 的 LRU cache 是 process 全域、key 不含 fallback chain，而 fallback chain 這次開始依賴 per-site 的 SiteSetting.default_locale。詳見 F-001。
+- **G 測試**（未通過）：改的是全站最熱的 I18n.t 路徑與 locale 解析順序，但整個 diff 沒有任何 spec；spec/components/freedom_patches/ 與 spec/components/js_locale_helper_spec.rb 都已存在，代表這類程式碼在本 repo 是有測試慣例的。詳見 F-006。
+- **I 回溯分析**（未通過）：I18n.t 的呼叫端分成「經過 ApplicationController#set_locale」與「不經過」兩類，這次新增的前置條件（ensure_loaded!）只掛在前者身上。詳見 F-002。
+
+### 掃描執行狀況
+
+| 工具 | 狀態 | 說明 |
+|---|---|---|
+| trivy | 略過 | 本機未安裝 trivy，略過相依套件漏洞、misconfiguration 與 secret 掃描。 |
+| opengrep | 略過 | 本機未安裝 opengrep，且沒有可用的 semgrep rules 目錄，略過 SAST 掃描。 |
+| ruff | 略過 | ruff 有安裝（0.15.8），但本次 diff 全部是 Ruby 檔（.rb），ruff 只處理 Python，沒有可掃描的範圍，因此沒有執行。 |
+| ty | 略過 | 本機未安裝 ty；且本次 diff 無 Python 檔，即使安裝也無適用範圍。 |
+| oxlint | 略過 | 本機未安裝 oxlint；且本次 diff 無 JavaScript/TypeScript 檔。 |
+| rubocop | 略過 | 本機未安裝任何 Ruby linter（rubocop / standardrb 皆無），且環境沒有網路、Gemfile 的 gem 未安裝。結論：本次審查對 Ruby 程式碼沒有任何 linter 覆蓋，下列所有發現都來自人工閱讀，不是工具掃出來的。 |
+| rspec | 略過 | gem 未安裝且無網路，測試套件無法執行；因此本報告沒有任何「跑過測試」的證據。 |
+| ruby -c (syntax only) | 已執行 | 僅為語法檢查（ruby 3.3.6），不是 lint、不做任何語意分析，不能當成程式碼品質已被工具驗證。 · files_checked 6、syntax_errors 0 |
+| codegraph | 略過 | 本機未安裝 codegraph，Phase 3 的呼叫路徑列舉改用 grep 逐一確認（已對 ensure_loaded!、I18n.locale、SiteSetting.default_locale、fallbacks 做全 repo grep）。 |
+
+### Critical
+
+#### F-001 translate 的全域 LRU cache key 不含 fallback chain，multisite 下會把 A 站的 fallback 結果餵給 B 站 — `lib/freedom_patches/translate_accelerator.rb:71`
+
+面向 F 資料取用與資料庫 · Critical
+
+**問題**：translate_accelerator.rb:72 的 cache key 是 `"#{key}#{config.locale}#{config.backend.object_id}"`，只由 key、目前 locale、backend 物件組成；@cache（:71）掛在 I18n 這個 module 物件上，是 process 全域的。這個 key 在這次變更之前是夠用的：改動前 production 走 `config.i18n.fallbacks = true`，fallback 目標是全域常數 I18n.default_locale（全 repo grep 沒有任何一處對 I18n.default_locale 賦值），所以 (key, locale) 確實能唯一決定結果。
+
+改動後，config/initializers/i18n.rb:17 把 fallback chain 定義成 `[locale, SiteSetting.default_locale.to_sym, :en]`，而 SiteSetting 是 per-site 的（config/initializers/05-site_settings.rb:7 用 RailsMultisite::ConnectionManagement.each_connection 逐站 refresh，同一個 process 服務多個站台）。於是同一組 (key, locale) 在不同站台會解析出不同的字串，但共用同一個 cache entry。
+
+具體路徑：站台 A 的 default_locale 是 fr、站台 B 是 de，兩站都開 allow_user_locale（app/models/user.rb:154 的 effective_locale 因此會回傳使用者自己的 locale）。A 站一位 locale=ja 的使用者請求到一個 ja.yml 缺少的 key，chain 為 [:ja, :fr, :en]，解析出法文字串並以 "<key>ja" 存進 @cache；接著 B 站同樣 locale=ja 的使用者拿到的是那個法文字串，而不是應有的德文。
+
+反證檢查：(1) 有沒有別的東西會清掉這個 cache？全 repo grep `I18n.reload!` 與 `loaded_locales`，除了 translate_accelerator.rb 自己之外沒有任何呼叫端，production 下 cache_classes=true，@cache 的壽命等於 process 壽命。(2) backend.object_id 會不會剛好區分站台？I18n 的 backend 是全域共用的單一 Simple 實例，不隨 connection 切換，所以 object_id 恆定。(3) 單站台是否就沒事？也不是——管理員在後台改 default_locale 後 SiteSetting.refresh! 會生效，但 @cache 不會被清，舊的 fallback 結果會一直供到 process 重啟為止。
+
+**證據**：
+- `lib/freedom_patches/translate_accelerator.rb:71`
+- `lib/freedom_patches/translate_accelerator.rb:72`
+- `config/initializers/i18n.rb:17`
+- `app/models/user.rb:154`
+- `config/initializers/05-site_settings.rb:7`
+
+**修復方向**：把會影響解析結果的維度放進 cache key。最小改法是在 translate_accelerator.rb:72 併入 fallback chain 本身：
+
+```ruby
+k = "#{key}#{config.locale}#{config.backend.object_id}#{I18n.fallbacks[config.locale].join(',')}"
+```
+
+（chain 已經包含 SiteSetting.default_locale，所以同時解決 multisite 與 runtime 改設定兩種情況。）
+若不想在每次 cache 命中都算一次 chain，另一個等效做法是併入 `RailsMultisite::ConnectionManagement.current_db`，並在 SiteSetting.default_locale 變更時清掉 @cache。無論選哪一種，請一併補上一個 spec：同一個 key、同一個 I18n.locale，在兩個 default_locale 不同的站台下必須得到不同的字串。
+
+<details>
+<summary>Suggestion（3）</summary>
+
+#### F-002 fallback 的 locale 載入只掛在 ApplicationController，Sidekiq job、rake task、mailer 這些路徑上 fallback 會靜默失效 — `app/controllers/application_controller.rb:159`
+
+面向 I 回溯分析 · Suggestion
+
+**問題**：這個 freedom patch 的前提是「只載入用得到的 locale」：translate_accelerator.rb:25 把 Backend::Base#load_translations 改成沒給檔名就什麼都不載，所以 Simple#lookup 內部的 init_translations 實際上不會載入任何 YAML；translate（:68）也只 load_locale(config.locale) 一個 locale。因此 Fallbacks backend 往 chain 的第二、第三個 locale 查詢時，那些 locale 的翻譯若沒有被明確載入過，查到的是空的，fallback 等於沒發生。
+
+把 chain 上的 locale 都載入的動作，只有 config/initializers/i18n.rb:20-21 的 ensure_loaded! 做，而它全 repo 只有一個呼叫點：app/controllers/application_controller.rb:159（before_filter :set_locale，見 :36）。
+
+列舉其他會走到 I18n.t 的路徑，逐一確認有沒有經過這個 guard：
+- Sidekiq job：app/jobs/base.rb:151 直接 `I18n.locale = SiteSetting.default_locale`，沒有 ensure_loaded!。Sidekiq 是獨立 process，:en 不會因為別人發過 web request 而被載入。所以在 default_locale=fr 的站台上，通知信裡缺少 fr 翻譯的 key 不會 fallback 到英文，而是照舊吐 translation missing——也就是這次要修的問題，在最容易被使用者看到的 email 上沒有被修到。
+- rake task：lib/tasks/db.rake:3、:28 同樣只設 I18n.locale。
+- lib/post_destroyer.rb:102 的 I18n.with_locale 切換到 default_locale 後也沒有 ensure。
+
+反證檢查：grep 全 repo `ensure_loaded`，只有 config/initializers/i18n.rb:20-21、app/controllers/application_controller.rb:159、lib/freedom_patches/translate_accelerator.rb:62 三處，diff 內外都沒有第二個掛載點。這不是 regression（改動前這些路徑也沒有 fallback），但它讓新功能的覆蓋範圍只有一半，而且是靜默的一半。
+
+**證據**：
+- `app/controllers/application_controller.rb:159`
+- `config/initializers/i18n.rb:20`
+- `config/initializers/i18n.rb:21`
+- `lib/freedom_patches/translate_accelerator.rb:25`
+- `lib/freedom_patches/translate_accelerator.rb:68`
+- `app/jobs/base.rb:151`
+- `lib/post_destroyer.rb:102`
+- `lib/tasks/db.rake:3`
+
+**修復方向**：把 ensure 從 controller 移到 I18n 自己身上，讓所有呼叫端一體適用。例如在 translate_accelerator.rb 的 translate 裡把「載入目前 locale」換成「載入整條 chain」：
+
+```ruby
+def translate(key, *args)
+  I18n.fallbacks.ensure_loaded!
+  ...
+end
+```
+
+（ensure_loaded! 內部已經是 `@loaded_locales.include?` 的短路檢查，命中時只是幾次陣列比對，不會每次都進 mutex。）
+如果考量熱路徑成本不想放在 translate，退而求其次是掛在 `I18n.locale=` 上；但無論如何 app/controllers/application_controller.rb:159 這個單點掛載要拿掉或補齊，否則 background job 與 web request 的翻譯行為會長期不一致。
+
+#### F-003 fallback 順序在 server 與 client 各實作了一次，兩份必須手動保持同步 — `config/initializers/i18n.rb:17`
+
+面向 B 簡潔 · Suggestion
+
+**問題**：config/initializers/i18n.rb:17 定義 server 端的 chain 是 `[locale, SiteSetting.default_locale.to_sym, :en].uniq`。lib/js_locale_helper.rb:79-85 用 if/elsif/else 手寫出完全等價的邏輯：locale==:en 時只用 [en]、locale==site_locale 或 site_locale==:en 時用 [locale, :en]、其餘用 [locale, site_locale, :en]——這正是同一個 uniq 後的結果，只是換一種寫法。兩者是前後兩個 commit（728845d0 client、ecfa17b5 server）分別寫下的同一個決定。
+
+兩處都留了同一個 TODO（config/initializers/i18n.rb:15-16 與 lib/js_locale_helper.rb:58 的「support N fallbacks」），代表作者自己預期這個順序之後會再改；屆時只改一邊，client 與 server 就會對同一個缺字顯示不同語言，而且不會有任何測試或型別去攔截。
+
+**證據**：
+- `config/initializers/i18n.rb:17`
+- `lib/js_locale_helper.rb:79`
+- `lib/js_locale_helper.rb:81`
+- `lib/js_locale_helper.rb:84`
+- `lib/js_locale_helper.rb:58`
+
+**修復方向**：讓 client 端引用 server 端的定義，只留一份真實來源。lib/js_locale_helper.rb 的 output_locale 可以改成：
+
+```ruby
+locales = I18n.fallbacks[locale.to_sym]
+translations = locales.size == 1 ? load_translations(locale) : load_translations_merged(*locales)
+```
+
+（load_translations_merged 目前最多接受三個 locale，若要真的支援 N 個，順手把它改成迴圈。）改完請在 spec/components/js_locale_helper_spec.rb 補一個 case，斷言 client 產出的 translations 涵蓋的 locale 集合等於 I18n.fallbacks[locale]。
+
+#### F-006 改動 I18n.t 的解析順序與載入時機，但整個 diff 沒有任何測試 — `config/initializers/i18n.rb:13`
+
+面向 G 測試 · Suggestion
+
+**問題**：這次新增了三個有行為的單元——FallbackLocaleList#[]（chain 順序）、FallbackLocaleList#ensure_loaded!（載入哪些 locale）、I18n.ensure_loaded!（載入是否冪等）——以及一個 before_filter 的副作用，diff 內沒有任何 spec 檔。這在本 repo 不是慣例：spec/components/freedom_patches/ 下已有 pool_drainer_spec.rb、safe_buffer_spec.rb，前一個 commit 的 client 端 fallback 也有 spec/components/js_locale_helper_spec.rb 對應。
+
+而且沒有測試正是 F-001 與 F-002 能夠成立的原因：這兩個問題都不會讓任何現有測試變紅，只會在特定站台設定或特定執行環境下顯示錯誤語言。另外，這次把 fallback 從「只有 production / profile / cloud66 開啟」變成「所有環境都開啟」，test 環境的翻譯解析行為也跟著改了，卻沒有任何一個測試在描述新的預期行為。
+
+**證據**：
+- `config/initializers/i18n.rb:13`
+- `config/initializers/i18n.rb:20`
+- `lib/freedom_patches/translate_accelerator.rb:62`
+- `app/controllers/application_controller.rb:159`
+
+**修復方向**：至少補三個 spec：(1) FallbackLocaleList#[] 在 user locale、SiteSetting.default_locale、:en 三者互不相同 / 部分相同時回傳的順序與去重；(2) I18n.ensure_loaded! 對已載入的 locale 不重複載入、對未載入的 locale 會載入；(3) 一個 request-level 或 I18n-level 的 case：locale 設為某個缺少該 key 的語系時，I18n.t 回傳 default_locale 的字串而非 translation missing。第 (3) 個同時是 F-001 的回歸測試——把它寫成兩個 default_locale 不同的情境，就能把快取污染釘住。
+
+</details>
+
+<details>
+<summary>Nit（3）</summary>
+
+#### F-004 「order: after 02-freedom_patches.rb」是一句沒有任何機制保證的註解，而且看起來並非真的必要 — `config/initializers/i18n.rb:1`
+
+面向 A 風格 · Nit
+
+**問題**：config/initializers/ 底下所有有順序需求的檔案都用數字前綴表達（00-rails-master-polyfills.rb 到 99-unicorn.rb），這是這個目錄唯一被 Rails 實際執行的排序依據。新檔案叫 i18n.rb，靠的是「數字在字母之前」這個隱含性質剛好排在 02-freedom_patches.rb 後面——結果正確，但第 1 行的註解把它講成一個前提，卻沒有任何東西在保證它。
+
+另外這個前提本身也值得再確認一次：這個檔案在載入時做的三件事（require 'i18n/backend/fallbacks'、include 進 I18n.backend.class、指派 I18n.fallbacks）都不依賴 translate_accelerator.rb 是否已經載入；真正需要 freedom patch 的 I18n.ensure_loaded!（:21）是在 request 時才被呼叫的，那時所有 initializer 早就跑完了。
+
+**證據**：
+- `config/initializers/i18n.rb:1`
+- `config/initializers/02-freedom_patches.rb:1`
+
+**修復方向**：二選一：想保留這個順序保證就改名為數字前綴（例如 config/initializers/03-i18n.rb），跟目錄裡其他檔案一致；若確認沒有載入期依賴，就把第 1 行改寫成說明為什麼要放在 initializer 而不是 environment 檔，別讓下一個人以為改檔名會壞掉。
+
+#### F-005 fallback chain 的 .compact 永遠不會生效，Hash 子類別也從來不存任何東西 — `config/initializers/i18n.rb:12`
+
+面向 B 簡潔 · Nit
+
+**問題**：`[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact`（:17）裡的三個元素沒有一個可能是 nil：locale 來自 I18n.locale，:en 是字面量，而 SiteSetting.default_locale 若真的是 nil，`.to_sym` 會先丟 NoMethodError，.compact 根本輪不到。所以 .compact 讀起來像是在防 default_locale 為 nil，實際上完全防不到——下一個維護者會據此以為這裡已經處理過 nil。lib/tasks/db.rake:3 對同一個 SiteSetting.default_locale 是用 `rescue :en` 處理的，兩邊的防禦強度不一致。
+
+FallbackLocaleList < Hash（:12）覆寫了 [] 卻從不呼叫 store，所以繼承來的 fetch / key? / each / size 全部會回報「這個 Hash 是空的」。目前只有 Fallbacks backend 透過 [] 存取，沒有壞掉，但這是留給下一個人的陷阱。（附帶一提，i18n gem 自己的 I18n::Locale::Fallbacks 也是 Hash 子類別，所以繼承 Hash 這個選擇本身合理，問題只在於這裡刻意不 memoize——那是對的，因為 chain 依賴 per-site 設定——卻沒有把這個取捨寫下來。）
+
+**證據**：
+- `config/initializers/i18n.rb:12`
+- `config/initializers/i18n.rb:17`
+
+**修復方向**：把 .compact 換成真正的防禦或直接刪掉，例如 `[locale, SiteSetting.default_locale.presence&.to_sym, :en].compact.uniq`（先 compact 再 uniq）。並在 class 上加一行註解，說明為什麼刻意不 memoize（chain 依賴 per-site 的 SiteSetting.default_locale，快取起來會跨站台污染，見 F-001），這樣繼承 Hash 卻永遠是空的這件事才有跡可循。
+
+#### F-007 @loaded_locales 的 nil 防禦只加在 ensure_loaded!，translate 與 load_locale 仍然直接 dereference — `lib/freedom_patches/translate_accelerator.rb:63`
+
+面向 A 風格 · Nit
+
+**問題**：新增的 ensure_loaded! 在 :63 寫了 `@loaded_locales ||= []`，但同一個 class << self 區塊裡，load_locale（:48）與 translate（:68）都是直接 `@loaded_locales.include?(...)`。這個 ||= 只有兩種可能：@loaded_locales 真的可能是 nil，那 translate 一樣會踩到 NoMethodError（而且 translate 的呼叫時機比 ensure_loaded! 早得多）；或者它不可能是 nil（reload! 在 :40 會設成 []），那這行就是誤導性的雜訊，讓讀者以為這裡有已知的 nil 情境。無論哪一種，三個地方的假設不一致本身就是問題。
+
+**證據**：
+- `lib/freedom_patches/translate_accelerator.rb:63`
+- `lib/freedom_patches/translate_accelerator.rb:48`
+- `lib/freedom_patches/translate_accelerator.rb:68`
+
+**修復方向**：把初始化收斂到一個地方：在 `class << self` 裡跟 LRU_CACHE_SIZE 一起寫 `@loaded_locales = []`（patch 載入時就決定），然後把 :63 的 `||=` 拿掉。這樣三個方法對 @loaded_locales 的假設就一致了。
+
+</details>
+
+<details>
+<summary>未驗證提問（3）</summary>
+
+#### Q-001 移除 config.i18n.fallbacks = true 之後，Rails 4.1.10 的 I18n::Railtie 會不會在 config/initializers/ 跑完之後把 I18n.fallbacks 覆寫回 gem 預設的 I18n::Locale::Fallbacks？若會，app/controllers/application_controller.rb:159 的 I18n.fallbacks.ensure_loaded! 會在每一個 request 丟 NoMethodError。
+
+面向 E 架構
+
+**背景**：Rails 的 i18n railtie 是在 after_initialize 階段套用 config.i18n.* 的，也就是排在 config/initializers/*.rb 之後。這次把三個 environment 檔的 config.i18n.fallbacks = true 都刪掉（config/environments/production.rb、config/environments/profile.rb、config/cloud/cloud66/files/production.rb），依 railtie 對空 fallbacks 設定的處理方式，initializer 設好的 FallbackLocaleList 應該會被保留；但這台機器沒有安裝 gem、也沒有網路，無法讀 railties-4.1.10/lib/i18n_railtie.rb 或啟動應用程式來確認。ensure_loaded! 是定義在 FallbackLocaleList 上而不是 I18n 上，所以這個假設一旦不成立，失敗方式是全站 500 而不是退化成沒有 fallback——影響面值得在合併前確認一次。
+
+**如何確認**：在有 gem 的環境啟動 console，檢查 `I18n.fallbacks.class` 是否為 FallbackLocaleList（production 與 test 環境各測一次）；或直接閱讀該版本 railties 的 i18n_railtie.rb 中 initialize_i18n / validate_fallbacks 的分支。更穩健的做法是把 ensure_loaded! 定義成 I18n 的方法（見 F-002 的修法），讓 controller 不再依賴 fallbacks 物件的型別。
+
+#### Q-002 FallbackLocaleList#[] 在每次翻譯缺字時都會無保護地呼叫 SiteSetting.default_locale。在 site_settings 資料表還不可查詢的時機（全新資料庫的 rake db:migrate、assets:precompile、db:create）發生翻譯查詢，會不會變成一個難以理解的 ActiveRecord 例外？
+
+面向 F 資料取用與資料庫
+
+**背景**：config/initializers/i18n.rb:17 直接呼叫 SiteSetting.default_locale.to_sym，沒有 rescue。同一個 repo 裡其他在 boot / rake 階段讀這個設定的地方都有防禦：lib/tasks/db.rake:3 是 `I18n.locale = (SiteSetting.default_locale || :en) rescue :en`、:28 同樣有 rescue，config/initializers/05-site_settings.rb:9 也 rescue 了 ActiveRecord::StatementInvalid 並註明「This will happen when migrating a new database」。這代表「SiteSetting 在這些時機會炸」在本 repo 是已知事實。但要確定它真的會發生，需要一條「在 site_settings 可用之前執行到缺字翻譯」的具體路徑，我沒有辦法在這台機器上跑出來。
+
+**如何確認**：在空資料庫上跑一次 `rake db:migrate` 與 `rake assets:precompile`，看是否出現來自 FallbackLocaleList#[] 的例外。若確認會發生，修法是把 :17 改成 `SiteSetting.default_locale.to_sym rescue :en`，或包成一個有 rescue 的 helper。
+
+#### Q-003 fallback 從「只在 production / profile / cloud66 啟用」變成「所有環境啟用」之後，test 環境既有的斷言會不會被削弱或改變？
+
+面向 G 測試
+
+**背景**：改動前 config.i18n.fallbacks = true 只出現在 config/environments/production.rb、config/environments/profile.rb、config/cloud/cloud66/files/production.rb（grep 確認 development.rb 與 test.rb 從來沒有這一行）；改動後由 initializer 無條件啟用。這會影響兩類測試：spec/integrity/i18n_spec.rb 用 `expect(...).not_to match(/translation missing/)` 檢查缺字，開啟 fallback 後缺字會被英文字串蓋掉，這個檢查可能不再抓得到問題；spec/components/search_spec.rb:357、:365 與 spec/models/search_observer_spec.rb:14 會在測試中改 SiteSetting.default_locale，連帶改變 fallback chain。環境沒有安裝 gem、無法跑測試，所以我只能指出這兩處，不能斷言它們會失敗或會被削弱。
+
+**如何確認**：在裝好 gem 的環境跑 `bundle exec rspec spec/integrity/i18n_spec.rb spec/components spec/models/search_observer_spec.rb`，並特別檢查 i18n_spec 的缺字檢查在 fallback 開啟後是否仍能偵測到刻意移除的 key。
+
+</details>

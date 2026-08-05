@@ -1,0 +1,5 @@
+[
+  "Copy-paste bug: the second `requireNonNull` checks `grantType` again instead of `rawTokenId`. A null `rawTokenId` will be silently accepted and likely cause a NullPointerException later when it's used.",
+  "Make `getShortcut()` a default SPI method; adding it as abstract breaks existing custom grant factories on upgrade.",
+  "The new access-token matcher rejects valid grant shortcuts because it reads the wrong substring and returns false on a match."
+]

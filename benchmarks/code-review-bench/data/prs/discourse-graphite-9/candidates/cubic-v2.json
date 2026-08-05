@@ -1,0 +1,5 @@
+[
+  "`locale` is not normalized to a Symbol (or String) before the `include?` check. In Ruby `:en != \"en\"`, so passing a String when the locale was previously loaded as a Symbol (from `I18n.config.locale`) will bypass the guard and trigger a redundant load. Consider adding `locale = locale.to_sym` at the top of the method.",
+  "`@loaded_locales ||= []` is not protected by `LOAD_MUTEX`, introducing a race condition. Two threads could simultaneously see `nil`, each create a new array, and one write is lost. Consider removing the lazy init and relying on `load_locale` (which already guards access with `LOAD_MUTEX`) directly, or wrapping this in the mutex.",
+  "Preserve standard locale-ancestor fallbacks here; otherwise regional locales skip matching base-language translations."
+]

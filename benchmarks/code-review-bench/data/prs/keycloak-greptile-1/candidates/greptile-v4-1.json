@@ -1,0 +1,5 @@
+[
+  "isConditionalPasskeysEnabled() is invoked with no arguments, but the only definition in the parent class UsernamePasswordForm has signature isConditionalPasskeysEnabled(UserModel user) - this will fail to compile",
+  "isConditionalPasskeysEnabled(UserModel user) returns false whenever user == null, so fillContextForm is skipped for unauthenticated visits, meaning passkey autocomplete/form will not appear for new logins - breaking initial login passkeys flow",
+  "The challenge() method inverts the original condition - original guard was context.getUser() == null && webauthnAuth != null && webauthnAuth.isPasskeysEnabled(), but new guard isConditionalPasskeysEnabled(context.getUser()) is true only when user != null, so users who submit bad username will see error page without WebAuthn form"
+]

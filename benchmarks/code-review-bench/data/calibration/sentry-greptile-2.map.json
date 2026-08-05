@@ -1,0 +1,202 @@
+{
+  "slug": "sentry-greptile-2",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 3,
+      "text": "The comment about negative offset handling being for 'authorized administrators' is misleading since has_global_access defaults to True for all org members, exposing the buggy paginator to more users than intended",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 14,
+      "text": "After removing the spans.buffer.flush_segments.segment_span_count_exceeded metric, are any dashboards or alerts still referencing it? Nothing in this repo references it, but dashboard/alert definitions live outside this repo.",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 1,
+      "text": "The audit log endpoint gained a query-parameter-toggled pagination path that deliberately removes the offset lower bound; the gate meant to restrict it to administrators is in practice equivalent to \"any org member\", because has_global_access defaults to True and the superuser check reads the wrong (raw DB) flag instead of is_active_superuser(request).",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "Potential AttributeError when member is None - organization_context.member is typed as RpcOrganizationMember | None, so organization_context.member.has_global_access raises AttributeError for superusers who are not explicit members of the organization",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 13,
+      "text": "Is end_timestamp_precise Required or NotRequired in sentry_kafka_schemas' ingest_spans_v1.SpanEvent? If NotRequired, the direct-index access added in factory.py could raise KeyError and stall the consumer when the field is missing.",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 3,
+      "text": "ZUNIONSTORE defaults to AGGREGATE SUM, so if the same span payload exists in both inputs its score will be summed (doubling timestamps), which can skew ordering and the subsequent ZPOPMIN eviction behavior",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "optimized_pagination is a user-controlled query parameter that bypasses the endpoint's existing AuditLogQueryParamSerializer and is compared case-sensitively, so variant/invalid values silently fail to enable the feature instead of surfacing a validation error.",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "The added code has trailing whitespace and extra blank lines that will fail ruff format.",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "Does zpopmin-by-end-timestamp eviction actually guarantee the root/segment span is never evicted? If it is evicted, the span-buf:hrs: flag isn't cleared, so the segment would still be treated as having a root span and flushed using the shorter root timeout even though it no longer has one.",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "The span-buf:s:* Redis keys are changed from SET to ZSET, but the key name is unchanged and there is no migration path, so at deploy time every pre-existing key will raise WRONGTYPE against the new z* commands.",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "The per-segment span cap (1000) is hardcoded in the Lua script, while the Python-side SpansBuffer.max_segment_spans (1001) has no remaining reader and is now dead code \u2014 and the two values already disagree with each other.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 1,
+      "text": "OptimizedCursorPaginator.value_from_cursor returns raw cursor value without converting back to datetime, causing invalid SQL when comparing a number to a DateTimeField on subsequent pages",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "The redirect-loop cap was lowered from 10000 to 1000, and the comment explaining the consequence of that limit was deleted along with it, leaving no indication of whether the lower cap was intentional.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "BasePaginator negative-offset branch slices QuerySet with a negative start index",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 1,
+      "text": "start_offset can still be negative when cursor.is_prev is true, and Django QuerySet slicing does not support negative indices (it asserts), so a crafted/invalid cursor could crash pagination",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 4,
+      "text": "The eviction threshold is hard-coded to 1000 in the Lua script, but SpansBuffer is configured with max_segment_spans (default 1001); this mismatch can cause unexpected eviction/data loss and makes the Python-side limit effectively ignored",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 0,
+      "text": "organization_context.member can be None, and the audit log endpoint dereferences it unconditionally on every request, so the existing org-auth-token call path (which has no membership) returns 500 for every request \u2014 a regression on an already-shipped path, not something limited to the new feature.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "golden",
+      "golden_index": 2,
+      "tool": null,
+      "text": "OptimizedCursorPaginator.get_item_key uses floor/ceil on a datetime key (order_by='-datetime'), causing TypeError.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 3,
+      "text": "max_segment_spans parameter is never used - SpansBuffer accepts max_segment_spans (default 1001), but the eviction threshold is hardcoded as 1000 in add-buffer.lua, making this parameter dead code with a confusing off-by-one difference",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 11,
+      "text": "The change to negative-offset handling in BasePaginator.get_result affects essentially every cursor-paginated endpoint site-wide, not just audit logs: a corrupted or tampered cursor that used to fail explicitly with 500 will now silently return page one, with no way for the caller to distinguish that from a genuine first page, and this ships untested inside a commit titled feat(audit-logs).",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "Stale ARGS documentation in add-buffer.lua - header comment still lists payload as the first ARGV parameter, but the script body maps ARGV[1] to is_root_span since payload is now inserted by Python caller via zadd",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "The old overflow behavior (drop the whole segment, log an error, increment a metric) was replaced with silent truncation via zpopmin: no eviction count is logged or reported as a metric, and the truncation ignores parent/child span structure, so the resulting segment can be missing its parent while looking otherwise intact.",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "Neither this PR's main topic (eviction during insert) nor the new audit log branch has any test coverage.",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "zunionstore keeps the default AGGREGATE SUM, which adds together end-timestamp scores for any span present in both source keys \u2014 pushing that span to the tail of the zset so eviction never removes it, while genuinely newer spans get evicted instead.",
+      "claim_id": "c024"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "OptimizedCursorPaginator negative-offset branch slices QuerySet with a negative start index",
+      "claim_id": "c025"
+    }
+  ]
+}

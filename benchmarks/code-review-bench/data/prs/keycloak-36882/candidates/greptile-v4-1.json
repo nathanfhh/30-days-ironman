@@ -1,0 +1,4 @@
+[
+  "Hardcoded --features=rolling-updates in the updatecompatibility macro will become stale when the feature is promoted to stable, needs a comment noting removal on graduation or a conditional based on preview status",
+  "When updateStrategy is null, createInitialDeployment returns early before setting ROLLING_UPDATES on the FeatureSpec, but testCacheMaxCount(null) relies on rolling-update behavior - this will break if the operator adds a feature check"
+]

@@ -1,0 +1,212 @@
+{
+  "slug": "keycloak-33832",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "asn1-indefinite-length-unhandled",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:127-134,49-63,65-73,170",
+      "reason": "Both halves verified by executing the copied decoder: readLength() returns -1 on 0x80, readSequence()'s `while (length > 0)` then skips entirely (returns an empty list), and readInteger() on {0x02,0x80,...} throws NegativeArraySizeException from `new byte[-1]`. Low rather than higher because I brute-forced the only production entry point (asn1derToConcatenatedRS, exhaustive over a 6-byte DER-ish alphabet plus 400k random inputs) and NegativeArraySizeException never escapes it — readNext() always returns headerLen-1 bytes for an indefinite element, so readInteger can never see the 0x80."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "asn1-indefinite-length-unhandled",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:134,170",
+      "reason": "Same defect as c001, and the claim is honest about its own reach ('if a future caller reached it'): read(int) does `new byte[length]` with no negative guard, so an unchecked NegativeArraySizeException replaces the declared IOException. Confirmed by direct invocation; not reachable today through asn1derToConcatenatedRS. (Fuzzing did surface a different unchecked escape from the same method family — NumberFormatException: Zero length BigInteger at ASN1Decoder.java:73 for a zero-length INTEGER — which no claim mentions.)"
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "crypto-init-classloader",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:95; common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:29-43",
+      "reason": "Factually correct: ServiceLoader.load(CryptoProvider.class, AuthzClient.class.getClassLoader()) only sees providers visible to the authz-client jar's own loader, so a provider registered only on the TCCL is invisible. Low because every other init call site in the repo (KeycloakApplication, CryptoInitRule) uses the same class-loader idiom, and using the class's own loader is what guarantees the bundled AuthzClientCryptoProvider fallback is found at all."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "unclear",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "multi-provider-deployment-prevalence",
+      "evidence": "crypto/default/.../DefaultCryptoProvider.java:83; crypto/fips1402/.../FIPS1402Provider.java:114",
+      "reason": "Not settleable from the repository: it asks how often real deployments put keycloak-crypto-default and keycloak-crypto-fips1402 on one classloader. Both do declare order 200, so the tie is real in code; what is missing is deployment/packaging evidence (distribution assembly contents, customer configurations) to size the blast radius."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "concatrs-no-length-validation",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:105-110",
+      "reason": "Confirmed by execution: concatenatedRSToASN1DER(new byte[3], 64) throws ArrayIndexOutOfBoundsException ('last source index 32 out of bounds for byte[3]') from the arraycopy, not the declared IOException. Low because the only caller, ECDSASignatureVerifierContext.verify (core/src/main/java/org/keycloak/crypto/ECDSASignatureVerifierContext.java:30-34), wraps everything in catch(Exception) -> VerificationException, and the pre-existing BCECDSACryptoProvider has the identical unchecked shape."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "debugf-format-misuse",
+      "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:69",
+      "reason": "logger.debugf(builder.toString()) binds to jboss-logging's debugf(String format, Object... params) with an empty varargs array, so the runtime-built message is passed through String.format as a pattern; logger.debug() is the correct call. The stated trigger is real but essentially unreachable — a '%' would have to appear in a class name — so this is a code-smell finding, not a live crash."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "log-trailing-comma",
+      "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:66-68",
+      "reason": "The loop appends `getClass().getName() + \", \"` on every iteration with no separator handling, so the message always ends in a stray ', '. Trivial but plainly true of the new code."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "test-shared-default-ec-key",
+      "evidence": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:44,47-56",
+      "reason": "The test builds one KeyPairGenerator.getInstance(\"EC\").genKeyPair() in the constructor and reuses it for ES256/ES384/ES512, so the curve does not match the algorithm's required curve. I reproduced it on the CI JDK (21, per .github/actions/java-setup/action.yml): the default is secp384r1, and the ES256 case round-trips through a truncated 32-byte r/s and produces a DER signature that a real JDK verifier rejects, while the test still passes."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "order-abstract-no-default",
+      "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:44",
+      "reason": "`int order();` is added abstract to the public interface with no default body. All four in-repo implementations were updated, and the build enforces nothing here (no japicmp/revapi/clirr anywhere in the poms), so this build is fine — but any CryptoProvider implemented outside the repo stops compiling and gets AbstractMethodError against the new keycloak-common. The claim is about external implementors, not about this build failing."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "test-no-real-verify",
+      "evidence": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:53-56",
+      "reason": "The only assertion is assertArrayEquals(rsConcat, rsConcat2) — the encoder's output is fed back to the same decoder and never to Signature.verify(). I demonstrated the gap has teeth: for the ES256 case the re-encoded DER fails a real JDK SHA256withECDSA verify while the round-trip assertion still passes."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "debugf-format-misuse",
+      "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:64-70",
+      "reason": "All three sub-assertions hold: debugf treats the built string as a format pattern (should be debug()), the StringBuilder loop at 65-68 runs before any isDebugEnabled check so the message is always constructed, and the appended ', ' leaves a trailing comma."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "crypto-init-classloader",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:95; common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:54-57",
+      "reason": "Same issue as c003 — detectProvider's ServiceLoader is scoped to the loader handed in, so a caller-registered provider reachable only from the TCCL will not be enumerated and cannot win the order() comparison."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "equal-order-no-tiebreak",
+      "evidence": "crypto/elytron/src/main/java/org/keycloak/crypto/elytron/WildFlyElytronProvider.java:76-78; crypto/default/.../DefaultCryptoProvider.java:83; crypto/fips1402/.../FIPS1402Provider.java:114",
+      "reason": "Verified: Elytron's new order() returns 200, identical to DefaultCryptoProvider and FIPS1402Provider. Comparator.comparingInt(order).reversed() gives no tiebreak for equal values, so with two of them on one classpath the winner falls out of ServiceLoader enumeration order."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "crypto-init-classloader",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:95; common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:29-38",
+      "reason": "The 'permanently for the JVM' part is accurate — init() double-checks a static volatile cryptoProvider and is a no-op once set, so the first AuthzClient.create() wins for the process (only the explicit setProvider() escape hatch overrides it). Same underlying classloader-scoping issue as c003/c012; kept Low because the repo's own convention at every other init site is exactly this idiom."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "unused-hamcrest-dep",
+      "evidence": "authz/client/pom.xml:66-70; authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:32-33",
+      "reason": "ECDSAAlgorithmTest is the only file under authz/client/src/test and imports only org.junit.Assert/Test — no org.hamcrest anywhere. The added org.hamcrest:hamcrest (2.x) is not what JUnit 4 pulls transitively (that is hamcrest-core 1.3), so it really is unused. Mitigating: the junit+hamcrest pair is copied verbatim from common/pom.xml:48-57 and a dozen other modules, so it is house style rather than an accident."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "test-shared-default-ec-key",
+      "evidence": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:44; authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Encoder.java:66-79",
+      "reason": "The load-bearing conclusion is correct and I measured it: with the shared default key the re-encoded DER lengths are 0x45/0x64/0x64, all short-form, so ASN1Encoder.writeLength's >127 branch and ASN1Decoder.readLength's long-form branch are never executed by these tests. Two supporting details are wrong on the CI JDK — the default key is 384-bit, not 256-bit, and P-384 does not reach long form either (only P-521, which gives 0x81) — but the finding and its fix stand."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "unclear",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "external-order-impl-readiness",
+      "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:44; authz/client/pom.xml:14-19",
+      "reason": "Cannot be settled from this checkout: it asks about the state of code in other repositories. The premise is at least grounded — authz/client/pom.xml's own description says the shipped artifact for third parties is a separately hosted org.keycloak:keycloak-authz-client — but confirming whether those implementations already have order() needs those repos and the release plan."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "dead-asn1encoder-calls",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:114-121",
+      "reason": "Lines 114-115 create two ASN1Encoder instances, write the BigIntegers into them and discard the results; the return statement at 117-121 builds fresh encoders and does the real work. Removing 114-115 changes nothing — confirmed by running the method with and without them."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "Low",
+      "cluster": "test-shared-default-ec-key",
+      "evidence": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:44,60-73",
+      "reason": "The headline finding (one shared default key pair for all three algorithms; should generate curve-appropriate keys) is correct. But the stated mechanism is inverted on the CI JDK: the default is P-384, not P-256, so ES384 is the realistic case, ES512 is the one that only exercises zero-padding, and ES256 exercises truncation of a 48-byte r/s down to 32. Confidence lowered accordingly."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "bouncycastle-provider-indirection",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:60-66; crypto/elytron/src/main/java/org/keycloak/crypto/elytron/WildFlyElytronProvider.java:70-73",
+      "reason": "Accurate on both halves: the method returns KeyStore.getInstance(getDefaultType()).getProvider() while the sibling no-BouncyCastle implementation simply returns null. I measured that on JDK 21 the indirection yields SUN — exactly what BouncyIntegration.loadProvider (common/src/main/java/org/keycloak/common/util/BouncyIntegration.java:33-39) already falls back to for null — so the roundabout form buys nothing over `return null`."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "equal-order-no-tiebreak",
+      "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-71; crypto/{default,elytron,fips1402} order() = 200",
+      "reason": "Every element checks out: the `foundProviders.size() > 1` IllegalStateException is deleted by this diff, the replacement sorts on order() with no secondary key, and all three server-side providers return 200. So the previously loud misconfiguration (crypto-default plus crypto-fips1402 together) now resolves silently to whichever ServiceLoader happens to yield first — a FIPS deployment could silently run on the non-FIPS provider. High because it is a security-relevant behaviour change, not just a robustness nit."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "order-abstract-no-default",
+      "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:44; common/pom.xml:35-37",
+      "reason": "Same defect as c009 and the suggested fix is valid: common/pom.xml targets release 8, so `default int order() { return 0; }` compiles. Scope check — the 'fails to compile' consequence applies to third-party implementors, not to this repository, where all four implementations (default, elytron, fips1402, the new authz-client one) were updated and no API-compatibility plugin gates the build."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "bouncycastle-provider-indirection",
+      "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:60-66; common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:35-37",
+      "reason": "Correct as a contract statement: the interface javadoc says the method returns 'BouncyCastle security provider', and this implementation returns the default keystore's provider (measured: SUN on JDK 21), which is not BouncyCastle. Only Low, and confidence held down, because the single consumer BouncyIntegration.loadProvider treats null by falling back to Security.getProviders()[0] — which is the same SUN — so no observable misbehaviour follows."
+    }
+  ]
+}

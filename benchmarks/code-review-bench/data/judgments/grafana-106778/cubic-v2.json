@@ -1,0 +1,26 @@
+{
+  "slug": "grafana-106778",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.97,
+      "reasoning": "Missing key prop on GrafanaRuleListItem while sibling branches pass key."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.97,
+      "reasoning": "GrafanaRuleListItem passes only promRule so the silence drawer's rulerRule guard is always false and clicking Silence does nothing."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 3,
+      "confidence": 0.85,
+      "reasoning": "Restates the same silence-action defect: canSilence exposes the action but the handler needs rulerRule, so it does nothing in list view."
+    }
+  ]
+}

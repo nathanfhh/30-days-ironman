@@ -1,0 +1,6 @@
+[
+  "`isConditionalPasskeysEnabled` is invoked without the required `UserModel` argument, causing an unresolved method call",
+  "The new `user != null` check disables conditional passkey form setup for normal (unidentified) login, so passkey sign-in only works when a user is already preselected",
+  "The null-user login path never gets conditional passkey UI populated, so the initial username page drops passkey conditional UI",
+  "Catch `NoSuchElementException` instead of `Exception` so unexpected Selenium/runtime failures do not get treated as successful assertions"
+]

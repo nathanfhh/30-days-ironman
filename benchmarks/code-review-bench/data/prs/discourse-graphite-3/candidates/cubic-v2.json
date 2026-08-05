@@ -1,0 +1,5 @@
+[
+  "Normalize the email before querying in BlockedEmail.should_block?; otherwise blocked addresses can be bypassed by changing case",
+  "EmailValidator no longer rejects malformed email addresses, so validates :email, email: true can now accept values like sam@sam or sam",
+  "should_block? is a predicate method but has write side effects (increments match_count, sets last_match_at, saves record), violating command-query separation; callers expect a ? method to be a pure read but every invocation silently mutates the database"
+]

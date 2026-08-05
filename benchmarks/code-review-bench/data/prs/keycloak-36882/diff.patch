@@ -1,0 +1,441 @@
+diff --git a/common/src/main/java/org/keycloak/common/Profile.java b/common/src/main/java/org/keycloak/common/Profile.java
+index de9fa04..d3da2f4 100755
+--- a/common/src/main/java/org/keycloak/common/Profile.java
++++ b/common/src/main/java/org/keycloak/common/Profile.java
+@@ -126,17 +126,19 @@ public class Profile {
+         ORGANIZATION("Organization support within realms", Type.DEFAULT),
+ 
+         PASSKEYS("Passkeys", Type.PREVIEW),
+ 
+         CACHE_EMBEDDED_REMOTE_STORE("Support for remote-store in embedded Infinispan caches", Type.EXPERIMENTAL),
+ 
+         USER_EVENT_METRICS("Collect metrics based on user events", Type.PREVIEW),
+ 
+-        IPA_TUURA_FEDERATION("IPA-Tuura user federation provider", Type.EXPERIMENTAL)
++        IPA_TUURA_FEDERATION("IPA-Tuura user federation provider", Type.EXPERIMENTAL),
++
++        ROLLING_UPDATES("Rolling Updates", Type.PREVIEW),
+         ;
+ 
+         private final Type type;
+         private final String label;
+         private final String unversionedKey;
+         private final String key;
+         private final BooleanSupplier isAvailable;
+ 
+diff --git a/docs/guides/operator/advanced-configuration.adoc b/docs/guides/operator/advanced-configuration.adoc
+index 67a8be6..6db681c 100644
+--- a/docs/guides/operator/advanced-configuration.adoc
++++ b/docs/guides/operator/advanced-configuration.adoc
+@@ -438,16 +438,22 @@ The traffic from outside the OpenShift cluster goes through these pods.
+ They need to access {project_name} to scrape the available metrics.
+ 
+ Check the https://kubernetes.io/docs/concepts/services-networking/network-policies/[Kubernetes Network Policies documentation] for more information about NetworkPolicies.
+ 
+ === Managing Keycloak Operator Updates (Preview)
+ 
+ The Keycloak Operator offers updates strategies to control how the Operator handles changes to the Keycloak CR.
+ 
++[CAUTION]
++====
++While on preview stage, the feature `rolling-updates` must be enabled.
++Otherwise, the {project_name} Operator will fail.
++====
++
+ **Supported Updates Types:**
+ 
+ Rolling Updates:: Update the StatefulSet in a rolling fashion, minimizing downtime (requires multiple replicas).
+ Recreate Updates:: Scale down the StatefulSet before applying updates, causing temporary downtime.
+ 
+ ==== Configuring the Update Strategy
+ 
+ The update strategy is specified within the `spec` section of the Keycloak CR YAML definition.
+@@ -461,21 +467,24 @@ Any configuration change will be a rolling update.
+ 
+ [source,yaml]
+ ----
+ apiVersion: k8s.keycloak.org/v2alpha1
+ kind: Keycloak
+ metadata:
+   name: example-kc
+ spec:
++  features:
++    enabled:
++      - rolling-updates # <1>
+   update:
+-    strategy: Recreate|<not set> # <1>
++    strategy: Recreate|<not set> # <2>
+ ----
+-
+-<1> Set the desired update strategy here (Recreate in this example).
++<1> Enable preview feature `rolling-updates`.
++<2> Set the desired update strategy here (Recreate in this example).
+ 
+ [%autowidth]
+ .Possible field values
+ |===
+ |Value |Downtime? |Description
+ 
+ |`<not set>` (default)
+ |On image name or tag change
+diff --git a/docs/guides/server/update-compatibility.adoc b/docs/guides/server/update-compatibility.adoc
+index 24a4cfe..9f77d8d 100644
+--- a/docs/guides/server/update-compatibility.adoc
++++ b/docs/guides/server/update-compatibility.adoc
+@@ -4,17 +4,21 @@
+ 
+ <@tmpl.guide
+ title="Update Compatibility Tool"
+ summary="Learn how to use this tool before upgrade {project_name}"
+ preview="true"
+ previewDiscussionLink="https://github.com/keycloak/keycloak/discussions/36785"
+ >
+ 
+-// TODO Link to discussion?
++[CAUTION]
++====
++While on preview stage, the feature `rolling-updates` must be enabled.
++Otherwise, the commands will fail.
++====
+ 
+ The goal of this tool is to assist with modifying a {project_name} deployment, whether upgrading to a new version, enabling/disabling features, or changing configuration.
+ The outcome will indicate whether a rolling upgrade is possible or if a recreate upgrade is required.
+ 
+ This has been designed to be fully scriptable, so an update procedure can adapt to a rolling or recreate strategy depending on the configuration or version change.
+ It is also GitOps friendly as it allows storing the metadata of a currently running configuration in a file. This file can be used in a CI/CD run with the new configuration to determine if a rolling upgrade is possible or if a recreate upgrade is needed.
+ 
+ [NOTE]
+@@ -119,11 +123,15 @@ m|1
+ |Unexpected error occurred (e.g., the metadata file is missing or corrupted).
+ 
+ m|2
+ |Invalid CLI option.
+ 
+ m|3
+ |Rolling Upgrade is not possible.
+ The deployment must be shut down before applying the new configuration.
++
++m|4
++|Rolling Upgrade is not possible.
++The feature `rolling-updates` is disabled.
+ |===
+ 
+ </@tmpl.guide>
+diff --git a/docs/guides/templates/kc.adoc b/docs/guides/templates/kc.adoc
+index 8db47c0..e99dced 100644
+--- a/docs/guides/templates/kc.adoc
++++ b/docs/guides/templates/kc.adoc
+@@ -45,11 +45,11 @@ bin/kc.[sh|bat] import ${parameters}
+ ----
+ bin/kc.[sh|bat] bootstrap-admin ${parameters}
+ ----
+ </#macro>
+ 
+ <#macro updatecompatibility parameters>
+ [source,bash]
+ ----
+-bin/kc.[sh|bat] update-compatibility ${parameters}
++bin/kc.[sh|bat] update-compatibility ${parameters} --features=rolling-updates
+ ----
+ </#macro>
+diff --git a/operator/scripts/Dockerfile-custom-image b/operator/scripts/Dockerfile-custom-image
+index 786e722..86cd864 100644
+--- a/operator/scripts/Dockerfile-custom-image
++++ b/operator/scripts/Dockerfile-custom-image
+@@ -1,5 +1,5 @@
+ ARG IMAGE=keycloak
+ ARG VERSION=latest
+ FROM $IMAGE:$VERSION
+ 
+-RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
++RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true --features=rolling-updates
+diff --git a/operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java b/operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java
+index 384dfcc..589e6c9 100644
+--- a/operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java
++++ b/operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java
+@@ -12,30 +12,32 @@
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+ 
+ package org.keycloak.operator.testsuite.integration;
+ 
++import java.util.List;
+ import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.ExecutionException;
+ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.TimeoutException;
+ import java.util.stream.Stream;
+ 
+ import io.quarkus.test.junit.QuarkusTest;
+ import org.awaitility.Awaitility;
+ import org.junit.jupiter.params.ParameterizedTest;
+ import org.junit.jupiter.params.provider.MethodSource;
++import org.keycloak.common.Profile;
+ import org.keycloak.operator.crds.v2alpha1.deployment.Keycloak;
+ import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakStatusCondition;
+ import org.keycloak.operator.crds.v2alpha1.deployment.ValueOrSecret;
+-import org.keycloak.operator.crds.v2alpha1.deployment.spec.UnsupportedSpec;
++import org.keycloak.operator.crds.v2alpha1.deployment.spec.FeatureSpec;
+ import org.keycloak.operator.crds.v2alpha1.deployment.spec.UpdateSpec;
+ import org.keycloak.operator.upgrade.UpdateStrategy;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.keycloak.operator.testsuite.utils.CRAssert.assertKeycloakStatusCondition;
+ import static org.keycloak.operator.testsuite.utils.CRAssert.eventuallyRecreateUpgradeStatus;
+ import static org.keycloak.operator.testsuite.utils.CRAssert.eventuallyRollingUpgradeStatus;
+ import static org.keycloak.operator.testsuite.utils.K8sUtils.deployKeycloak;
+@@ -100,21 +102,22 @@ public class UpgradeTest extends BaseOperatorTest {
+     private static Keycloak createInitialDeployment(UpdateStrategy updateStrategy) {
+         var kc = getTestKeycloakDeployment(true);
+         kc.getSpec().setInstances(3);
+         if (updateStrategy == null) {
+             return kc;
+         }
+         var updateSpec = new UpdateSpec();
+         updateSpec.setStrategy(updateStrategy);
++        kc.getSpec().setUpdateSpec(updateSpec);
+ 
+-        if (kc.getSpec().getUnsupported() == null) {
+-            kc.getSpec().setUnsupported(new UnsupportedSpec());
++        if (kc.getSpec().getFeatureSpec() == null) {
++            kc.getSpec().setFeatureSpec(new FeatureSpec());
+         }
+-        kc.getSpec().setUpdateSpec(updateSpec);
++        kc.getSpec().getFeatureSpec().setEnabledFeatures(List.of(Profile.Feature.ROLLING_UPDATES.getKey()));
+         return kc;
+     }
+ 
+     private static <T> void await(CompletableFuture<T> future) throws InterruptedException {
+         try {
+             future.get(2, TimeUnit.MINUTES);
+         } catch (ExecutionException | TimeoutException e) {
+             throw new AssertionError(e);
+diff --git a/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java b/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java
+index 6763c88..4dcd6f6 100644
+--- a/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java
++++ b/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java
+@@ -75,9 +75,13 @@ public abstract class AbstractUpdatesCommand extends AbstractCommand implements
+             System.err.println(message);
+         }
+     }
+ 
+     void printPreviewWarning() {
+         printError("Warning! This command is preview and is not recommended for use in production. It may change or be removed at a future release.");
+     }
+ 
++    void printFeatureDisabled() {
++        printError("Unable to use this command. The preview feature 'rolling-updates' is not enabled.");
++    }
++
+ }
+diff --git a/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java b/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java
+index 3252463..86d7740 100644
+--- a/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java
++++ b/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java
+@@ -15,17 +15,19 @@
+  * limitations under the License.
+  */
+ 
+ package org.keycloak.quarkus.runtime.cli.command;
+ 
+ import java.io.File;
+ import java.io.IOException;
+ 
++import org.keycloak.common.Profile;
+ import org.keycloak.quarkus.runtime.cli.PropertyException;
++import org.keycloak.quarkus.runtime.compatibility.CompatibilityResult;
+ import org.keycloak.quarkus.runtime.compatibility.ServerInfo;
+ import org.keycloak.util.JsonSerialization;
+ import picocli.CommandLine;
+ 
+ @CommandLine.Command(
+         name = UpdateCompatibilityCheck.NAME,
+         description = "Checks if the metadata is compatible with the current configuration. A zero exit code means a rolling upgrade is possible between old and the current metadata."
+ )
+@@ -36,16 +38,21 @@ public class UpdateCompatibilityCheck extends AbstractUpdatesCommand {
+ 
+ 
+     @CommandLine.Option(names = {INPUT_OPTION_NAME}, paramLabel = "FILE",
+             description = "The file path to read the metadata.")
+     String inputFile;
+ 
+     @Override
+     public void run() {
++        if (!Profile.isFeatureEnabled(Profile.Feature.ROLLING_UPDATES)) {
++            printFeatureDisabled();
++            picocli.exit(CompatibilityResult.FEATURE_DISABLED);
++            return;
++        }
+         printPreviewWarning();
+         validateConfig();
+         var info = readServerInfo();
+         var result = compatibilityManager.isCompatible(info);
+         result.errorMessage().ifPresent(this::printError);
+         result.endMessage().ifPresent(this::printOut);
+         picocli.exit(result.exitCode());
+     }
+diff --git a/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java b/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java
+index 71e6f3b..406afef 100644
+--- a/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java
++++ b/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java
+@@ -16,17 +16,19 @@
+  */
+ 
+ package org.keycloak.quarkus.runtime.cli.command;
+ 
+ import java.io.File;
+ import java.io.IOException;
+ 
+ import com.fasterxml.jackson.core.JsonProcessingException;
++import org.keycloak.common.Profile;
+ import org.keycloak.quarkus.runtime.cli.PropertyException;
++import org.keycloak.quarkus.runtime.compatibility.CompatibilityResult;
+ import org.keycloak.quarkus.runtime.compatibility.ServerInfo;
+ import org.keycloak.util.JsonSerialization;
+ import picocli.CommandLine;
+ 
+ @CommandLine.Command(
+         name = UpdateCompatibilityMetadata.NAME,
+         description = "Stores the metadata necessary to determine if a configuration is compatible."
+ )
+@@ -36,16 +38,21 @@ public class UpdateCompatibilityMetadata extends AbstractUpdatesCommand {
+     public static final String OUTPUT_OPTION_NAME = "--file";
+ 
+     @CommandLine.Option(names = {OUTPUT_OPTION_NAME}, paramLabel = "FILE",
+             description = "The file path to store the metadata. It is stored in the JSON format.")
+     String outputFile;
+ 
+     @Override
+     public void run() {
++        if (!Profile.isFeatureEnabled(Profile.Feature.ROLLING_UPDATES)) {
++            printFeatureDisabled();
++            picocli.exit(CompatibilityResult.FEATURE_DISABLED);
++            return;
++        }
+         printPreviewWarning();
+         validateConfig();
+         var info = compatibilityManager.current();
+         printToConsole(info);
+         writeToFile(info);
+     }
+ 
+     @Override
+diff --git a/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java b/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java
+index ea44c30..b47b87a 100644
+--- a/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java
++++ b/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java
+@@ -23,17 +23,21 @@ import java.util.Optional;
+  * The result of {@link CompatibilityManager#isCompatible(ServerInfo)}.
+  * <p>
+  * It is composed by the exit code (to help building scripts around this tool as is is easier than parsing logs), and an
+  * optional error message.
+  */
+ public interface CompatibilityResult {
+ 
+     int ROLLING_UPGRADE_EXIT_CODE = 0;
+-    int RECREATE_UPGRADE_EXIT_CODE = 4;
++    // see picocli.CommandLine.ExitCode
++    // 1 -> software error
++    // 2 -> usage error
++    int RECREATE_UPGRADE_EXIT_CODE = 3;
++    int FEATURE_DISABLED = 4;
+ 
+     /**
+      * The compatible {@link CompatibilityResult} implementation
+      */
+     CompatibilityResult OK = new CompatibilityResult() {
+         @Override
+         public int exitCode() {
+             return ROLLING_UPGRADE_EXIT_CODE;
+diff --git a/quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java b/quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java
+index 81b69a7..bbecde2 100644
+--- a/quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java
++++ b/quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java
+@@ -36,70 +36,78 @@ import org.keycloak.quarkus.runtime.compatibility.ServerInfo;
+ import org.keycloak.util.JsonSerialization;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ 
+ @DistributionTest
+ @RawDistOnly(reason = "Requires creating JSON file to be available between containers")
+ public class UpdateCommandDistTest {
+ 
++    private static final String ENABLE_FEATURE = "--features=rolling-updates";
++
++    @Test
++    @Launch({UpdateCompatibility.NAME, UpdateCompatibilityMetadata.NAME})
++    public void testFeatureNotEnabled(CLIResult cliResult) {
++        cliResult.assertError("Unable to use this command. The preview feature 'rolling-updates' is not enabled.");
++    }
++
+     @Test
+     @Launch({UpdateCompatibility.NAME})
+     public void testMissingSubCommand(CLIResult cliResult) {
+         cliResult.assertError("Missing required subcommand");
+     }
+ 
+     @Test
+-    @Launch({UpdateCompatibility.NAME, UpdateCompatibilityMetadata.NAME})
++    @Launch({UpdateCompatibility.NAME, UpdateCompatibilityMetadata.NAME, ENABLE_FEATURE})
+     public void testMissingOptionOnSave(CLIResult cliResult) {
+         cliResult.assertNoMessage("Missing required argument");
+     }
+ 
+     @Test
+-    @Launch({UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME})
++    @Launch({UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME, ENABLE_FEATURE})
+     public void testMissingOptionOnCheck(CLIResult cliResult) {
+         cliResult.assertError("Missing required argument: " + UpdateCompatibilityCheck.INPUT_OPTION_NAME);
+     }
+ 
+     @Test
+     public void testCompatible(KeycloakDistribution distribution) throws IOException {
+         var jsonFile = createTempFile("compatible");
+-        var result = distribution.run(UpdateCompatibility.NAME, UpdateCompatibilityMetadata.NAME, UpdateCompatibilityMetadata.OUTPUT_OPTION_NAME, jsonFile.getAbsolutePath());
++        var result = distribution.run(UpdateCompatibility.NAME, UpdateCompatibilityMetadata.NAME, UpdateCompatibilityMetadata.OUTPUT_OPTION_NAME, jsonFile.getAbsolutePath(), ENABLE_FEATURE);
+         result.assertMessage("Metadata:");
+         assertEquals(0, result.exitCode());
+ 
+         var info = JsonSerialization.mapper.readValue(jsonFile, ServerInfo.class);
+         assertEquals(Version.VERSION, info.getVersions().get(CompatibilityManagerImpl.KEYCLOAK_VERSION_KEY));
+         assertEquals(org.infinispan.commons.util.Version.getVersion(), info.getVersions().get(CompatibilityManagerImpl.INFINISPAN_VERSION_KEY));
+ 
+-        result = distribution.run(UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME, UpdateCompatibilityCheck.INPUT_OPTION_NAME, jsonFile.getAbsolutePath());
++        result = distribution.run(UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME, UpdateCompatibilityCheck.INPUT_OPTION_NAME, jsonFile.getAbsolutePath(), ENABLE_FEATURE);
+         result.assertMessage("[OK] Rolling Upgrade is available.");
+         result.assertNoError("Rolling Upgrade is not available.");
+     }
+ 
+     @Test
+     public void testWrongVersions(KeycloakDistribution distribution) throws IOException {
+         var jsonFile = createTempFile("wrong-versions");
+ 
+         // incompatible keycloak version
+         var info = new ServerInfo();
+         info.setVersions(Map.of(CompatibilityManagerImpl.KEYCLOAK_VERSION_KEY, "0.0.0.Final",
+                 CompatibilityManagerImpl.INFINISPAN_VERSION_KEY, org.infinispan.commons.util.Version.getVersion()));
+         JsonSerialization.mapper.writeValue(jsonFile, info);
+ 
+-        var result = distribution.run(UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME, UpdateCompatibilityCheck.INPUT_OPTION_NAME, jsonFile.getAbsolutePath());
++        var result = distribution.run(UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME, UpdateCompatibilityCheck.INPUT_OPTION_NAME, jsonFile.getAbsolutePath(), ENABLE_FEATURE);
+         result.assertError("[Versions] Rolling Upgrade is not available. 'keycloak' is incompatible: Old=0.0.0.Final, New=%s".formatted(Version.VERSION));
+ 
+         // incompatible infinispan version
+         info.setVersions(Map.of(
+                 CompatibilityManagerImpl.KEYCLOAK_VERSION_KEY, Version.VERSION,
+                 CompatibilityManagerImpl.INFINISPAN_VERSION_KEY, "0.0.0.Final"));
+         JsonSerialization.mapper.writeValue(jsonFile, info);
+ 
+-        result = distribution.run(UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME, UpdateCompatibilityCheck.INPUT_OPTION_NAME, jsonFile.getAbsolutePath());
++        result = distribution.run(UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME, UpdateCompatibilityCheck.INPUT_OPTION_NAME, jsonFile.getAbsolutePath(), ENABLE_FEATURE);
+         result.assertError("[Versions] Rolling Upgrade is not available. 'infinispan' is incompatible: Old=0.0.0.Final, New=%s".formatted(org.infinispan.commons.util.Version.getVersion()));
+     }
+ 
+     private static File createTempFile(String prefix) throws IOException {
+         var file = File.createTempFile(prefix, ".json");
+         file.deleteOnExit();
+         return file;
+     }

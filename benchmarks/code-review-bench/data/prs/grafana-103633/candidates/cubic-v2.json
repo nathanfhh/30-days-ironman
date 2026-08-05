@@ -1,0 +1,5 @@
+[
+  "`Check` trusts the denial cache (returns denied immediately) but deliberately ignores denials from the permission cache (re-queries DB to pick up new grants). This is contradictory: once a denial is stored in `permDenialCache` after a DB re-query, any permission granted afterward is blocked for up to 30s \u2014 the exact staleness problem the re-query path was designed to solve. Consider either not caching denials for the `Check` path, or invalidating the denial cache entry when the permission cache is refreshed.",
+  "Escape or encode `name` and `parent` in the denial-cache key; the current `_`-joined format can collide and cause false permission denials.",
+  "This test seeds the cached permission as denied, so it can pass even if `permDenialCache` is never consulted."
+]

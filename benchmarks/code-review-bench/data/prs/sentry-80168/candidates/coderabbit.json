@@ -1,0 +1,6 @@
+[
+  "Inconsistent value parameter in test: data packet specifies {\"group_1\": 6, \"group_2\": 10} but build_mock_occurrence_and_event for group_2 is called with value=6 instead of value=10",
+  "Docstring is inconsistent with return type: docstring says 'returns a list of DetectorEvaluationResult' but the method now returns a dict[DetectorGroupKey, DetectorEvaluationResult]",
+  "Mutable class attribute counter_names should be annotated with typing.ClassVar",
+  "Unused value parameter in build_mock_occurrence_and_event helper function"
+]

@@ -1,0 +1,5 @@
+[
+  "Removing the global cacheMu lock from BuildIndex means two goroutines can now enter the function concurrently for the same key. When the index is file-based (size > FileThreshold), the second goroutine will call bleve.New(dir, mapper) on a directory that already exists, causing it to return an error and fail the search request",
+  "TotalDocs() iterates b.cache without holding cacheMu, creating a data race with concurrent Prometheus scrapes during any BuildIndex call",
+  "Postgres integration test is permanently skipped in CI with a TODO, leaving the postgres path completely uncovered in automated testing"
+]

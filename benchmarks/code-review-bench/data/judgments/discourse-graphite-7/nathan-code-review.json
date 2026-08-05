@@ -1,0 +1,12 @@
+{
+  "slug": "discourse-graphite-7",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 11,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 1, "confidence": 0.85,
+     "reasoning": "Both flag the .topic-meta-data h5 a rule whose light-theme lightness went from 30% to 70% during a conversion that should have left the light value alone, the candidate calling it swapped arguments."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.55,
+     "reasoning": "Both concern a .name rule whose light-theme $primary value was altered rather than preserved, in both the desktop and the mobile variant, which is the pairing the golden calls out; the candidate names the selector .group-member-info .name and argues from lost hierarchy rather than from the 30%-to-50% shift."}
+  ]
+}

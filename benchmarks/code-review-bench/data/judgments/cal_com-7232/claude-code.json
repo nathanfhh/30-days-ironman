@@ -1,0 +1,10 @@
+{
+  "slug": "cal_com-7232",
+  "tool": "claude-code",
+  "n_golden": 2,
+  "n_candidates": 2,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.95,
+     "reasoning": "Both identify that deleteScheduledEmailReminder fails to delete the WorkflowReminder DB record when immediateDelete is true, leaving orphaned records."}
+  ]
+}

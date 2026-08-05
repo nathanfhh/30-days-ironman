@@ -1,0 +1,121 @@
+{
+  "slug": "sentry-95633",
+  "issues": [
+    {
+      "text": "SimpleQueueProcessingStrategy.close()/terminate()/join() all call queue_pool.shutdown(), but the FixedQueuePool is created once in the factory's __init__ and never rebuilt; since arroyo calls close() on the strategy at the start of every rebalance (as documented elsewhere in this repo for the spans flusher), the pool is irreversibly shut down after the first rebalance — every subsequent message submitted hits a dead queue, raises queue.ShutDown, gets caught by a broad except Exception, and the offset is still marked complete and committed — meaning the consumer looks healthy while silently dropping every message with no way to recover, even via restart, since offsets are already committed.",
+      "zh": "strategy 的 close() 會摧毀 factory 持有的 FixedQueuePool，而 pool 只在 factory __init__ 建立一次——第一次 rebalance 之後 consumer 會靜默丟訊息並照常 commit offset",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "The worker queues have no maxsize and submit() never raises MessageRejected, so there is no real backpressure mechanism despite the class docstring explicitly claiming \"Natural backpressure when queues fill up\"; without MessageRejected (the only mechanism arroyo has to slow down a consumer), any slowdown downstream (DB, Redis) or lag catch-up after a restart will let messages pile up unbounded in memory, eventually causing OOM.",
+      "zh": "queue 沒有上限也不會丟 MessageRejected，等於完全沒有 backpressure——但 class docstring 宣稱有",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "OffsetTracker's docstring claims it \"Only commits offsets when all prior offsets are processed\", but actual testing shows the gap-blocking only holds for one commit cycle: after the first commit advances last_committed, the next call to get_committable_offsets recomputes its starting point from min(remaining offsets) rather than last_committed+1, so a gap (e.g. offset 101 never entering the tracker) gets silently skipped and permanently lost on the second commit tick onward. The one test that pinned this invariant (test_handles_gaps) was deleted in this PR's final commit without explanation.",
+      "zh": "OffsetTracker 只在第一次 commit 時擋住 offset gap，之後會直接跳過 gap——與它自己 docstring 宣稱的「所有前序 offset 完成才 commit」相反",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "SimpleQueueProcessingStrategy.submit doesn't handle FilteredPayload messages: since the decoder asserts `not isinstance(payload, FilteredPayload)`, every filtered message raises an AssertionError that gets caught by the broad except-Exception path and logged as an error, even though receiving a filtered message is normal operation.",
+      "zh": "filtered 訊息會走 AssertionError 例外路徑",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "For Value (non-BrokerValue) messages — the shape used when DLQ machinery forwards already-processed offsets via DlqStaleMessagesStrategyFactoryWrapper — the exception-path offset bookkeeping only triggers when isinstance(message.value, BrokerValue), so those offsets are never recorded or committed at all, silently dropping them and creating exactly the kind of gap described in F-003.",
+      "zh": "Value（非 BrokerValue）訊息的 offset 會被整個丟掉",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "OrderedQueueWorker.run opens its own sentry transaction (op=\"queue_worker.process\") wrapping each work item's processing, but ResultProcessor.__call__ — which it calls into — already opens its own transaction covering the same work, so the outer transaction adds a redundant layer with no coverage of anything beyond the inner one.",
+      "zh": "worker 內每則訊息開一個 sentry transaction，和 ResultProcessor.__call__ 已經開的那個重複",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The worker transaction's name inherits a \"monitors.\" prefix even though this module lives under remote_subscriptions/ with identifier \"uptime\" (producing misleading names like \"monitors.uptime.worker_7\"), and embeds worker_id in the name, which has no diagnostic value and multiplies the number of distinct transaction names by --max-workers.",
+      "zh": "名稱沿用 monitors. 前綴，且把 worker_id 放進 transaction name",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "FixedQueuePool.shutdown() sets each worker's shutdown flag to True before calling queue.shutdown(immediate=False), but since the worker loop condition checks `while not self.shutdown`, workers exit after at most one more item instead of draining the remaining queued items, defeating the immediate=False \"drain\" semantics that were deliberately chosen.",
+      "zh": "shutdown 順序讓 shutdown(immediate=False) 的 drain 語意失效",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "SimpleQueueProcessingStrategy.close() joins/stops the commit thread before shutting down the queue pool, so any offsets that finish processing (or, combined with F-006, offsets still sitting in the drained queue) after the commit thread stops are never committed, causing avoidable duplicate processing on every deploy.",
+      "zh": "commit thread 比 worker 先結束",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "A queue_depth gauge fires once per processed message (message-processing frequency, an order of magnitude higher than this factory's other gauges which fire once per batch) inside OrderedQueueWorker.run's finally block.",
+      "zh": "每處理一則訊息就送一次 queue_depth gauge",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The queue_depth gauge's tags only include `identifier`, without worker_id or queue_index, so all N workers overwrite the same metric time series — the resulting value represents neither any single queue nor a valid aggregate, and poll() already emits a meaningful aggregate (total_queued) separately.",
+      "zh": "20 個 worker 共用同一組 tag 互相覆蓋，而 poll() 已經在送總量",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "WorkItem.message stores the full original Kafka Message (including undecoded payload bytes) even though nothing in the codebase ever reads work_item.message — offset tracking uses the separate partition/offset fields — so every queued item unnecessarily doubles its memory footprint, compounding the unbounded-queue risk from F-002.",
+      "zh": "WorkItem.message 從未被讀取，卻讓每個排隊項目多持有一份完整的 Kafka 訊息",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "OffsetTracker's four internal dicts (all_offsets, outstanding, last_committed, partition_locks) never remove entries for partitions that get revoked, so they grow unboundedly across rebalances; more importantly, if a partition is revoked and later reassigned with a lower starting offset, the stale last_committed value could permanently prevent that partition from ever computing a committable offset again.",
+      "zh": "OffsetTracker 的四個 dict 沒有回收路徑，partition 被 revoke 之後條目與 lock 永久留著",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "test_thread_queue_parallel_error_handling's docstring claims errors don't block offset commits for other messages, but its actual assertion checks the opposite (that nothing got committed) — and neither claim reflects the real implementation, which unconditionally marks both failed and successful offsets complete in a finally block; the test only passes because it doesn't wait long enough for the commit thread's tick to actually run, making it a flaky, misleadingly-documented test of an essentially uncovered code path.",
+      "zh": "test_thread_queue_parallel_error_handling 斷言的行為和實作相反，只因為沒等到 commit tick 才通過",
+      "finding_id": "F-010",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "test_stats_reporting asserts stats[\"total_items\"] > 0 immediately after submitting items, but this is racy: the 3 worker threads (already blocked on get() since setUp) process trivially fast compared to constructing WorkItems on the main thread, so the queue may already be drained by the time the assertion runs.",
+      "zh": "test_stats_reporting 在 for 迴圈送完 10 個項目後立刻 assert stats[\"total_items\"] > 0，這條斷言本身就是競態",
+      "finding_id": "F-011",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "test_different_groups_distributed asserts all 3 queues receive at least one of 20 distributed group keys (len(queue_indices) == 3), but since queue assignment uses hash(group_key) which is randomized per Python process (PYTHONHASHSEED not pinned anywhere in the repo), there is a ~0.09% chance one queue gets nothing, making this an intermittently flaky assertion.",
+      "zh": "test_different_groups_distributed 用 20 個 group key 打進 3 條 queue，斷言 len(queue_indices) == 3，CPython 對 str 的 hash 每個行程隨機，三條 queue 中至少一條落空的機率約 0.09%",
+      "finding_id": "F-011",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The seven new thread-queue-parallel unit tests were placed inside ProcessResultSerialTest, whose strategy_processing_mode is declared \"serial\" (and whose Literal type doesn't even include the new mode), so the class name and its declared processing mode now misrepresent what several of its test methods actually exercise.",
+      "zh": "七個 thread-queue-parallel 測試被放進 ProcessResultSerialTest，該類別的 strategy_processing_mode 是 serial，而該屬性的型別根本不含新模式",
+      "finding_id": "F-012",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Can the commit callable passed by arroyo to create_with_partitions safely be invoked from a strategy's own background thread, given every other strategy in this repo commits only from within arroyo's main loop (submit/poll), and this is the first to commit from a separate thread?",
+      "zh": "arroyo 傳給 create_with_partitions 的 commit callable，可以從 strategy 自己開的背景執行緒呼叫嗎？"
+    },
+    {
+      "text": "Does the uptime-results topic actually experience offset gaps in practice (transaction control records, compaction), and is the consumer deployed with --stale-threshold-sec? Either would elevate F-003/F-004 from a theoretical correctness gap to an actively-triggered data-loss bug.",
+      "zh": "uptime-results 這個 topic 實際上會不會出現 offset 空洞（transaction control record、compaction），以及部署時有沒有帶 --stale-threshold-sec？"
+    },
+    {
+      "text": "Can the DB and Redis connection pools (and pgbouncer) handle 20 permanently-running worker threads each holding their own thread-local connections that are never explicitly recycled?",
+      "zh": "20 條常駐 worker thread 各自持有的 Django DB 連線與 Redis 連線，在連線池與 pgbouncer 的容量上撐得住嗎？連線又何時被回收？"
+    }
+  ]
+}

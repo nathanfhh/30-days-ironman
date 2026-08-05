@@ -1,0 +1,284 @@
+{
+  "slug": "keycloak-36880",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "v2-unsupported-token-exchange",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:148; services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/AbstractTokenExchangeProvider.java:276; common/src/main/java/org/keycloak/common/Profile.java:76",
+      "reason": "MgmtPermissionsV2.clients() now returns ClientPermissionsV2, whose canExchangeTo throws UnsupportedOperationException, and AbstractTokenExchangeProvider line 276 calls AdminPermissions.management(...).clients().canExchangeTo unconditionally. TOKEN_EXCHANGE (v1) declares no dependency on admin-fine-grained-authz, so token-exchange + admin-fine-grained-authz:v2 is a permitted combination and V1TokenExchangeProvider reaches that line; before this change the base ClientPermissions ran and returned false (403)."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "not_real",
+      "confidence": 0.9,
+      "severity": null,
+      "cluster": "findbyname-owner-arg",
+      "evidence": "model/jpa/src/main/java/org/keycloak/authorization/jpa/store/ResourceServerAdapter.java:91; model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/authorization/ResourceServerAdapter.java:121; server-spi-private/src/main/java/org/keycloak/authorization/store/ResourceStore.java:142",
+      "reason": "Both ResourceServer implementations define getClientId() { return getId(); }, so findByName(server, name, server.getId()) is byte-for-byte the same lookup as the default findByName(server, name), which uses resourceServer.getClientId(). The owner does match the resources created by getOrCreateResource, so the claimed 'never finds them' consequence does not follow."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "clients-with-permission-returns-type-name",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:138; server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:104; rest/admin-ui-ext/src/main/java/org/keycloak/admin/ui/rest/AvailableRoleMappingResource.java:229",
+      "reason": "getOrCreateResource creates per-client resources without calling setType, so only the type-level resource created by init() carries type 'Clients'; findByType therefore yields at most that one resource and the method returns the literal name 'Clients' rather than client ids, which realm.getClientById cannot resolve. The one consumer (AvailableRoleMappingResource) is gated on the V1 flag and so unreachable while V2 is on, which caps this at a wrong-by-construction override rather than a live NPE."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "not_real",
+      "confidence": 0.95,
+      "severity": null,
+      "cluster": "dependabot-labels",
+      "evidence": "benchmarks/code-review-bench/data/prs/keycloak-36880/diff.patch (whole diff)",
+      "reason": "The diff touches only AdminPermissionsSchema, the admin permissions evaluators and FGAP tests; there is no Dependabot config, workflow or label definition anywhere in it. The claim is not about this change."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "null-all-clients-resource-npe",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:217; server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:116; model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAPolicyStore.java:215",
+      "reason": "getResourceTypeResource returns null in four different branches (schema unsupported, unknown type, or the named resource simply absent) and the result goes straight into policyStore.findByResource, whose JPA implementation dereferences resource.getId() and whose SPI javadoc says the resource cannot be null."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "inconsistent-all-clients-lookup",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:217 vs :244; services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java:121",
+      "reason": "Line 217 resolves the all-clients resource through AdminPermissionsSchema.getResourceTypeResource (which also runs the supportsAuthorizationSchema/type checks) while line 244 hand-rolls resourceStore.findByName with the type name; UserPermissionsV2 uses only the schema entry point. The two paths in the same new class genuinely disagree."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "clientpermissionsv2-public-visibility",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:49; ClientPermissions.java:59; UserPermissionsV2.java:40; MgmtPermissionsV2.java:64",
+      "reason": "ClientPermissions and UserPermissionsV2 are package-private and MgmtPermissionsV2 (also package-private) is the only instantiation site, yet ClientPermissionsV2 is declared public with a public constructor. The wider visibility buys nothing since its constructor parameter type MgmtPermissionsV2 is package-private anyway."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "no-upgrade-path-new-resource-type",
+      "evidence": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:222; model/jpa/src/main/java/org/keycloak/models/jpa/JpaClientProviderFactory.java:73; services/src/main/java/org/keycloak/services/managers/RealmManager.java:572",
+      "reason": "init() returns immediately when realm.getAdminPermissionsClient() is non-null, and its only two callers fire on realm creation/import or when the admin-permissions-enabled attribute flips from off to on. A realm that already had FGAP v2 on therefore never gets the 'Clients' resource or the configure / map-roles-client-scope / map-roles-composite scopes, and this diff adds no migration."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "default-client-scopes-index",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java:148,174",
+      "reason": "Both sites index element 1 of getDefaultClientScopes() with no size assertion and no deterministic selection, so the test silently depends on the server's default client-scope set having at least two entries in a stable order."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "dead-code-clientpermissionsv2",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:22,23,27,29,46,51,262",
+      "reason": "Verified in the file: the logger field at line 51 is never read, getEvaluationContext at line 262 has no caller, and the imports of Scope (27), the static TOKEN_EXCHANGE (46), ClientModelIdentity (22), DefaultEvaluationContext (23) and EvaluationContext (29) are used by nothing except that dead method."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "missing-resourceid-filter",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java:135; ClientPermissionsV2.java:226,251; commit c2acddc",
+      "reason": "git log -L on UserPermissionsV2 shows the permission.getResourceId().equals(resource.getId()) check was added by commit c2acddc, 'Update FGAP v2 to not grant permissions of all users when permission is granted only for a single user'. Neither hasPermission in ClientPermissionsV2 has that filter, so the otherwise copy-pasted evaluator diverges on exactly the guard that fixed over-granting."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "dead-code-clientpermissionsv2",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:262",
+      "reason": "getEvaluationContext is private and grep over the file finds no call site; it is a leftover from ClientPermissions.canExchangeTo, which this class overrides to throw."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "getresourcename-missing-clients",
+      "evidence": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:304-326; services/src/main/java/org/keycloak/authorization/admin/PolicyResourceService.java:218",
+      "reason": "getResourceName only branches on USERS and otherwise returns resource.getDisplayName(); neither the type-level resource built in init() nor the per-client resource created by getOrCreateResource ever sets a display name, so PolicyResourceService.getResources() reports displayName=null for every Clients permission."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "single-scope-list-lookup",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:225,250",
+      "reason": "Both call sites wrap a single String in Arrays.asList purely to call contains(); List.of (or a direct equals, as hasGrantedPermission already does) is the better construct. Minor but factually about this code."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "null-all-clients-resource-npe",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:217-219; server-spi-private/src/main/java/org/keycloak/authorization/store/PolicyStore.java:96-100; model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAPolicyStore.java:215",
+      "reason": "The PolicyStore javadoc states the resource cannot be null and JPAPolicyStore.findByResource calls resource.getId(); the infinispan cache layer does the same at StoreFactoryCacheSession:938. On a realm that enabled FGAP v2 before this commit the 'Clients' resource does not exist (init() returns early), so every canManage/canView for a caller without manage-clients falls into this branch with a null resource."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "default-client-scopes-index",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java:174",
+      "reason": "The second occurrence is real: line 174 indexes defaultClientScopes.get(1) after only asserting the list is not empty, so a single-element list would throw IndexOutOfBoundsException rather than fail meaningfully."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "test-shared-realm-state",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java:166,175,178,332-341; AbstractPermissionTest.java:118-134; test-framework InjectRealm.lifecycle() default LifeCycle.CLASS",
+      "reason": "@InjectRealm defaults to LifeCycle.CLASS, so the realm survives between test methods, yet testManageOnlyOneClient renames myclient and moves a default client scope to optional and testMapRolesAndCompositesOnlyOneClient creates two client roles, none of it undone; @AfterEach only deletes scope permissions. The same diff registers realm.cleanup() callbacks for policies, so the mechanism was available."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "getresourcename-missing-clients",
+      "evidence": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:310-322",
+      "reason": "Same defect as c013 stated as a suggestion: the USERS branch maps the all-users resource to 'All users' and per-user resources to a username, and no equivalent branch was added for the new CLIENTS type."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "registerlistener-diff-noise",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77-96; diff.patch lines 105-141",
+      "reason": "The diff replaces the entire listener body: the re-indent follows from the new wrapping if, but the cast respacing ((ClientModel)role -> (ClientModel) role, etc.) is gratuitous and is what turns a one-line behaviour change into a 30-line rewrite in review."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "require-javadoc-says-returns",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java:95-103",
+      "reason": "The javadocs newly added above void requireView() and void requireViewClientScopes() both read 'Returns {@code true} if ... returns {@code true}', while every other require* javadoc in the same file (requireManage, requireList, requireConfigure, ...) is worded as throwing ForbiddenException."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "require-javadoc-says-returns",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java:95-98; ClientPermissions.java:292-296",
+      "reason": "requireView() is declared void and the implementation throws ForbiddenException when canView() is false, so the new javadoc's 'Returns {@code true}' is wrong."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "listener-v1-guard",
+      "evidence": "common/src/main/java/org/keycloak/common/Profile.java:56-58,283-300 (configure); services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:186; AdminPermissions.java:77",
+      "reason": "ADMIN_FINE_GRAINED_AUTHZ and ADMIN_FINE_GRAINED_AUTHZ_V2 share the unversioned key admin-fine-grained-authz and Profile.configure writes features.put(f, f == enabledFeature) for every version, so exactly one can be on; under v2 no v1 permission objects are ever created, hence nothing v1-shaped to orphan. The recommended fix is also wrong for this tree: the listener calls clients().setPermissionsEnabled, which ClientPermissionsV2 now overrides to throw UnsupportedOperationException, so running it under v2 would break client deletion. The guard is what this PR needed to add, not a mistake."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "High",
+      "cluster": "missing-resourceid-filter",
+      "evidence": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:239-244; server-spi-private/src/main/java/org/keycloak/authorization/policy/evaluation/DefaultPolicyEvaluator.java:83-88; ClientPermissionsV2.java:224-233",
+      "reason": "Both premises check out: init() flattens the scopes of every resource type into one set on the resource server (so 'manage'/'view'/'map-roles' are shared with Users), and DefaultPolicyEvaluator calls policyStore.findByScopes(resourceServer, null, scopes, consumer). Because ClientPermissionsV2 accepts any returned Permission without comparing getResourceId(), anything the evaluator hands back for another resource grants access - which is exactly what commit c2acddc had to fix for users."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "default-client-scopes-index",
+      "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java:148",
+      "reason": "clientResource.getDefaultClientScopes().get(1) is called with no size check, inside a try block that expects ForbiddenException - an IndexOutOfBoundsException there would also be swallowed as 'some exception' by the surrounding catch."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "trailing-whitespace-schema",
+      "evidence": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:53",
+      "reason": "cat -A on line 53 shows '    $' - four spaces of trailing whitespace where the diff removed an empty line, an unrelated edit in a file otherwise changed only for the Clients resource type."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "not_real",
+      "confidence": 0.95,
+      "severity": null,
+      "cluster": "dependabot-labels",
+      "evidence": "benchmarks/code-review-bench/data/prs/keycloak-36880/diff.patch (whole diff)",
+      "reason": "Nothing in the diff touches Dependabot configuration or repository labels; the change is FGAP v2 Clients permissions plus tests."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "duplicated-scope-loop",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:224-234, 249-259, 276-283",
+      "reason": "The evaluatePermission call plus nested for-loop over permission.getScopes() appears verbatim in hasPermission(ClientModel,String), hasPermission(String) and hasGrantedPermission(Resource,String) in the same new class."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "getresourcename-missing-clients",
+      "evidence": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:93-94,104,325",
+      "reason": "Same finding as c013: resources are now created for the CLIENTS type via resolveClient, but getResourceName has no CLIENTS branch and falls through to getDisplayName(), which resourceStore.create never populates."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "dead-code-clientpermissionsv2",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:262-272",
+      "reason": "Confirmed unreferenced private method; removing it also retires four of the class's unused imports."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "single-scope-list-lookup",
+      "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:225,250,280; UserPermissionsV2.java:132",
+      "reason": "UserPermissionsV2.hasPermission takes String... scopes so Arrays.asList(scopes) is warranted there; both ClientPermissionsV2 variants take a single String yet keep the list-and-contains shape, while hasGrantedPermission in the same class does the plain scope.equals(s)."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "getresourcename-missing-clients",
+      "evidence": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:304-326; services/src/main/java/org/keycloak/authorization/admin/PolicyResourceService.java:213-219",
+      "reason": "Same defect as c013/c018/c028: with no CLIENTS branch the method returns getDisplayName() (null), and the representation's name field is the raw client UUID, so the console has nothing but a UUID and a null label to show."
+    }
+  ]
+}

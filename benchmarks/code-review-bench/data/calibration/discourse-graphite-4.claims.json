@@ -1,0 +1,221 @@
+{
+  "slug": "discourse-graphite-4",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Date.parse loses time information - should use DateTime.parse or Time.parse to preserve full timestamp"
+    },
+    {
+      "claim_id": "c002",
+      "text": "Deprecated RSpec matcher be_true should be be true (with space)"
+    },
+    {
+      "claim_id": "c003",
+      "text": "Missing error handling for network and parsing failures in poll_feed method"
+    },
+    {
+      "claim_id": "c004",
+      "text": "The disqus.thor task now fetches each URL over HTTP via import_remote instead of parsing the offline XML export directly, and open(url) failures are not rescued, so pages that are offline or moved will break the whole batch import."
+    },
+    {
+      "claim_id": "c005",
+      "text": "On line 35, `i.content` returns `nil` for RSS 2.0 feeds that use `<description>` instead of `<content>`, causing `NoMethodError` when `.scrub` is called on `nil`. Since the job has `sidekiq_options retry: false`, this crashes the entire feed polling job with no retry. Should fall back to `i.description` and guard against nil."
+    },
+    {
+      "claim_id": "c006",
+      "text": "Destructive force: true in create_table migration will drop existing topic_embeds table and data"
+    },
+    {
+      "claim_id": "c007",
+      "text": "require_dependency is used on a gem (nokogiri) instead of a plain require; require_dependency is meant for autoloaded app code, not gems."
+    },
+    {
+      "claim_id": "c008",
+      "text": "TopicEmbed.import mutates the caller's contents string argument in place via String#<<, an implicit side effect not indicated by the method's name or signature."
+    },
+    {
+      "claim_id": "c009",
+      "text": "When `cook_method` is `:raw_html`, `cook` returns `raw` and bypasses the normal cooking/sanitization pipeline. If any imported content isn't strictly sanitized upstream (RSS or remote fetch), this can become an XSS vector on Discourse-rendered pages."
+    },
+    {
+      "claim_id": "c010",
+      "text": "i.content may be nil when RSS/Atom items have no content element, causing NoMethodError when calling .scrub on nil"
+    },
+    {
+      "claim_id": "c011",
+      "text": "Some feeds don't provide `content` for items; `i.content.scrub` will raise if `i.content` is `nil`, which would break polling. Need to guard/fallback to another field (e.g., description) before scrubbing/unescaping."
+    },
+    {
+      "claim_id": "c012",
+      "text": "The new embed.css and embed.js assets are not added to config.assets.precompile, so in production the embed page and the third-party embed script will 404."
+    },
+    {
+      "claim_id": "c013",
+      "text": "embed.js does not null-check the result of getElementById('discourse-comments') before appending to it, so a host page missing that container throws a TypeError that silently aborts the whole script."
+    },
+    {
+      "claim_id": "c014",
+      "text": "embed.js silently requires discourseUrl to end with a trailing slash (undocumented), otherwise the constructed URL is malformed (e.g. http://forum.example.comembed/best)."
+    },
+    {
+      "claim_id": "c015",
+      "text": "XSS vulnerability: raw_html cook_method bypasses sanitizer, allowing untrusted HTML to become stored XSS"
+    },
+    {
+      "claim_id": "c016",
+      "text": "Assertions in after block is anti-pattern - if test body fails, after block still executes causing confusing errors"
+    },
+    {
+      "claim_id": "c017",
+      "text": "GET embed/best triggers creation of a Topic and Post as a side effect, violating the safety semantics of the GET method (RFC 9110), which can be triggered by prefetchers, link scanners, or retries."
+    },
+    {
+      "claim_id": "c018",
+      "text": "retrieve_topic.rb has an unused require_dependency 'email/sender' that the file never references."
+    },
+    {
+      "claim_id": "c019",
+      "text": "XSS vulnerability: request.referer is interpolated directly into a JavaScript string literal without any escaping, allowing an attacker to craft a Referer header to inject arbitrary JavaScript"
+    },
+    {
+      "claim_id": "c020",
+      "text": "force: true was added to an already-merged migration (and to a brand-new migration where it is unnecessary), which will silently DROP and recreate the table (destroying data) if the migration is ever rerun."
+    },
+    {
+      "claim_id": "c021",
+      "text": "Destructive force: true in create_table migration will drop existing top_topics table and data"
+    },
+    {
+      "claim_id": "c022",
+      "text": "Four new files are missing a trailing newline at end of file."
+    },
+    {
+      "claim_id": "c023",
+      "text": "Jobs::PollFeed#feed_key is defined but never called anywhere in the codebase, appearing to be unfinished dead code for a conditional-GET caching feature that isn't in this MR."
+    },
+    {
+      "claim_id": "c024",
+      "text": "Port exclusion in absolutize_urls ignores scheme - an http:// URL on port 443 would have its port silently dropped, producing an incorrect absolute URL"
+    },
+    {
+      "claim_id": "c025",
+      "text": "An unrelated migration file (migrate_word_counts.rb) has a purely whitespace-only diff (trailing whitespace and trailing newline removed) that has nothing to do with the embedding feature."
+    },
+    {
+      "claim_id": "c026",
+      "text": "Is it intentional that embed/best redirects to the login page on forums with login_required enabled, rather than supporting anonymous embedding?"
+    },
+    {
+      "claim_id": "c027",
+      "text": "TopicEmbed.import's check-then-create pattern doesn't handle the unique index conflict; concurrent imports of overlapping URLs can hit RecordNotUnique inside a transaction, rolling back the whole batch and aborting the polling loop."
+    },
+    {
+      "claim_id": "c028",
+      "text": "postMessage height value should be parsed and validated before use to prevent invalid values"
+    },
+    {
+      "claim_id": "c029",
+      "text": "poll_feed's main body (the item-processing loop) is entirely mocked out via poller.expects(:poll_feed) in every test, so it has zero real test coverage and issues like missing sanitize or missing nil handling are invisible to CI."
+    },
+    {
+      "claim_id": "c030",
+      "text": "Potential NoMethodError if feed item content is nil when calling .scrub"
+    },
+    {
+      "claim_id": "c031",
+      "text": "raw and cooked both set to p[:cooked] in disqus importer - raw should contain source text not HTML"
+    },
+    {
+      "claim_id": "c032",
+      "text": "Two poll_feed_spec tests never actually fail even if the guarded code they're supposed to test is deleted entirely, because they don't stub the other required guard conditions (feed_polling_enabled?), so they test the stub defaults rather than the code."
+    },
+    {
+      "claim_id": "c033",
+      "text": "SSRF vulnerability using open(url) without validation"
+    },
+    {
+      "claim_id": "c034",
+      "text": "Is TopicRetriever synchronously running a full PollFeed cycle on every new embed request an intentional design choice, or an unintended amplification given it can trigger N full polling runs for N concurrent new URLs?"
+    },
+    {
+      "claim_id": "c035",
+      "text": "Only one of the three Gemfile lockfiles (Gemfile_rails4.lock) was updated with the new gems, so installs using the RAILS3 or RAILS_MASTER lockfiles will be out of sync with the Gemfile."
+    },
+    {
+      "claim_id": "c036",
+      "text": "The ERB block closes with end if, which is invalid Ruby/ERB and will raise at render; it should just be end to close the if block."
+    },
+    {
+      "claim_id": "c037",
+      "text": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML."
+    },
+    {
+      "claim_id": "c038",
+      "text": "The disqus.thor rake task's --category option was removed when the import mechanism was switched, so any existing invocation that passes -c/--category will now fail as an unrecognized option."
+    },
+    {
+      "claim_id": "c039",
+      "text": "Missing blank guard for SiteSetting.embed_by_username before calling downcase"
+    },
+    {
+      "claim_id": "c040",
+      "text": "import_remote missing timeout protection - open(url).read can hang indefinitely"
+    },
+    {
+      "claim_id": "c041",
+      "text": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check."
+    },
+    {
+      "claim_id": "c042",
+      "text": "Adding column with default + null: false in single migration step can cause long-running locks on large tables"
+    },
+    {
+      "claim_id": "c043",
+      "text": "RSS-imported HTML is stored via the raw_html cook method which completely bypasses PrettyText's sanitize step, and the output is rendered with raw, resulting in stored XSS; the import_remote path has a whitelist but the poll_feed path does not, so the two paths protect asymmetrically."
+    },
+    {
+      "claim_id": "c044",
+      "text": "The code sets X-Frame-Options: ALLOWALL which completely disables clickjacking protection. The referer validation can be bypassed (referer headers are easily spoofed), and the fallback to empty string for nil referer masks validation failures."
+    },
+    {
+      "claim_id": "c045",
+      "text": "Consider using image_tag for safer avatar rendering instead of direct URL interpolation"
+    },
+    {
+      "claim_id": "c046",
+      "text": "Missing guard against missing #discourse-comments container - appendChild will throw if the container doesn't exist"
+    },
+    {
+      "claim_id": "c047",
+      "text": "Non-atomic Redis setnx + expire pattern can leave key without TTL permanently blocking retrieval"
+    },
+    {
+      "claim_id": "c048",
+      "text": "Is the varchar(255) length of topic_embeds.embed_url sufficient for real-world URLs to be imported, given there's no length truncation and overly long URLs would abort the create inside a transaction?"
+    },
+    {
+      "claim_id": "c049",
+      "text": "content_sha1 updated unconditionally even if PostRevisor#revise! returns false, causing state desync"
+    },
+    {
+      "claim_id": "c050",
+      "text": "Unused feed_key method should be removed or connected to intended functionality"
+    },
+    {
+      "claim_id": "c051",
+      "text": "The disqus.thor task no longer passes created_at through to post creation, so all imported posts get the current time instead of their original Disqus timestamps, and this is irreversible."
+    },
+    {
+      "claim_id": "c052",
+      "text": "postMessage targetOrigin should be the origin (scheme+host+port), not the full referrer URL; using the full URL will cause the message to be dropped and prevent resizing."
+    },
+    {
+      "claim_id": "c053",
+      "text": "Sanitize `raw_html` posts before returning them - the early return turns imported embed HTML into stored, unsanitized output"
+    },
+    {
+      "claim_id": "c054",
+      "text": "cook_method option not validated before persisting, risking invalid enum values"
+    }
+  ]
+}

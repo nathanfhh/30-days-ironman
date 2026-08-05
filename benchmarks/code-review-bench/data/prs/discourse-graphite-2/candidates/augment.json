@@ -1,0 +1,4 @@
+[
+  "topicUnsubscribe is declared as a top-level route, but the template lives at templates/topic/unsubscribe.hbs (which resolves to topic.unsubscribe), so Ember may not find/render the intended template and the unsubscribe page may render incorrectly or blank",
+  "TopicUser.find_by(...) can return nil if the user has no topic_users row yet, and the subsequent tu.notification_level access will raise, causing 500 errors when hitting the unsubscribe URL"
+]

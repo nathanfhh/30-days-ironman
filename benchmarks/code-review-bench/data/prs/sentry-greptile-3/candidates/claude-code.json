@@ -1,0 +1,5 @@
+[
+  "_get_event_stats passes the outer closure variable `dataset` instead of the `scoped_dataset` parameter to `is_errors_query_for_error_upsampled_projects`, causing the upsampling eligibility check to use the wrong dataset when get_event_stats_factory calls _get_event_stats with a different dataset during dashboard widget splitting",
+  "PR accidentally adds a `sentry-repo` git submodule reference at the repository root (commit a5d290951def) which is unrelated to the error upsampling feature and appears to be an artifact from the development environment",
+  "`upsampled_count` uses `default_result_type=\"number\"` but wraps its result in `toInt64()` and is designed to replace `count()` which uses `default_result_type=\"integer\"`, causing API response metadata to report the type inconsistently when upsampling is active"
+]

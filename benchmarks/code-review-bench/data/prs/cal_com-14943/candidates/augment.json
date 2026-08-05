@@ -1,0 +1,5 @@
+[
+  "The `retryCount > 1` branch isn't scoped to `method: SMS`, so it will delete any WorkflowReminder that happens to have retryCount incremented (even non-SMS methods), causing potential unintended data loss",
+  "`retryCount: reminder.retryCount + 1` is based on a potentially stale in-memory value; if this cron overlaps/runs concurrently it can lose increments",
+  "`update()` will throw if the reminder was deleted between `findMany` and this write, which would escape the catch block - needs to be robust to concurrency and missing rows"
+]

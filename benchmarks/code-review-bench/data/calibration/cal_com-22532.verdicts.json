@@ -1,0 +1,428 @@
+{
+  "slug": "cal_com-22532",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "dropdown-raw-tailwind-colors",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:86-87",
+      "reason": "Both lines use raw palette classes (text-gray-900 / text-gray-500) and both carry dark:text-white, so in dark mode heading and secondary line are the same colour; the surrounding codebase uses semantic tokens heavily (210 text-emphasis hits under packages/features, and AppListCard itself uses text-emphasis)."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "Low",
+      "cluster": "cache-status-credentialids-guard",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:27-29",
+      "reason": "With zero connected calendars (the onboarding path is one of the 8 call sites) the handler still issues a groupBy with `in: []`; an early return would avoid that useless round-trip. The dedup half of the claim is unnecessary — one entry per credential and groupBy would collapse duplicates anyway — so only half of it lands."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "env-file-relative-path",
+      "evidence": "scripts/test-gcal-webhooks.sh:5",
+      "reason": "ENV_FILE=\"../.env\" is resolved against the caller's cwd; invoked as ./scripts/test-gcal-webhooks.sh from the repo root it targets the repo's *parent* directory and the `if [ ! -f ]` branch happily `touch`es a new file there."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "tsx-undeclared",
+      "evidence": "apps/web/package.json:11",
+      "reason": "grep over every package.json and yarn.lock finds no `tsx` entry at all, while ts-node is a declared devDependency in apps/web; `npx tsx` therefore fetches an unpinned package at run time."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "env-file-relative-path",
+      "evidence": "scripts/test-gcal-webhooks.sh:5",
+      "reason": "Same finding as c003 — the path is cwd-relative, so running from the repo root writes GOOGLE_WEBHOOK_URL one directory above the repo."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "mock-signature-params",
+      "evidence": "packages/features/calendar-cache/calendar-cache.repository.mock.ts:14-30",
+      "reason": "TypeScript allows a method with fewer parameters to implement a wider signature, so nothing is broken; the two sibling mock methods (unwatchCalendar, deleteManyByCredential) also declare no parameters, so the new one matches the file's existing convention rather than violating it."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "sed-bsd-vs-gnu",
+      "evidence": "scripts/test-gcal-webhooks.sh:68",
+      "reason": "`sed -i '' -E \"s|...|\"` is the BSD form; GNU sed reads the '' as the script and the s-expression as a filename and errors out. The script has no `set -e`, so it still prints the success line."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "hardcoded-en-us-locale",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:89",
+      "reason": "The component destructures from useLocale() on line 38 (which also exposes i18n) yet formats the timestamp with a literal \"en-US\" DateTimeFormat, so translated labels sit next to US date/time formatting for every locale."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "calendarcache-factory-bypass",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:28; packages/features/calendar-cache/calendar-cache.ts:23-30",
+      "reason": "CalendarCache.init() checks the `calendar-cache` global feature flag and returns CalendarCacheRepositoryMock when off; the handler constructs CalendarCacheRepository directly, so the flag is bypassed and the newly added mock method is never reached."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "tsx-undeclared",
+      "evidence": "apps/web/package.json:11; yarn.lock (no tsx entry)",
+      "reason": "Verified: `tsx` appears in no package.json and has no yarn.lock entry, whereas ts-node@^10.9.1 is declared in apps/web devDependencies — the switch moves a lockfile-pinned binary to an unpinned registry fetch."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "shell-unused-loop-var",
+      "evidence": "scripts/test-gcal-webhooks.sh:41",
+      "reason": "`for i in {1..20}` never references $i in the body; `for _ in` is the idiomatic form. Trivial but correct — no shellcheck config in the repo would flag it, so it is a style point only."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "cache-status-credentialids-guard",
+      "evidence": "packages/lib/CalendarManager.ts:51-135; packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:27",
+      "reason": "Both premises fail: every branch of getConnectedCalendars returns a non-optional `credentialId`, and getCalendarCredentials emits one entry per credential, so the array can contain neither missing nor duplicate ids."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "unrelated-changes-bundled",
+      "evidence": "apps/web/package.json:11; scripts/test-gcal-webhooks.sh",
+      "reason": "The dev:cron runner swap and the new tunnelmole developer script have nothing to do with calendar-cache status; they are independent changes riding along in the same MR."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "hardcoded-en-us-locale",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:89",
+      "reason": "Same defect as c008 — the DateTimeFormat locale is a hardcoded literal while the rest of the component is i18n-driven."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "tmole-log-assumption",
+      "evidence": "scripts/test-gcal-webhooks.sh:20-27,45-48",
+      "reason": "In the reuse branch the script only greps $LOG_FILE; if /tmp/tmole.log was deleted (or belongs to an older tunnel) TUNNEL_URL comes back empty or stale and the script aborts with 'Failed to extract Tunnelmole URL' even though tmole is running fine."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "always-rendered-w32-actions-div",
+      "evidence": "packages/platform/atoms/selected-calendars/wrappers/SelectedCalendarsSettingsWebWrapper.tsx:68-79,127-135; packages/ui/components/app-list-card/AppListCard.tsx:55,64",
+      "reason": "The conditional moved inside the child: `actions` is now unconditionally a `<div className=\"flex w-32 justify-end\">`, and AppListCard renders it as a flex sibling of the `grow ... truncate` title column. When CredentialActionsDropdown returns null (delegation credential, or disableConnectionModification) an 8rem empty flex item remains."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "migration-default-now-backfill",
+      "evidence": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql:9",
+      "reason": "ADD COLUMN ... NOT NULL DEFAULT NOW() stamps every existing CalendarCache row with the migration time, and that value is exactly what the new dropdown surfaces as 'Last updated'. The suggested backfill checks out: CACHING_TIME in calendar-cache.repository.ts is 30 days, so expiresAt - 30d recovers the real write time."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "deletecache-no-query-invalidation",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:42-49 vs 51-65; packages/features/eventtypes/components/tabs/advanced/EventAdvancedTab.tsx:372-378",
+      "reason": "disconnectMutation has an onSettled that invalidates connectedCalendars; deleteCacheMutation only calls the optional onSuccess prop. EventAdvancedTab renders the wrapper without onChanged, so on that page nothing invalidates and the stale timestamp stays."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "selectedcalendar-updatedat-deadcode",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:1024; packages/lib/server/repository/user.ts:891-899; packages/app-store/googlecalendar/api/webhook.ts:46",
+      "reason": "The UI's cacheUpdatedAt comes from CalendarCache.groupBy, not SelectedCalendar; grep finds no reader of the selectedCalendars updatedAt/googleChannelId fields added to findUnlockedUserForSession, and fetchAvailabilityAndSetCache is invoked from the Google push webhook, so the extra updateMany runs on every notification."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "hardcoded-en-us-locale",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:89",
+      "reason": "Same defect as c008/c014; useLocale() is already in scope and exposes i18n.language."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "plain-error-not-trpcerror",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:25; packages/trpc/server/routers/viewer/calendars/setDestinationCalendar.handler.ts:77,97",
+      "reason": "tRPC wraps any non-TRPCError thrown in a procedure as INTERNAL_SERVER_ERROR; the sibling handler in the same directory uses TRPCError with explicit codes, so this is both a behaviour and a convention break."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "empty-data-updatemany-noop",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:1024; packages/prisma/schema.prisma (SelectedCalendar.updatedAt DateTime? @updatedAt)",
+      "reason": "It goes the way the claim says: Prisma's @updatedAt injection (WriteArgs::update_datetimes) is skipped when the args map is empty, and the SQL connector short-circuits an empty update, so updateMany({where, data:{}}) emits no UPDATE and never bumps updatedAt — it is a silent no-op returning count 0, not an error. The claim's stated consequence is slightly off (the dropdown reads CalendarCache.updatedAt, not SelectedCalendar.updatedAt), but the mechanism it identifies is correct and the line does nothing."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "sed-bsd-vs-gnu",
+      "evidence": "scripts/test-gcal-webhooks.sh:68 vs deploy/install.sh:6-7",
+      "reason": "Confirmed on both halves: the new script uses the BSD `sed -i '' -E` form, and the only other sed -i in the repo (deploy/install.sh) uses the GNU no-suffix form. The success echo on line 72 is unconditional."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "hardcoded-en-us-locale",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:89",
+      "reason": "Same defect as c008/c014/c020."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "not_real",
+      "confidence": 0.65,
+      "severity": null,
+      "cluster": "deletecache-team-credentials",
+      "evidence": "packages/lib/getConnectedDestinationCalendars.ts (credential.findMany where userId: user.id); packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:17-22",
+      "reason": "The auth check is indeed userId-only, but the connectedCalendars query that feeds this dropdown only ever loads credentials with userId = the session user, so no team-owned credential can surface a cache-status dropdown. The described blocked flow does not exist in this change."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "env-file-relative-path",
+      "evidence": "scripts/test-gcal-webhooks.sh:5",
+      "reason": "Same finding as c003/c005."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "Low",
+      "cluster": "credentialid-zod-int-positive",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/_router.tsx:29",
+      "reason": "z.number() accepts floats and negatives; negative ids are the in-memory delegation-credential sentinel (isInMemoryDelegationCredential checks credentialId < 0), so .int().positive() is a genuine tightening. Weakened slightly by the fact that the neighbouring deleteCredential schema also uses a bare z.number()."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "plain-error-not-trpcerror",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:25",
+      "reason": "Same finding as c021 — tRPC's getTRPCErrorFromUnknown coerces the plain Error to INTERNAL_SERVER_ERROR, losing NOT_FOUND/FORBIDDEN semantics."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "plain-error-not-trpcerror",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:25",
+      "reason": "Same finding as c021/c028, including the monitoring consequence: an ordinary not-found/not-yours request is reported as a 500."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "bare-hr-instead-of-separator",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:112; packages/ui/components/dropdown/index.ts",
+      "reason": "A raw <hr className=\"my-1\" /> is used inside DropdownMenuContent even though DropdownMenuSeparator (a styled Radix Separator, bg-emphasis -mx-1 my-1 h-px) is exported from the same dropdown barrel the file already imports from."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "migration-timestamp-out-of-order",
+      "evidence": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at vs 20250716135157_team_booking_page_cache_feature_flag",
+      "reason": "Verified with git: 20250716135157 already exists on the base ref (commit b40d448), while 20250715160635 is introduced by this branch, so after merge the applied order will not match lexicographic order."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "delegation-guard-lost-remove-app",
+      "evidence": "packages/features/apps/components/DisconnectIntegration.tsx:42-43; packages/lib/CalendarManager.ts:90-97; packages/features/apps/components/CredentialActionsDropdown.tsx:68",
+      "reason": "DisconnectIntegration disabled itself via isDelegationCredential({credentialId}) (credentialId < 0); the new dropdown relies solely on the delegationCredentialId prop. The 'No primary calendar found' return in getConnectedCalendars omits delegationCredentialId, so on that (Alert) path canDisconnect evaluates true for an in-memory delegation credential and 'Remove app' becomes clickable."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "deletecache-no-query-invalidation",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:42-49",
+      "reason": "Same finding as c018; on the event-type Advanced tab (which passes no onChanged) the cached timestamp is not refetched after deletion."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "deletecache-router-conventions",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/_router.tsx:8-11,28-33; deleteCache.handler.ts:4-11",
+      "reason": "All three sub-claims check out: the zod object is inlined in _router.tsx while the two sibling procedures use connectedCalendars.schema.ts / setDestinationCalendar.schema.ts, the handler declares its input shape inline instead of importing a T-type, and CalendarsRouterHandlerCache still lists only two entries."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "calendarcache-factory-bypass",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:28; packages/features/calendar-cache/calendar-cache.ts:23-30",
+      "reason": "Same finding as c009 — CalendarCache.init is the factory that consults FeaturesRepository.checkIfFeatureIsEnabledGlobally('calendar-cache') and returns the mock; direct construction skips it."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "platform-constants-undeclared-dep",
+      "evidence": "packages/features/package.json (dependencies list); packages/platform/constants/package.json",
+      "reason": "@calcom/platform-constants is absent from packages/features' dependencies, and it is a built package (main ./dist/index.js, types ./dist/index.d.ts, built by its own post-install), so both resolution and build ordering depend on hoisting rather than a declared edge."
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "empty-data-updatemany-noop",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:1024; packages/lib/server/repository/selectedCalendar.ts:400",
+      "reason": "The two supporting assertions are verified — grep finds no other empty-data updateMany in the repo and no test touches updateManyByCredentialId. Answering the question: Prisma does NOT reject it and does NOT emit SET updatedAt = now(); @updatedAt injection is skipped for an empty args map and the update is short-circuited, so it is a silent no-op."
+    },
+    {
+      "claim_id": "c038",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "no-e2e-testing",
+      "evidence": "n/a",
+      "reason": "Whether the author exercised this against a real Google Calendar is not knowable from the repository; only the absence of automated tests is observable (covered by c040). Settling it would need the PR discussion or the author's testing notes."
+    },
+    {
+      "claim_id": "c039",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dropdownmenuitem-for-static-label",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:84-95; packages/ui/components/dropdown/Dropdown.tsx:54-60",
+      "reason": "DropdownMenuItem wraps DropdownMenuPrimitive.Item, which Radix makes focusable and selectable (and closes the menu on select) — there is no onSelect preventDefault or `disabled`. DropdownMenuLabel wraps Primitive.Label and is exported from the same barrel."
+    },
+    {
+      "claim_id": "c040",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "no-tests-added",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/ (only setDestinationCalendar.handler.test.ts); packages/features/calendar-cache/calendar-cache.repository.test.ts",
+      "reason": "grep for deleteCacheHandler and getCacheStatusByCredentialIds finds only definitions and call sites, no test file; the calendars router directory has a test for setDestinationCalendar only, so the convention of testing handlers exists and was not followed."
+    },
+    {
+      "claim_id": "c041",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "delete-cache-not-gated-by-disableconnectionmodification",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:68-69,82-110; packages/features/eventtypes/components/tabs/advanced/EventAdvancedTab.tsx:375",
+      "reason": "hasCache is `isGoogleCalendar && cacheUpdatedAt` only — disableConnectionModification gates canDisconnect but not the cache block. EventAdvancedTab passes disableConnectionModification={true}, so on the event-type Advanced tab 'Remove app' is hidden while the destructive 'Delete cached data' remains rendered and clickable."
+    },
+    {
+      "claim_id": "c042",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "tsx-undeclared",
+      "evidence": "apps/web/package.json:11",
+      "reason": "Same finding as c004/c010 — no tsx in any package.json or in yarn.lock, so `npx tsx` resolves outside the lockfile and can prompt to install."
+    },
+    {
+      "claim_id": "c043",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "satisfies-removed-findmany",
+      "evidence": "packages/lib/server/repository/selectedCalendar.ts:259-261",
+      "reason": "The object literal is passed straight into prisma.selectedCalendar.findMany, whose generic parameter is constrained by SelectSubset<T, SelectedCalendarFindManyArgs<ExtArgs>>; that is still a compile-time check (with excess-property checking on the literal, if anything stricter). Nothing moves to runtime, so the claim's central assertion is wrong even though the edit is indeed incidental to the feature."
+    },
+    {
+      "claim_id": "c044",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "delete-cache-no-refetch",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:27-29; packages/app-store/googlecalendar/lib/CalendarService.ts:970-976",
+      "reason": "The behavioural contrast is accurate: deleteCacheHandler only calls calendarCache.deleteMany, while unwatchCalendar repopulates via fetchAvailabilityAndSetCache(remainingCalendars). After deletion cacheUpdatedAt is null, the status block disappears and availability is uncached until the next push notification — worth flagging even though whether that is desired is a product call."
+    },
+    {
+      "claim_id": "c045",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "delegation-dropdown-behavior-verify",
+      "evidence": "packages/features/calendar-cache/calendar-cache.repository.ts:34-42,136-146",
+      "reason": "Mostly a restatement plus a request to confirm intent, and the 'cache-only dropdown' half cannot occur: upsertCachedAvailability calls assertCalendarHasDbCredential, which throws for credentialId < 0, so an in-memory delegation credential never has CalendarCache rows and hasCache is always false for it. The concrete delegation regression is the one described in c032."
+    },
+    {
+      "claim_id": "c046",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "Low",
+      "cluster": "features-imports-platform-constants-layering",
+      "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:6; packages/platform/atoms/selected-calendars/wrappers/SelectedCalendarsSettingsWebWrapper.tsx:4-7",
+      "reason": "The direction claim holds — packages/platform/atoms imports @calcom/features, so this is the reverse edge, and the string is already available as _metadata.type in packages/app-store/googlecalendar. The 'only such import outside packages/platform' wording is an overstatement (apps/web and apps/api/v2 import it in dozens of files); it is only true when restricted to packages/."
+    },
+    {
+      "claim_id": "c047",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "calendarcache-factory-bypass",
+      "evidence": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:28-29; packages/features/calendar-cache/calendar-cache.repository.mock.ts:27",
+      "reason": "Same defect as c009/c035, and the supporting details check out: grep finds exactly 8 connectedCalendars.useQuery call sites (Booker's useCalendars, onboarding ConnectCalendars/CreateEventsOnCalendarSelect, troubleshooter, CalendarListContainer, two platform wrappers, the selected-calendars wrapper), and the mock's new method is unreachable."
+    }
+  ]
+}

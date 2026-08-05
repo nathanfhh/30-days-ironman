@@ -1,0 +1,7 @@
+[
+  "If params[:id] doesn't match a record, host will be nil and save_host(host) / host.destroy will raise a 500 error instead of returning 404",
+  "If host is nil, sub! will raise before validations run, turning a bad request into a 500 instead of surfacing a validation error",
+  "record_for_host compares against uri.host (no port), but the model allows saving host values with :port, so a stored example.com:3000 would never match and will be treated as disallowed",
+  "Migration inserts h via string interpolation which can break on quotes and bypasses the model's host normalization (scheme/path stripping), potentially leaving records that will never match record_for_host",
+  "Server-side save_host defaults blank category_id to uncategorized, but the client sets host.category from categoryId rather than the saved record's returned category_id, causing UI to show no category even though the server persisted one"
+]

@@ -1,0 +1,4 @@
+[
+  "SimpleQueueProcessingStrategy.close() calls self.queue_pool.shutdown() which permanently destroys all workers and queues in the shared FixedQueuePool, causing any Kafka partition rebalance to leave the new strategy referencing a dead pool where submitted messages will never be processed",
+  "FixedQueuePool.shutdown() sets worker.shutdown = True for all workers before calling q.shutdown(immediate=False), creating a race where workers exit their while loop before draining remaining queued items, causing unnecessary reprocessing on restart"
+]

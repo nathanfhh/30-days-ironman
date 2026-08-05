@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-7232",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 15,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "handleCancelBooking.ts fire-and-forget reminder deletion is exactly the booking-cancellation instance of the unawaited-forEach issue golden describes."},
+    {"golden_index": 0, "candidate_index": 1, "confidence": 0.55,
+     "reasoning": "handleNewBooking.ts's unawaited forEach deletion calls match the same bug pattern, plausibly the rescheduling instance golden refers to, though the file name doesn't make that explicit."},
+    {"golden_index": 0, "candidate_index": 9, "confidence": 0.9,
+     "reasoning": "bookings.tsx explicitly identifies the same fire-and-forget pattern during reschedule, one of the locations golden's comment covers."},
+    {"golden_index": 0, "candidate_index": 11, "confidence": 0.75,
+     "reasoning": "workflows.tsx cancellation helpers invoked in forEach without awaiting matches the workflow/workflow-step cancellation instance golden describes."},
+    {"golden_index": 1, "candidate_index": 2, "confidence": 0.8,
+     "reasoning": "Identifies the same immediateDelete=true path failing to delete the DB record, from a call-site perspective rather than the function definition."},
+    {"golden_index": 1, "candidate_index": 8, "confidence": 0.95,
+     "reasoning": "Directly describes emailReminderManager.ts's immediateDelete path cancelling SendGrid but not deleting the workflowReminder row, matching golden's orphaned-record issue precisely."}
+  ]
+}

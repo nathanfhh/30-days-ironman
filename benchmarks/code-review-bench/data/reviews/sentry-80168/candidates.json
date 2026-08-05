@@ -1,0 +1,71 @@
+{
+  "slug": "sentry-80168",
+  "issues": [
+    {
+      "text": "StatefulDetectorHandler.evaluate's return type was changed from list[DetectorEvaluationResult] to dict[DetectorGroupKey, DetectorEvaluationResult], but its docstring still says it \"returns a list\" — a silent mismatch since both types can be iterated with `for x in results`, just yielding different things.",
+      "zh": "evaluate 的回傳型別由 list 改為 dict，docstring 仍寫「returns a list」",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "The new test assertions on IssueOccurrence are effectively empty: IssueOccurrence.__eq__ only compares `id`, and the test helper build_mock_occurrence_and_event hardcodes the same id string for every occurrence it builds, so any two occurrences produced by the helper compare equal regardless of fingerprint, group_key, priority, or other content — meaning this PR's main new assertions verify nothing, as demonstrated by two tests whose expected values already don't match what's actually produced yet still pass.",
+      "zh": "測試對 IssueOccurrence 的斷言全部是空的——IssueOccurrence.__eq__ 只比一個欄位（id），而 mock 對所有 occurrence 都寫死同一個 id，兩者相乘的結果是任何兩個由這個 helper 產生的 IssueOccurrence 都相等，不管 fingerprint、group_key、priority、project_id、detection_time 差多少",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "MetricAlertDetectorHandler's base class was changed such that it now inherits four unimplemented abstract methods, making it non-instantiable (ABCMeta), yet it is still registered on MetricAlertFire.detector_handler; accessing detector_handler for a metric_alert_fire Detector will raise TypeError, and mypy won't catch it because the declared type is a `type[X] | None` union which suppresses the type-abstract check.",
+      "zh": "MetricAlertDetectorHandler 變成無法實例化的抽象類別，卻仍註冊在 MetricAlertFire.detector_handler 上",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "A TODO comment (\"This will be a stateful detector when we build that abstraction\") describing work that this very PR completed was left in place instead of being removed.",
+      "zh": "已經被這次變更完成的 TODO 註解沒有移除",
+      "finding_id": "F-004",
+      "severity": "Nit"
+    },
+    {
+      "text": "The test helper parameter name `type` in create_detector_and_conditions shadows the builtin `type`, and reads awkwardly since `type` in this codebase is also a Detector field name and a GroupType concept.",
+      "zh": "測試 helper 的參數名 type 蓋掉 builtin",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "TestProcessDetectors.setUp is a no-op override that only calls super().setUp(), a leftover remnant from merging StatefulDetectorHandlerTestMixin into BaseDetectorHandlerTest.",
+      "zh": "TestProcessDetectors.setUp（:125-126）現在只有 super().setUp() 一行，等同於不覆寫",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "build_handler's detector_type parameter is never passed by any of its ten call sites in the file, making it a dead/unused parameter left over from the test refactor.",
+      "zh": "build_handler(self, detector=None, detector_type=None) 的 detector_type 參數，檔案裡十處呼叫全部是無參數的 self.build_handler()，沒有任何 caller 傳值",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "The `import builtins` / `builtins.type[GroupType]` workaround (needed because the Detector model has a field literally named `type`, which shadows the builtin inside the class body) is correct but has no explanatory comment, making it likely a future \"cleanup\" will revert it back to `type[GroupType]` and break CI again.",
+      "zh": "builtins.type[GroupType] 這個規避寫法是對的，但沒有註解說明，下一個人很可能會把它「簡化」回去",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Is MetricAlertDetectorHandler being left as `pass` a deliberate placeholder (pending a future stateful implementation), or was it an oversight when the base class was changed?",
+      "zh": "MetricAlertDetectorHandler 留成 pass 是刻意的佔位（等 metric alert 的 stateful 實作），還是這次改基底類別時漏掉的？"
+    },
+    {
+      "text": "Detector.project_id is still hardcoded to return 1; now that this change wires up actually producing and sending IssueOccurrence to Kafka, what mechanism prevents occurrences from being written against project 1 before a real project_id is added to the model?",
+      "zh": "Detector.project_id 仍然是寫死的 1；在真正的 detector 上線之前，有什麼機制擋住 occurrence 被寫到 project 1？"
+    },
+    {
+      "text": "The occurrence is sent to Kafka before commit_state_updates() runs; if the commit fails, will the next data packet re-produce the same occurrence (a duplicate issue) rather than just a duplicate resolve as before?",
+      "zh": "occurrence 在 commit_state_updates() 之前就送進 Kafka；若 commit 失敗，下一個 data packet 會不會重複產生同一個 occurrence？"
+    },
+    {
+      "text": "Was removing the duplicate-group-key detection and its logger.error call a deliberate transfer of responsibility to each handler, or just incidental cleanup once the return type became a dict? If deliberate, is the new \"keys must be unique and match result.group_key\" contract documented anywhere?",
+      "zh": "拿掉重複 group key 的偵測與那行 logger.error(\"Duplicate detector state group keys found\")，是刻意把責任移交給 handler，還是型別改成 dict 之後的順手清理？如果是刻意的，這個新契約有打算寫下來嗎？"
+    }
+  ]
+}

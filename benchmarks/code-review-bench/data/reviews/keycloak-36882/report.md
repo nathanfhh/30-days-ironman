@@ -1,0 +1,172 @@
+## 審查結論：Approved with Comments
+
+> Critical 0 · Suggestion 5 · Nit 2 · 未驗證提問 2
+> nathan-code-review 2026.08.02.05 · 第 1 次審查
+
+### 總評
+
+| A 風格 | B 簡潔 | C 安全 |
+|:--:|:--:|:--:|
+| ❌ | ❌ | ✅ |
+
+| D API 慣例 | E 架構 | F 資料取用與資料庫 |
+|:--:|:--:|:--:|
+| — | ❌ | — |
+
+| G 測試 | H 非 Python 檔 | I 回溯分析 |
+|:--:|:--:|:--:|
+| ❌ | ❌ | ❌ |
+
+- **A 風格**（未通過）：命名與註解整體清楚（CompatibilityResult 新增的 picocli exit code 註解是加分項），但常數命名與錯誤訊息字串各有一處小問題，見 F-006、F-007。
+- **B 簡潔**（未通過）：feature gate 的五行在兩個子指令裡逐字重複，而共用父類別只放了訊息輔助方法，見 F-002。
+- **D API 慣例**（不適用）：沒有 HTTP endpoint、REST 路徑或 verb 語意的改動；本次的對外介面是 CLI exit code，歸在 I。
+- **E 架構**（未通過）：同一個 preview gate 只套用在 quarkus CLI 這一半，operator 那一半完全沒有，而文件卻宣告兩邊都需要，見 F-001。
+- **F 資料取用與資料庫**（不適用）：沒有資料庫存取、schema、migration 或持久化格式的改動。ServerInfo 的 metadata JSON 格式本次未動。
+- **G 測試**（未通過）：新增了 testFeatureNotEnabled，但唯一被改動的對外契約（exit code 3 / 4）沒有任何斷言，check 子指令的 gate 也沒有被執行到，見 F-004。
+- **H 非 Python 檔**（未通過）：11 個檔案中有 4 個 .adoc 與 1 個 Dockerfile。Dockerfile-custom-image 只是在既有 kc.sh build 後面追加 --features，沒有引入 build tooling 或改變 base image，這部分沒問題；文件模板的部分見 F-005，operator 文件的部分見 F-001。
+- **I 回溯分析**（未通過）：CompatibilityResult 是既有介面，RECREATE_UPGRADE_EXIT_CODE 的值被改掉、4 又被賦予新語意，屬於既有契約的形狀變更，見 F-003。Java 端的呼叫相容性另外確認過：AbstractUpdatesCommand 只新增方法、沒有改任何既有簽章，UpdateCompatibilityCheck/Metadata 的 run() 覆寫維持原簽章，Profile.Feature 是在 enum 末尾追加，不影響既有常數。
+
+### 意圖確認
+
+以下項目在審查前留有疑慮。疑慮不阻擋審查，列出是因為這個決定屬於人，不屬於審查流程：
+
+- **該在這個 MR 做？**：CompatibilityResult.RECREATE_UPGRADE_EXIT_CODE 由 4 改成 3（CompatibilityResult.java:34）與「加 feature flag」是兩件事，卻混在同一個 PR。這是既有 preview 指令的對外契約調整，混進來之後日後用 git 追這個變更會很難定位。詳見 F-003。
+
+### 掃描執行狀況
+
+| 工具 | 狀態 | 說明 |
+|---|---|---|
+| git | 已執行 | 以 merge-base..refs/ncr/pr 比對，與提供的 diff.patch 逐檔一致（11 檔）。 · changed_files 11、insertions 70、deletions 18 |
+| ruff | 已執行 | 本次變更的 11 個檔案全是 Java、AsciiDoc 與 Dockerfile，沒有任何 Python 檔，ruff 對這個 diff 等於零覆蓋。整個 checkout 掃出的 6 項（F821／F541／E722）全部落在 docs/guides/high-availability/examples/generated/fencing_lambda.py，屬於既有專案債，不歸屬本次 diff。 · reported 6、attributable_to_diff 0 |
+| trivy | 略過 | 未安裝，略過相依套件漏洞與 secret 掃描。本 diff 沒有新增相依或憑證檔，但這一段沒有工具背書。 |
+| opengrep | 略過 | 未安裝，且 ruleset 目錄不存在，略過 SAST 掃描。 |
+| ty | 略過 | 未安裝；且本 diff 無 Python 檔，即使安裝也無適用範圍。 |
+| oxlint | 略過 | 未安裝；且本 diff 無 JavaScript/TypeScript 檔。 |
+| codegraph | 略過 | 未安裝，Phase 3 的呼叫路徑列舉全部改以 grep 完成（ROLLING_UPDATES / rolling-updates / RECREATE_UPGRADE_EXIT_CODE 各做過全 repo 搜尋）。 |
+| Java build（maven / javac） | 略過 | 環境無 Maven 網路存取，這個 repo 在此無法編譯。所有關於 Java 行為的判斷都是靠讀 checkout 內的原始碼得出，沒有任何一條依賴「編譯器或 linter 會擋下來」。 |
+| ncr-fresh-eyes | 略過 | 這個執行環境沒有可派送 subagent 的工具（無 Agent／Task 工具，ToolSearch 也找不到），因此 Phase 3 的 fresh eyes 未執行，也沒有由主 agent 自行模擬。代價是：本報告的所有觀察都經過九維度框架，缺少一次未被框架塑形的閱讀。 |
+| ncr-quality-check | 略過 | 同上，無法派送 subagent，Phase 4 step 3 的品質稽核未執行。報告只經過 report_model.py 的機械驗證。 |
+
+<details>
+<summary>Suggestion（5）</summary>
+
+#### F-001 operator 文件宣告的 rolling-updates 前置條件，在 operator 程式碼裡沒有任何對應檢查 — `docs/guides/operator/advanced-configuration.adoc:446-450`
+
+面向 E 架構 · Suggestion
+
+**問題**：新增的 CAUTION 寫「While on preview stage, the feature `rolling-updates` must be enabled. Otherwise, the Keycloak Operator will fail.」，但這次的 gate 只加在 quarkus 的兩個 CLI 子指令（UpdateCompatibilityCheck.java:46、UpdateCompatibilityMetadata.java:46）。對 ROLLING_UPDATES 與 rolling-updates 做過全 repo 搜尋，operator/src/main 一次都沒有出現：UpgradeLogicFactory.create() 只讀 spec.update.strategy，BaseUpgradeLogic.decideUpgrade() 只比對 container 的 image／args／env，兩者都不查 Profile。CR 的 spec.features.enabled 也不能補上這個缺口——它只會變成 Keycloak server pod 的 build 參數，operator 自己那個 JVM 的 Profile 不受影響。PR 自己的測試就是反證：createInitialDeployment() 在 updateStrategy == null 時於第 106 行提前 return，因此 testImageChange-null 與 testCacheMaxCount-null 是在功能未啟用的狀態下跑完升級流程的，其中 testCacheMaxCount-null 還明確期待 eventuallyRollingUpgradeStatus。也就是說，文件承諾的失敗不會發生，而 preview 功能在 operator 這一側其實沒有被 flag 擋住。
+
+**證據**：
+- `docs/guides/operator/advanced-configuration.adoc:446-450`
+- `operator/src/main/java/org/keycloak/operator/upgrade/UpgradeLogicFactory.java:35-43`
+- `operator/src/main/java/org/keycloak/operator/upgrade/impl/BaseUpgradeLogic.java:58-80`
+- `operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java:105-106`
+- `operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java:115`
+
+**修復方向**：兩條路擇一，重點是讓文件與程式碼講同一件事：(a) 若 operator 這半邊也要 gate，在 UpgradeLogicFactory.create() 或 Keycloak CR 的 validation 加上 Profile.isFeatureEnabled(Profile.Feature.ROLLING_UPDATES) 判斷，未啟用時把 CR 標成錯誤狀態，並讓 UpgradeTest 的 null 情境也一併啟用 feature（把第 105-106 行的提前 return 移到 setEnabledFeatures 之後）；(b) 若 operator 這半邊本來就不打算在這個 PR gate，把 CAUTION 改寫成實際成立的敘述，例如「`update-compatibility` 指令需要啟用 `rolling-updates`；operator 的 update strategy 在 preview 階段仍可直接使用」。
+
+#### F-002 feature gate 在兩個子指令裡逐字重複，共用父類別卻只放了訊息輔助方法 — `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java:46-50`
+
+面向 B 簡潔 · Suggestion
+
+**問題**：兩個 run() 的前五行完全相同，而 printFeatureDisabled() 已經放在共用的 AbstractUpdatesCommand。判斷留在子類別意味著日後在 UpdateCompatibility.java:22-27 的 subcommands 清單新增第三個子指令時，預設是沒有保護的，而且沒有任何機制會提醒。這是 preview 功能的唯一入口守衛，漏掉一處等於 preview 程式碼被公開。
+
+**證據**：
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java:46-50`
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java:46-50`
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java:83-85`
+
+**修復方向**：把 gate 上移到 AbstractUpdatesCommand。最小改法是加一個 protected final boolean checkFeatureDisabled()，內部印訊息並呼叫 picocli.exit(CompatibilityResult.FEATURE_DISABLED) 後回傳 true，子類別寫成 `if (checkFeatureDisabled()) return;`；更徹底的做法是把 run() 改成 final 的 template method，在裡面先跑 gate 與 printPreviewWarning()，再呼叫子類別實作的抽象 doRun()。
+
+#### F-003 RECREATE_UPGRADE_EXIT_CODE 由 4 改為 3，是既有 preview 指令的對外契約變更，diff 裡沒有任何說明 — `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:30-35`
+
+面向 I 回溯分析 · Suggestion
+
+**問題**：update-compatibility 在 26.1 就以 preview 身分出貨，guide 自己寫著「they should rely only on the exit code of the `check` command」，等於把 exit code 當成對外 API。這次把「需要 recreate」從 4 移到 3、再讓 4 變成「feature 未啟用」，同一個數字換了語意。已查證兩件事：guide 的 exit code 表格在改動前就寫 3（diff 中該段是未變動的 context 行），所以這次是把程式碼對齊文件而非相反；repo 內 RECREATE_UPGRADE_EXIT_CODE 的唯一消費端是 IncompatibleResult.java:35，operator 目前沒有任何地方解析這些 exit code，所以不會在合併當下打壞誰。風險落在外部：照著 26.1 實際行為（4 = 需要 recreate）寫腳本的使用者，升級後同一個 4 會變成「feature 未啟用」。這個變更與本 PR 標題的 feature flag 是兩件事，卻沒有 release note、沒有 upgrading note，也沒有測試釘住新舊值。
+
+**證據**：
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:30-35`
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/IncompatibleResult.java:35`
+- `docs/guides/server/update-compatibility.adoc:53-56`
+
+**修復方向**：在 docs/documentation/release_notes/topics/26_2_0.adoc 補一則，明說 exit code 4 → 3 的搬移與新的 4 語意，讓照舊行為寫腳本的使用者有機會看到；同時把這個變更抽成獨立 commit（或獨立 PR），日後才追得回來。另外請一併補上 F-004 的 exit code 斷言，讓契約有測試釘住而不是只有文件。
+
+#### F-004 新的 exit code 契約沒有任何測試；feature 未啟用的情境只覆蓋 metadata，沒覆蓋 check — `quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-50`
+
+面向 G 測試 · Suggestion
+
+**問題**：testFeatureNotEnabled 只斷言 stderr 字串，沒有斷言 exit code；整個測試類別裡唯一的 exit code 斷言是 testCompatible 的 assertEquals(0, result.exitCode())。結果是這次唯一被改動的對外契約——3 與 4——完全沒有測試釘住。同時 testFeatureNotEnabled 只跑 metadata 子指令，check 子指令那一份一模一樣的 gate（UpdateCompatibilityCheck.java:46-50）從未被執行到，而 F-002 指出的「複製貼上兩份」正是最容易在後續改動中失去同步的形狀。exit code 在這裡是拿得到的：CLIResult extends LaunchResult，@Launch 形式的測試同樣可以讀 cliResult.exitCode()。
+
+**證據**：
+- `quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-50`
+- `quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:75`
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:34-35`
+
+**修復方向**：在 testFeatureNotEnabled 補一行 assertEquals(CompatibilityResult.FEATURE_DISABLED, cliResult.exitCode())，並新增對應的 testFeatureNotEnabledOnCheck（@Launch({UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME})）覆蓋 check 子指令；另外在 testWrongVersions 的兩個 distribution.run 之後各補 assertEquals(CompatibilityResult.RECREATE_UPGRADE_EXIT_CODE, result.exitCode())，讓 3 這個新值有測試背書。
+
+#### F-005 kc.adoc 把 build-time 的 --features 硬接在 update-compatibility 指令後面，與同一份 guide 的警告互相衝突 — `docs/guides/templates/kc.adoc:50-55`
+
+面向 H 非 Python 檔 · Suggestion
+
+**問題**：--features 是 FeatureOptions.FEATURES，宣告為 buildTime(true) 的 list option。這個 PR 在 operator image 那一側正是用 build 形式啟用的（operator/scripts/Dockerfile-custom-image:5 的 `kc.sh build ... --features=rolling-updates`），文件這一側卻改成在 runtime 指令尾端追加，兩處作法不一致。更實際的問題是：同一份 guide 在 update-compatibility.adoc:70-76 的 WARNING 要求「Ensure that all configuration options, whether set via environment variables or CLI arguments, are included when running the above command. Omitting any configuration options will result in incomplete metadata.」，但 macro 產生的範例只給 --features=rolling-updates。若使用者的部署原本就有 --features=docker,token-exchange，照著文件做會在同一行出現兩個 --features，而 ConfigArgsConfigSource.parseArguments() 是把 CLI 參數放進 HashMap（第 120、127 行，同 key 後者覆蓋前者），只會留下一個，量到的 metadata 就不是部署實際的 feature 集合。此外這個 macro 是 update-compatibility 的通用模板，preview 階段結束後必須記得改回來，目前沒有留下任何標記。
+
+**證據**：
+- `docs/guides/templates/kc.adoc:50-55`
+- `docs/guides/server/update-compatibility.adoc:63`
+- `docs/guides/server/update-compatibility.adoc:70-76`
+- `quarkus/config-api/src/main/java/org/keycloak/config/FeatureOptions.java:13-19`
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/configuration/ConfigArgsConfigSource.java:120-127`
+
+**修復方向**：把範例改成明確表達「加在既有 feature 清單上」，例如 `--features=<your-features>,rolling-updates`，或把啟用方式改成 build 形式並在 CAUTION 裡說明 --features 是 build-time option；同時在 kc.adoc 的 macro 上方留一行註解標示這是 preview 期間的暫時措施，好讓功能 GA 時有東西可以 grep。
+
+</details>
+
+<details>
+<summary>Nit（2）</summary>
+
+#### F-006 錯誤訊息把 feature key 寫死成字串，沒有取自 Profile.Feature.ROLLING_UPDATES.getKey() — `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java:83-85`
+
+面向 A 風格 · Nit
+
+**問題**：訊息裡的 'rolling-updates'、測試常數 ENABLE_FEATURE 與 assertError 的字串各自寫死同一個值，而真正的來源是 Profile.Feature.ROLLING_UPDATES 的 key。之後若 feature 改名或加上版本後綴（Keycloak 的 versioned feature 機制允許 feature:v1 這種 key），這三處不會跟著動，訊息與測試會同時失準。
+
+**證據**：
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java:83-85`
+- `quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:44`
+- `quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:49`
+
+**修復方向**：訊息改成 "Unable to use this command. The preview feature '%s' is not enabled.".formatted(Profile.Feature.ROLLING_UPDATES.getKey())，測試常數改成 "--features=" + Profile.Feature.ROLLING_UPDATES.getKey()，assertError 也用同一個來源組字串。
+
+#### F-007 FEATURE_DISABLED 的命名與相鄰兩個 exit code 常數不一致 — `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:30-35`
+
+面向 A 風格 · Nit
+
+**問題**：同一個 interface 裡三個常數，ROLLING_UPGRADE_EXIT_CODE 與 RECREATE_UPGRADE_EXIT_CODE 都帶 _EXIT_CODE 後綴，新增的 FEATURE_DISABLED 沒有。在呼叫端 picocli.exit(CompatibilityResult.FEATURE_DISABLED) 讀起來像是在傳一個布林或狀態，而不是 exit code。
+
+**證據**：
+- `quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:30-35`
+
+**修復方向**：改名為 FEATURE_DISABLED_EXIT_CODE，與相鄰常數對齊；只有兩個引用點（UpdateCompatibilityCheck.java:48、UpdateCompatibilityMetadata.java:48）需要同步。
+
+</details>
+
+<details>
+<summary>未驗證提問（2）</summary>
+
+#### Q-001 照文件執行 `kc.sh update-compatibility metadata --file=... --features=rolling-updates` 時，會不會順帶觸發 re-augmentation，也就是讓一個唯讀的相容性檢查改寫了 server 的 build 設定？
+
+面向 H 非 Python 檔
+
+**背景**：Picocli.shouldSkipRebuild() 第 251-259 行有一條 currentCommandName.equals(UpdateCompatibility.NAME) 的豁免，但 currentCommandName 取的是 result.asCommandLineList() 的最後一個元素（Picocli.java:122-125），對 `update-compatibility metadata` 而言那是 metadata 而不是 update-compatibility，照這個讀法豁免不會生效。而 --features 是 build-time option，requiresReAugmentation()（Picocli.java:261-271）會因為 persisted 與當前 build 選項不同而回傳 true。若成立，這是文件新指示帶來的副作用，且與 F-005 相關；但這個環境沒有 Maven 網路存取、無法建置 distribution，不足以下判斷，因此不給 severity。
+
+**如何確認**：在有 dist 的環境實跑 `bin/kc.sh update-compatibility metadata --file=<任一可寫檔案路徑> --features=rolling-updates`，觀察輸出是否出現 re-augmentation 訊息，並比對執行前後 lib/quarkus 底下 persisted build 設定是否被改寫。
+
+#### Q-002 新增一個 Type.PREVIEW feature 是否應該在 docs/documentation/release_notes/topics/26_2_0.adoc 補一則？
+
+面向 H 非 Python 檔
+
+**背景**：26_2_0.adoc 目前列了三則使用者可見的變更，而這個 PR 新增了 rolling-updates 這個 preview feature 並改變了 update-compatibility 的使用方式，兩者都沒有進 release notes。但 `grep -rn "update-compatibility" docs/documentation/` 在整個 checkout 沒有任何命中——update-compatibility 工具與 operator update strategy 當初進版時同樣沒有 release note。既有慣例本身就不一致，所以無法從 repo 判定這是遺漏還是這個功能領域一貫的作法，不列為 finding。
+
+**如何確認**：專案維護者對「新增 Type.PREVIEW feature 是否一律需要 release note 條目」的慣例確認，或指出 keycloak 的貢獻指南中對應的規定。
+
+</details>

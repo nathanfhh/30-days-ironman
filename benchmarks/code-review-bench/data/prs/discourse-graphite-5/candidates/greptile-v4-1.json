@@ -1,0 +1,5 @@
+[
+  "-ms-align-items is not a valid CSS property - the correct IE vendor-prefixed property for align-items is -ms-flex-align, which is already declared. This line will be silently ignored by all browsers but adds noise to the generated CSS.",
+  "Missing space after colon in align-items:$alignment; - inconsistent with every other property declaration in this file",
+  "float: right on button inside .small-action flex container is ignored - floats have no effect on flex items, so the button will no longer be right-aligned, causing a visual regression. Should replace with margin-left: auto"
+]

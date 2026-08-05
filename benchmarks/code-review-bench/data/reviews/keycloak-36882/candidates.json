@@ -1,0 +1,69 @@
+{
+  "slug": "keycloak-36882",
+  "issues": [
+    {
+      "text": "The new operator documentation states that the rolling-updates feature must be enabled or the Keycloak Operator will fail, but nothing in operator/src/main ever reads Profile.Feature.ROLLING_UPDATES; UpgradeLogicFactory and BaseUpgradeLogic only look at spec.update.strategy, and the PR's own UpgradeTest runs the upgrade flow with the feature disabled.",
+      "zh": "operator 文件宣告的 rolling-updates 前置條件，在 operator 程式碼裡沒有任何對應檢查",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The five-line feature gate is duplicated verbatim in UpdateCompatibilityCheck.run() and UpdateCompatibilityMetadata.run() while the shared parent AbstractUpdatesCommand only holds the message helper, so a third subcommand added later defaults to being unguarded with nothing to catch it.",
+      "zh": "feature gate 在兩個子指令裡逐字重複，共用父類別卻只放了訊息輔助方法",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "RECREATE_UPGRADE_EXIT_CODE is changed from 4 to 3 and 4 is reassigned to 'feature disabled'; this is a contract change for a preview command that the guide tells users to rely on, and it ships with no release note, no upgrading note and no explanation in the diff.",
+      "zh": "RECREATE_UPGRADE_EXIT_CODE 由 4 改為 3，是既有 preview 指令的對外契約變更，diff 裡沒有任何說明",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The only externally visible contract this PR changes — exit codes 3 and 4 — has no test pinning it: testFeatureNotEnabled asserts only the stderr string and the class's sole exit-code assertion is assertEquals(0, ...) in testCompatible.",
+      "zh": "新的 exit code 契約沒有任何測試",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "testFeatureNotEnabled only runs the metadata subcommand, so the identical gate in UpdateCompatibilityCheck is never executed by any test — exactly the copy-pasted shape most likely to drift out of sync.",
+      "zh": "feature 未啟用的情境只覆蓋 metadata，沒覆蓋 check",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "kc.adoc appends the build-time --features option to the runtime update-compatibility command, contradicting the same guide's WARNING that all configuration options must be included: a deployment that already passes --features ends up with two --features arguments and ConfigArgsConfigSource keeps only the last one, so the captured metadata does not reflect the real feature set.",
+      "zh": "kc.adoc 把 build-time 的 --features 硬接在 update-compatibility 指令後面，與同一份 guide 的警告互相衝突",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The kc.adoc macro is the generic template for update-compatibility and must be reverted once the feature leaves preview, but nothing marks it as a temporary preview-stage measure.",
+      "zh": "此外這個 macro 是 update-compatibility 的通用模板，preview 階段結束後必須記得改回來，目前沒有留下任何標記。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The error message and the test constants hardcode the literal 'rolling-updates' instead of deriving it from Profile.Feature.ROLLING_UPDATES.getKey(), so a rename or a version suffix would silently desynchronise the message and the assertions.",
+      "zh": "錯誤訊息把 feature key 寫死成字串，沒有取自 Profile.Feature.ROLLING_UPDATES.getKey()",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "The new constant is named FEATURE_DISABLED while the two neighbouring exit-code constants in the same interface are ROLLING_UPGRADE_EXIT_CODE and RECREATE_UPGRADE_EXIT_CODE, so at the call site picocli.exit(CompatibilityResult.FEATURE_DISABLED) reads like a status flag rather than an exit code.",
+      "zh": "FEATURE_DISABLED 的命名與相鄰兩個 exit code 常數不一致",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does running the documented `kc.sh update-compatibility metadata --file=... --features=rolling-updates` trigger re-augmentation, i.e. does a read-only compatibility check end up rewriting the server's persisted build configuration?",
+      "zh": "照文件執行 `kc.sh update-compatibility metadata --file=... --features=rolling-updates` 時，會不會順帶觸發 re-augmentation，也就是讓一個唯讀的相容性檢查改寫了 server 的 build 設定？"
+    },
+    {
+      "text": "Should adding a new Type.PREVIEW feature come with an entry in docs/documentation/release_notes/topics/26_2_0.adoc? The existing convention in this area is itself inconsistent, so the repo cannot settle whether this is an omission.",
+      "zh": "新增一個 Type.PREVIEW feature 是否應該在 docs/documentation/release_notes/topics/26_2_0.adoc 補一則？"
+    }
+  ]
+}

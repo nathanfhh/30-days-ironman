@@ -1,0 +1,4 @@
+[
+  "userIdsFromOrg becomes empty when teamsFromOrg.length === 0, which would exclude org-member personal bookings for orgs that have no child teams - need to verify if this scenario is possible and whether org-scope auth should still include org-level memberships",
+  "Arrays used in ANY(...) (e.g. teamIds / uniqueUserIds) come from DB queries without explicit ordering, so the bound array order and resulting Prisma.sql shape may be non-deterministic, making SQL-fragment equality assertions brittle and causing inconsistent condition caching across identical inputs"
+]

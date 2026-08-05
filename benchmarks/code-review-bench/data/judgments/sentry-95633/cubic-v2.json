@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-95633",
+  "tool": "cubic-v2",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.95,
+     "reasoning": "Both flag that queue.Queue.shutdown(immediate=False)/queue.ShutDown may not exist on the running Python version, causing AttributeError."}
+  ]
+}

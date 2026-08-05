@@ -1,0 +1,7 @@
+[
+  "AND instead of OR in isTeamAdminOrOwner - isTeamAdmin already returns truthy for both ADMIN and OWNER roles, so the && requires users to satisfy both checks simultaneously, meaning only owners pass while team admins are silently denied access",
+  "Duplicate emails within the input array are not deduplicated - the filter removes guests already in booking.attendees but does not deduplicate within the incoming guests array itself, allowing duplicate Attendee rows to be inserted via createMany",
+  "Empty-string initial state bypasses the early-return guard - multiEmailValue is initialized to [''], so multiEmailValue.length === 0 is never true on first open, causing validation error to show before user types anything",
+  "Error is silently swallowed - the caught err is never logged, making email-delivery failures invisible in production logs",
+  "Schema recreated on every render - ZAddGuestsInputSchema is defined inside the component body, so a new Zod schema object is allocated on every render instead of being at module scope"
+]

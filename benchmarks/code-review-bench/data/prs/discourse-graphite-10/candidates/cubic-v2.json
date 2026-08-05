@@ -1,0 +1,6 @@
+[
+  "`self.host.sub!` will raise `NoMethodError` if `host` is `nil`. The `before_validation` callback runs before the format validation, so a nil host bypasses the validates_format_of check and crashes instead of producing a validation error. Guard with a nil check or use the safe navigation operator.",
+  "Fetch the singleton embedding record by id instead of calling `store.find` without an id, which resolves to a collection.",
+  "Guard the `embed_category` lookup before indexing it. As written, missing data raises before the uncategorized fallback can run.",
+  "The query lowercases the DB column with `lower(host)` but does not downcase the input parameter. Call `.downcase` on `host` so the comparison is consistent."
+]

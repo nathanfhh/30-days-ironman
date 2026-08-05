@@ -1,0 +1,26 @@
+{
+  "slug": "sentry-greptile-2",
+  "tool": "claude-code",
+  "n_golden": 3,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both flag OptimizedCursorPaginator.get_item_key calling floor/ceil on a datetime key, raising TypeError."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.85,
+      "reasoning": "Both identify OptimizedCursorPaginator's negative-offset branch slicing the QuerySet with a negative start index, contrary to the code's claim that Django supports it."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 4,
+      "confidence": 0.5,
+      "reasoning": "This describes the exploit path (crafting a negative-offset cursor to get a 500) for the same OptimizedCursorPaginator negative-slicing bug already named in golden index 0."
+    }
+  ]
+}

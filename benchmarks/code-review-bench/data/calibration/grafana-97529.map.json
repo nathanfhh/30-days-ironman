@@ -1,0 +1,179 @@
+{
+  "slug": "grafana-97529",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "With initWatcher moved to after search.init, could events written during index building be missed?",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 1,
+      "text": "The error is logged twice with identical message 'error initializing resource server' - once at line 260 (new) and once inside Init() at line 314 (existing)",
+      "claim_id": "c002"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 2,
+      "text": "Removing per-request `Init()` checks means `Stop()` no longer blocks later RPCs; the server can still serve requests after shutdown starts.",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 2,
+      "text": "On init failure, the error is logged both at the call site and inside (*server).Init, producing duplicate error logs for a single failure",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "Postgres integration test is permanently skipped in CI with a TODO, leaving the postgres path completely uncovered in automated testing",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 4,
+      "text": "In searchSupport.init() when initWorkers > 1, totalBatchesIndexed++ (line 189) is a non-atomic increment from multiple concurrent goroutines, causing a data race",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 3,
+      "text": "In searchSupport.init() when initWorkers > 1, the errgroup goroutines concurrently write to the shared err variable (line 190 uses = instead of :=) - if one goroutine sets err=someError and another sets err=nil, the error is silently lost",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 0,
+      "text": "When Init() fails in NewResourceServer(), the function returns (nil, err) without calling cancel(), leaking the context created at line 229 and any goroutines spawned during partial initialization",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "Why does TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer only fail on postgres in Drone? Is it caused by this PR's startup timing change, or by differences in the postgres environment itself?",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "The same initialization error is logged twice with an identical message string.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "NewResourceServer has no context parameter, so the index building moved into construction can't be canceled or bounded.",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "On a Grafana instance with real data volume, after moving full index building into NewResourceServer, will startup time exceed dskit's module startup tolerance or create a noticeably longer unavailable period for users?",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "The 'issue a health check to force server initialization' trick in watcher_test.go no longer works, and the comment is now stale.",
+      "claim_id": "c014"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "Track the RV short-circuit TODO - if this optimization is intended, consider filing a follow-up so it doesn't get lost",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 3,
+      "text": "Docstring coverage is 0.00% which is insufficient - the required threshold is 80.00%; write docstrings for the functions missing them",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 3,
+      "text": "Skipping this integration test for postgres removes coverage for the storage-server startup and `/metrics` path on a supported backend. That hides regressions instead of fixing the Drone-specific failure.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "This PR's trace context fix isn't applied to bleve.BuildIndex, so that span can't pick up child spans.",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 0,
+      "text": "Skipping PostgreSQL test for all postgres runs removes coverage; consider gating this on a CI-only env var and/or filing a follow-up issue",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "NewResourceServer's error path never calls cancel() and doesn't reclaim the goroutines and indexes Init already started.",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "The PR's only test change is disabling the postgres integration test, which is exactly what covers the startup path this PR changes.",
+      "claim_id": "c022"
+    }
+  ]
+}

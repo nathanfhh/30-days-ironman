@@ -1,0 +1,17 @@
+{
+  "slug": "keycloak-38446",
+  "source_repo": "keycloak",
+  "language": "Java",
+  "golden_url": "https://github.com/keycloak/keycloak/pull/38446",
+  "pr_title": "Implement recovery key support for user storage providers",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR38446__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR38446__20260122.git",
+  "base_sha": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head_sha": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "stat": " .../java/org/keycloak/utils/CredentialHelper.java  |  43 +++++--\n .../models/utils/RecoveryAuthnCodesUtils.java      |  17 +++\n .../RecoveryAuthnCodesFormAuthenticator.java       |   3 +-\n .../requiredactions/RecoveryAuthnCodesAction.java  |  13 +--\n .../model/RecoveryAuthnCodeInputLoginBean.java     |   8 +-\n .../BackwardsCompatibilityUserStorage.java         |  72 +++++++++++-\n .../BackwardsCompatibilityUserStorageFactory.java  |   5 +\n .../BackwardsCompatibilityUserStorageTest.java     | 126 ++++++++++++++++++++-\n 8 files changed, 256 insertions(+), 31 deletions(-)\n",
+  "name_status": "M\tserver-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java\nM\tserver-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java\nM\tservices/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java\nM\tservices/src/main/java/org/keycloak/authentication/requiredactions/RecoveryAuthnCodesAction.java\nM\tservices/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java\nM\ttestsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java\nM\ttestsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorageFactory.java\nM\ttestsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java\n",
+  "commits": "ce2dcc5 Create recovery keys in user storage or local\n"
+}

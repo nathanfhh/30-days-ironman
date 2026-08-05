@@ -1,0 +1,8 @@
+[
+  "Create error path (line 45): calls recordLegacyDuration when storage fails \u2014 should be recordStorageDuration",
+  "Delete success path (line 106): passes name instead of options.Kind as the kind argument",
+  "Update error path (line 129): calls recordLegacyDuration when storage fails \u2014 should be recordStorageDuration",
+  "DeleteCollection goroutine (line 166): calls recordStorageDuration for the legacy operation \u2014 should be recordLegacyDuration",
+  "Logger context bug in Delete: ctx = klog.NewContext(ctx, d.Log) uses the base logger instead of the enriched log variable",
+  "Async goroutines derive child contexts from the request context, which may already be cancelled by the time the goroutine executes since the handler returns immediately after spawning the goroutine, causing legacy writes to fail silently"
+]

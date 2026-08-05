@@ -1,0 +1,3 @@
+[
+  "Missing double-check under write lock: After acquiring the write lock, the code never re-reads entryPointAssetsCache before doing the expensive work. Goroutines that raced past the early-return check will each take the write lock in turn and redo the full file/CDN read, causing redundant work at startup."
+]

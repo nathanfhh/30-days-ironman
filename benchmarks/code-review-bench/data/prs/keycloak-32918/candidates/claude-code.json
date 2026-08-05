@@ -1,0 +1,5 @@
+[
+  "registerIDPLoginInvalidationOnUpdate compares a wrapped (org-aware) original model from getById() with the raw unwrapped updated model parameter, creating asymmetry in isEnabled() evaluation that can cause under-invalidation - when an org-linked IDP is cached for login, then the org is disabled, then a login-relevant field like hideOnLogin is changed, both models fail the login predicate for different reasons, triggering early return that skips cache invalidation, causing stale cache entries after org re-enablement",
+  "Test cleanup in testCacheIDPForLogin uses hardcoded 'alias' instead of the actual IDP alias (e.g. 'idp-alias-' + i) on lines 381 and 425, so cleanup silently fails to remove any of the created test IDPs, leaving stale IDPs in the realm",
+  "Pre-existing bug in testCacheIDPByOrg method at line 303 has the same hardcoded 'alias' cleanup issue instead of using the actual alias variable"
+]

@@ -1,0 +1,6 @@
+[
+  "Missing Thread.join() before assertion - the reader thread is not joined before the assertion runs, so exceptions caught in the thread's last iteration can race past the assertThat, making the test a non-deterministic false negative",
+  "Typo in variable name 'groupUuuids' - has three 'u's instead of two, should be 'groupUuids'",
+  "Three getSubGroupsStream overloads in GroupAdapter (lines 254-268) have the same unguarded modelSupplier.get() pattern and will still NPE under concurrent deletion - the fix is incomplete",
+  "Need to extract the thread into a local variable (Thread readerThread = new Thread(...); readerThread.start();) to be able to call join() on it"
+]

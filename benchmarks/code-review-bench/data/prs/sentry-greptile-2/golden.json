@@ -1,0 +1,20 @@
+{
+  "slug": "sentry-greptile-2",
+  "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/2",
+  "pr_title": "Optimize spans buffer insertion with eviction during insert",
+  "language": "Python",
+  "comments": [
+    {
+      "comment": "OptimizedCursorPaginator negative-offset branch slices QuerySet with a negative start index",
+      "severity": "Critical"
+    },
+    {
+      "comment": "BasePaginator negative-offset branch slices QuerySet with a negative start index",
+      "severity": "High"
+    },
+    {
+      "comment": "OptimizedCursorPaginator.get_item_key uses floor/ceil on a datetime key (order_by='-datetime'), causing TypeError.",
+      "severity": "High"
+    }
+  ]
+}

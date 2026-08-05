@@ -1,0 +1,4 @@
+[
+  "Org-scope assertion is order-dependent even though the service fetches team/member IDs without orderBy, so the test can fail nondeterministically on valid SQL",
+  "getAuthorizationConditions() always returns a Prisma.Sql object (never null/undefined), so authConditions is always truthy and the else if (filterConditions) and else branches are unreachable dead code - should simplify to just two branches or add explicit nullability path if intended"
+]

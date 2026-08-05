@@ -1,0 +1,5 @@
+[
+  "Accessing `req.PluginContext` without a nil guard will panic if `req` is nil - the middleware should guard against nil requests like LoggerMiddleware does in all four methods",
+  "The contextual log attributes omit `traceID` - since this middleware now owns the contextual logging setup, it should include `traceID` from `tracing.TraceIDFromContext` so plugin request logs still carry trace correlation",
+  "Returning a fresh `TestLogger` in `FromContext` drops all log writes made through `FromContext`, so tests can no longer observe logs emitted by code paths that use contextual logging - should return `f` instead"
+]

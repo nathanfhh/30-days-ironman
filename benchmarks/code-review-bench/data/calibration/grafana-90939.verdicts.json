@@ -1,0 +1,86 @@
+{
+  "slug": "grafana-90939",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "no-test-for-race-fix",
+      "evidence": "pkg/api/webassets/webassets_test.go:11,89",
+      "reason": "The only tests in the package are TestReadWebassets (readWebAssetsFromFile) and TestReadWebassetsFromCDN (t.Skip()); grepping the tree, GetWebAssets is referenced only by pkg/api/index.go:82, pkg/api/frontendsettings.go:62 and pkg/middleware/recovery.go:141 and by no test, and the diff adds none."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Low",
+      "cluster": "dev-mode-wasted-rlock",
+      "evidence": "pkg/api/webassets/webassets.go:41-47",
+      "reason": "When cfg.Env == setting.Dev the RLock/read/RUnlock at lines 41-43 always runs but the guard at line 45 is false, so `ret` is discarded and the function falls through to Lock() regardless; the read lock buys nothing on that path."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.78,
+      "severity": "Medium",
+      "cluster": "cache-assigned-on-error",
+      "evidence": "pkg/api/webassets/webassets.go:59-70",
+      "reason": "Line 69 does `entryPointAssetsCache = result` with no `if err == nil` guard, and readWebAssetsFromFile returns (nil, err) on failure (line 77), so a failed load stores nil; combined with the missing re-check after Lock() (line 48) a second goroutine that loses the race and then fails can clobber a cache another goroutine just populated."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "lock-held-during-io",
+      "evidence": "pkg/api/webassets/webassets.go:48-57, 85-102",
+      "reason": "The exclusive lock taken at line 48 is held (via defer) across the whole body, so the readWebAssetsFromCDN call at line 56 — an http.DefaultClient.Do with no client timeout, line 90 — would run under the write lock if the hardcoded `cdn := \"\"` were ever populated; the same critical section already covers the file read and JSON decode. Whether the CDN branch is planned is a product question, but the lock-scope observation is correct as written."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "return-result-not-global",
+      "evidence": "pkg/api/webassets/webassets.go:69-70",
+      "reason": "Line 69 assigns result to the global and line 70 immediately reads it back while still holding the same lock, so `return result, err` is exactly equivalent and avoids re-reading shared state."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "not_real",
+      "confidence": 0.95,
+      "severity": null,
+      "cluster": "docstring-coverage-threshold",
+      "evidence": "pkg/api/webassets/webassets.go:1-145",
+      "reason": "Generic tool boilerplate with no bearing on this change: Go has no docstrings, the repo has no 80% doc-comment gate (the surrounding exported functions readWebAssetsFromFile/readWebAssets carry none either), and the diff adds no undocumented API."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "missing-double-check",
+      "evidence": "pkg/api/webassets/webassets.go:41-49",
+      "reason": "After RUnlock at line 43 and Lock at line 48 the code never re-reads entryPointAssetsCache, so concurrent first requests all reload assets-manifest.json in turn instead of the loser seeing the winner's result; all three call sites (index.go:82, frontendsettings.go:62, recovery.go:141) are per-request handlers, so that concurrency is real."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "external-warmup-caller",
+      "evidence": "pkg/api/index.go:82, pkg/api/frontendsettings.go:62, pkg/middleware/recovery.go:141",
+      "reason": "Inside this repo GetWebAssets is called only from the three per-request handlers above — no startup warm-up in pkg/server or pkg/cmd — but the function is exported and grafana-enterprise is not in this checkout, so whether an out-of-tree entry point pre-warms the cache cannot be settled here; the enterprise source tree would settle it."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "lock-held-during-io",
+      "evidence": "pkg/api/webassets/webassets.go:45-67, 73-83",
+      "reason": "In Dev the guard at line 45 never returns early, so every request takes the exclusive lock at line 48 and holds it (defer, line 49) through os.Open plus json.Decode in readWebAssetsFromFile; before this change the Dev path took no lock at all, so the serialization is newly introduced."
+    }
+  ]
+}

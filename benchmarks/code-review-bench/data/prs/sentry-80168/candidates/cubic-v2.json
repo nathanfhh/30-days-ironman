@@ -1,0 +1,6 @@
+[
+  "`MetricAlertDetectorHandler` inherits from `StatefulDetectorHandler` which declares four abstract methods (`counter_names`, `get_dedupe_value`, `get_group_key_values`, `build_occurrence_and_event_data`), but none of them are implemented here. The class is still abstract and will raise `TypeError` at instantiation time.",
+  "This assertion allows extra Kafka publishes, so the test no longer catches duplicate occurrence production.",
+  "This expected occurrence is built with the wrong group key/value, so the test can pass without validating the new hook inputs.",
+  "The `evaluate()` method in `StatefulDetectorHandler` now returns `dict[DetectorGroupKey, DetectorEvaluationResult]`, but its docstring still says \"returns a list of `DetectorEvaluationResult`\". The docstring should be updated to reflect the dict-keyed-by-`DetectorGroupKey` return type."
+]

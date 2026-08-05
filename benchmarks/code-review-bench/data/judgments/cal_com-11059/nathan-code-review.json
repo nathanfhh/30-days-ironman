@@ -1,0 +1,38 @@
+{
+  "slug": "cal_com-11059",
+  "tool": "nathan-code-review",
+  "n_golden": 5,
+  "n_candidates": 25,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Both flag parseRefreshTokenResponse substituting the literal string 'refresh_token' when the provider omits it, destroying the stored refresh token."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 4,
+      "confidence": 0.85,
+      "reasoning": "Both identify the computed keys in the zod object schema as invalid/degenerate, so the schema does not validate the intended fields."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both say the safeParse result wrapper ({success,data}) is persisted into credential.key instead of the parsed token payload."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 6,
+      "confidence": 0.9,
+      "reasoning": "Both describe refreshOAuthTokens returning a raw fetch Response on the credential-sync branch while callers such as GoogleCalendarService expect the integration-specific token object."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 6,
+      "confidence": 0.85,
+      "reasoning": "Same underlying return-shape mismatch: on the sync path res is a fetch Response with no .data, so callers reading res.data break at runtime."
+    }
+  ]
+}

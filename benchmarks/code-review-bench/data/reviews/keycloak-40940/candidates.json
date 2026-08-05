@@ -1,0 +1,75 @@
+{
+  "slug": "keycloak-40940",
+  "issues": [
+    {
+      "text": "The three getSubGroupsStream() overloads in the same GroupAdapter class (lines 256/262/268) are still unprotected calls to modelSupplier.get().getSubGroupsStream(...) and will NPE under the same concurrent-group-deletion race this PR fixes for getSubGroupsCount() — e.g. GET admin/realms/{realm}/groups/{group-id}/children still returns 500 in that race.",
+      "zh": "同一個 class 內三個 getSubGroupsStream() overload 仍是未防護的 modelSupplier.get()，修復不完整",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "GroupAdapter.getSubGroupsCount() now returns null when the concurrently-deleted group's row is gone, but GroupModel.getSubGroupsCount()'s javadoc explicitly says 'Never returns null', so the implementation now contradicts the public SPI contract — any future caller unboxing it (e.g. `> 0`) will NPE, and the sibling no-arg getSubGroupsStream() falls back to an empty stream (count 0) in the identical scenario, an inconsistency within the same adapter.",
+      "zh": "getSubGroupsCount() 改為可能回傳 null，與 GroupModel 上「Never returns null」的 javadoc 契約矛盾",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "GroupUtils.populateGroupHierarchyFromSubGroups() dereferences parentModel (from session.groups().getGroupById(realm, currGroup.getParentId())) without a null check, so the exact same concurrent-deletion race this PR fixes elsewhere still NPEs here — hit via GET admin/realms/{realm}/groups with populateHierarchy=true (the default) whenever a returned group has a parent, and not covered by the new test since it only creates top-level groups.",
+      "zh": "GroupUtils.populateGroupHierarchyFromSubGroups() 對 parentModel 沒有 null 檢查，同一個競態仍會 NPE",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new regression test sets deletedAll.set(true) and asserts immediately afterward without joining the reader thread, so if the reader thread's last HTTP request happens to land after the assertion runs, a 500 response is missed entirely — a structural false-negative window in a test written specifically to catch this NPE.",
+      "zh": "新測試在 assert 前沒有等待 reader thread",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The delete loop that precedes deletedAll.set(true) has no try/finally, so if any remove() call throws, deletedAll stays false forever and the non-daemon reader thread loops indefinitely hitting the server, blocking JVM shutdown and potentially affecting other tests in the class.",
+      "zh": "刪除迴圈拋例外時該 thread 不會結束",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The PR bundles two changes unrelated to the NPE fix: adding @Override to CachedGroup.getRealm(), and removing the now-unused private static groupMatchesSearchOrIsPathElement from GroupUtils — both are safe on their own, but PR-CHECKLIST.md requires PRs not contain changes unrelated to the GitHub issue, and mixing them in makes future git-blame archaeology on this fix noisier.",
+      "zh": "PR 夾帶兩處與此 NPE 無關的改動",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "The variable name groupUuuids (three u's) is a typo, used at three call sites in the new test.",
+      "zh": "變數名 typo groupUuuids",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "A newly added blank line has trailing whitespace (4 trailing spaces).",
+      "zh": "新增的空白行帶有 trailing whitespace",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "The new test's assertion only checks that no exception was caught and discards the returned List<GroupRepresentation> entirely, so a failure can't be distinguished from any other 500 error, and the fix's actual behavior (subGroupCount handling) is never verified against real response content.",
+      "zh": "斷言只檢查「沒有例外」，失敗時無法分辨是不是這個 NPE，也沒有驗證回傳內容",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "The test polls groups(null, 0, Integer.MAX_VALUE, true), requesting the entire realm's groups on every poll — unnecessary load in CI.",
+      "zh": "Integer.MAX_VALUE 當 max 會讓每次輪詢都要求整個 realm 的所有 group，在 CI 上是不必要的負擔",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does createMultiDeleteMultiReadMulti actually reproduce the original NPE reliably in CI, or could it pass whether or not the fix is applied, since it has no synchronization point guaranteeing the reader thread's request lands in the cache-stale/DB-deleted window?",
+      "zh": "createMultiDeleteMultiReadMulti 在 CI 上真的能重現原本的 NPE 嗎？還是它會不分修復前後都綠燈？"
+    },
+    {
+      "text": "Could the 100 'Test Group N' groups created by this test leak into and affect other test methods in the same GroupTest class if the delete loop fails partway (per F-004), depending on whether @InjectRealm's lifecycle is per-class or per-method and whether tests run in parallel?",
+      "zh": "這支測試建立的 100 個「Test Group N」是否會影響 GroupTest 內其他測試方法？"
+    }
+  ]
+}

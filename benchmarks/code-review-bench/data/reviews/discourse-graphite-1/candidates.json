@@ -1,0 +1,71 @@
+{
+  "slug": "discourse-graphite-1",
+  "issues": [
+    {
+      "text": "`OptimizedImage.downsize` is defined twice in the same class; Ruby's method redefinition silently overrides the four-argument version, and `Jobs::ResizeEmoji` (which still calls the old five-argument signature) will raise ArgumentError every time it runs.",
+      "zh": "`OptimizedImage.downsize` 被重複定義，四參數版本靜默失效，`Jobs::ResizeEmoji` 每次執行都會拋 ArgumentError",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "The frontend upload size limit was hardcoded to 10MB, decoupling the attachment client-side check from the server-side `max_attachment_size_kb` setting, and the client error message can display a number that doesn't match what the admin actually configured.",
+      "zh": "前端大小上限硬編成 10MB，attachment 的用戶端檢查與 `max_attachment_size_kb` 脫鉤，錯誤訊息也會顯示管理者設定裡不存在的數字",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The \"10MB\" decision is hardcoded independently in four separate places with no comment linking them together, so adjusting the limit requires editing all four in sync and any one being missed causes hard-to-diagnose mismatches.",
+      "zh": "「10MB」這個決策同時硬編在 4 個地方，彼此沒有任何說明連結",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The auto-downsize logic lives inside the controller instead of the Upload model, so the other 9 production call sites of Upload.create_for (e.g. email attachment receiving, hotlinked image fetching, avatar downloads) don't benefit from it and can still reject oversized images.",
+      "zh": "自動縮圖寫在 controller 裡，其他 9 個 `Upload.create_for` 呼叫端都拿不到這個行為",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "An existing JavaScript test asserts the old hardcoded-per-type size limit and will fail because of this change, and the new server-side downsizing behavior has no test coverage at all.",
+      "zh": "既有 JavaScript 測試會因為這次變更而失敗，且新行為完全沒有測試",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The downsize retry loop discards the boolean return value of `OptimizedImage.downsize` and doesn't handle the case where the file is still oversized after all 5 attempts are exhausted; the upload proceeds regardless of success.",
+      "zh": "縮圖迴圈丟棄 `OptimizedImage.downsize` 的回傳值，也沒有處理 5 次用盡後仍然超標的情況",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The `allow_animated_thumbnails` site setting (intended only for derived thumbnails) is repurposed to decide whether the user's original uploaded file keeps its animation; when the setting is disabled, an oversized animated GIF gets silently squashed down to its first frame and the original file is overwritten in place with no warning.",
+      "zh": "用 `allow_animated_thumbnails` 決定原檔要不要保留動畫；設為 false 時會把動態 GIF 就地壓成第一格",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "\"80%\" and `attempt = 5` are undocumented magic numbers that together determine the smallest oversized image the feature can actually recover.",
+      "zh": "`\"80%\"` 與 `attempt = 5` 是沒有說明的魔術數字",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does gifsicle's `--resize-fit` flag actually accept a percentage value like \"80%\" for the animated-GIF downsize branch?",
+      "zh": "動畫分支收到的 `\"80%\"`，gifsicle 的 `--resize-fit` 接受嗎？"
+    },
+    {
+      "text": "Can `tempfile.size` actually observe the new (smaller) file size after `convert`/`ImageOptim` rewrite the file in place, or does it read stale fd metadata if the rewrite uses rename-over-write?",
+      "zh": "`tempfile.size` 觀察得到 convert / ImageOptim 改寫後的新大小嗎？"
+    },
+    {
+      "text": "Is the resource amplification from repeatedly invoking convert/ImageOptim in this loop acceptable on deployments that don't enforce a 10MB request-body cap?",
+      "zh": "在沒有 10MB 請求體上限的部署上，這個迴圈的資源放大可以接受嗎？"
+    },
+    {
+      "text": "Does the exit-code failure check in `convert_with` actually work correctly under the shell used in the real deployment (bash vs. dash), given it relies on `&>` redirection?",
+      "zh": "`convert_with` 的 exit code 檢查在實際部署的 shell 下真的有效嗎？"
+    }
+  ]
+}

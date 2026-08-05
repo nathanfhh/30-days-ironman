@@ -1,0 +1,10 @@
+{
+  "slug": "keycloak-32918",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 13,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 6, "confidence": 0.92,
+     "reasoning": "Both identify that the test's cleanup registration uses the literal string \"alias\" instead of the per-iteration alias variable, so cleanup never targets the right IDP."}
+  ]
+}

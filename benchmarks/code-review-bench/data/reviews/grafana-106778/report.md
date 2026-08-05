@@ -1,0 +1,309 @@
+## 審查結論：Request Changes
+
+> Critical 2 · Suggestion 6 · Nit 7 · 未驗證提問 2
+> nathan-code-review 2026.08.02.05 · 第 1 次審查
+
+### 總評
+
+| A 風格 | B 簡潔 | C 安全 |
+|:--:|:--:|:--:|
+| ❌ | ❌ | ❌ |
+
+| D API 慣例 | E 架構 | F 資料取用與資料庫 |
+|:--:|:--:|:--:|
+| — | ❌ | ✅ |
+
+| G 測試 | H 非 Python 檔 | I 回溯分析 |
+|:--:|:--:|:--:|
+| ❌ | ❌ | ❌ |
+
+- **A 風格**（未通過）：多處註解與它所描述的程式碼已經對不上（useAbilities.ts:289 的 `// duplicate` 開發殘留、:301 的註解講「都是 Grafana-managed」但下一行的識別字是 isAlertingRule、GrafanaGroupLoader.tsx:24-28 的 JSDoc 仍寫「from Prometheus and Ruler endpoints」、prometheusGroupsGenerator.ts:81-84 的 ruler preload 註解與變數名在 preload 被刪掉後仍留著）。見 F-009、F-011。
+- **B 簡潔**（未通過）：留下數處死程式碼：GrafanaRuleListItem 的 operation prop 沒有任何呼叫端傳入、測試裡的 ui.menuItems.delete selector 定義了卻從未使用、GrafanaRuleListItem.tsx:53 在已被 type guard 收窄的分支裡又做一次同樣的判斷。見 F-010。
+- **C 安全**（未通過）：兩處權限判斷放寬：skipToken 路徑回傳的是依全域權限推導的 ability 而非中立值（F-003），以及 federated rule group 不再被視為 immutable（F-004）。兩者都只影響前端是否顯示動作入口，後端仍會擋，所以列為 Suggestion 而非 Critical；但「顯示了使用者其實無權執行的入口」本身就是這一維度要抓的東西。
+- **D API 慣例**（不適用）：本次變更沒有新增或修改任何後端 API endpoint、URL 或 request schema，改動的只是前端要發哪些既有查詢（移除 getGrafanaRulerGroup 查詢與其 prefetch）。API 慣例（URL 命名、HTTP verb 語意、validation schema）在這份 diff 裡沒有對應的檢查對象。
+- **E 架構**（未通過）：同一件事（這條 rule 能不能被 pause / delete / silence）現在有兩套平行的 ability 來源，AlertRuleMenu 用 `(rulerX && rulerY) || (grafanaX && grafanaY)` 把它們 OR 起來，但 JSX 的 render guard 只認 rulerRule。ability 的計算結果與 render 條件分屬兩套判準、沒有單一事實來源，這正是 F-001 與 F-002 的成因。另見 F-015（每次 render 都重建 actions 陣列，讓兩個 hook 的 useMemo 失效）。
+- **G 測試**（未通過）：新增的 GrafanaGroupLoader 測試把目前（有缺陷的）行為寫成期望值：`expect(menuItems.length).toBe(4)` 在授予了 AlertingRuleUpdate / AlertingRuleDelete 的前提下仍斷言只有 4 個選單項目，等於把 Pause 與 Delete 消失一起釘住（F-007）。另外沒有任何測試點擊 Silence 選單項目，所以 F-001 的死按鈕在測試裡完全看不見。
+- **H 非 Python 檔**（未通過）：本次變更的檔案全部是 .ts / .tsx / .json。互動分支未被逐一檢查：Silence 選單項目會渲染但抽屜永遠不會打開（F-001）、Pause 與 Delete 分支在新列表下永遠取不到（F-002）；render state 也不完整：FilterView.tsx:157 的 list item 少了 React key（F-005），GrafanaGroupLoader 在查詢成功但 groups 為空時不輸出任何東西、也沒有空狀態（F-014）。
+- **I 回溯分析**（未通過）：既有函式 useAllAlertRuleAbilities 被改寫成 useAllRulerRuleAbilities 的 wrapper，語意隨之改變（federated 判斷從 isFederatedRuleGroup(rule.group) 變成硬編 false），而它的三個呼叫端（RuleActionsButtons.tsx:57、RuleDetailsButtons.tsx:34、GrafanaRuleQueryViewer.tsx:111）沒有跟著調整，其中 RuleActionsButtons.tsx 自己沒有另外的 federated 檢查——見 F-004。GrafanaRuleLoader.tsx 整檔刪除、GrafanaRuleListItem 換家，已 grep 確認沒有殘留匯入。
+
+### 意圖確認
+
+以下項目在審查前留有疑慮。疑慮不阻擋審查，列出是因為這個決定屬於人，不屬於審查流程：
+
+- **該在這個 MR 做？**：這個 MR 同時做了三件可以拆開的事：(1) 列表頁改用 prom-only 資料來源，(2) 新增一整組 GrafanaPromRuleDTO 版本的 ability hooks，(3) 把既有的 useAllAlertRuleAbilities 改寫成 useAllRulerRuleAbilities 的 wrapper。第 (3) 項改到的是舊版 rules table 的行為（見 F-004，federated rule group 不再 immutable），而那條路徑不在本 MR 標題宣稱的範圍內；它被夾在同一份 diff 裡，很容易在 review 時被當成單純的搬移。建議至少在描述裡把第 (3) 項單獨點名，或拆成獨立 commit / MR。
+
+### 掃描執行狀況
+
+| 工具 | 狀態 | 說明 |
+|---|---|---|
+| ruff | 已執行 | 已實際執行、exit code 0、零診斷，但這不等於本次變更被檢查過：本 MR 變更的 14 個檔案全部是 .ts / .tsx / .json，ruff 只處理 Python，對這份 diff 的實際覆蓋率是 0。 · in_diff 0、outside_diff 0 |
+| oxlint | 略過 | 未安裝（不在 PATH 上）。這是本次唯一能涵蓋 TypeScript / React 的 linter，缺席代表 unused import、React hooks 規則、missing key 等機械性問題完全沒有工具把關，只能靠人工閱讀（F-005 就是這一類）。 |
+| ty | 略過 | 未安裝，且本 repo 是 TypeScript 專案，ty 本來也不適用。 |
+| tsc | 略過 | 執行環境沒有 Node / TypeScript toolchain 也沒有網路，無法編譯或跑 jest。所有型別相容性判斷都只能靠閱讀型別定義，因此本報告不提出任何「這裡會編譯失敗」的斷言（相關疑慮見 Q-002）。 |
+| trivy | 略過 | 未安裝，略過相依套件漏洞與 secret 掃描。 |
+| opengrep | 略過 | 未安裝，略過 SAST 掃描。 |
+| codegraph | 略過 | 未安裝，Phase 3 的 caller / impact 追蹤全部改用 grep 完成。 |
+| ncr-fresh-eyes | 略過 | 本執行環境沒有可用的 subagent 派工工具（Agent / Task tool 不存在），無法派出 fresh-eyes。依 SKILL.md 規定不以主 agent 自行模擬，因此本次審查缺少「未被 checklist 框住」的那一遍閱讀。 |
+| ncr-quality-check | 略過 | 同上，無法派出 subagent。本報告未經獨立的品質複核，只通過 report_model.py 的機械驗證。 |
+
+### Critical
+
+#### F-001 新版 Grafana rule list 的「Silence notifications」是死按鈕：選單會出現、點下去什麼都不會發生 — `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:47`
+
+面向 H 非 Python 檔 · Critical
+
+**問題**：完整路徑追過一次：GrafanaRuleListItem.tsx:47 只傳 `promRule={rule}`，沒有 `rule`（rulerRule），所以 RuleActionsButtons.V2 內的 `rule` 是 undefined，再往下 AlertRuleMenu 收到的 `rulerRule` 也是 undefined。AlertRuleMenu 的 canSilence 現在會由 grafanaSilenceAbility 撐起來——useAbilities.ts:323 對 GrafanaPromRuleDTO 回傳 `[silenceSupported, canSilenceInFolder && isAlertingRule]`，對一個有 folder silence 權限的 Grafana alerting rule 就是 `[true, true]`——於是 AlertRuleMenu.tsx:126 的 Menu.Item 會被渲染出來，onClick 呼叫 handleSilence，也就是 RuleActionsButtons.V2.tsx:100 的 `setShowSilenceDrawer(true)`。但抽屜本身在 :104 被 `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer` 守著，而 `rule` 是 undefined，這個條件永遠為 false。使用者看得到選項、點得下去、沒有任何回饋，也沒有錯誤。
+
+反證找過了：grep `SilenceGrafanaRuleDrawer` 全 repo 只有兩個渲染點（components/rules/RuleActionsButtons.tsx:136 與 rule-list/components/RuleActionsButtons.V2.tsx:105），新列表這條路徑不經過前者，所以沒有其他地方會把抽屜打開。新增的測試 GrafanaGroupLoader.test.tsx 只斷言 Silence 選單項目存在（:198），從未點擊它，因此測試不會發現。
+
+**證據**：
+- `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:47`
+- `public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:100`
+- `public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:104`
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:126`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:323`
+
+**修復方向**：兩條路擇一。(a) 讓 silence 流程不再依賴 rulerRule：SilenceGrafanaRuleDrawer 目前吃 `rulerRule`，可以改成接受 rule uid（GrafanaPromRuleDTO 的 `uid` 已經夠用來建 silence matcher），render guard 改成 `prometheusRuleType.grafana.alertingRule(promRule) && showSilenceDrawer`。(b) 若短期內不打算改抽屜，就讓 canSilence 與 render guard 用同一個判準——在 AlertRuleMenu 內把 Silence 項目也加上和 Pause 一樣的 `rulerRuleType.grafana.rule(rulerRule)` 條件，寧可少一個入口也不要留一個無反應的按鈕。同時補一個會實際點擊 Silence 並斷言抽屜出現的測試。
+
+#### F-002 新版 Grafana rule list 失去 Pause 與 Delete：新增的 grafanaPauseAbility / grafanaDeleteAbility 在這條路徑上是取不到的死程式碼 — `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:123`
+
+面向 H 非 Python 檔 · Critical
+
+**問題**：AlertRuleMenu 這次新增了 grafanaPauseAbility 與 grafanaDeleteAbility，並在 :83 / :87 把它們 OR 進 canPause / canDelete。但 JSX 的渲染條件沒有跟著改：:123 是 `canPause && rulerRuleType.grafana.rule(rulerRule) && ...`，:165 是 `canDelete && rulerRule && ...`。新列表（GrafanaRuleListItem.tsx:47）不再傳 rulerRule，兩個條件都恆為 false，所以無論 grafana ability 算出什麼，Pause 與 Delete 都不會出現。
+
+這是回歸而不只是「還沒做」：被刪掉的 GrafanaRuleLoader.tsx 原本會查 Ruler group 並把 rulerRule 傳進 `<RuleActionsButtons rule={rulerRule} promRule={rule} .../>`，所以改動前這兩個動作在 Grafana rule list 是可用的。換句話說，本 MR 的 commit 訊息說要「Add working actions for GMA rules based on Prom-only API」，實際結果是這兩個動作反而消失了。
+
+反證找過了：該列的動作區只由 RuleActionsButtons 產生（Edit 是另一顆 LinkButton），沒有第二個 Pause / Delete 入口。作者自己新增的測試也印證了這一點——GrafanaGroupLoader.test.tsx 在 beforeEach 授予了 AlertingRuleUpdate / AlertingRuleDelete 等權限，:207 仍斷言選單剛好 4 項（silence / copy link / duplicate / export），沒有 delete、也沒有 pause。
+
+**證據**：
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:123`
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:165`
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:83`
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:87`
+- `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:47`
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:207`
+
+**修復方向**：Delete 與 Pause 都需要能在只有 GrafanaPromRuleDTO 的情況下運作：Pause 走 MenuItemPauseRule，目前吃 `RulerGrafanaRuleDTO`，可改成吃 uid + folderUid + 目前的 isPaused（GrafanaPromRuleDTO 三者都有）；Delete 走 handleDelete(rulerRule, groupIdentifier)，可改成吃已經算好的 `identifier`（RuleActionsButtons.V2.tsx:66 的 getEditableIdentifier 已經能從 promRule 產出 GrafanaRuleIdentifier）。改完後把 AlertRuleMenu 的 :123 / :165 條件換成「有 rulerRule 或有 grafana promRule」的統一判準，別讓 ability 與 render guard 各用一套。若這一輪不打算補齊，請在 MR 描述中明確記錄「新列表暫時沒有 Pause / Delete」並移除 AlertRuleMenu 中對應的 grafana ability 計算，免得留下看起來已生效、實際取不到的程式碼。
+
+<details>
+<summary>Suggestion（6）</summary>
+
+#### F-003 skipToken 路徑不是中立值：useAllGrafanaPromRuleAbilities(undefined) 會用全域 Grafana 權限推導 ability，讓 cloud rule 冒出 Duplicate — `public/app/features/alerting/unified/hooks/useAbilities.ts:309`
+
+面向 C 安全 · Suggestion
+
+**問題**：`skipToken` 讀起來像是「這條 rule 不適用，別算」，但實作上 `useGrafanaPromRuleAbilities(skipToken, ...)` 只是把 `undefined` 傳進 useAllGrafanaPromRuleAbilities，而該函式對 undefined 並沒有短路：useIsGrafanaPromRuleEditable(undefined) 回傳 loading=false，於是 :309 的 `MaybeSupported = loading ? NotSupported : AlwaysSupported` 直接等於 true，:313 的 duplicateSupported 也是 true，:315 取的是 `getRulesPermissions('grafana')`，:318 於是回傳 `[true, ctx.hasPermission('alert.rules:create')]`。
+
+具體後果：AlertRuleMenu.tsx:73 對非 Grafana 的 prom rule（Mimir / Loki 等 cloud rule 沒有 folderUid、uid，`prometheusRuleType.grafana.rule` 為 false）傳入 skipToken，canDuplicate 因此在 ruler 側說「不支援」時仍然為 true，:135 的 Duplicate 選單項目就會出現。一個只有 Grafana rule create 權限、沒有 external rule create 權限的使用者，現在會在 Mimir rule 上看到 Duplicate。
+
+其他四個 action 檢查過了，沒有同樣的外洩：Pause / ModifyExport / Restore 的 supported 端都乘上 isAlertingRule（undefined 時為 false），Delete 的 allowed 端是 isRemovable（false），Silence 的 allowed 端是 `canSilenceInFolder && isAlertingRule`（false）。所以目前只有 Duplicate 一個出口，而且後端仍會擋下實際的建立動作，因此列為 Suggestion 而非 Critical；但這是設計上的定時炸彈——只要之後有人在這個 abilities 表裡新增一個「supported 端不乘 isAlertingRule」的項目，同一個洞就會再開一次。
+
+**證據**：
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:309`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:313`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:315`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:318`
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:73`
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:135`
+
+**修復方向**：在 useAllGrafanaPromRuleAbilities 開頭就處理缺席情形，讓它成為結構性保證而不是逐項運氣：把 `rule === undefined` 明確映射成一張全為 `[false, false]` 的 abilities（可以抽一個 `const NO_ABILITIES: Abilities<AlertRuleAction>` 常數，useMemo 內第一行 `if (!rule) return NO_ABILITIES;`）。這樣 skipToken 的語意才和它的名字一致，AlertRuleMenu 裡的 `||` 合併也才安全。
+
+#### F-004 useAllAlertRuleAbilities 改寫成 wrapper 後，federated rule group 不再是 immutable，舊版 rules table 會冒出 Edit 按鈕 — `public/app/features/alerting/unified/hooks/useAbilities.ts:222`
+
+面向 I 回溯分析 · Suggestion
+
+**問題**：改動前 useAllAlertRuleAbilities 自己算 `const isFederated = isFederatedRuleGroup(rule.group)`，並把它併進 :250 的 immutableRule。改動後它委派給 useAllRulerRuleAbilities，而那裡的 isFederated 在 :245 被硬編成 false，:243 留了一行 `// TODO: Add support for federated rules`。TODO 誠實地承認了這件事，但它改到的不只是新列表——useAllAlertRuleAbilities 透過 useAlertRuleAbility 服務三個既有呼叫端，其中 components/rules/RuleActionsButtons.tsx:57 拿它算 canEditRule，:84 直接用 `rulerRule && canEditRule` 決定要不要渲染 Edit，該檔案本身沒有另外的 federated 檢查（grep 確認 isFederated 不出現在該檔）。所以 Mimir federated rule group 底下的 rule，在舊版 rules table 會多出一顆本來被刻意隱藏的 Edit。
+
+反證找過了，也因此不升為 Critical：點下 Edit 後進到 ExistingRuleEditor.tsx:103，那裡仍會算 isFederatedRule 並渲染 FederatedRuleWarning——但它只是警告橫幅，不會阻擋表單，所以這是「多了一個原本被隱藏、且下游只有警告沒有攔截的入口」。另外 RuleDetailsButtons.tsx:38 與 RulesGroup.tsx:61 有各自的 federated 檢查，不受影響。要注意 useAllRulerRuleAbilities 裡的 `isFederated = false` 是搬移前就存在的既有狀態，本 MR 新增的是「讓 useAllAlertRuleAbilities 也繼承它」。
+
+**證據**：
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:222`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:243`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:245`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:250`
+- `public/app/features/alerting/unified/components/rules/RuleActionsButtons.tsx:57`
+- `public/app/features/alerting/unified/components/rules/RuleActionsButtons.tsx:84`
+
+**修復方向**：最小修法是讓 wrapper 保留它原本知道的資訊：useAllAlertRuleAbilities 手上有 CombinedRule，federated 判斷仍算得出來，可以在委派後把結果再收一次——例如讓 useAllRulerRuleAbilities 接一個 `isFederated?: boolean` 參數，由 useAllAlertRuleAbilities 傳 `isFederatedRuleGroup(rule.group)`、由新的 prom-only 呼叫端傳 false（Grafana-managed rule 本來就不可能 federated，useAbilities.ts:298 的註解已經寫明）。若決定先不修，請把 :243 的 TODO 補上「這會讓舊版 rules table 對 federated rule 顯示 Edit」這句後果，並在 MR 描述裡點名，讓它成為一個被記錄的決定而不是搬移的副作用。
+
+#### F-005 FilterView 的 GrafanaRuleListItem 少了 React key，同一個 map 裡另外兩個分支都有 — `public/app/features/alerting/unified/rule-list/FilterView.tsx:157`
+
+面向 H 非 Python 檔 · Suggestion
+
+**問題**：`rules.map` 在 :152 解構出 `key`，datasource 分支（:165）與 default 分支（:169）都傳了 `key={key}`，只有被本 MR 換掉的 grafana 分支沒有——舊的 `<GrafanaRuleLoader key={key} ... />` 有，新的 `<GrafanaRuleListItem ...>` 漏掉了。這條路徑是 FilterView 的無限捲動結果列表，項目會持續往後追加，缺 key 時 React 只能用索引對位：除了 console 警告之外，實務後果是捲動載入更多之後，已展開的列、focus 狀態與 More 選單的開闔狀態會被錯誤地沿用到別的 rule 上。
+
+這也是本次沒有 oxlint 可用的直接代價——`react/jsx-key` 是最典型的機械性規則，有 linter 的話不會走到人工閱讀這一步。
+
+**證據**：
+- `public/app/features/alerting/unified/rule-list/FilterView.tsx:157`
+- `public/app/features/alerting/unified/rule-list/FilterView.tsx:165`
+- `public/app/features/alerting/unified/rule-list/FilterView.tsx:169`
+
+**修復方向**：補上 `key={key}`，和同一個 switch 內另外兩個分支一致。
+
+#### F-006 rule 連結不再帶 returnTo，從篩選結果點進 rule 詳情後回不到原本的列表狀態 — `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:40`
+
+面向 H 非 Python 檔 · Suggestion
+
+**問題**：被刪除的 GrafanaRuleLoader.tsx 原本在建 href 前呼叫 `createReturnTo()`，並把 returnTo 當成第二個參數傳給 createRelativeUrl（`createRelativeUrl(rulePath, { returnTo })`）；新的 GrafanaRuleListItem.tsx:40 只剩 `createRelativeUrl(rulePath)`，第二個參數整個不見了。returnTo 是 rule 詳情頁「返回上一頁」導覽的依據，少了它，從 FilterView 的篩選結果點進去的使用者會失去回到原查詢條件的路徑。
+
+同一個目錄下的 DataSourceRuleListItem.tsx:36 仍然呼叫 createReturnTo()，所以這不是專案在收斂的模式，而是搬移時掉的一行——兩種 rule 的列表項現在行為不一致。
+
+**證據**：
+- `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:40`
+- `public/app/features/alerting/unified/rule-list/DataSourceRuleListItem.tsx:36`
+
+**修復方向**：在 GrafanaRuleListItem 內加回 `const returnTo = createReturnTo();`，href 改回 `createRelativeUrl(rulePath, { returnTo })` 的兩參數形式，與 DataSourceRuleListItem 對齊。
+
+#### F-007 新測試把「選單剛好 4 項」寫死，等於把 F-002 的 Pause / Delete 消失釘成期望行為 — `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:46`
+
+面向 G 測試 · Suggestion
+
+**問題**：測試在 :46 與 :52 授予了完整權限，包含 AlertingRuleUpdate 與 AlertingRuleDelete，然後在 :206-207 斷言 `byRole('menuitem').getAll().length` 剛好是 4，並在註解裡寫「With proper permissions, all 4 menu actions should be available」。以這份 diff 的實際行為來說這個斷言會通過，但它把「有 delete 權限卻沒有 Delete 選項」記錄成正確結果——之後有人修好 F-002，這個測試會紅，而紅的原因看起來像是修改破壞了測試，不像是測試原本就寫錯。:42 定義了 `delete` selector 卻從頭到尾沒用過，正好是這個缺口的痕跡。
+
+另外 :80 的測試名為「should render More button with action menu options」，但內容只斷言 More 按鈕存在與它的 aria-label，從未打開選單；名字承諾的比它驗的多。
+
+**證據**：
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:46`
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:52`
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:206`
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:42`
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:80`
+
+**修復方向**：把 `toBe(4)` 換成對每個「應該存在」與「不應該存在」的項目分別斷言（`expect(ui.menuItems.delete().query()).not.toBeInTheDocument()` 之類），並在該行加註為什麼目前不該有 Delete，指向 F-002；修好之後這個斷言就會被自然地翻轉而不是被刪掉。同時補一個會實際點擊 Silence 的案例（見 F-001），並把 :80 那個測試改名成它真正在驗的事，或補上開啟選單的步驟。
+
+#### F-008 prom 版 abilities 把「是不是 Grafana rule」窄化成「是不是 Grafana alerting rule」，Grafana recording rule 因此失去 Pause / Export / Restore — `public/app/features/alerting/unified/hooks/useAbilities.ts:302`
+
+面向 E 架構 · Suggestion
+
+**問題**：ruler 版（:269 附近）用的是 `isGrafanaManagedAlertRule = rulerRuleType.grafana.rule(rule)`，涵蓋 Grafana alerting rule 與 Grafana recording rule 兩者；prom 版 :302 換成 `const isAlertingRule = prometheusRuleType.grafana.alertingRule(rule)`，只涵蓋 alerting rule，然後在 :324 ModifyExport、:325 Pause 以及 Restore / DeletePermanently 上原封不動地取代了前者的位置。Grafana-managed recording rule 是可以被暫停的（utils/rules.ts:71 的 isRulePaused 讀的是 `grafana_alert.is_paused`，對 recording rule 一樣成立），所以只要走 prom 版 abilities，recording rule 的 Pause 就會被判為 not supported。
+
+目前這個差異被 F-002 蓋住（Pause 在新列表根本不會渲染），但它會在 F-002 修好的那一刻浮出來，所以現在講比較便宜。:301 的註解「All GrafanaPromRuleDTO rules are Grafana-managed by definition」是對的，但它解釋的是「為什麼不需要再檢查 grafana-managed」，緊接著的識別字卻做了另一件事（篩掉 recording rule），兩者放在一起會讓下一個讀的人以為這只是改名。
+
+**證據**：
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:302`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:324`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:325`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:269`
+- `public/app/features/alerting/unified/utils/rules.ts:71`
+
+**修復方向**：把兩個概念分開：`const isGrafanaManaged = true`（依 :301 的理由）用在原本 isGrafanaManagedAlertRule 的位置，另外保留 `const isAlertingRule = prometheusRuleType.grafana.alertingRule(rule)` 只用在真的僅限 alerting rule 的地方（Silence 顯然是，ModifyExport 需要確認 recording rule 是否支援匯出）。逐項對照 ruler 版的 abilities 表，讓兩張表的差異都是刻意的。
+
+</details>
+
+<details>
+<summary>Nit（7）</summary>
+
+#### F-009 開發過程殘留的 `// duplicate` 註解留在 useAllGrafanaPromRuleAbilities 裡 — `public/app/features/alerting/unified/hooks/useAbilities.ts:289`
+
+面向 A 風格 · Nit
+
+**問題**：`const { isEditable, isRemovable, loading } = useIsGrafanaPromRuleEditable(rule); // duplicate` 這個 `// duplicate` 沒有說明任何事——它看起來是寫作過程中給自己的標記（大概是指這段與 useIsRuleEditable 重複）。留在 main 上的話，下一個人只能猜它是提醒、是待辦、還是描述某種重複。
+
+**證據**：
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:289`
+
+**修復方向**：刪掉，或者換成完整的句子說明它與 useIsRuleEditable 的重複關係與打算怎麼收斂（例如 `// TODO: 與 useIsRuleEditable 的 Grafana 分支重複，待兩者都改用 folderUid 後合併`）。
+
+#### F-010 新檔案與新測試留下取不到的 prop、沒用到的 selector 與重複的型別收窄 — `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:22`
+
+面向 B 簡潔 · Nit
+
+**問題**：三處：(1) GrafanaRuleListItem 的 `operation?: RuleOperation` prop 沒有任何呼叫端傳入——grep 確認只有 GrafanaGroupLoader.tsx:70 與 FilterView.tsx:157 兩個使用者，都沒傳；它是從被刪掉的 GrafanaRuleLoader「Creating / Deleting」流程一起搬過來的，但那個流程已經隨 matchRules 一起移除。(2) :53 的 `rule && rule.type === PromRuleType.Alerting ? rule : undefined` 位在 `prometheusRuleType.grafana.alertingRule(rule)` 已經成立的分支裡，而且 `rule` 是必填 prop，這行判斷恆真；同一個檔案裡 :41-45 也在必填的 `rule` 上用了 `rule?.health` / `rule?.lastError` / `rule?.isPaused` 的 optional chaining。(3) 測試的 `ui.menuItems.delete` 定義了卻沒有任何斷言用到。這一類殘留單獨看都無害，但它們會讓下一個讀者花時間去找「這個 prop 是誰在用」。
+
+**證據**：
+- `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:22`
+- `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:53`
+- `public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:41`
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:42`
+
+**修復方向**：移除 operation prop（若之後要回填 Creating / Deleting 狀態，屆時連同傳入端一起加）；:53 直接用已收窄的 `rule`；:41-45 拿掉 optional chaining，讓型別上的必填在讀起來也是必填。測試的 delete selector 依 F-007 改成實際使用。
+
+#### F-011 移除 Ruler 查詢後，三處註解與一個變數名仍在描述已經不存在的行為 — `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:25`
+
+面向 A 風格 · Nit
+
+**問題**：GrafanaGroupLoader 的 JSDoc 仍寫「Loads an evaluation group from Prometheus and Ruler endpoints」，但 Ruler 查詢已在本 MR 移除。prometheusGroupsGenerator.ts:81 的「This is not mandatory to preload ruler rules, but it improves the UX...」整段是在解釋 ruler prefetch 為什麼存在，而那個 dispatch 已經刪掉了，剩下的只有 prom cache 的 upsert；:84 的變數 `cacheAndRulerPreload` 也還叫這個名字。另外 :19 的 `expectedRulesCount` doc 提到「Ruler response might contain different number of rules」，在只剩 prom 的世界裡也已經沒有對照對象。這些是最容易誤導後續維護者的一類殘留：程式碼已經對了，文件還在描述被放棄的設計。
+
+**證據**：
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:25`
+- `public/app/features/alerting/unified/rule-list/hooks/prometheusGroupsGenerator.ts:81`
+- `public/app/features/alerting/unified/rule-list/hooks/prometheusGroupsGenerator.ts:84`
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:19`
+
+**修復方向**：JSDoc 改成只提 Prometheus；prometheusGroupsGenerator 的註解改寫成解釋「為什麼要把 group 塞進 RTKQ cache」，變數改名為 `cachePreload`；順手清掉 expectedRulesCount doc 裡對 Ruler 的引用。
+
+#### F-012 `getRulesPermissions('grafana')` 用字面量而非 GRAFANA_RULES_SOURCE_NAME 常數 — `public/app/features/alerting/unified/hooks/useAbilities.ts:315`
+
+面向 A 風格 · Nit
+
+**問題**：本 MR 新增的兩處都寫成 `getRulesPermissions('grafana')`，而同一個 codebase 既有的呼叫（access-control.ts:147-148）用的是 `getRulesPermissions(GRAFANA_RULES_SOURCE_NAME)`。值目前一致，所以行為沒問題；但 rules source name 是跨模組共用的一個決定，散在字串裡之後就必須靠 grep 才能改得齊。
+
+**證據**：
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:315`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:368`
+- `public/app/features/alerting/unified/utils/access-control.ts:147`
+
+**修復方向**：改用 `GRAFANA_RULES_SOURCE_NAME`（來自 utils/datasource），與檔案內其他常數引用一致。
+
+#### F-013 `RequireAtLeastOne` 看起來保證了「至少有一個 rule」，實際上沒有 — `public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:25`
+
+面向 B 簡潔 · Nit
+
+**問題**：`RequireAtLeastOne<{ rule?: RulerRuleDTO; promRule?: Rule }>` 要求的是「至少出現一個 key」，不是「至少有一個非 undefined 的值」。StateView.tsx:132 寫 `rule={rule.rulerRule} promRule={promRule}`，只要 key 在就滿足這個型別，即使兩個值都是 undefined。這正是為什麼 :146 還需要一個執行期的 logWarning 兜底——型別本身沒有提供它名字暗示的保證，讀者卻很容易停在型別這一層就放心。
+
+**證據**：
+- `public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:25`
+- `public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:146`
+- `public/app/features/alerting/unified/rule-list/StateView.tsx:132`
+
+**修復方向**：如果要的是真正的二選一，改成明確的聯集：`type RuleProps = { rule: RulerRuleDTO; promRule?: Rule } | { rule?: RulerRuleDTO; promRule: Rule }`，這樣 `rule={undefined}` 就會在編譯期被擋下，:146 的 logWarning 也才真的只剩下防禦性用途。若維持現狀，請在型別旁加一行註解說明它擋不住什麼。
+
+#### F-014 GrafanaGroupLoader 在查詢成功但 groups 為空時不輸出任何內容，也沒有空狀態 — `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:68`
+
+面向 H 非 Python 檔 · Nit
+
+**問題**：:53 只在 `!promResponse` 時顯示錯誤 Alert；:68 的 `promResponse.data.groups.at(0)?.rules.map(...)` 在 groups 為空陣列時是 undefined，React 直接渲染空白。改動前這條路徑還有 ruler 那一側可以撐住畫面（rulerResponse?.rules.map），現在只剩一個資料來源，一旦 group 名稱對不上或後端回了空 groups，使用者看到的是一個展開後什麼都沒有的群組，沒有錯誤也沒有提示。
+
+**證據**：
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:68`
+- `public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:53`
+
+**修復方向**：把 `groups.at(0)` 的結果先取出來判斷，為 undefined 或 `rules` 為空時渲染一個明確的空狀態（或沿用 :57 的 Alert 文案語氣，說明這個 group 目前沒有可顯示的 rule）。
+
+#### F-015 每次 render 都重建 actions 陣列，讓 useRulerRuleAbilities / useGrafanaPromRuleAbilities 的 useMemo 失效 — `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:58`
+
+面向 E 架構 · Nit
+
+**問題**：兩個 plural hook 的 useMemo 依賴都是 `[abilities, actions]`，而 AlertRuleMenu 在 :58 與 :73 都是直接寫陣列字面量傳進去——每次 render 都是新的 reference，memo 每次都重算。改動前用的是 singular 版本，依賴是一個列舉值（primitive），memo 是有效的。這段程式碼旁邊本來就有一句「This hook is being called a lot in different places / In some cases multiple times for ~80 rules」的註記（本 MR 把它搬到 :223-226），所以這個退化正好發生在作者已經標記為熱點的地方。實際成本不高（memo 內只是查表），但它讓 memo 變成純粹的裝飾。
+
+**證據**：
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:58`
+- `public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:73`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:216`
+- `public/app/features/alerting/unified/hooks/useAbilities.ts:405`
+
+**修復方向**：把兩個 actions 陣列提到 component 外層成為模組層級常數（例如 `const MENU_ACTIONS = [AlertRuleAction.Pause, ...] as const;`），reference 就穩定了，兩個 hook 內的 useMemo 也就恢復作用。
+
+</details>
+
+<details>
+<summary>未驗證提問（2）</summary>
+
+#### Q-001 移除 Ruler 查詢後，rule 的「Creating」與「Deleting」過渡狀態在 Grafana rule list 完全消失，這是刻意的產品決定嗎？
+
+面向 H 非 Python 檔
+
+**背景**：被刪掉的 matchRules 用 ruler 與 prom 兩側的差集來標示兩種過渡：只有 ruler 有的顯示 Creating，只有 prom 有的顯示 Deleting，並在後者發生時 logWarning。GrafanaGroupLoader.test.tsx 中對應的兩個測試（`should render rule with url and creating state when only ruler rule exists`、`should render delete rule operation list item when only prom rule exists`）也在本 MR 一併刪除。舊 matchRules 的註解寫著「Grafana Prometheus rules should be strongly consistent now」，暗示作者認為這兩個狀態已經不會發生——但這是後端一致性保證的問題，從前端程式碼讀不出來，我也沒有網路可以查證 Grafana 該版本的 API 契約。若保證成立，這次刪除是乾淨的；若在寫入尖峰仍存在短暫視窗，使用者會在建立後短時間內看不到自己剛建的 rule，而且沒有任何提示。
+
+**如何確認**：後端對 Grafana-managed rule 的 Prometheus API 是否保證 read-after-write 一致性（相關的後端 PR 或 API 文件），或是作者說明這兩個過渡狀態已由別的機制承接。
+
+#### Q-002 `getIsProvisioned` 把 `Rule` 傳進 `isProvisionedPromRule(promRule: PromRuleDTO)`，這兩個型別在 TypeScript 下真的互相相容嗎？
+
+面向 I 回溯分析
+
+**背景**：RuleActionsButtons.V2.tsx:124 以 `promRule?: Rule`（來自 app/types/unified-alerting）呼叫 utils/rules.ts:171 的 `isProvisionedPromRule(promRule: PromRuleDTO)`（來自 app/types/unified-alerting-dto），而後者內部又把它傳給吃 `Rule` 的 `prometheusRuleType.grafana.rule`——同一個值在兩個方向上被當成兩種型別。這兩個介面的 base 不同（RuleBase 的 `health: RuleHealth`、`uid?: string` vs PromRuleDTOBase 的 `health: string`、無 uid），AlertingRule 的 `alerts?: Alert[]` 與 PromAlertingRuleDTO 的 `alerts?: Array<{...}>` 也不是同一個型別。結構化子型別很可能讓它通過，但這裡沒有 Node / tsc 也沒有網路，我無法編譯驗證，所以不把它寫成 finding。同一個疑慮也適用於 `prometheusRuleType.grafana.rule` 這個箭頭函式——它沒有顯式的 type predicate 標註，AlertRuleMenu.tsx:73 與 RuleActionsButtons.V2.tsx:57 都依賴它在三元運算式裡收窄型別，這需要 TS 5.5+ 的 inferred type predicate 才成立（本專案是 5.7.3，理論上支援）。
+
+**如何確認**：在有 toolchain 的環境跑一次 `yarn typecheck`（或 `tsc --noEmit`）；CI 的型別檢查若已綠燈即可視為解決。
+
+</details>

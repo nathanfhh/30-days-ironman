@@ -1,0 +1,8 @@
+[
+  "updateManyByCredentialId(this.credential.id, {}) with empty data could be rejected by Prisma at runtime or become a no-op, so the updatedAt timestamp may not actually change",
+  "Handler directly instantiates new CalendarCacheRepository() which bypasses the CalendarCache.init(...) feature-flag logic and its mock when calendar-cache is disabled, causing inconsistent cache status behavior across deployments",
+  "Throwing a plain Error instead of TRPCError will surface as INTERNAL_SERVER_ERROR in tRPC rather than preserving NOT_FOUND/FORBIDDEN semantics for clients",
+  "new Intl.DateTimeFormat(\"en-US\", ...) hard-codes the timestamp formatting locale, causing inconsistent date formatting for non-English users compared to other UI parts that use i18n.language/user locale",
+  "ENV_FILE=\"../.env\" depends on the caller's current working directory, so running the script from repo root may update the wrong file path",
+  "sed -i '' is BSD/macOS-specific and fails on GNU sed (Linux), making the script non-portable for Linux contributors"
+]

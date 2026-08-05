@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-106778",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/106778",
+  "pr_title": "Notification Rule Processing Engine",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR106778__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR106778__20260122.git",
+  "base_sha": "15e1aa88551d925a80796a966e52f2b7a178203b",
+  "head_sha": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "stat": " .../components/rule-viewer/AlertRuleMenu.tsx       |  77 ++++++---\n .../unified/components/rules/RuleDetails.test.tsx  |   5 +-\n .../unified/components/rules/RulesTable.test.tsx   | 108 +++++++++---\n .../alerting/unified/hooks/useAbilities.ts         | 172 ++++++++++++++-----\n .../alerting/unified/rule-list/FilterView.tsx      |   8 +-\n .../unified/rule-list/GrafanaGroupLoader.test.tsx  | 182 +++++++++++++--------\n .../unified/rule-list/GrafanaGroupLoader.tsx       |  98 +----------\n .../unified/rule-list/GrafanaRuleListItem.tsx      |  71 ++++++++\n .../unified/rule-list/GrafanaRuleLoader.tsx        | 150 -----------------\n .../rule-list/components/RuleActionsButtons.V2.tsx |  74 ++++++++-\n .../rule-list/hooks/prometheusGroupsGenerator.ts   |   8 -\n .../app/features/alerting/unified/utils/rules.ts   |   4 +\n public/app/types/unified-alerting-dto.ts           |   1 +\n public/locales/en-US/grafana.json                  |   2 -\n 14 files changed, 542 insertions(+), 418 deletions(-)\n",
+  "name_status": "M\tpublic/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx\nM\tpublic/app/features/alerting/unified/components/rules/RuleDetails.test.tsx\nM\tpublic/app/features/alerting/unified/components/rules/RulesTable.test.tsx\nM\tpublic/app/features/alerting/unified/hooks/useAbilities.ts\nM\tpublic/app/features/alerting/unified/rule-list/FilterView.tsx\nM\tpublic/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx\nM\tpublic/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx\nA\tpublic/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx\nD\tpublic/app/features/alerting/unified/rule-list/GrafanaRuleLoader.tsx\nM\tpublic/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx\nM\tpublic/app/features/alerting/unified/rule-list/hooks/prometheusGroupsGenerator.ts\nM\tpublic/app/features/alerting/unified/utils/rules.ts\nM\tpublic/app/types/unified-alerting-dto.ts\nM\tpublic/locales/en-US/grafana.json\n",
+  "commits": "8df85037 Update translations\n292f782f Enhance GrafanaGroupLoader tests: Add permission checks and More button functionality\n26b9ef98 Merge branch 'main' of github.com:grafana/grafana into alerting/remove-ruler-from-alert-list-view2\na05db6f9 Add showLocation to GrafanaRuleListItem, improve useAbilities, address PR feedback\n82704e80 Add missing mocks in tests\nb536f5ee remove showLocation property\nc360b5f6 remove commented code\n4710dd51 add some comments\n91f89e47 Remove outdated tests\n2492e45e Remove Ruler-loader related code for Grafana rules\nf9b346a7 Add working actions for GMA rules based on Prom-only API\n75b80b9a wip\n"
+}

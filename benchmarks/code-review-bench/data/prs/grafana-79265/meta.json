@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-79265",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/79265",
+  "pr_title": "Anonymous: Add configurable device limit",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR79265__20260122.git",
+  "pr_number": 1,
+  "golden_count": 5,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR79265__20260122.git",
+  "base_sha": "7ddcd0c9611882858701f4f876fb8e449fe73980",
+  "head_sha": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "stat": " packages/grafana-data/src/types/config.ts          |  1 +\n packages/grafana-runtime/src/config.ts             |  1 +\n pkg/api/dtos/frontend_settings.go                  |  1 +\n pkg/api/frontendsettings.go                        |  1 +\n .../anonymous/anonimpl/anonstore/database.go       | 57 ++++++++++++++++++++--\n .../anonymous/anonimpl/anonstore/database_test.go  | 25 +++++++++-\n pkg/services/anonymous/anonimpl/api/api.go         |  6 +--\n pkg/services/anonymous/anonimpl/client.go          | 23 +++------\n pkg/services/anonymous/anonimpl/impl.go            |  8 +--\n pkg/services/anonymous/anonimpl/impl_test.go       |  8 ++-\n pkg/setting/setting.go                             | 11 +++--\n 11 files changed, 105 insertions(+), 37 deletions(-)\n",
+  "name_status": "M\tpackages/grafana-data/src/types/config.ts\nM\tpackages/grafana-runtime/src/config.ts\nM\tpkg/api/dtos/frontend_settings.go\nM\tpkg/api/frontendsettings.go\nM\tpkg/services/anonymous/anonimpl/anonstore/database.go\nM\tpkg/services/anonymous/anonimpl/anonstore/database_test.go\nM\tpkg/services/anonymous/anonimpl/api/api.go\nM\tpkg/services/anonymous/anonimpl/client.go\nM\tpkg/services/anonymous/anonimpl/impl.go\nM\tpkg/services/anonymous/anonimpl/impl_test.go\nM\tpkg/setting/setting.go\n",
+  "commits": "bbd8c507 anon device limit for config\n7af474db refactored const to make it clearer with expiration\neb44d75d fix typo\n566e0a8f break auth if limit reached\n6ccd33f7 Anonymous: Add device limiter\n"
+}

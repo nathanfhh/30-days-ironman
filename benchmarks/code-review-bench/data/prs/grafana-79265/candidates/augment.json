@@ -1,0 +1,4 @@
+[
+  "tagDeviceUI caches the device ID before calling CreateOrUpdateDevice, so returning ErrDeviceLimitReached can leave the cache entry set and let subsequent requests bypass the device limit until cache expiry. The cache should only be populated after a successful DB write or cleared on error.",
+  "Using RowsAffected()==0 to signal ErrDeviceLimitReached can misfire on MySQL where RowsAffected may be 0 when the row matches but values don't change (e.g., same updated_at after second-precision truncation), which could incorrectly deny existing devices at the limit."
+]

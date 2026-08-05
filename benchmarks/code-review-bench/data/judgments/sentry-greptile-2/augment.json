@@ -1,0 +1,20 @@
+{
+  "slug": "sentry-greptile-2",
+  "tool": "augment",
+  "n_golden": 3,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.6,
+      "reasoning": "Candidate ties the negative-slicing crash to the enable_advanced_features-gated branch, which best corresponds to the new OptimizedCursorPaginator negative-offset path, though the class isn't named explicitly."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.94,
+      "reasoning": "Both say OptimizedCursorPaginator.get_item_key applies math.floor/ceil to what can be a datetime key (order_by=-datetime), raising TypeError."
+    }
+  ]
+}

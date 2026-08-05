@@ -1,0 +1,12 @@
+{
+  "slug": "sentry-greptile-5",
+  "tool": "coderabbit",
+  "n_golden": 3,
+  "n_candidates": 18,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 2, "confidence": 0.95,
+     "reasoning": "Both describe zip(error_ids, events.values()) assuming get_multi preserves input order, mispairing event data with IDs."},
+    {"golden_index": 2, "candidate_index": 3, "confidence": 0.85,
+     "reasoning": "Describes the same zip-alignment bug's 'missing nodes also shift alignment' case explicitly named in the golden comment."}
+  ]
+}

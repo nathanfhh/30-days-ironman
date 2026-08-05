@@ -1,0 +1,10 @@
+{
+  "slug": "keycloak-33832",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 11,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 2, "confidence": 0.95,
+     "reasoning": "Both point to the same dead ASN1Encoder.create().write(...) calls in concatenatedRSToASN1DER whose results are discarded and never used."}
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  "RpcUserOrganizationContext.member is documented as optional, so organization_context.member.has_global_access can raise if member is None, causing a 500 error",
+  "No tests cover the new optimized_pagination=true code path, especially around cursor handling",
+  "Allowing negative offset values to reach queryset[start:stop] can raise at runtime because Django QuerySet slicing does not support negative indices, so a crafted cursor can trigger a 500",
+  "OptimizedCursorPaginator.get_item_key assumes the sort key is numeric, but with order_by=\"-datetime\" the key will be a datetime and math.floor/ceil will raise TypeError"
+]

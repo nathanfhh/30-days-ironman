@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-greptile-1",
+  "tool": "nathan-code-review",
+  "n_golden": 4,
+  "n_candidates": 12,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 2, "confidence": 0.9,
+     "reasoning": "Both say a negative offset is sliced directly into a Django QuerySet, which raises instead of being handled automatically as the code comment claims."},
+    {"golden_index": 2, "candidate_index": 1, "confidence": 0.85,
+     "reasoning": "Both say organization_context.member can be None and line 71 dereferences it unconditionally, causing an AttributeError/crash for API-key or org-auth-token requests."},
+    {"golden_index": 3, "candidate_index": 0, "confidence": 0.95,
+     "reasoning": "Both say get_item_key's integer-based math.floor/ceil is applied to a -datetime ordering used by the audit log endpoint, raising a TypeError."}
+  ]
+}

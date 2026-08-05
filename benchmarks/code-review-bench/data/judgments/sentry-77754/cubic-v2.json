@@ -1,0 +1,12 @@
+{
+  "slug": "sentry-77754",
+  "tool": "cubic-v2",
+  "n_golden": 4,
+  "n_candidates": 2,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.97,
+     "reasoning": "Both identify timezone.now() being evaluated once as a shared mutable default, causing a stale timestamp across instances."},
+    {"golden_index": 3, "candidate_index": 1, "confidence": 0.95,
+     "reasoning": "Both flag that to_dict()/asdict() leaves queued as a datetime, which breaks JSON serialization when passed as task kwargs."}
+  ]
+}

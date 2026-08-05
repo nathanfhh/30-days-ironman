@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-67876",
+  "tool": "coderabbit",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 0, "confidence": 0.95,
+     "reasoning": "Directly matches golden: missing sender key in integration.metadata causes a KeyError, and candidate proposes guarding against it."}
+  ]
+}

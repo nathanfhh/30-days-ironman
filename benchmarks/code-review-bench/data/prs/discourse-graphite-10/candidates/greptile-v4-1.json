@@ -1,0 +1,6 @@
+[
+  "SQL injection vulnerability: host value from embeddable_hosts site setting is interpolated directly into raw SQL string in migration without escaping, allowing potential SQL injection if admin set malicious value",
+  "Nil dereference in update and destroy methods: .where(id:).first returns nil when no record matches, causing NoMethodError (500) instead of 404 when calling methods on nil",
+  "embed: :ids without include: true in EmbeddingSerializer omits sideloaded embeddable_hosts array from response, breaking client-side _hydrateEmbedded hydration and leaving admin UI empty",
+  "String#replace only replaces first underscore: using non-regex form of replace on type like 'my_embedded_host' results in 'my-embedded_host', missing ADMIN_MODELS lookup"
+]

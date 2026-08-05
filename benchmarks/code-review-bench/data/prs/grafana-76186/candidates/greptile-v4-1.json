@@ -1,0 +1,3 @@
+[
+  "TestLogger.FromContext returns a new instance with zero counters instead of returning the existing instance (f), which means log calls routed through FromContext will never appear on the original TestLogger, causing future tests that check log call counts to silently fail"
+]

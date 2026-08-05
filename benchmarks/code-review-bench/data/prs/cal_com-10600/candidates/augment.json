@@ -1,0 +1,7 @@
+[
+  "Component is exported as `function TwoFactor` even though it's a backup-code UI; the name mismatch can be confusing in stack traces/DevTools and when importing alongside the real `TwoFactor` component",
+  "`navigator.clipboard.writeText(...)` isn't awaited/handled, so the success toast can show even if the clipboard write fails (e.g., permissions/unsupported environment)",
+  "Renders an `<a>` wrapping a `Button` that becomes a `<button>`, which creates nested interactive elements (`<a><button>\u2026`). This can cause inconsistent click/keyboard behavior and is invalid HTML semantics",
+  "A new object URL is created for `backupCodesUrl`, but it's only revoked when generating a new one; if the modal is closed/reset without another setup run, the object URL can leak and keep the blob alive longer than intended",
+  "`JSON.parse(symmetricDecrypt(...))` can throw (or return a non-array) if `backupCodes` is corrupted/unexpected, which would crash the authorize/disable flow with a 500. Consider guarding parse/decrypt errors and validating the decoded shape before using `indexOf`"
+]

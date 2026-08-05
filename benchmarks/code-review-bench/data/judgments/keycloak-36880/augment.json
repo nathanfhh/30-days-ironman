@@ -1,0 +1,14 @@
+{
+  "slug": "keycloak-36880",
+  "tool": "augment",
+  "n_golden": 3,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both say getClientsWithPermission returns the type-level 'Clients' resource name instead of real client IDs, breaking AvailableRoleMappingResource's realm.getClientById call sites."
+    }
+  ]
+}

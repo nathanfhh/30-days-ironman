@@ -1,0 +1,10 @@
+{
+  "slug": "keycloak-32918",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 2,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.95,
+     "reasoning": "Directly matches golden: cleanup uses the literal string 'alias' instead of the generated per-iteration alias, so created IDPs are never removed."}
+  ]
+}

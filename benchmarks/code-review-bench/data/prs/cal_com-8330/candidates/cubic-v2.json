@@ -1,0 +1,4 @@
+[
+  "Dayjs object reference comparison (`===`) is always `false`. Use `.isSame()` to compare values. Because this condition can never be true, a zero-duration date override (start == end, meaning 'unavailable all day') will not be recognized, potentially allowing bookings during a blocked day.",
+  "`end` is calculated from `slotStartTime` instead of `slotEndTime`, making it identical to `start`. This means a slot that starts within working hours but extends past the end of working hours will not be filtered out, allowing bookings outside working hours."
+]

@@ -1,0 +1,16 @@
+{
+  "slug": "discourse-graphite-10",
+  "tool": "nathan-code-review",
+  "n_golden": 4,
+  "n_candidates": 31,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 7, "confidence": 0.95,
+     "reasoning": "Both identify the EmbeddableHost before_validation callback raising NoMethodError because it calls a string method on host without a nil check."},
+    {"golden_index": 1, "candidate_index": 6, "confidence": 0.95,
+     "reasoning": "Both say Admin::EmbeddableHostsController's update and destroy look the record up with .first and then call methods on a possible nil, giving a NoMethodError/500 instead of a not-found response."},
+    {"golden_index": 2, "candidate_index": 5, "confidence": 0.95,
+     "reasoning": "Both point out record_for_host lowercases only the stored host in SQL and not the passed-in host value, so the intended case-insensitive comparison is asymmetric."},
+    {"golden_index": 3, "candidate_index": 1, "confidence": 0.95,
+     "reasoning": "Both note the migration's raw SQL insert bypasses the model's normalization, so legacy values carrying a scheme or path will never match the new bare-host lookup."}
+  ]
+}

@@ -1,0 +1,3 @@
+[
+  "Cache key collision vulnerability in userPermDenialCacheKey function - concatenating name and parent with underscore can cause collisions when values contain underscores (UIDs often do), leading to incorrect denial cache hits. Should encode segments or add length prefixes before concatenation."
+]

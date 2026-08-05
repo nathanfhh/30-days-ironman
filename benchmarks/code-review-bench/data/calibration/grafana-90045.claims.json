@@ -1,0 +1,117 @@
+{
+  "slug": "grafana-90045",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Update no longer wraps objInfo with updateWrapper and instead hands the raw objInfo straight to Legacy.Update \u2014 will the two stores still end up writing consistent content?"
+    },
+    {
+      "claim_id": "c002",
+      "text": "Wrong metric recorder for legacy DeleteCollection in goroutine - d.Legacy.DeleteCollection duration is recorded with recordStorageDuration instead of recordLegacyDuration, causing legacy metrics to appear as storage metrics"
+    },
+    {
+      "claim_id": "c003",
+      "text": "The context is being created with d.Log instead of the log variable that was initialized with additional context values (name, kind, method). This means those values won't be propagated to the logging context."
+    },
+    {
+      "claim_id": "c004",
+      "text": "Async goroutines derive child contexts from the request context, which may already be cancelled by the time the goroutine executes since the handler returns immediately after spawning the goroutine, causing legacy writes to fail silently"
+    },
+    {
+      "claim_id": "c005",
+      "text": "Failures in the background legacy write only go into a metric with no logging, and the goroutine has no panic recovery."
+    },
+    {
+      "claim_id": "c006",
+      "text": "DeleteCollection goroutine (line 166): calls recordStorageDuration for the legacy operation \u2014 should be recordLegacyDuration"
+    },
+    {
+      "claim_id": "c007",
+      "text": "Several small readability issues: method should be a const, Create returns an err that is always nil, a const is declared in an odd position, and comments are out of sync with the implementation."
+    },
+    {
+      "claim_id": "c008",
+      "text": "Async legacy writes are tied to request cancellation - background legacy operations inherit the request context, so if the request ends quickly the legacy write can be canceled immediately"
+    },
+    {
+      "claim_id": "c009",
+      "text": "In TestMode3_Create, the failing case only stubs Legacy.Create, but Mode3 calls Storage.Create first; without a storage expectation this won't exercise the intended error path (and may panic due to an unexpected mock call)"
+    },
+    {
+      "claim_id": "c010",
+      "text": "The async legacy Update reuses the original objInfo; since Storage.Update already applied the update, calling Legacy.Update with the same UpdatedObjectInfo can compute a different object or run update logic twice"
+    },
+    {
+      "claim_id": "c011",
+      "text": "The async legacy Create uses obj (the pre-storage object) rather than created returned by unified storage, which can drop server-assigned fields and cause legacy/unified divergence"
+    },
+    {
+      "claim_id": "c012",
+      "text": "Could the goroutine and the apiserver's response serialization holding the same obj/options pointers concurrently constitute a data race?"
+    },
+    {
+      "claim_id": "c013",
+      "text": "The three new playlist 'mode 3' integration tests actually run in mode 1; not a single line of this change's production code is covered."
+    },
+    {
+      "claim_id": "c014",
+      "text": "Mode3 previously attempted legacy deletion even when unified storage returned NotFound; now any error from Storage.Delete returns early and skips the legacy cleanup, which may leave stray legacy objects during migrations"
+    },
+    {
+      "claim_id": "c015",
+      "text": "The way the test Prometheus registry is declared is inconsistent across three files."
+    },
+    {
+      "claim_id": "c016",
+      "text": "Mode 3 async legacy writes can make test assertions race - doPlaylistTests validates legacy API results immediately after K8s writes, but in mode 3 legacy writes are fire-and-forget, causing potential flakiness"
+    },
+    {
+      "claim_id": "c017",
+      "text": "Use separate mocks for legacy and unified storage; a shared mock.Mock makes backend routing assertions indistinguishable."
+    },
+    {
+      "claim_id": "c018",
+      "text": "Four write methods each duplicate the same goroutine + 10-second timeout boilerplate."
+    },
+    {
+      "claim_id": "c019",
+      "text": "go.work.sum adds a fully duplicate line and drags in dependencies unrelated to this change."
+    },
+    {
+      "claim_id": "c020",
+      "text": "Goroutines inherit cancellable request context causing async writes to fail silently - all four async goroutines derive their timeout context from the incoming request ctx, which gets cancelled when HTTP response is sent, aborting legacy writes before the 10-second timeout has any effect. Should use context.Background() as the base"
+    },
+    {
+      "claim_id": "c021",
+      "text": "Bug: calling recordLegacyDuration when storage operation fails should be recordStorageDuration."
+    },
+    {
+      "claim_id": "c022",
+      "text": "Is options.Kind almost always an empty string on real requests, causing all metrics to pile into the kind=\"\" series?"
+    },
+    {
+      "claim_id": "c023",
+      "text": "The async legacy write reuses the request context, which is canceled as soon as the request ends, so mode 3's dual write systematically only completes half."
+    },
+    {
+      "claim_id": "c024",
+      "text": "Async legacy writes inherit the request ctx; if the apiserver cancels it when the request completes, the safe measure legacy write may be canceled before it runs"
+    },
+    {
+      "claim_id": "c025",
+      "text": "Inconsistency: using name instead of options.Kind for metrics recording differs from other methods."
+    },
+    {
+      "claim_id": "c026",
+      "text": "recordStorageDuration is called for the legacy DeleteCollection operation instead of recordLegacyDuration, recording the wrong metric."
+    },
+    {
+      "claim_id": "c027",
+      "text": "The mode 3 unit tests never verify the async write to the legacy side, which is the whole point of mode 3."
+    },
+    {
+      "claim_id": "c028",
+      "text": "Delete / DeleteCollection now return immediately on any storage error, so the legacy side is no longer cleaned up (it used to deliberately tolerate NotFound)."
+    }
+  ]
+}

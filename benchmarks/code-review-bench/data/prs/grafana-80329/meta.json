@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-80329",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/80329",
+  "pr_title": "Database Performance Optimizations",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR80329__20260122.git",
+  "pr_number": 1,
+  "golden_count": 1,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR80329__20260122.git",
+  "base_sha": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "head_sha": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "stat": " .../annotations/annotationsimpl/cleanup_test.go    | 129 ++++++++++++++------\n .../annotations/annotationsimpl/xorm_store.go      | 130 +++++++++++++++++----\n pkg/services/cleanup/cleanup.go                    |   2 +-\n 3 files changed, 199 insertions(+), 62 deletions(-)\n",
+  "name_status": "M\tpkg/services/annotations/annotationsimpl/cleanup_test.go\nM\tpkg/services/annotations/annotationsimpl/xorm_store.go\nM\tpkg/services/cleanup/cleanup.go\n",
+  "commits": "04cfa3bf lint\n99fe93d1 Turn annotation cleanup test to integration tests\n91e337d5 Add test for catching SQLITE_MAX_VARIABLE_NUMBER limit\nae72e369 Refactor test to customise test data creation\nd74c91c2 Bulk insert test data in DB\n23c53d90 Work around parameter limit on sqlite for large batches\naa296e52 drop unused function\na503d597 Use same approach for tags\ncbe26d7b Use SQL parameters\nbcddaa68 guard against empty queries\n73dca0cb Use split-out utility in outer batching loop so it respects context cancellation\n83a86c93 Separate cancellable batch implementation to allow for multi-statement callbacks, add overload for single-statement use\n4ecfade2 Iterate in batches\nbc0bf5d5 Raise batch size, now that we pay attention to it\n30243d8e update comment\nd1c87b3c Split subquery when cleaning annotations\n"
+}

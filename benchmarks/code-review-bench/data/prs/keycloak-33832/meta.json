@@ -1,0 +1,17 @@
+{
+  "slug": "keycloak-33832",
+  "source_repo": "keycloak",
+  "language": "Java",
+  "golden_url": "https://github.com/keycloak/keycloak/pull/33832",
+  "pr_title": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR33832__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR33832__20260122.git",
+  "base_sha": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "head_sha": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "stat": " authz/client/pom.xml                               |  11 +\n .../keycloak/authorization/client/AuthzClient.java |   2 +\n .../client/util/crypto/ASN1Decoder.java            | 203 ++++++++++++++++++\n .../client/util/crypto/ASN1Encoder.java            | 101 +++++++++\n .../util/crypto/AuthzClientCryptoProvider.java     | 226 +++++++++++++++++++++\n .../org.keycloak.common.crypto.CryptoProvider      |  20 ++\n .../client/test/ECDSAAlgorithmTest.java            |  74 +++++++\n .../keycloak/common/crypto/CryptoIntegration.java  |  12 +-\n .../org/keycloak/common/crypto/CryptoProvider.java |   9 +-\n .../keycloak/crypto/def/DefaultCryptoProvider.java |   6 +-\n .../crypto/elytron/WildFlyElytronProvider.java     |   5 +\n .../org/keycloak/crypto/fips/FIPS1402Provider.java |  13 +-\n 12 files changed, 673 insertions(+), 9 deletions(-)\n",
+  "name_status": "M\tauthz/client/pom.xml\nM\tauthz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java\nA\tauthz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java\nA\tauthz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Encoder.java\nA\tauthz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java\nA\tauthz/client/src/main/resources/META-INF/services/org.keycloak.common.crypto.CryptoProvider\nA\tauthz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java\nM\tcommon/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java\nM\tcommon/src/main/java/org/keycloak/common/crypto/CryptoProvider.java\nM\tcrypto/default/src/main/java/org/keycloak/crypto/def/DefaultCryptoProvider.java\nM\tcrypto/elytron/src/main/java/org/keycloak/crypto/elytron/WildFlyElytronProvider.java\nM\tcrypto/fips1402/src/main/java/org/keycloak/crypto/fips/FIPS1402Provider.java\n",
+  "commits": "79d11c4 Add AuthzClientCryptoProvider to authz-client in keycloak main repository closes #33831\n"
+}

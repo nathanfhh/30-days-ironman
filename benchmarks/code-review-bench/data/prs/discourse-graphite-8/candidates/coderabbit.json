@@ -1,0 +1,12 @@
+[
+  "totalPages calculation has off-by-one error when user_count is a multiple of limit - Math.floor(user_count / limit) + 1 yields an extra page for exact multiples, should use Math.ceil instead",
+  "next() function allows navigating to an empty page by clamping offset to user_count instead of the last valid offset",
+  "Usernames are not normalized before lookup in add_members - whitespace or blank entries will silently skip valid users",
+  "Pagination params limit and offset are not clamped - negative or very large values can trigger heavy queries or odd behavior",
+  "Test for automatic-group remove_member uses PUT instead of DELETE, which won't validate verb correctness",
+  "Guard condition in group/members.hbs checks model but loop iterates over members - if model is truthy but members is undefined/empty, table header renders with no rows",
+  "Stray closing </div> tag with no matching opening tag in group/members.hbs template",
+  "Route parameter mismatch - routes provide :id but controller expects :group_id, causing param is missing error",
+  "Hardcoded colors #333 and #aaa in SCSS instead of SCSS variables may break theme consistency",
+  "usernames input is not cleared after add operation, making it easy to accidentally re-add the same usernames"
+]

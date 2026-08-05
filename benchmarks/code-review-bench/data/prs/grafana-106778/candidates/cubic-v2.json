@@ -1,0 +1,6 @@
+[
+  "Guard `rules` before calling `.map()`. An empty `groups` response is valid here, and the current expression will throw instead of rendering nothing.",
+  "The 'Silence notifications' menu action is non-functional for Grafana rules in this view. `GrafanaRuleListItem` passes only `promRule` to `RuleActionsButtons`, leaving the `rule` (RulerRuleDTO) prop undefined. The silence drawer is gated on `rulerRuleType.grafana.alertingRule(rule)`, which is always falsy when `rule` is undefined \u2014 so clicking 'Silence' sets state but never renders the drawer.",
+  "Missing `key` prop on `GrafanaRuleListItem`. The other two branches (`DataSourceRuleLoader`, `UnknownRuleListItem`) pass `key={key}`, and the previous `GrafanaRuleLoader` also had it. Without a key, React cannot efficiently reconcile list items and may produce incorrect UI updates.",
+  "`canSilence` now exposes a silence action in promRule-only rows, but the click handler still requires `rulerRule`, so the menu item does nothing in the list view."
+]

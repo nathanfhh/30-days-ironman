@@ -1,0 +1,75 @@
+{
+  "slug": "discourse-graphite-2",
+  "issues": [
+    {
+      "text": "The new per-topic unsubscribe endpoint is a GET request that has a state-changing side effect (writes notification_level), giving it no CSRF protection and making it triggerable by mail-client link prefetching or a forged `<img>` tag pointing at it.",
+      "zh": "GET 端點帶副作用：`t/:slug/:topic_id/unsubscribe` 直接改寫 notification_level",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "`TopicUser.find_by` can return nil, and the very next line calls `.notification_level` on it without a nil guard, causing a 500 for any logged-in user who opens the unsubscribe link for a topic they've never interacted with.",
+      "zh": "`TopicUser.find_by` 可能回傳 nil，未防護即取用 notification_level",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "Adding `render :show` to the shared `perform_show_response` method (needed only so the new unsubscribe action has a template) changes the render timing of the existing `topics#show` action and causes its canonical link tag to disappear.",
+      "zh": "在共用的 `perform_show_response` 加上 `render :show`，使 topics#show 的 canonical link 消失",
+      "finding_id": "F-003",
+      "severity": "Critical"
+    },
+    {
+      "text": "The unsubscribe write bypasses `TopicUser.change` and saves directly, leaving `notifications_reason_id` blank; as a result the unsubscribe action gets silently auto-reverted later by `update_last_read`/`TrackedTopicsUpdater` and never broadcasts the change via MessageBus to other open tabs.",
+      "zh": "繞過 `TopicUser.change` 直接 save!，notifications_reason_id 留白，退訂會被系統自動回復",
+      "finding_id": "F-004",
+      "severity": "Critical"
+    },
+    {
+      "text": "The first click only downgrades the notification level to 'regular' (replies and mentions still notify), which contradicts both the email copy and the confirmation-page copy that promise notifications will 'stop'.",
+      "zh": "第一次點擊只降到 regular，仍會收到通知，與信件與確認頁的文案不符",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The unsubscribe link requires the user to be logged in and silently redirects unauthenticated visitors to the homepage with no message or return URL; it also doesn't reuse the repo's existing signed-key unsubscribe mechanism used elsewhere for email links.",
+      "zh": "退訂連結要求已登入，未登入的收信人會被靜默丟回首頁；未沿用既有的 signed key 機制",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new controller action, model method, and two new routes have zero test coverage; the only touched spec merely adds a now-required parameter without asserting anything about the new unsubscribe link or behavior.",
+      "zh": "新增的 action、model method 與路由完全沒有測試；唯一的 spec 改動沒有斷言新行為",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The Ember `topicUnsubscribe` route unconditionally displays a 'notifications stopped' message even when reached via a client-side transition, in which case the server unsubscribe endpoint is never actually called.",
+      "zh": "Ember 端的 topicUnsubscribe 路由無條件顯示「已停止通知」，client-side transition 時 server 從未被呼叫",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new identifier `stopNotificiationsText` contains a typo (\"Notificiations\").",
+      "zh": "`stopNotificiationsText` 拼字錯誤（Notificiations）",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "The unsubscribe redirect uses a permanent 301 status and doesn't reuse the existing `redirect_to_correct_topic` helper's handling of JSON-format requests.",
+      "zh": "轉址用 301，且未沿用 `redirect_to_correct_topic` 對 JSON 請求的處理",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does `add_unsubscribe_link: true` now implicitly require also passing `unsubscribe_url`, and should this new calling contract have an explicit guard against missing it?",
+      "zh": "`add_unsubscribe_link: true` 現在隱含要求同時傳入 `unsubscribe_url`，這個新的呼叫契約要不要有明確的守衛？"
+    },
+    {
+      "text": "After dropdown-button was changed to omit the `<h4 class='title'>` element entirely when title is empty, does this cause any layout shift for existing users of the notifications/pinned buttons?",
+      "zh": "dropdown-button 改成「title 為空就不輸出 `<h4 class='title'>`」之後，既有使用者的版面有沒有位移？"
+    }
+  ]
+}

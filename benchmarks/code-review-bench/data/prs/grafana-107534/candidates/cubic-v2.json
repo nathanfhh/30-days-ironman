@@ -1,0 +1,5 @@
+[
+  "Interpolate before filtering `query.expr`, otherwise template-only queries that resolve to an empty expression can reach the shard-splitting path and crash `runSplitQuery()`",
+  "Test assertion expects template interpolation once per shard, but the code now interpolates each target only once before splitting - assertion count should be 1 instead of 5",
+  "`request.filters` is passed to `applyTemplateVariables` but never populated in the test setup (`createRequest` in querySplitting.test.ts omits `filters`), so ad-hoc filter interpolation is untested - need test case that supplies `filters` and asserts they are forwarded correctly"
+]

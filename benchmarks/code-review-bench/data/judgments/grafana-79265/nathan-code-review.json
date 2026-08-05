@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-79265",
+  "tool": "nathan-code-review",
+  "n_golden": 5,
+  "n_candidates": 16,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 2, "confidence": 0.95,
+     "reasoning": "Both describe the missing transaction/lock between the device count check and the insert, allowing the limit to be exceeded under concurrent requests."},
+    {"golden_index": 0, "candidate_index": 15, "confidence": 0.45,
+     "reasoning": "Open question about how much the device_limit is actually overshot in a multi-instance HA deployment, presupposing and probing the same check-then-act race."},
+    {"golden_index": 3, "candidate_index": 12, "confidence": 0.55,
+     "reasoning": "Both flag that updateDevice returns ErrDeviceLimitReached when no rows were updated, noting this doesn't match what the name/doc/actual meaning would suggest."}
+  ]
+}

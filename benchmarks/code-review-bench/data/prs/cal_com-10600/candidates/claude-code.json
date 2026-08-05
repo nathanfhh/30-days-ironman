@@ -1,0 +1,7 @@
+[
+  "Dismissing the dialog (via Escape key or clicking outside) during the backup codes step bypasses the onEnable callback, causing the UI to show 2FA as disabled even though it was successfully enabled on the server because utils.viewer.me.invalidate() is never called",
+  "First e2e test never interacts with the new backup codes screen after OTP verification - it skips straight to checking the two-factor-switch without clicking backup-codes-close, so onEnable() is never called",
+  "First e2e test assertion on line 53 uses expect(Promise).toBeTruthy() which evaluates the Promise object itself (always truthy) rather than the resolved boolean - should use await expect(page.locator(...)).toBeChecked()",
+  "PasswordField on line 167 has explicit type=\"password\" prop that breaks the show/hide password toggle because {...props} spread in InputField comes after the internal type prop, causing the explicit type to always override the dynamic isPasswordVisible state",
+  "BackupCode.tsx line 7 exports function TwoFactor instead of function BackupCode - wrong function name will appear in React DevTools and error stack traces causing confusion since a real TwoFactor component already exists"
+]

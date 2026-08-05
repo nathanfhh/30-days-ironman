@@ -1,0 +1,239 @@
+{
+  "slug": "cal_com-8087",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "import-error-handling-bookings-refund",
+      "evidence": "packages/trpc/server/routers/viewer/bookings.tsx:967",
+      "reason": "Line 967 is exactly `const paymentApp = await appStore[...]` with no try/catch; the value awaited is a dynamic import() promise, which can reject where the previous synchronous property access could not. Correct but low-impact, since a rejecting app import mostly means a broken build."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "handlecancel-refund-outside-try",
+      "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:589-602",
+      "reason": "Confirmed by reading the file: `await appStore[...]` (589), `const PaymentService` (594) and `new PaymentService(...)` (595) all sit above the `try { await paymentInstance.refund(...) } catch { handleRefundError(...) }` that starts at 596, so a failure in app resolution or construction bypasses handleRefundError entirely."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "appstore-list-no-sync-test",
+      "evidence": "packages/app-store/index.ts; packages/app-store/apps.server.generated.ts",
+      "reason": "index.ts does contain exactly 28 hand-written entries, and the sibling apps.server.generated.ts is machine-generated from the full app list; grepping the repo for tests touching appStore or app-store/index turns up nothing, so nothing keeps the two in sync. Pre-existing condition, but this PR rewrites that list wholesale."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "import-error-handling-handlepayment",
+      "evidence": "packages/lib/payment/handlePayment.ts:26",
+      "reason": "Line 26 is the awaited appStore lookup and there is no try/catch anywhere in handlePayment; the only guard is the `\"lib\" in paymentApp` shape check, which handles undefined but not a rejected import promise."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "unclear",
+      "confidence": 0.9,
+      "severity": null,
+      "cluster": "unhandled-rejection-runtime-behaviour",
+      "evidence": "packages/app-store/index.ts (module-scope import() promises)",
+      "reason": "Whether an unhandled rejection is swallowed, logged, or fatal depends on the Node version, --unhandled-rejections flag and the Next.js/Vercel process wrapper actually used in production. Settling it needs the deployment's runtime config or an actual run, neither of which is available here."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "apideletes-push-resolved-value",
+      "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:466-467, 652",
+      "reason": "`const deletedEvent = await calendar?.deleteEvent(...)` then `apiDeletes.push(deletedEvent)` pushes an already-resolved value, and because the enclosing `.forEach(async ...)` is detached the push typically happens after `await Promise.all(prismaPromises.concat(apiDeletes))` at line 652 has already run. The line itself is unchanged context inside a hunk this PR modifies."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "import-error-handling-deletepayment",
+      "evidence": "packages/lib/payment/deletePayment.ts:16",
+      "reason": "Line 16 is the awaited appStore lookup; deletePayment has no try/catch and returns `false` only on the shape check, so a rejected dynamic import propagates out of a function typed `Promise<boolean>`."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "foreach-async-fire-and-forget-general",
+      "evidence": "packages/app-store/vital/lib/reschedule.ts:125; packages/app-store/wipemycalother/lib/reschedule.ts:125; packages/trpc/server/routers/viewer/bookings.tsx:553; packages/features/bookings/lib/handleCancelBooking.ts:460",
+      "reason": "The PR converts three `forEach((ref) => ...)` callbacks into `forEach(async (ref) => ...)`; forEach discards the returned promises, so the deletes are detached and the surrounding try/catch in the two reschedule.ts files can no longer catch anything (a rejection is now async rather than a synchronous throw). The mention of payment refunds is an overreach — the refund paths are not inside a forEach — but the calendar/video part is accurate at four sites."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "calendar-field-is-promise",
+      "evidence": "packages/core/CalendarManager.ts:23-35, 47",
+      "reason": "getCalendarCredentials stays synchronous and stores the unawaited `getCalendar(credential)` result, so the field named `calendar` now holds `Promise<Calendar | null>`; getConnectedCalendars had to add `const calendar = await item.calendar` at line 47 to compensate. Both current consumers (viewer.tsx, apps/web/pages/api/availability/calendar.ts) go through getConnectedCalendars, so nothing is broken today — it is a naming/clarity hazard."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "foreach-async-wipemycal-reschedule",
+      "evidence": "packages/app-store/wipemycalother/lib/reschedule.ts:125-134",
+      "reason": "Read the file: `bookingRefsFiltered.forEach(async (bookingRef) => { ... await getCalendar(...); return calendar?.deleteEvent(...) })` inside a try/catch that now catches nothing, and the function proceeds to send reschedule emails without waiting for the deletions. Same shape as vital/lib/reschedule.ts but a separate file needing its own fix."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "await-in-loop-getvideoadapters",
+      "evidence": "packages/core/videoClient.ts:21-35; packages/app-store/index.ts",
+      "reason": "The premise is wrong: every `import()` in appStore is invoked when index.ts is evaluated, so all module loads are already in flight before getVideoAdapters runs. `await appStore[appName]` awaits an already-pending promise, and `makeVideoApiAdapter(cred)` is synchronous, so the loop does not serialize any loading."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "handlecancel-refund-outside-try",
+      "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:589",
+      "reason": "Line 589 is the awaited appStore lookup and it sits above the try block at 596; the same fix (moving the try upward) closes this and c002."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "eager-dynamic-imports",
+      "evidence": "packages/app-store/index.ts:1-31",
+      "reason": "The object literal invokes `import(...)` for all 28 entries at module-evaluation time, storing promises; nothing defers them. Anything that imports appStore therefore kicks off every provider load at once, which defeats the on-demand loading the change is shaped to provide. Thunks (`() => import(...)`) would be the actual fix."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "import-error-handling-createevent",
+      "evidence": "packages/core/CalendarManager.ts:233",
+      "reason": "Line 233 is `const calendar = await getCalendar(credential);` in createEvent, outside any try/catch — the function only has `.catch()` handlers on the later `calendar.createEvent(...)` call, so a rejected import escapes before any of that logging runs."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "Low",
+      "cluster": "import-error-handling-generic",
+      "evidence": "packages/app-store/_utils/getCalendar.ts:15 and the five other `await appStore[...]` sites",
+      "reason": "Factually true of every await this PR introduces — none of the six `await appStore[...]` sites is wrapped — but the claim names no file, line or function, so it is the weakest possible form of a correct observation."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "eager-dynamic-imports",
+      "evidence": "packages/app-store/index.ts:1-31",
+      "reason": "Same defect as c013 stated differently: the import() calls are evaluated eagerly as object-literal property values, so importing appStore starts every provider load rather than deferring it."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "calendar-field-is-promise",
+      "evidence": "packages/core/CalendarManager.ts:23-35",
+      "reason": "Correct that getCalendarCredentials is still synchronous while its `calendar` field is now `Promise<Calendar | null>`. The 'unchanged type alias' wording is slightly off — consumers use `ReturnType<typeof getCalendarCredentials>`, which is inferred and updates automatically — but the misleading-field-name point stands."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "commented-example-path",
+      "evidence": "packages/app-store/index.ts:2",
+      "reason": "The comment reads `// example: import(\"./example\"),`; neither packages/app-store/example nor packages/app-store/_example exists (the old commented import pointed at `./_example`). Harmless because it is a comment, but the path is wrong and now differs from what it replaced."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "await-in-loop-getvideoadapters",
+      "evidence": "packages/core/videoClient.ts:24-33",
+      "reason": "Accurate on both halves: today the `await appStore[appName]` inside the for loop awaits promises already started at module evaluation, so it costs nothing; if the eager imports were converted to thunks the same loop would load modules strictly one after another."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "import-error-handling-getcalendar",
+      "evidence": "packages/app-store/_utils/getCalendar.ts:15",
+      "reason": "Line 15 is the awaited appStore lookup; the function returns null for unknown types via the shape check on line 16 but has no handling for a rejected import promise, and several callers invoke it from detached async callbacks where such a rejection is unhandled."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "unclear",
+      "confidence": 0.9,
+      "severity": null,
+      "cluster": "cold-start-bundle-impact-unmeasured",
+      "evidence": "packages/app-store/index.ts",
+      "reason": "Answering this needs a build and a deployment to measure chunk sizes and cold-start time; there is no node_modules and no network in this checkout, so nothing can be built or profiled."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "foreach-async-wipemycal-reschedule",
+      "evidence": "packages/app-store/wipemycalother/lib/reschedule.ts:128",
+      "reason": "Line 128 is `const calendar = await getCalendar(...)` inside the `forEach(async ...)` callback; because forEach drops the callback's promise, a rejection there is unhandled and the enclosing try/catch at 124-139 never sees it. Same defect and same fix as c010."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "foreach-async-vital-reschedule",
+      "evidence": "packages/app-store/vital/lib/reschedule.ts:125-134",
+      "reason": "Confirmed in the file: the callback was changed to `async` by this PR, forEach ignores the returned promise, and execution continues to sendRequestRescheduleEmail without the deletes having completed. Distinct file from wipemycalother, so it needs its own fix."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "apideletes-push-resolved-value",
+      "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:466-467, 652",
+      "reason": "The described code exists and `await Promise.all(prismaPromises.concat(apiDeletes))` is at line 652 as quoted; the cited line number is off (the push is at 467, 458 is the start of the enclosing block) and the line is unchanged context, but the substance is correct."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "foreach-async-vital-reschedule",
+      "evidence": "packages/app-store/vital/lib/reschedule.ts:128",
+      "reason": "Line 128 is the awaited getCalendar inside the detached `forEach(async ...)` callback, so a rejection cannot reach the try/catch wrapping the forEach. Same underlying defect as c023."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "unclear",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "tsc-still-passes",
+      "evidence": "6 sites: getCalendar.ts:15, videoClient.ts:26, handleCancelBooking.ts:589, bookings.tsx:967, deletePayment.ts:16, handlePayment.ts:26",
+      "reason": "The premise checks out — grep finds exactly six `await appStore[...]` sites, and the awaited value is a union of 28 module-namespace types narrowed by `in` checks. Whether that still type-checks (especially `new CalendarService(credential)` on a union of constructors) needs tsc, and this checkout has no node_modules and no network."
+    }
+  ]
+}

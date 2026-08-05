@@ -1,0 +1,6 @@
+[
+  "Password verification can be bypassed when a crafted request includes both a valid backupCode and any truthy totpCode value. The password check on line 121 is skipped when totpCode is present, but the backup code branch still runs and grants authentication. An attacker with a stolen backup code can log in without knowing the password.",
+  "Store backup codes as one-way hashes instead of a reversible encrypted blob",
+  "Race condition: the backup code read, validation, and invalidation are not atomic. Two concurrent requests can both validate and consume the same backup code, because the findUnique and update are separate queries with no transaction or lock.",
+  "Backup code comparison via indexOf is case-sensitive. If codes contain letters, users who type them in the wrong case will be rejected. Normalize both sides to the same case before comparing."
+]

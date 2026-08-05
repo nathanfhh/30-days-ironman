@@ -1,0 +1,5 @@
+[
+  "Using AuthzClient.class.getClassLoader() may miss CryptoProvider implementations visible via the thread context classloader, which could cause CryptoIntegration to not find the intended provider in modular/container setups",
+  "getBouncyCastleProvider() returns the provider of the default KeyStore type which is typically not a BouncyCastle provider, causing BouncyIntegration.PROVIDER to be derived incorrectly and potentially pinning crypto operations to an unexpected provider with missing algorithms",
+  "concatenatedRSToASN1DER() assumes signature.length == signLength without validation, which can throw ArrayIndexOutOfBoundsException instead of IOException for malformed/untrusted signatures"
+]

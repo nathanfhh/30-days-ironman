@@ -1,0 +1,5 @@
+[
+  "Returning `null` violates the `GroupModel.getSubGroupsCount()` contract which specifies 'Never returns `null`'. Callers that unbox the `Long` return value will get an NPE. Should throw an `IllegalStateException` when the model is missing, or return `0L` as a safe default.",
+  "Set the stop flag from a `finally` block; otherwise a failed delete leaves the polling thread running indefinitely.",
+  "Synchronize with the reader thread before asserting; as written the test can pass without ever performing a concurrent read and can miss late failures."
+]

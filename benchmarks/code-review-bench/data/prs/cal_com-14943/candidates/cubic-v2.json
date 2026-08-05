@@ -1,0 +1,4 @@
+[
+  "The retryCount is incremented using the stale in-memory value (reminder.retryCount + 1) rather than an atomic database operation. If this cron handler runs concurrently or the same reminder is processed twice, both executions read the same retryCount and write the same incremented value, losing one update. Should use Prisma's atomic increment instead: retryCount: { increment: 1 }",
+  "The retry-count cleanup is not scoped to SMS reminders. As written, any reminder with retryCount > 1 will be deleted, including EMAIL and WHATSAPP rows"
+]

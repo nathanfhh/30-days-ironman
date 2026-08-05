@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-107534",
+  "tool": "nathan-code-review",
+  "n_golden": 1,
+  "n_candidates": 6,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.7,
+      "reasoning": "Both flag that the newly passed request.filters argument to applyTemplateVariables is not exercised by the new test setup."
+    }
+  ]
+}

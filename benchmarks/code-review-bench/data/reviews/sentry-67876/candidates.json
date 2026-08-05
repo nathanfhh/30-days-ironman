@@ -1,0 +1,111 @@
+{
+  "slug": "sentry-67876",
+  "issues": [
+    {
+      "text": "The OAuth state parameter is pipeline.signature, a value derived only from the pipeline view class names — a global constant that is identical for every user, every installation, and (since Sentry is open source) can be computed by anyone offline — so the state comparison provides no CSRF protection at all.",
+      "zh": "OAuth state 用的是全域固定常數，state 比對等於沒有比對。",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "integration.metadata[\"sender\"][\"login\"] is indexed directly without checking the key exists, even though the codebase's own GitHubIntegrationsInstallationEndpoint explicitly guards against sender being absent from metadata — when an Integration exists as ACTIVE but has no OrganizationIntegration and sender is missing, this raises an unhandled KeyError that surfaces as an HTTP 500 instead of the intended error page.",
+      "zh": "integration.metadata[\"sender\"] 直接下標，缺 key 時會 KeyError 變成 500。",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "The new identity check only covers the case where the Integration already exists; the Integration.DoesNotExist branch (the first-install path, before the installation.created webhook lands) returns pipeline.next_step() directly with no identity check at all, so this path can bind an installation to an organization without any verification of who owns it.",
+      "zh": "身分檢查沒有覆蓋首次安裝路徑：Integration 不存在時直接放行。",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The calls to get_user_info() and safe_urlopen() in the new OAuth flow have no exception handling, so a non-2xx response from GitHub or a connection error surfaces as an unhandled exception (HTTP 500) instead of the intended github-integration-failed.html error page, unlike the existing OAuth2CallbackView which handles these cases.",
+      "zh": "get_user_info 與 safe_urlopen 的例外沒有接，會變成 500 而不是錯誤頁。",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The GitHub authorize URL is built by string concatenation/f-string instead of urlencode, so redirect_uri is not percent-encoded, and the test suite locks in the unencoded string as the expected value.",
+      "zh": "authorize URL 以字串串接組成，redirect_uri 未做百分比編碼。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "OAuthLoginView never calls pipeline.bind_state(\"subdomain\", ...) the way OAuth2LoginView does, so PipelineAdvancerView's existing customer-domain restoration branch is permanently a no-op for the GitHub install flow — a user starting from a customer subdomain won't be routed back to it after the GitHub OAuth round trip.",
+      "zh": "沒有 bind_state(\"subdomain\")，customer domain 的回程還原分支永遠不會觸發。",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "test_installation_not_found passes a state value that doesn't match pipeline.signature, so the request is now rejected at the state-comparison step and never reaches the 404-installation-not-found code path its name and original assertion claim to test.",
+      "zh": "test_installation_not_found 已經測不到它名字宣稱的路徑。",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "_(error_short) applies gettext to a variable instead of a literal string, so Django's makemessages (which only scans literal strings) can no longer extract these three user-facing messages into the translation catalog, and they silently fall back to English at runtime.",
+      "zh": "_(error_short) 對變數取 gettext，三段使用者可見訊息會從翻譯檔消失。",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The identity comparison uses the mutable GitHub login instead of the immutable sender id that's already available from the webhook payload and the /user response, so a renamed account can be locked out of its own re-install, and if the old login is later claimed by a third party, that party's login can match the stored value.",
+      "zh": "身分比對用可變的 login，而不是 webhook 已經存下來的不可變 sender id。",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The same Integration row is queried twice within the same request (once to check installations_exist, once with a status filter to get the object) with no write in between.",
+      "zh": "同一個 Integration 在同一個 request 內被查了兩次。",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "The new error(), get_document_origin(), and OAuthLoginView.dispatch functions lack type annotations, unlike the existing functions in the same file.",
+      "zh": "新增的 error()、get_document_origin()、OAuthLoginView.dispatch 缺型別標註。",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "The hardcoded OAuth state value is duplicated as a literal string across five places in the test file, so any change to the pipeline view composition requires updating all five occurrences with no clear failure message pointing at the real cause.",
+      "zh": "urlencode({\"code\": ..., \"state\": \"9cae5e88803f35ed7970fc131e6e65d3\"}) 這段在檔案裡出現五次。",
+      "finding_id": "F-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "One test asserts against responses.calls[2] by positional index, which will silently start validating the wrong HTTP call the moment another stub request is inserted earlier in the flow.",
+      "zh": "responses.calls[2] 用位置索引取請求。",
+      "finding_id": "F-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "Multiple tests assign resp = self.client.get(...) and then immediately overwrite that variable with a second call before the first response is ever read or asserted on.",
+      "zh": "resp = self.client.get(...) 指派後立刻被下一行覆寫，第一個 resp 從未被讀取。",
+      "finding_id": "F-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "Adding a view to the pipeline changes Pipeline.signature, so at deploy time every GitHub install session already in progress becomes invalid and the user is bounced back to the start.",
+      "zh": "pipeline 多一個 view 會改變 signature，部署當下進行中的安裝 session 全數失效。",
+      "finding_id": "F-013",
+      "severity": "Nit"
+    },
+    {
+      "text": "pipeline_advancer.py has a pre-existing ruff E402 (import not at top of file) that is now trivial to fix since this change moved away the code block that used to sit above it.",
+      "zh": "pipeline_advancer.py 的 E402：import 仍卡在檔案中段，但擋住它的區塊已經被這次變更移走。",
+      "finding_id": "F-014",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Whether an attacker can reliably win the race against GitHub's installation.created webhook landing before the pipeline completes, which determines whether the unchecked Integration.DoesNotExist path (F-003) is practically exploitable.",
+      "zh": "在真實環境中，攻擊者能否穩定地趕在 GitHub 的 installation.created webhook 落地之前完成 pipeline，從而走 F-003 描述的未檢查路徑？"
+    },
+    {
+      "text": "Whether, for organizations with customer domains enabled, the pipeline session and active-organization resolution still work correctly after the round trip through GitHub lands back on the main domain.",
+      "zh": "對啟用 customer domain 的 organization，經過 GitHub 往返後回到主網域，pipeline session 與 active organization 是否仍然解析正確？"
+    }
+  ]
+}

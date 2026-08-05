@@ -1,0 +1,13 @@
+[
+  "minimumTokenResponseSchema uses computed keys ([z.string().toString()]), which will literally create keys like \"[object Object]\" and won't validate arbitrary numeric expiry fields as intended; safeParse will likely fail for real token responses",
+  "parseRefreshTokenResponse switches to minimumTokenResponseSchema whenever credential sharing + sync endpoint are configured, even when the refresh call is still hitting the third-party provider (e.g., team credentials), so valid provider responses can be parsed against the wrong schema",
+  "Setting a missing refresh_token to the literal string \"refresh_token\" can overwrite a previously valid refresh token when callers merge/store .data, which would break subsequent refreshes",
+  "refreshOAuthTokens returns a fetch Response when syncing is enabled but returns whatever refreshFunction() returns otherwise (axios/hubspot/google responses), so downstream code can break depending on env",
+  "res?.data assumes a Gaxios-style response, but when refreshOAuthTokens uses fetch it returns a Response without .data, so token.access_token/token.expiry_date will be undefined and refresh will fail",
+  "parseRefreshTokenResponse returns a Zod safeParse result object, so data: { key } would persist { success, data, ... } instead of the credential JSON payload",
+  "When syncing is enabled, refreshOAuthTokens returns a Response, but this code treats it as a HubspotToken and immediately reads expiresIn/accessToken, which will throw at runtime",
+  "refreshOAuthTokens's third argument is userId, but this call passes credentialId; if syncing is enabled it will POST the wrong calcomUserId and likely refresh the wrong account",
+  "appCredentialWebhookRequestBodySchema.parse (and the subsequent JSON.parse) can throw and return a 500 for malformed requests; without a method guard this endpoint is also callable via non-POST methods",
+  "APP_CREDENTIAL_SHARING_ENABLED resolves to a string/undefined (due to &&), not a boolean; any code that expects a strict boolean may behave unexpectedly",
+  "After refreshing and storing the new Salesforce access token, the jsforce.Connection is still initialized from the pre-refresh credentialKey values, so immediate API calls may use an expired token"
+]

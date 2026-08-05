@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-8",
+  "tool": "cubic-v2",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Same issue: findMembers() is called without awaiting/returning the promise, so the template can render before members load."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.7,
+      "reasoning": "Same off-by-one pagination defect: an exact multiple of limit yields an extra, empty last page (the golden's 2/2-with-no-members case)."
+    }
+  ]
+}

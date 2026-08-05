@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-67876",
+  "tool": "cubic-v2",
+  "n_golden": 3,
+  "n_candidates": 5,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 2, "confidence": 0.9,
+     "reasoning": "Both identify that fetch_state('github_authenticated_user') / the state can be None and is used without a null check."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both identify OAuth state using the static/deterministic pipeline.signature instead of a per-request random nonce, a CSRF concern."},
+    {"golden_index": 2, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both identify integration.metadata['sender']['login'] access raising a KeyError when sender metadata was not set during integration creation."}
+  ]
+}

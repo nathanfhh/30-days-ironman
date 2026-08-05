@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-90939",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/90939",
+  "pr_title": "Frontend Asset Optimization",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR90939__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR90939__20260122.git",
+  "base_sha": "cca9dee702ac4338ddc38aa56257273b8143e32e",
+  "head_sha": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "stat": " pkg/api/webassets/webassets.go | 16 +++++++++++++---\n 1 file changed, 13 insertions(+), 3 deletions(-)\n",
+  "name_status": "M\tpkg/api/webassets/webassets.go\n",
+  "commits": "b1613e32 fix data race in GetWebAssets\n"
+}

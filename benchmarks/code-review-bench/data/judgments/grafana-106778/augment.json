@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-106778",
+  "tool": "augment",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "GrafanaRuleListItem rendered without a key prop even though key is available from ruleWithOrigin."
+    }
+  ]
+}

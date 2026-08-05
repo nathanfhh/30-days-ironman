@@ -1,0 +1,5 @@
+[
+  "MetricAlertDetectorHandler subclasses StatefulDetectorHandler but doesn't implement any of the four abstract methods (counter_names, get_dedupe_value, get_group_key_values, build_occurrence_and_event_data), making the class uninstantiable at runtime with TypeError",
+  "TestEvaluateGroupKeyValue.test_dedupe passes wrong group key ('val1') to build_mock_occurrence_and_event, causing fingerprint mismatch with the key ('group_key') passed to evaluate_group_key_value, breaking the assertion",
+  "Stale docstring in detector.py still references 'list' but the method now returns a dict[DetectorGroupKey, DetectorEvaluationResult]"
+]

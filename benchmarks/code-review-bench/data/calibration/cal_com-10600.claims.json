@@ -1,0 +1,173 @@
+{
+  "slug": "cal_com-10600",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "A new object URL is created for `backupCodesUrl`, but it's only revoked when generating a new one; if the modal is closed/reset without another setup run, the object URL can leak and keep the blob alive longer than intended"
+    },
+    {
+      "claim_id": "c002",
+      "text": "Password visibility toggle button has tabIndex={-1} which removes it from keyboard navigation, causing accessibility regression for keyboard-only users"
+    },
+    {
+      "claim_id": "c003",
+      "text": "Password verification can be bypassed at login: authorize() skips the password check whenever totpCode is non-empty, and the new backup-code branch never validates totpCode, so an attacker with an email and one valid backup code plus any arbitrary totpCode logs in without knowing the password."
+    },
+    {
+      "claim_id": "c004",
+      "text": "The two new error codes (IncorrectBackupCode, MissingBackupCodes) are handled by ad-hoc else-if branches instead of being added to the file's existing errorMessages map, leaving two competing lookup mechanisms in one file."
+    },
+    {
+      "claim_id": "c005",
+      "text": "Test suite doesn't cover login-with-backup-code, disable-via-backup-code, or sequential reuse failure, so the recovery path can regress without CI noticing"
+    },
+    {
+      "claim_id": "c006",
+      "text": "Migration timestamp 20230804153419 is older than existing migrations like 20230828094603, causing Prisma migration-order drift across environments"
+    },
+    {
+      "claim_id": "c007",
+      "text": "The render was changed to an unparenthesised nested ternary (twoFactorRequired ? !twoFactorLostAccess ? <TwoFactor/> : <BackupCode/> : null), which is a level harder to read than the previous conditional."
+    },
+    {
+      "claim_id": "c008",
+      "text": "Password verification can be bypassed when a crafted request includes both a valid backupCode and any truthy totpCode value. The password check on line 121 is skipped when totpCode is present, but the backup code branch still runs and grants authentication. An attacker with a stolen backup code can log in without knowing the password."
+    },
+    {
+      "claim_id": "c009",
+      "text": "JSON.parse(symmetricDecrypt(...)) is called with no try/catch and no check that the result is an array, unlike the TOTP branch in the same handler which validates the decrypted secret; after a key rotation the user gets an ErrorCode-less 500 with nothing in the logs."
+    },
+    {
+      "claim_id": "c010",
+      "text": "onEnable() was moved behind the Close button of the final step, so closing the dialog with Esc or an outside click leaves 2FA enabled on the server while the client cache (and the Switch) still shows it disabled; the parent's onOpenChange never invalidates the query."
+    },
+    {
+      "claim_id": "c011",
+      "text": "resetState() runs only from the Cancel and Close buttons, so dismissing the dialog with Esc leaves step stuck at DisplayBackupCodes without unmounting the component; reopening the modal shows the previous round's backup codes instead of starting over."
+    },
+    {
+      "claim_id": "c012",
+      "text": "The backup-code verification paths have no test coverage at all: nothing tests that logging in with a backup code succeeds, that reusing the same code fails (single use), or that disabling 2FA with a backup code works; the new e2e test only checks the display/download/copy UI."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Once all ten codes are consumed, user.backupCodes is still a non-empty ciphertext of [null,null,...], so the `if (!user.backupCodes)` MissingBackupCodes check never fires and the user is told the backup code is incorrect rather than that all codes have been used."
+    },
+    {
+      "claim_id": "c014",
+      "text": "useState([]) without a type argument infers backupCodes as never[], so the state carries no real type protection; it should be useState<string[]>([])."
+    },
+    {
+      "claim_id": "c015",
+      "text": "Backup codes are stored with reversible symmetric encryption (AES-256 under the single site-wide CALENDSO_ENCRYPTION_KEY) instead of being hashed, even though they only ever need equality comparison; anyone with a DB dump plus the key can read every user's backup codes."
+    },
+    {
+      "claim_id": "c016",
+      "text": "Backup codes are stored as decryptable ciphertext using symmetricEncrypt instead of one-way hashes, making them recoverable if DB and app key material are exposed"
+    },
+    {
+      "claim_id": "c017",
+      "text": "PasswordField on line 167 has explicit type=\"password\" prop that breaks the show/hide password toggle because {...props} spread in InputField comes after the internal type prop, causing the explicit type to always override the dynamic isPasswordVisible state"
+    },
+    {
+      "claim_id": "c018",
+      "text": "resetState doesn't clear backupCodes or backupCodesUrl - if user cancels mid-flow, stale values remain in state and previous object URL isn't revoked"
+    },
+    {
+      "claim_id": "c019",
+      "text": "Backup code validation is case-sensitive due to the use of indexOf(). This causes validation to fail if a user enters uppercase hex characters, as backup codes should be case-insensitive for a better user experience."
+    },
+    {
+      "claim_id": "c020",
+      "text": "Error message mentions 'backup code login' but this is a disable endpoint, not login"
+    },
+    {
+      "claim_id": "c021",
+      "text": "First e2e test never interacts with the new backup codes screen after OTP verification - it skips straight to checking the two-factor-switch without clicking backup-codes-close, so onEnable() is never called"
+    },
+    {
+      "claim_id": "c022",
+      "text": "Because backupCodes are decrypted and mutated in memory before being written back, two concurrent login requests using the same backupCode could both pass this check and update, so a single backup code may effectively be accepted more than once if used concurrently, weakening the intended one-time-use semantics."
+    },
+    {
+      "claim_id": "c023",
+      "text": "Renders an `<a>` wrapping a `Button` that becomes a `<button>`, which creates nested interactive elements (`<a><button>\u2026`). This can cause inconsistent click/keyboard behavior and is invalid HTML semantics"
+    },
+    {
+      "claim_id": "c024",
+      "text": "Should a successful backup-code login notify the user by email or leave an audit record, and prompt them to regenerate? Currently the used code is just marked null, with no notification and no audit log, so a stolen backup code leaves the victim no way to notice."
+    },
+    {
+      "claim_id": "c025",
+      "text": "The backup-code input constrains only minLength={10}/maxLength={11}, which admits 11 characters without a dash, 10 characters containing a dash, and any non-hex content; a pattern expressing the real format would give the user a specific error instead of a generic 'incorrect'."
+    },
+    {
+      "claim_id": "c026",
+      "text": "The backup code is compared with Array.prototype.indexOf, a short-circuiting non-constant-time comparison; hashing plus timingSafeEqual would remove the timing side channel at almost no cost."
+    },
+    {
+      "claim_id": "c027",
+      "text": "`navigator.clipboard.writeText(...)` isn't awaited/handled, so the success toast can show even if the clipboard write fails (e.g., permissions/unsupported environment)"
+    },
+    {
+      "claim_id": "c028",
+      "text": "SSO users still can't authenticate with backup codes because guards only exempt totpCode - a Google/SAML user submitting backupCode will hit ThirdPartyIdentityProviderEnabled or IncorrectEmailPassword before the backup-code branch runs"
+    },
+    {
+      "claim_id": "c029",
+      "text": "When totpEmail is present the login page switches to ExternalTotpFooter, so SAML/Google users never see the new backup-code entry point and can still be locked out after losing their authenticator"
+    },
+    {
+      "claim_id": "c030",
+      "text": "Store backup codes as one-way hashes instead of a reversible encrypted blob"
+    },
+    {
+      "claim_id": "c031",
+      "text": "locator.isChecked() returns a Promise<boolean>, so expect(locator.isChecked()).toBeTruthy() only asserts that a Promise object exists, not its resolved value - should use data-state attribute check instead"
+    },
+    {
+      "claim_id": "c032",
+      "text": "`JSON.parse(symmetricDecrypt(...))` can throw (or return a non-array) if `backupCodes` is corrupted/unexpected, which would crash the authorize/disable flow with a 500. Consider guarding parse/decrypt errors and validating the decoded shape before using `indexOf`"
+    },
+    {
+      "claim_id": "c033",
+      "text": "The assertion expect(locator.isChecked()).toBeTruthy() always passes because isChecked() returns a Promise (always truthy); it was only annotated with a FIXME rather than fixed, even though the correct form already exists in the same file."
+    },
+    {
+      "claim_id": "c034",
+      "text": "req.body.backupCode is used as a string without any type or schema validation, so a non-string value such as a number or array passes the truthy check and then throws a TypeError at .replaceAll(), returning a 500 instead of a 400 with an ErrorCode."
+    },
+    {
+      "claim_id": "c035",
+      "text": "Is the duplicate 2FA modal set under apps/web/components/security/ dead code? If it is still reachable, why was it not updated alongside apps/web/components/settings/ \u2014 users going through it would enable 2FA and never receive backup codes."
+    },
+    {
+      "claim_id": "c036",
+      "text": "The standalone <Label> has no htmlFor and the TextField is passed label=\"\", so the input has no correctly associated label and screen readers announce an empty string."
+    },
+    {
+      "claim_id": "c037",
+      "text": "Same case-sensitivity bug exists in the disable flow at apps/web/pages/api/auth/two-factor/totp/disable.ts - indexOf comparison without lowercasing user input will block users from disabling 2FA via backup code"
+    },
+    {
+      "claim_id": "c038",
+      "text": "URL.createObjectURL is only revoked when a new one replaces it; the last blob URL, whose contents are the ten plaintext backup codes, is never revoked on unmount or in resetState and lives until the tab is closed."
+    },
+    {
+      "claim_id": "c039",
+      "text": "The exported function TwoFactor handles backup codes and is in BackupCode.tsx. Inconsistent naming."
+    },
+    {
+      "claim_id": "c040",
+      "text": "First e2e test assertion on line 53 uses expect(Promise).toBeTruthy() which evaluates the Promise object itself (always truthy) rather than the resolved boolean - should use await expect(page.locator(...)).toBeChecked()"
+    },
+    {
+      "claim_id": "c041",
+      "text": "Dismissing the dialog (via Escape key or clicking outside) during the backup codes step bypasses the onEnable callback, causing the UI to show 2FA as disabled even though it was successfully enabled on the server because utils.viewer.me.invalidate() is never called"
+    },
+    {
+      "claim_id": "c042",
+      "text": "There is no way to regenerate backup codes: they are only produced in setup.ts, which rejects users who already have 2FA enabled, and the settings UI shows neither a regenerate action nor how many codes remain."
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "slug": "discourse-graphite-8",
+  "tool": "coderabbit",
+  "n_golden": 3,
+  "n_candidates": 10,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.8,
+      "reasoning": "Same off-by-one producing an extra empty page when user_count is a multiple of limit."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Exactly the golden's point: next() clamps offset to user_count instead of the last valid offset, landing on an empty page."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 4,
+      "confidence": 0.95,
+      "reasoning": "Same issue: the remove_member test uses PUT instead of DELETE."
+    }
+  ]
+}

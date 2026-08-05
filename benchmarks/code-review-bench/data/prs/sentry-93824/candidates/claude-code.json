@@ -1,0 +1,8 @@
+[
+  "isinstance(process, multiprocessing.Process) is always False for SpawnProcess objects created via get_context('spawn').Process(), since SpawnProcess inherits from BaseProcess, not multiprocessing.Process, causing process.kill() and process.terminate() to never be called",
+  "The break at line 340 exits the entire for loop when the deadline expires, so terminate() is skipped for all remaining processes even if the isinstance bug were fixed",
+  "process.kill() in _ensure_processes_alive is a regression since the pre-PR code called it unconditionally, meaning unhealthy/hung processes are now never killed before spawning a replacement",
+  "_create_process_for_shard (singular, line 127) is defined but never called anywhere - it's dead code that should be removed",
+  "Having both _create_process_for_shard and _create_process_for_shards methods with near-identical names is confusing for future maintainers",
+  "Typo on line 199: tags={'shards': shard_tag} should be tags={'shard': shard_tag} (singular) to match the other two metrics on lines 186 and 195, causing dashboards filtering by the shard tag to silently miss the wait_produce timer"
+]

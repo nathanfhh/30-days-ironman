@@ -1,0 +1,7 @@
+[
+  "StringIndexOutOfBoundsException in diagnostic substring calculation when sanitized shares a common suffix with value that extends past start (start + end >= value.length()), causing value.substring(start, value.length() - end) to throw and crash the Maven goal",
+  "RuntimeException thrown instead of MojoExecutionException on I/O failure in verifySafeHtml, causing confusing stack trace instead of clean error message",
+  "Instance fields POLICY_SOME_HTML, POLICY_NO_HTML, and HTML_TAGS should be static final to avoid allocating new HtmlPolicyBuilder, PolicyFactory, and compiled Pattern for every VerifyMessageProperties instance",
+  "ISO-8859-1 encoding used for potentially UTF-8 properties files when using PropertyResourceBundle(FileInputStream), causing garbled content and potential false positives for non-Latin locales",
+  "Typo in method name: santizeAnchors should be sanitizeAnchors"
+]

@@ -1,0 +1,6 @@
+[
+  "Case-sensitive backup code comparison will reject valid codes - indexOf lookup is strict string comparison but stored codes are always lowercase hex, so uppercase user input won't match",
+  "Same case-sensitivity bug exists in the disable flow at apps/web/pages/api/auth/two-factor/totp/disable.ts - indexOf comparison without lowercasing user input will block users from disabling 2FA via backup code",
+  "Exported function in BackupCode.tsx is named TwoFactor instead of BackupCode, same name as TOTP component making navigation and stack traces confusing",
+  "resetState doesn't clear backupCodes or backupCodesUrl - if user cancels mid-flow, stale values remain in state and previous object URL isn't revoked"
+]

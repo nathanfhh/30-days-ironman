@@ -1,0 +1,4 @@
+[
+  "Returning null in GroupAdapter#getSubGroupsCount() violates the GroupModel#getSubGroupsCount() contract which states it never returns null, potentially moving the NPE to callers",
+  "Background reader thread is never joined and deletedAll isn't set in a finally block, so a failure during deletion could leave a non-daemon thread running and potentially hang/flake the test suite"
+]

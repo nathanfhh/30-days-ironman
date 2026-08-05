@@ -1,0 +1,20 @@
+{
+  "slug": "grafana-97529",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.93,
+      "reasoning": "Removing the global cacheMu lock lets two goroutines enter BuildIndex concurrently for the same key."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.8,
+      "reasoning": "TotalDocs iterates b.cache without holding cacheMu, racing with concurrent BuildIndex writes — same data race, different trigger cited."
+    }
+  ]
+}

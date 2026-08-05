@@ -1,0 +1,4 @@
+[
+  "tagDeviceUI() sets the local cache entry BEFORE the CreateOrUpdateDevice DB call. When the device limit is reached, the first request from a new device poisons the cache and fails auth, but the second request within 29 minutes hits the cache, returns nil (no error), and bypasses the device limit entirely. Fix by moving localCache.SetDefault after the successful DB write, or by clearing the cache entry when ErrDeviceLimitReached is returned.",
+  "pkg/server/wire.go lines 374-375 still register anonstore.ProvideAnonDBStore and wire.Bind for AnonStore, but ProvideAnonDBStore now requires (db.DB, int64) which wire cannot inject, and ProvideAnonymousDeviceService no longer accepts anonstore.AnonStore. Both lines and the anonstore import in wire.go must be removed for wire generation to succeed."
+]

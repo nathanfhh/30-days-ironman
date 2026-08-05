@@ -1,0 +1,5 @@
+[
+  "Django QuerySets do not support negative indexing - when enable_advanced_features is true and cursor.offset is negative, line 882 passes the negative offset directly to queryset[start_offset:stop], which raises AssertionError. Any superuser hitting the audit logs endpoint with optimized_pagination=true and a crafted cursor containing a negative offset will get a 500 error. The fix should clamp start_offset to 0 or reject negative offsets with a BadPaginationError.",
+  "OptimizedCursorPaginator.get_item_key calls math.floor()/math.ceil() directly on datetime objects (line 839), which raises TypeError since datetime does not implement __floor__. The method should convert datetime to float timestamp first like DateTimePaginator does.",
+  "OptimizedCursorPaginator.value_from_cursor returns the raw cursor value (an integer timestamp) instead of converting it back to a datetime, so build_queryset will compare an integer against a DateTimeField on page 2+, causing type mismatch errors. It should convert back using datetime.fromtimestamp() like DateTimePaginator does."
+]

@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-97529",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/97529",
+  "pr_title": "Unified Storage Performance Optimizations",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR97529__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR97529__20260122.git",
+  "base_sha": "871af07203177ce59a24e742107119409274f48a",
+  "head_sha": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "stat": " pkg/server/module_server_test.go       |  4 +++\n pkg/storage/unified/resource/search.go |  8 ++---\n pkg/storage/unified/resource/server.go | 57 +++++++---------------------------\n pkg/storage/unified/search/bleve.go    | 11 +++----\n pkg/storage/unified/sql/backend.go     |  2 +-\n 5 files changed, 25 insertions(+), 57 deletions(-)\n",
+  "name_status": "M\tpkg/server/module_server_test.go\nM\tpkg/storage/unified/resource/search.go\nM\tpkg/storage/unified/resource/server.go\nM\tpkg/storage/unified/search/bleve.go\nM\tpkg/storage/unified/sql/backend.go\n",
+  "commits": "26fed312 Merge branch 'main' into unified-storage-dont-lazy-init\n45e00898 put delay back to 500 ms\n6f4d7087 skips postgres integration test. Only fails in drone. Will fix later.\n71fcce63 Merge branch 'main' into unified-storage-dont-lazy-init\n1095580d try with big timeout, see if fixes CI. Wont fail locally.\n29db0d39 wait 1 second before querying metrics\n5b876e35 update dependency owner in mod file\n9b6abbb9 fix workspaces check error\n96032455 make update-workspace\n1c085eb6 go mod\n29fc9712 Merge branch 'main' into unified-storage-dont-lazy-init\ne1ffce46 linter fix\n99053d8f Merge branch 'main' into unified-storage-dont-lazy-init\na73df83d formatting\n6cce48ca Use finer grained cache locking when building indexes to speed things up. Locking the whole function was slowing things down.\n05e864f3 Inits index when creating new resource server. Fixes trace propagation by passing span ctx. Update some logging.\n6abf2bf3 dont lazy init unified storage\n"
+}

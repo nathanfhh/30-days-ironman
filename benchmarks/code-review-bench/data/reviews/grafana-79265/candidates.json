@@ -1,0 +1,99 @@
+{
+  "slug": "grafana-79265",
+  "issues": [
+    {
+      "text": "The anonymous device limit can be bypassed via the local cache: tagDeviceUI writes the cache key before writing to the database and doesn't roll it back on failure, so a device rejected once will be waved through on any retry within the cache TTL and is never recorded in anon_device.",
+      "zh": "裝置上限被 local cache 旁路：被拒的裝置只要重送一次請求就會通過。tagDeviceUI 是先寫 cache 再寫資料庫，而且寫入失敗時不會把 cache key 收回。",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "Anonymous requests that don't carry the X-Grafana-Device-Id header (scripts, curl, or the initial HTML document request) completely bypass device_limit enforcement.",
+      "zh": "沒有帶 X-Grafana-Device-Id 的匿名請求完全不受 device_limit 約束。",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "There is no transaction or lock between CountDevices and the INSERT, so the device limit can be exceeded under concurrent requests or in multi-instance deployments (classic check-then-act race).",
+      "zh": "CountDevices 與 INSERT 之間沒有交易或鎖，上限在併發與多實例下會被超過。",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "ErrDeviceLimitReached is not an errutil error, so a user who hits the device limit only gets an unexplained 401 or is redirected to /login, unlike every other authn client in the same layer.",
+      "zh": "ErrDeviceLimitReached 不是 errutil 錯誤，撞到上限的使用者只會拿到沒有原因的 401 或被導去 /login。",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "AnonStore construction was moved out of the wire dependency-injection graph, leaving pkg/server/wire.go's provider registration stale and incompatible with the new constructor signature, and removing the interface substitution point that was used for testing.",
+      "zh": "AnonStore 的建構被搬出 wire DI，pkg/server/wire.go 的註冊變成過時且與新簽章不相容，AnonStore 這個介面也失去了替換點。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The device-tagging database write, which used to run in a background goroutine, is now executed synchronously on every anonymous request's auth path — including for deployments that never configured a device_limit — adding a database round trip on the request path without the change being disclosed by the MR title.",
+      "zh": "匿名認證從背景 tagging 改成在請求路徑上同步等待資料庫；這個代價對完全沒有設定 device_limit 的既有部署也照樣付出，而 MR 標題並沒有告訴他們行為會改變。",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The synchronous device-tagging write now uses the request's own context instead of a background context, so a client disconnect (context cancellation) can interrupt the write after the cache key was already set, leaving that device untracked and uncounted for the cache TTL.",
+      "zh": "改動後它在 Authenticate 內同步執行，且改用請求本身的 ctx；用戶端斷線導致 ctx 取消時寫入會中斷，而 cache 已經先設好，該裝置 29 分鐘內既不記錄也不計數。",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The '30-day anonymous device' window is now hardcoded in four places under two different names, so the enforcement window, the usage-stat window, and the admin listing window can silently drift out of sync with each other.",
+      "zh": "「匿名裝置 30 天」這個決定現在同時寫死在四個地方、兩種名字，統計視窗與強制執行視窗會各自漂移。",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new device_limit setting was not added to conf/defaults.ini, conf/sample.ini, or the configuration documentation.",
+      "zh": "新的 device_limit 設定沒有寫進 conf/defaults.ini、conf/sample.ini 或設定文件。",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new frontend anonymousDeviceLimit config field has no consumers anywhere in the frontend code, and its declared type is incorrectly inferred as plain undefined instead of number | undefined.",
+      "zh": "前端的 anonymousDeviceLimit 沒有任何消費者，而且型別被推導成 undefined。",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new test for the device limit only covers the rejected path; it never asserts that an existing device can still be updated once the limit is reached, even though that is the documented purpose of updateDevice.",
+      "zh": "新測試只覆蓋被拒絕的路徑，沒有斷言這條路徑真正的功能——上限已滿時既有裝置仍要能更新。",
+      "finding_id": "F-010",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "There is no test covering the new error-branching behavior added to Anonymous.Authenticate in client.go — that ErrDeviceLimitReached fails authentication while other errors are only logged and allowed through — even though that is the only user-visible behavior change in this MR.",
+      "zh": "同樣沒有測試涵蓋 client.go:44-50 新增的錯誤分流（ErrDeviceLimitReached 要讓認證失敗、其他錯誤只記 log 並放行），而那是這次唯一改變使用者可見行為的地方。",
+      "finding_id": "F-010",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "updateDevice's name and doc comment don't match its actual behavior: a function named 'update' returns ErrDeviceLimitReached when no row was updated, and the comment doesn't mention that return value or that the time window is self-computed rather than passed in as parameters.",
+      "zh": "updateDevice 的命名、註解與參數型別和它實際的行為對不上：函式叫 updateDevice，但回的是 ErrDeviceLimitReached；註解寫 updates a device if it exists and has been updated between the given times，但這個函式沒有任何時間參數。",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "updateDevice uses []interface{} while the rest of the file consistently uses []any.",
+      "zh": "database.go:80 與 84 用 []interface{}，而同一個檔案其他地方一律用 []any。",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Whether CI's wire gen step still succeeds given that pkg/server/wire.go's provider registration was not updated for the new constructor signature.",
+      "zh": "在 pkg/server/wire.go:374-375 沒有更新的情況下，CI 的 wire gen -tags oss ./pkg/server 是否仍然能成功產生 wire_gen.go？"
+    },
+    {
+      "text": "How much the device_limit is actually overshot in a multi-instance HA deployment, and whether that margin is acceptable for what this setting is meant to guarantee.",
+      "zh": "在多實例 HA 部署下，device_limit 實際會超收多少？這個誤差對這個設定要解決的問題是否可接受？"
+    }
+  ]
+}

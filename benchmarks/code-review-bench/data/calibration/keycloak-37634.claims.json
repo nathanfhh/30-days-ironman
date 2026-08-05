@@ -1,0 +1,93 @@
+{
+  "slug": "keycloak-37634",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "The lazy refresh paths at Lines 106-137 bypass the one-time duplicate check, allowing a custom grant to overwrite an existing shortcut mapping at runtime"
+    },
+    {
+      "claim_id": "c002",
+      "text": "OAuth2GrantTypeFactory's new getShortcut() method has no default implementation, and DefaultTokenContextEncoderProviderFactory.postInit calls it unconditionally on every registered grant factory during server startup, so any third-party OAuth2GrantTypeFactory implementation outside this repo (which won't have this method) will throw AbstractMethodError at startup rather than only when that grant is used."
+    },
+    {
+      "claim_id": "c003",
+      "text": "isAccessTokenId() may throw StringIndexOutOfBoundsException for short prefixes instead of returning false"
+    },
+    {
+      "claim_id": "c004",
+      "text": "Label 'area/dependencies' could not be found and needs to be created before Dependabot can use it"
+    },
+    {
+      "claim_id": "c005",
+      "text": "TokenContextEncoderProvider.getTokenContextFromTokenId (the decode side) currently has no production caller anywhere in the repo \u2014 only unit tests exercise it \u2014 so its strict behavior (fixed length of 6, IllegalArgumentException on unknown shortcuts) is unverified against any real caller for now."
+    },
+    {
+      "claim_id": "c006",
+      "text": "Make `getShortcut()` a default SPI method; adding it as abstract breaks existing custom grant factories on upgrade."
+    },
+    {
+      "claim_id": "c007",
+      "text": "grantType field is captured once in constructor but setFormParams() can replace parameters later without updating it, making getGrantType() return stale data"
+    },
+    {
+      "claim_id": "c008",
+      "text": "Label 'area/ci' could not be found and needs to be created before Dependabot can use it"
+    },
+    {
+      "claim_id": "c009",
+      "text": "session.getProvider(TokenContextEncoderProvider.class) is used without checking for a missing provider, which will cause NPE during token issuance if the SPI isn't available/registered"
+    },
+    {
+      "claim_id": "c010",
+      "text": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing."
+    },
+    {
+      "claim_id": "c011",
+      "text": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern."
+    },
+    {
+      "claim_id": "c012",
+      "text": "The duplicate-shortcut check in postInit throws IllegalStateException if a third-party grant happens to choose the same 2-character shortcut as a built-in grant, meaning upgrading can also break server startup purely from a shortcut collision, not just from a missing method."
+    },
+    {
+      "claim_id": "c013",
+      "text": "The decoder assumes a fixed 2+2+2 prefix but the factory never validates that grant shortcuts are exactly 2 characters, meaning custom grants can emit token IDs that later fail to decode"
+    },
+    {
+      "claim_id": "c014",
+      "text": "The local variable `ctx` assigned in testIncorrectGrantType is never used afterward."
+    },
+    {
+      "claim_id": "c015",
+      "text": "ClientCredentialsGrantTypeFactory and PermissionGrantTypeFactory declare shortcuts (\"cc\" and \"pg\") but neither ClientCredentialsGrantType nor PermissionGrantType ever calls setAttribute(Constants.GRANT_TYPE, ...), so access tokens from client_credentials and uma-ticket grants are always encoded with the UNKNOWN shortcut \"na\" instead of their declared codes."
+    },
+    {
+      "claim_id": "c016",
+      "text": "getShortcutByGrantType/getGrantTypeByShortcut patch the shortcut lookup maps at runtime for grants deployed after startup by directly put()-ing, without re-running the duplicate-shortcut validation that postInit enforces at boot \u2014 a colliding shortcut deployed later silently overwrites the existing map entry instead of failing loudly like it would at startup."
+    },
+    {
+      "claim_id": "c017",
+      "text": "Wrong parameter in null check (grantType vs. rawTokenId)"
+    },
+    {
+      "claim_id": "c018",
+      "text": "Only StandardTokenExchangeProvider (the V2 token-exchange path) sets Constants.GRANT_TYPE; the other three AbstractTokenExchangeProvider subclasses (V1TokenExchangeProvider, SubjectImpersonationTokenExchangeProvider, FederatedTokenExchangeProvider) don't override the method and fall through to the base class which never sets it, so the same grant_type=token-exchange request encodes as \"na\" or \"te\" depending on which exchange path handled it."
+    },
+    {
+      "claim_id": "c019",
+      "text": "Will external consumers of the access token's jti (SIEM systems, jti-indexed token blocklists, resource-server audit logs, downstream systems storing jti as a UUID column) break now that jti changed format from a plain UUID to `<6-char prefix>:<UUID>`?"
+    },
+    {
+      "claim_id": "c020",
+      "text": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false."
+    },
+    {
+      "claim_id": "c021",
+      "text": "Does this PR need accompanying release notes / upgrade guide documentation, given it changes the externally-visible jti format and the server-spi-private OAuth2GrantTypeFactory interface, per PR-CHECKLIST.md's documentation requirement?"
+    },
+    {
+      "claim_id": "c022",
+      "text": "OAuth2GrantType.Context caches grantType from formParams.getFirst(GRANT_TYPE) at construction time, but the public setFormParams() setter doesn't update it afterward, so getGrantType() can report a stale value if formParams is ever replaced."
+    }
+  ]
+}

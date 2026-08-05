@@ -1,0 +1,221 @@
+{
+  "slug": "grafana-80329",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "cleanup-ticker-10m-to-1m",
+      "evidence": "pkg/services/cleanup/cleanup.go:76",
+      "reason": "The diff changes `time.NewTicker(time.Minute * 10)` to `time.Minute * 1` in CleanUpService.Run, and clean() at cleanup.go:94-102 runs eight jobs (tmp files, expired snapshots, dashboard versions, expired images, annotations, user invites, short URLs, query history), so every one of them now fires 10x more often even though the PR is about annotation cleanup."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "import-grouping",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:12-19",
+      "reason": "The new `sqlstore/migrator` import is appended to the small group containing `annotations/accesscontrol` (lines 12-13), while `services/sqlstore` sits in the following group (line 19); both are grafana packages so they belong together."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "debug-error-logs",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:534,537,554,557,576,579",
+      "reason": "Six new `r.log.Error(...)` calls run on every batch of a routine background job, and three of them include `\"ids\", ids` — a slice that holds one full batch (default batch size 100, but configurable, and the new test uses 32767). Error level on a non-error path is exactly what error-rate alerting keys on."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "debug-error-logs",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:534,537,554,557,576,579",
+      "reason": "All six added log lines use `r.log.Error` for ordinary progress reporting on the success path (they fire even when err is nil and nothing went wrong); Debug is the appropriate level, and these read as leftover instrumentation."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "test-cleanup-registered-late",
+      "evidence": "pkg/services/annotations/annotationsimpl/cleanup_test.go:116-127",
+      "reason": "`createTestAnnotations` plus two `assert*Count` helpers (which use require and thus FailNow) all run before `t.Cleanup` is registered at line 120, so a failure in creation or in the pre-checks leaves rows in `annotation`/`annotation_tag`; since all subtests share one `fakeSQL` and the next subtest asserts an exact row count, that contaminates every later case."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "nil-err-logged",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:530-534",
+      "reason": "In all three closures the pattern is `ids, err := r.fetchIDs(...); if err != nil { return 0, err }` immediately followed by a log call carrying `\"err\", err`, so err is provably nil at lines 534, 554 and 576."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "Low",
+      "cluster": "deadlock-premise-unsubstantiated",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:522-527",
+      "reason": "The comment states the MySQL deadlock as the justification for the whole fetch-then-delete rewrite, and nothing in the branch reproduces or tests it — the only new test targets the SQLite variable limit. Asking for the evidence is a fair review request, though whether the deadlock was observed can only be answered outside the repo."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "High",
+      "cluster": "cleanup-ticker-10m-to-1m",
+      "evidence": "pkg/services/cleanup/cleanup.go:76,89",
+      "reason": "The ticker drop to 1 minute against a 9-minute per-cycle timeout is real and does mean far more frequent sweeps. The 'overlapping' mechanism is wrong, however: `srv.clean(ctx)` is called synchronously in the Run loop, so cycles run back-to-back rather than concurrently."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "cleanup-ticker-10m-to-1m",
+      "evidence": "pkg/services/cleanup/cleanup.go:74-83",
+      "reason": "Correct in outcome: the ticker channel is buffered by one, so if clean() exceeds a minute a tick is already pending and the next cycle starts immediately on return — effectively continuous cleanup. (Ticks do not literally accumulate; extra ones are dropped.)"
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "debug-error-logs",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:534,554,576",
+      "reason": "`\"ids\", ids` logs the entire fetched batch, whose size is `AnnotationCleanupJobBatchSize` (dialect Limit at dialect.go:317 applies it verbatim); the new test configures 32767, so a single log record can hold tens of thousands of int64s."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "fetchids-builds-sql-before-validation",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:584-589",
+      "reason": "`sql := fmt.Sprintf(\"SELECT id FROM %s\", table)` is built at line 585, and only afterwards does line 586 return an error for an empty condition; the guard should come first."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "nil-err-logged",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:531-534",
+      "reason": "Line 534 is exactly the log call cited, and the preceding `if err != nil { return 0, err }` at lines 532-533 guarantees err is nil when it is logged."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "Low",
+      "cluster": "zero-affected-early-exit",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:643-660",
+      "reason": "`untilDoneOrCancelled` returns as soon as a batch reports 0 affected rows, and splitting fetch from delete widens the race window (another instance can delete the fetched ids first — nothing in cleanup.go takes the ServerLockService for this job). The round does end early; convergence is preserved by the next cycle, which the comment at lines 522-525 explicitly accepts."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "large-batch-test-misses-annotation-path",
+      "evidence": "pkg/services/annotations/annotationsimpl/cleanup_test.go:97-111",
+      "reason": "Recomputed: 40003 annotations split by i%3 give 13335 alert / 13334 api / 13334 dashboard rows; with MaxCount=1 each type's single fetch returns at most 13334 ids — below the SQLite >= 3.32.0 limit of 32766 that the test name invokes. The 40000 deletions orphan 80000 annotation_tag rows, and CleanOrphanedAnnotationTags fetches Limit(32767) of them, so only the tag path produces an id list past 32766."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "nil-err-logged",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:534,537,554,557,576,579",
+      "reason": "Every added log line carries an `\"err\"` field that is nil on the happy path (the fetch errors return early, and the delete errors `y` are nil when the batch succeeds), producing Error-level records with err=<nil>."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "sqlite-inline-branch-uses-cfg-not-len",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:605-612",
+      "reason": "Both halves check out: the branch requires `r.db.GetDBType() == migrator.SQLite` so a large batch size on MySQL/Postgres still builds one placeholder per id (their own 65535 limit is unguarded), and the size test is on the configured `AnnotationCleanupJobBatchSize`, not on `len(ids)`."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "sqlite-inline-quadratic-concat",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:609-612",
+      "reason": "`values = fmt.Sprintf(\"%s, %d\", values, v)` reallocates and copies the whole accumulated string on each iteration, which is O(n^2) in the id count — at the 32767 ids the new test exercises that is on the order of gigabytes copied; strings.Builder would be linear."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "cleanup-ticker-10m-to-1m",
+      "evidence": "pkg/services/cleanup/cleanup.go:76,94-102",
+      "reason": "Correct that the background ticker went from 10 minutes to 1 minute and drags the other jobs along; a nit on the count — the list holds eight jobs total, of which seven are unrelated to annotations."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "cleanup-ticker-10m-to-1m",
+      "evidence": "pkg/services/cleanup/cleanup.go:76,94-102",
+      "reason": "`time.Minute * 1` written that way, alongside the six leftover `r.log.Error` debug lines in the same PR, reads as instrumentation that was not reverted; all eight jobs in cleanupJobs now run 10x more often."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "cleanup-ticker-10m-to-1m",
+      "evidence": "pkg/services/cleanup/cleanup.go:76",
+      "reason": "Same change as above; nothing else in the diff touches pkg/services/cleanup, so the interval change has no connection to the annotation batching work it ships with."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "Medium",
+      "cluster": "cleanup-ticker-10m-to-1m",
+      "evidence": "pkg/services/cleanup/cleanup.go:76,89",
+      "reason": "`const timeout = 9 * time.Minute` at line 89 is indeed sized for the old 10-minute interval and is now longer than the tick period. But cycles cannot overlap: Run calls `srv.clean(ctx)` synchronously in the select loop, so a long cycle merely swallows ticks and restarts immediately."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "sqlite-inline-branch-uses-cfg-not-len",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:608",
+      "reason": "Line 608 is exactly `r.cfg.AnnotationCleanupJobBatchSize > sqliteParameterLimit`; since fetchIDs frequently returns fewer ids than the batch size (final batch, or a type with few rows), those small deletes are string-interpolated for no reason. `len(ids) > sqliteParameterLimit` is the correct predicate."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "skip-message-casing",
+      "evidence": "pkg/services/annotations/annotationsimpl/cleanup_test.go:20,153",
+      "reason": "The repo's dominant form is `t.Skip(\"skipping integration test\")` — 168 occurrences under pkg/ — while the only two uses of the capitalised \"Skipping integration test\" are the two lines this diff adds."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "sqlite-inline-branch-uses-cfg-not-len",
+      "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:608",
+      "reason": "Same defect as verified above: the condition keys off the configured batch size rather than the actual id count, so any batch under the limit still takes the inlined-value path once the config exceeds 999."
+    }
+  ]
+}

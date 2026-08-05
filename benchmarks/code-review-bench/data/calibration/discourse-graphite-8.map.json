@@ -1,0 +1,266 @@
+{
+  "slug": "discourse-graphite-8",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 0,
+      "text": "add_members has no existence check before adding a user, so re-adding an existing group member hits the unique index on group_users and raises an unhandled 500 instead of a friendly error, and this is easy to trigger because the frontend never clears the input after submit.",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 8,
+      "text": "Hardcoded colors #333 and #aaa in SCSS instead of SCSS variables may break theme consistency",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 6,
+      "text": "Stray closing </div> tag with no matching opening tag in group/members.hbs template",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 2,
+      "text": "offset = params[:offset].to_i can produce negative offsets and limit can be <= 0, which may raise or produce invalid queries in ActiveRecord - need to clamp/sanitize limit and offset before calling .limit(...).offset(...)",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 9,
+      "text": "usernames input is not cleared after add operation, making it easy to accidentally re-add the same usernames",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "The public members.json response format was changed in place from a plain array to an object (breaking change) with no expand/migrate/contract path, risking breakage for any third-party script or integration already consuming the old shape.",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "The same endpoint's offset parameter has no lower-bound check, so a negative offset value causes PostgreSQL to raise an error, resulting in an unhandled 500.",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 0,
+      "text": "Both add_members and remove_member call params.require(:group_id), but the routes put the group's ID in params[:id], not params[:group_id], causing ActionController::ParameterMissing for every real HTTP request",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "The public group members page is now silently truncated to 50 entries (previously unlimited for non-automatic groups) with no pagination UI at all, so visitors have no way to see or even know about members beyond the first 50.",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 1,
+      "text": "Item-view template references `member`, but that alias is not available inside a separate `itemView` template. The row will render with missing member data, and clicking remove can throw when the controller calls `member.get(...)`.",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 13,
+      "text": "Several unrelated pure-formatting changes (ilike to ILIKE plus blank line, indentation of private/protected sections, a full reorder of an .hbs file, blank-line removal in another .hbs) are mixed into this behavioral commit, making the diff hard to review.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "remove_member bypasses the Group model and calls group.users.delete directly, skipping the cleanup that used to null out primary_group_id, so a removed member's posts continue to display flair for a group they no longer belong to.",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 1,
+      "text": "add_members writes members one at a time in a loop with no transaction, so when one username in a batch fails (e.g. duplicate), earlier usernames in the same batch are already committed, leaving the group in a partially-applied state.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 14,
+      "text": "findMembers now returns undefined on its early-return path instead of a resolved promise like before, making its return type inconsistent between code paths even though no current caller chains .then on it yet.",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 15,
+      "text": "Two lines have misleading semicolon placement (a lone semicolon after a block that looks like part of the return statement, and a missing semicolon relying on ASI) that make the reader stop to double-check.",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "A previously-existing test coverage for 'silently skip adding non-existent usernames' was removed with no equivalent replacement, even though that behavior is preserved in the new code.",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "There is no test coverage at all for the new response format's meta.total/limit/offset fields that the frontend depends on.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 19,
+      "text": "Does moving a block of shared form-styling CSS rules under .groups, .badges risk breaking styling on other pages that also relied on the original shared container?",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 11,
+      "text": "PUT is used for the non-idempotent add-members action, violating PUT's replace-the-resource semantics; the same request body sent twice produces different results (success, then a 500 from F-001).",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 5,
+      "text": "Guard condition in group/members.hbs checks model but loop iterates over members - if model is truthy but members is undefined/empty, table header renders with no rows",
+      "claim_id": "c020"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "In the next action, capping the next offset at user_count can produce an empty page (e.g., total equal to limit results in offset == total, showing 2/2 with no members). This can cause confusing UX on the last page.",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 3,
+      "text": "Stray closing </div> tag inside a <table> with no matching opening <div>, which is invalid HTML and may cause browser rendering issues",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 2,
+      "text": "Usernames are not normalized before lookup in add_members - whitespace or blank entries will silently skip valid users",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "The public /groups/:name/members.json endpoint passes an unvalidated limit parameter straight into SQL with no upper bound, and since it's anonymously reachable and trust_level_0 includes every user on the site, any anonymous visitor can dump the entire site's username/name/avatar/last_seen list in one request (also enabling large-result-set DoS).",
+      "claim_id": "c024"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 16,
+      "text": "A '// TODO: should clear the input' comment shipped as-is, meaning the username input isn't cleared after a successful add, which is the direct trigger for the duplicate-add 500 (F-001) since users naturally click Add again.",
+      "claim_id": "c025"
+    },
+    {
+      "source": "golden",
+      "golden_index": 2,
+      "tool": null,
+      "text": "HTTP method mismatch in .remove_member - test uses PUT but remove_member action expects DELETE",
+      "claim_id": "c026"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 0,
+      "text": "remove_member calls group.users.delete(user_id) which performs a direct SQL DELETE bypassing ActiveRecord callbacks including counter_cache, causing group.user_count to become stale after member removal. Should use group.remove(User.find(user_id)) instead which properly triggers counter cache updates.",
+      "claim_id": "c027"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 1,
+      "text": "The automatic variable may not be in scope for the item view template - if it resolves against the member context it may be undefined, causing the remove control to show even for automatic groups, which would allow clicking remove and likely surface a 422 without UI handling",
+      "claim_id": "c028"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 3,
+      "text": "Pagination params limit and offset are not clamped - negative or very large values can trigger heavy queries or odd behavior",
+      "claim_id": "c029"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": " The findMembers() call is now asynchronous and unhandled. The controller may not have member data immediately available, creating a race condition.",
+      "claim_id": "c030"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 18,
+      "text": "After group.users.delete(user_id), is the groups.user_count counter cache still accurate, given Rails' has_many :through #delete may not trigger the destroy callbacks that maintain the counter?",
+      "claim_id": "c031"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "A pending pagination test that is exactly what this MR is supposed to fix was never enabled, and its assertions still assume the old array response shape rather than the new {members, meta} format.",
+      "claim_id": "c032"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 7,
+      "text": "Route parameter mismatch - routes provide :id but controller expects :group_id, causing param is missing error",
+      "claim_id": "c033"
+    }
+  ]
+}

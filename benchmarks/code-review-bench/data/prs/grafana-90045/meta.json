@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-90045",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/90045",
+  "pr_title": "Dual Storage Architecture",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR90045__20260122.git",
+  "pr_number": 1,
+  "golden_count": 3,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR90045__20260122.git",
+  "base_sha": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "head_sha": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "stat": " go.work.sum                                 |  16 ++\n pkg/apiserver/rest/dualwriter_mode1_test.go |   1 -\n pkg/apiserver/rest/dualwriter_mode3.go      | 158 +++++++----\n pkg/apiserver/rest/dualwriter_mode3_test.go | 424 +++++++++++++++++++++++-----\n pkg/tests/apis/playlist/playlist_test.go    |  56 ++++\n 5 files changed, 524 insertions(+), 131 deletions(-)\n",
+  "name_status": "M\tgo.work.sum\nM\tpkg/apiserver/rest/dualwriter_mode1_test.go\nM\tpkg/apiserver/rest/dualwriter_mode3.go\nM\tpkg/apiserver/rest/dualwriter_mode3_test.go\nM\tpkg/tests/apis/playlist/playlist_test.go\n",
+  "commits": "e369f246 Use mode log when dual writer is initiated\n13374e4c remove test assertion\nf41deaba Update pkg/apiserver/rest/dualwriter_mode3_test.go\n50ace4cf Update dependencies\n05eb792d Improve logging\n9361ba11 [REVIEW] FInish mode 3 and add tests\n1f0de545 Admin: Fixes an issue where user accounts could not be enabled (#88117)\nb4f78267 Update pkg/apiserver/rest/dualwriter_mode3.go\n1c55c027 Remove todo\nfe550e41 Add integration tests for playlits in mode 3\nfba0af3e Dual writer: mode 3\n"
+}

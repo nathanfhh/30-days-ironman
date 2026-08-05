@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-10",
+  "tool": "coderabbit",
+  "n_golden": 4,
+  "n_candidates": 11,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 4,
+      "confidence": 0.95,
+      "reasoning": "Same issue: self.host.sub! in before_validation raises on nil host instead of producing a validation error."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Same issue: nil from where(id:).first causes NoMethodError in update/destroy."
+    }
+  ]
+}

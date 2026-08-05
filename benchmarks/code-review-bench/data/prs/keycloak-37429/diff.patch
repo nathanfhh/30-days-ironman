@@ -1,0 +1,1472 @@
+diff --git a/js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties b/js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties
+index 0f8ba16..955d201 100644
+--- a/js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties
++++ b/js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties
+@@ -180,17 +180,17 @@ unLinkSuccess=Successfully unlinked account
+ applications=Applications
+ sharedWithMe=Shared with Me
+ username=Username
+ webauthn-display-name=Passkey
+ webauthn-help-text=Use your Passkey to sign in.
+ webauthn-passwordless-display-name=Passkey
+ webauthn-passwordless-help-text=Use your Passkey for passwordless sign in.
+ passwordless=Passwordless
+-error-invalid-multivalued-size=Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).
++error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.
+ recovery-authn-code=My recovery authentication codes
+ recovery-authn-codes-display-name=Recovery authentication codes
+ recovery-authn-codes-help-text=These codes can be used to regain your access in case your other 2FA means are not available.
+ recovery-codes-number-used={0} recovery codes used
+ recovery-codes-number-remaining={0} recovery codes remaining
+ recovery-codes-generate-new-codes=Generate new codes to ensure access to your account
+ oid4vci=Verifiable Credentials
+ verifiableCredentialsTitle=Verifiable Credentials
+diff --git a/js/apps/admin-ui/maven-resources-community/theme/keycloak.v2/admin/messages/messages_zh_CN.properties b/js/apps/admin-ui/maven-resources-community/theme/keycloak.v2/admin/messages/messages_zh_CN.properties
+index f7283a5..39eae66 100644
+--- a/js/apps/admin-ui/maven-resources-community/theme/keycloak.v2/admin/messages/messages_zh_CN.properties
++++ b/js/apps/admin-ui/maven-resources-community/theme/keycloak.v2/admin/messages/messages_zh_CN.properties
+@@ -1247,17 +1247,17 @@ executorTypeSelectHelpText=执行器类型选择帮助文本
+ useDiscoveryEndpointHelp=如果启用此设置，发现端点将用于获取供应商配置。Keycloak 可以从终端节点加载配置并在源有任何更新时自动更新配置
+ eventTypes.USER_INFO_REQUEST_ERROR.name=用户信息请求错误
+ createUserProviderError=由于{{error}}，无法创建用户联盟供应商。
+ learnMore=了解更多
+ onDragCancel=已取消拖动。列表未更改。
+ removeUser=移除用户
+ ownerManagedAccess=启用用户管理访问
+ userModelAttributeNameHelp=从 LDAP 导入用户时要添加的模型属性的名称
+-templateHelp=用于格式化要导入的用户名的模板。替换包含在 ${} 中。例如：'${ALIAS}.${CLAIM.sub}'。ALIAS 是供应商别名。CLAIM.<NAME > 引用 ID 或访问令牌声明。可以通过将 |uppercase 或 |lowercase 附加到替换值来将替换转换为大写或小写，例如“${CLAIM.sub | lowercase}”。
++templateHelp=用于格式化要导入的用户名的模板。替换包含在 ${} 中。例如：'${ALIAS}.${CLAIM.sub}'。ALIAS 是供应商别名。CLAIM.<NAME> 引用 ID 或访问令牌声明。可以通过将 |uppercase 或 |lowercase 附加到替换值来将替换转换为大写或小写，例如“${CLAIM.sub | lowercase}”。
+ permissions=权限
+ emptyExecutionInstructions=您可以通过添加子流程或执行器来开始定义此流程
+ offlineSessionSettings=离线会话设置
+ unAssignRole=取消分配
+ deleteScope=永久删除授权范围？
+ eventTypes.CODE_TO_TOKEN.description=用于交换令牌的代码
+ oAuthDevicePollingIntervalHelp=客户端在对令牌端点的轮询请求之间应等待的最短时间（以秒为单位）。
+ passwordDataTitle=密码数据
+diff --git a/js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties b/js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties
+index ab0d45a..b9ca4b2 100644
+--- a/js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties
++++ b/js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties
+@@ -3130,17 +3130,17 @@ userNotSaved=The user has not been saved\: {{error}}
+ kcNumberFormat=Number Format
+ kcNumberUnFormat=Number UnFormat
+ tokenExpirationHelp=Sets the expiration for tokens. Expired tokens are periodically deleted from the database.
+ bruteForceMode.Disabled=Disabled
+ bruteForceMode.PermanentLockout=Lockout permanently
+ bruteForceMode.TemporaryLockout=Lockout temporarily
+ bruteForceMode.PermanentAfterTemporaryLockout=Lockout permanently after temporary lockout
+ bruteForceMode=Brute Force Mode
+-error-invalid-multivalued-size=Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).
++error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.
+ multivalued=Multivalued
+ multivaluedHelp=If this attribute supports multiple values. This setting is an indicator and does not enable any validation.
+ to the attribute. For that, make sure to use any of the built-in validators to properly validate the size and the values.
+ sendIdTokenOnLogout=Send 'id_token_hint' in logout requests
+ sendIdTokenOnLogoutHelp=If the 'id_token_hint' parameter should be sent in logout requests.
+ sendClientIdOnLogout=Send 'client_id' in logout requests
+ sendClientIdOnLogoutHelp=If the 'client_id' parameter should be sent in logout requests.
+ addAttributeTranslationBtn=Add translation button
+diff --git a/misc/theme-verifier/pom.xml b/misc/theme-verifier/pom.xml
+index c179ab8..9b06207 100644
+--- a/misc/theme-verifier/pom.xml
++++ b/misc/theme-verifier/pom.xml
+@@ -67,16 +67,27 @@
+             <scope>test</scope>
+         </dependency>
+         <dependency>
+             <groupId>org.hamcrest</groupId>
+             <artifactId>hamcrest</artifactId>
+             <version>2.2</version>
+             <scope>test</scope>
+         </dependency>
++        <dependency>
++            <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
++            <artifactId>owasp-java-html-sanitizer</artifactId>
++            <version>20240325.1</version>
++        </dependency>
++        <dependency>
++            <groupId>org.apache.commons</groupId>
++            <artifactId>commons-text</artifactId>
++            <version>1.13.0</version>
++            <scope>compile</scope>
++        </dependency>
+     </dependencies>
+ 
+ 
+     <build>
+         <plugins>
+             <plugin>
+                 <groupId>org.apache.maven.plugins</groupId>
+                 <artifactId>maven-surefire-plugin</artifactId>
+diff --git a/misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java b/misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java
+index 9565744..9368853 100644
+--- a/misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java
++++ b/misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java
+@@ -12,46 +12,170 @@
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+ package org.keycloak.themeverifier;
+ 
+ import org.apache.maven.plugin.MojoExecutionException;
++import org.owasp.html.PolicyFactory;
+ 
+ import java.io.BufferedReader;
+ import java.io.File;
++import java.io.FileInputStream;
+ import java.io.IOException;
+ import java.io.StringReader;
+ import java.nio.file.Files;
+ import java.util.ArrayList;
+ import java.util.HashSet;
+ import java.util.List;
++import java.util.MissingResourceException;
++import java.util.Objects;
++import java.util.PropertyResourceBundle;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
+ 
+ public class VerifyMessageProperties {
+ 
+     private final File file;
+     private List<String> messages;
+ 
+     public VerifyMessageProperties(File file) {
+         this.file = file;
+     }
+ 
+     public List<String> verify() throws MojoExecutionException {
+         messages = new ArrayList<>();
+         try {
+             String contents = Files.readString(file.toPath());
+             verifyNoDuplicateKeys(contents);
++            verifySafeHtml();
+         } catch (IOException e) {
+             throw new MojoExecutionException("Can not read file " + file, e);
+         }
+         return messages;
+     }
+ 
++    PolicyFactory POLICY_SOME_HTML = new org.owasp.html.HtmlPolicyBuilder()
++            .allowElements(
++                    "br", "p", "strong", "b"
++            ).toFactory();
++
++    PolicyFactory POLICY_NO_HTML = new org.owasp.html.HtmlPolicyBuilder().toFactory();
++
++    private void verifySafeHtml() {
++        PropertyResourceBundle bundle;
++        try (FileInputStream fis = new FileInputStream(file)) {
++            bundle = new PropertyResourceBundle(fis);
++        } catch (IOException e) {
++            throw new RuntimeException("unable to read file " + file, e);
++        }
++
++        PropertyResourceBundle bundleEnglish;
++        String englishFile = file.getAbsolutePath().replaceAll("resources-community", "resources")
++                .replaceAll("_[a-zA-Z-_]*\\.properties", "_en.properties");
++        try (FileInputStream fis = new FileInputStream(englishFile)) {
++            bundleEnglish = new PropertyResourceBundle(fis);
++        } catch (IOException e) {
++            throw new RuntimeException("unable to read file " + englishFile, e);
++        }
++
++        bundle.getKeys().asIterator().forEachRemaining(key -> {
++            String value = bundle.getString(key);
++            value = normalizeValue(key, value);
++            String englishValue = getEnglishValue(key, bundleEnglish);
++            englishValue = normalizeValue(key, englishValue);
++
++            value = santizeAnchors(key, value, englishValue);
++
++            // Only if the English source string contains HTML we also allow HTML in the translation
++            PolicyFactory policy = containsHtml(englishValue) ? POLICY_SOME_HTML : POLICY_NO_HTML;
++            String sanitized = policy.sanitize(value);
++
++            // Sanitizer will escape HTML entities for quotes and also for numberic tags like '<1>'
++            sanitized = org.apache.commons.text.StringEscapeUtils.unescapeHtml4(sanitized);
++            // Sanitizer will add them when there are double curly braces
++            sanitized = sanitized.replace("<!-- -->", "");
++
++            if (!Objects.equals(sanitized, value)) {
++
++                // Strip identical characters from the beginning and the end to show where the difference is
++                int start = 0;
++                while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start)) {
++                    start++;
++                }
++                int end = 0;
++                while (end < sanitized.length() && end < value.length() && value.charAt(value.length() - end - 1) == sanitized.charAt(sanitized.length() - end - 1)) {
++                    end++;
++                }
++
++                messages.add("Illegal HTML in key " + key + " for file " + file + ": '" + value.substring(start, value.length() - end) + "' vs. '" + sanitized.substring(start, sanitized.length() - end) + "'");
++            }
++
++        });
++    }
++
++    private String normalizeValue(String key, String value) {
++        if (key.equals("templateHelp")) {
++            // Allow "CLAIM.<NAME>" here
++            value = value.replaceAll("CLAIM\\.<[A-Z]*>", "");
++        } else if (key.equals("optimizeLookupHelp")) {
++            // Allow "<Extensions>" here
++            value = value.replaceAll("<Extensions>", "");
++        } else if (key.startsWith("linkExpirationFormatter.timePeriodUnit") || key.equals("error-invalid-multivalued-size")) {
++            // The problem is the "<" that appears in the choice
++            value = value.replaceAll("\\{[0-9]+,choice,[^}]*}", "...");
++        }
++
++        // Unescape HTML entities, as we later also unescape HTML entities in the sanitized value
++        value = org.apache.commons.text.StringEscapeUtils.unescapeHtml4(value);
++
++        if (file.getAbsolutePath().contains("email")) {
++            // TODO: move the RTL information for emails
++            value = value.replaceAll(Pattern.quote(" style=\"direction: rtl;\""), "");
++        }
++        return value;
++    }
++
++    Pattern HTML_TAGS = Pattern.compile("<[a-z]+[^>]*>");
++
++    private boolean containsHtml(String englishValue) {
++        return HTML_TAGS.matcher(englishValue).find();
++    }
++
++    private static final Pattern ANCHOR_PATTERN = Pattern.compile("</?a[^>]*>");
++
++    /**
++     * Allow only those anchor tags from the source key to also appear in the target key.
++     */
++    private String santizeAnchors(String key, String value, String englishValue) {
++        Matcher matcher = ANCHOR_PATTERN.matcher(value);
++        Matcher englishMatcher = ANCHOR_PATTERN.matcher(englishValue);
++        while (matcher.find()) {
++            if (englishMatcher.find() && Objects.equals(matcher.group(), englishMatcher.group())) {
++                value = value.replaceFirst(Pattern.quote(englishMatcher.group()), "");
++            } else {
++                messages.add("Didn't find anchor tag " + matcher.group() + " in original string");
++                break;
++            }
++        }
++        return value;
++    }
++
++    private static String getEnglishValue(String key, PropertyResourceBundle bundleEnglish) {
++        String englishValue;
++        try {
++            englishValue = bundleEnglish.getString(key);
++        } catch (MissingResourceException ex) {
++            englishValue = "";
++        }
++        return englishValue;
++    }
++
+     private void verifyNoDuplicateKeys(String contents) throws IOException {
+         BufferedReader bufferedReader = new BufferedReader(new StringReader(contents));
+         String line;
+         HashSet<String> seenKeys = new HashSet<>();
+         HashSet<String> duplicateKeys = new HashSet<>();
+         while ((line = bufferedReader.readLine()) != null) {
+             if (line.startsWith("#") || line.isEmpty()) {
+                 continue;
+diff --git a/misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java b/misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java
+index 7b48487..9fc08c7 100644
+--- a/misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java
++++ b/misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java
+@@ -24,18 +24,36 @@ import org.junit.jupiter.api.Test;
+ import java.io.File;
+ import java.net.URL;
+ import java.util.List;
+ 
+ class VerifyMessagePropertiesTest {
+ 
+     @Test
+     void verifyDuplicateKeysDetected() throws MojoExecutionException {
+-        List<String> verify = getFile("duplicate_keys.properties").verify();
+-        MatcherAssert.assertThat(verify, Matchers.contains(Matchers.containsString("Duplicate keys in file")));
++        List<String> verify = getFile("duplicateKeys_en.properties").verify();
++        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Duplicate keys in file")));
++    }
++
++    @Test
++    void verifyIllegalHtmlTagDetected() throws MojoExecutionException {
++        List<String> verify = getFile("illegalHtmlTag_en.properties").verify();
++        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Illegal HTML")));
++    }
++
++    @Test
++    void verifyNoHtmlAllowed() throws MojoExecutionException {
++        List<String> verify = getFile("noHtml_de.properties").verify();
++        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Illegal HTML")));
++    }
++
++    @Test
++    void verifyNoChangedAnchors() throws MojoExecutionException {
++        List<String> verify = getFile("changedAnchor_de.properties").verify();
++        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Didn't find anchor tag")));
+     }
+ 
+     private static VerifyMessageProperties getFile(String fixture) {
+         URL resource = VerifyMessageProperties.class.getResource("/" + fixture);
+         if (resource == null) {
+             throw new RuntimeException("Resource not found: " + fixture);
+         }
+         return new VerifyMessageProperties(new File(resource.getFile()));
+diff --git a/misc/theme-verifier/src/test/resources/changedAnchor_de.properties b/misc/theme-verifier/src/test/resources/changedAnchor_de.properties
+new file mode 100644
+index 0000000..84b3552
+--- /dev/null
++++ b/misc/theme-verifier/src/test/resources/changedAnchor_de.properties
+@@ -0,0 +1,17 @@
++#
++# Copyright 2025 Red Hat, Inc. and/or its affiliates
++# and other contributors as indicated by the @author tags.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++# http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++key=Some <a href="http://malicious.com">link</a>
+\ No newline at end of file
+diff --git a/misc/theme-verifier/src/test/resources/changedAnchor_en.properties b/misc/theme-verifier/src/test/resources/changedAnchor_en.properties
+new file mode 100644
+index 0000000..84a0c43
+--- /dev/null
++++ b/misc/theme-verifier/src/test/resources/changedAnchor_en.properties
+@@ -0,0 +1,17 @@
++#
++# Copyright 2025 Red Hat, Inc. and/or its affiliates
++# and other contributors as indicated by the @author tags.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++# http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++key=Some <a href="http://example.com">link</a>
+\ No newline at end of file
+diff --git a/misc/theme-verifier/src/test/resources/duplicate_keys.properties b/misc/theme-verifier/src/test/resources/duplicateKeys_en.properties
+similarity index 100%
+rename from misc/theme-verifier/src/test/resources/duplicate_keys.properties
+rename to misc/theme-verifier/src/test/resources/duplicateKeys_en.properties
+diff --git a/misc/theme-verifier/src/test/resources/illegalHtmlTag_en.properties b/misc/theme-verifier/src/test/resources/illegalHtmlTag_en.properties
+new file mode 100644
+index 0000000..6d8c3a1
+--- /dev/null
++++ b/misc/theme-verifier/src/test/resources/illegalHtmlTag_en.properties
+@@ -0,0 +1,17 @@
++#
++# Copyright 2025 Red Hat, Inc. and/or its affiliates
++# and other contributors as indicated by the @author tags.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++# http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++key=Some <div>tag</div
+\ No newline at end of file
+diff --git a/misc/theme-verifier/src/test/resources/noHtml_de.properties b/misc/theme-verifier/src/test/resources/noHtml_de.properties
+new file mode 100644
+index 0000000..702a1fa
+--- /dev/null
++++ b/misc/theme-verifier/src/test/resources/noHtml_de.properties
+@@ -0,0 +1,17 @@
++#
++# Copyright 2025 Red Hat, Inc. and/or its affiliates
++# and other contributors as indicated by the @author tags.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++# http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++key=Some <b>HTML</b>
+\ No newline at end of file
+diff --git a/misc/theme-verifier/src/test/resources/noHtml_en.properties b/misc/theme-verifier/src/test/resources/noHtml_en.properties
+new file mode 100644
+index 0000000..03d58e7
+--- /dev/null
++++ b/misc/theme-verifier/src/test/resources/noHtml_en.properties
+@@ -0,0 +1,17 @@
++#
++# Copyright 2025 Red Hat, Inc. and/or its affiliates
++# and other contributors as indicated by the @author tags.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++# http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++key=No HTML
+\ No newline at end of file
+diff --git a/themes/src/main/resources-community/theme/base/account/messages/messages_fi.properties b/themes/src/main/resources-community/theme/base/account/messages/messages_fi.properties
+index c191e5f..64a95b8 100644
+--- a/themes/src/main/resources-community/theme/base/account/messages/messages_fi.properties
++++ b/themes/src/main/resources-community/theme/base/account/messages/messages_fi.properties
+@@ -133,17 +133,17 @@ additionalGrants=Vaihtoehtoiset oikeudet
+ action=Toiminto
+ inResource=in
+ fullAccess=Täydet oikeudet
+ offlineToken=Offline Token
+ revoke=Kumoa oikeudet
+ 
+ configureAuthenticators=Konfiguroitu kaksivaiheinen kirjautuminen
+ mobile=Mobiili
+-totpStep1=Asenna <a href="https://freeotp.github.io/" target="_blank">FreeOTP</a> tai Google Authenticator ohjelma laiteellesi. Kummatkin sovellukset ovat saatavilla <a href="https://play.google.com">Google Play</a> ja Apple App Store kaupoissa.
++totpStep1=Asenna jokin seuraavista sovelluksista matkapuhelimeesi:
+ totpStep2=Avaa sovellus ja skannaa QR-koodi tai kirjoita avain.
+ totpStep3=Täytä saamasi kertaluontoinen koodisi allaolevaan kenttään ja paina Tallenna.
+ totpStep3DeviceName=Anna laitteelle nimi, jotta voit hallinnoida OTP-laitteitasi.
+ 
+ totpManualStep2=Avaa sovellus ja syötä koodi
+ totpManualStep3=Käytä seuraavia asetuksia mikäli sovellus sallii niiden syötön
+ totpUnableToScan=Ongelmia skannuksessa?
+ totpScanBarcode=Skannaa viivakoodi?
+diff --git a/themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties b/themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties
+index 65b8daf..e1a97b7 100644
+--- a/themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties
++++ b/themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties
+@@ -93,17 +93,17 @@ additionalGrants=Papildomi įgaliojimai
+ action=Veiksmas
+ inResource=yra
+ fullAccess=Pilna prieiga
+ offlineToken=Režimo neprisijungus raktas (token)
+ revoke=Atšaukti įgaliojimą
+ 
+ configureAuthenticators=Sukonfigūruotas autentifikatorius
+ mobile=Mobilus
+-totpStep1=Įdiekite <a href="https://freeotp.github.io/" target="_blank">FreeOTP</a> arba Google Authenticator savo įrenginyje. Programėlės prieinamos <a href="https://play.google.com">Google Play</a> ir Apple App Store.
++totpStep1=Installa una delle seguenti applicazioni sul tuo cellulare:
+ totpStep2=Atidarykite programėlę ir nuskenuokite barkodą arba įveskite kodą.
+ totpStep3=Įveskite programėlėje sugeneruotą vieną kartą galiojantį kodą ir paspauskite Saugoti norėdami prisijungti.
+ 
+ missingUsernameMessage=Prašome įvesti naudotojo vardą.
+ missingFirstNameMessage=Prašome įvesti vardą.
+ invalidEmailMessage=Neteisingas el. pašto adresas.
+ missingLastNameMessage=Prašome įvesti pavardę.
+ missingEmailMessage=Prašome įvesti el. pašto adresą.
+diff --git a/themes/src/main/resources-community/theme/base/account/messages/messages_sk.properties b/themes/src/main/resources-community/theme/base/account/messages/messages_sk.properties
+index 262623a..fd27282 100644
+--- a/themes/src/main/resources-community/theme/base/account/messages/messages_sk.properties
++++ b/themes/src/main/resources-community/theme/base/account/messages/messages_sk.properties
+@@ -93,17 +93,17 @@ additionalGrants=Dodatočné oprávnenia
+ action=Akcia
+ inResource=v
+ fullAccess=Úplný prístup
+ offlineToken=Offline token
+ revoke=Zrušiť oprávnenie
+ 
+ configureAuthenticators=Nakonfigurované autentifikátory
+ mobile=Mobilný
+-totpStep1=Nainštalujte vo svojom zariadení <a href="https://freeotp.github.io/" target="_blank"> FreeOTP </a> alebo Google Authenticator. Obidve aplikácie sú k dispozícii v <a href="https://play.google.com"> Google Play </a> a Apple App Store.
++totpStep1=Nainštalujte si do mobilu jednu z nasledujúcich aplikácií:
+ totpStep2=Otvorte aplikáciu a naskenujte čiarový kód alebo zadajte kľúč.
+ totpStep3=Zadajte jednorazový kód poskytnutý aplikáciou a kliknutím na tlačidlo Uložiť dokončíte nastavenie.
+ 
+ totpManualStep2=Otvorte aplikáciu a zadajte kľúč
+ totpManualStep3=Použite nasledujúce hodnoty konfigurácie, ak aplikácia umožňuje ich nastavenie
+ totpUnableToScan=Nemožno skenovať?
+ totpScanBarcode=Skenovanie čiarového kódu?
+ 
+diff --git a/themes/src/main/resources-community/theme/base/account/messages/messages_sv.properties b/themes/src/main/resources-community/theme/base/account/messages/messages_sv.properties
+index 1e1d812..9ec3b7b 100755
+--- a/themes/src/main/resources-community/theme/base/account/messages/messages_sv.properties
++++ b/themes/src/main/resources-community/theme/base/account/messages/messages_sv.properties
+@@ -88,17 +88,17 @@ additionalGrants=Ytterligare medgivanden
+ action=Åtgärd
+ inResource=i
+ fullAccess=Fullständig åtkomst
+ offlineToken=Offline token
+ revoke=Upphäv rättighet
+ 
+ configureAuthenticators=Konfigurerade autentiserare
+ mobile=Mobil
+-totpStep1=Installera <a href="https://freeotp.github.io/" target="_blank">FreeOTP</a> eller Google Authenticator på din enhet. Båda applikationerna finns tillgängliga på <a href="https://play.google.com">Google Play</a> och Apple App Store.
++totpStep1=Installera en av följande applikationer på din mobil:
+ totpStep2=Öppna applikationen och skanna streckkoden eller skriv i nyckeln.
+ totpStep3=Fyll i engångskoden som tillhandahålls av applikationen och klicka på Spara för att avsluta inställningarna.
+ 
+ missingUsernameMessage=Vänligen ange användarnamn.
+ missingFirstNameMessage=Vänligen ange förnamn.
+ invalidEmailMessage=Ogiltig e-postadress.
+ missingLastNameMessage=Vänligen ange efternamn.
+ missingEmailMessage=Vänligen ange e-post.
+diff --git a/themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties b/themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties
+index 4a4c09d..78eb62d 100644
+--- a/themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties
++++ b/themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties
+@@ -104,17 +104,17 @@ additionalGrants=可授予的权限
+ action=操作
+ inResource=in
+ fullAccess=所有权限
+ offlineToken=离线 token
+ revoke=收回授权
+ 
+ configureAuthenticators=配置的认证者
+ mobile=手机
+-totpStep1=在你的设备上安装 <a href="https://fedorahosted.org/freeotp/" target="_blank">FreeOTP</a> 或者 Google Authenticator.两个应用可以从 <a href="https://play.google.com">Google Play</a> 和 Apple App Store下载。
++totpStep1=在您的手機上安裝以下應用程式之一：
+ totpStep2=打开应用扫描二维码输入验证码
+ totpStep3=输入应用提供的一次性验证码单击保存
+ 
+ missingUsernameMessage=请指定用户名
+ missingFirstNameMessage=请指定名
+ invalidEmailMessage=无效的电子邮箱地址
+ missingLastNameMessage=请指定姓
+ missingEmailMessage=请指定邮件地址
+diff --git a/themes/src/main/resources-community/theme/base/email/messages/messages_da.properties b/themes/src/main/resources-community/theme/base/email/messages/messages_da.properties
+index 9c769d0..4cfca92 100644
+--- a/themes/src/main/resources-community/theme/base/email/messages/messages_da.properties
++++ b/themes/src/main/resources-community/theme/base/email/messages/messages_da.properties
+@@ -1,17 +1,17 @@
+ emailVerificationSubject=Verificer email
+ emailVerificationBody=Nogen har oprettet en {2} konto med denne email adresse. Hvis dette var dig, bedes du trykke på forbindet herunder for at verificere din email adresse \n\n{0}\n\nDette link vil udløbe inden for {3}.\n\nHvis det var dig der har oprettet denne konto, bedes du se bort fra denne mail.
+ emailVerificationBodyHtml=<p>Nogen har oprettet en {2} konto med denne email adresse. Hvis dette var dig, bedes du trykke på forbindet herunder for at verificere din email adresse</p><p><a href="{0}">Link til email verificering</a></p><p>Dette link vil udløbe inden for {3}.</p><p>Hvis det var dig der har oprettet denne konto, bedes du se bort fra denne mail.</p>
+ emailTestSubject=[KEYCLOAK] - SMTP test besked
+ emailTestBody=Dette er en test besked
+ emailTestBodyHtml=<p>Dette er en test besked</p>
+ identityProviderLinkSubject=Link {0}
+ identityProviderLinkBody=Nogen vil forbinde din "{1}" konto med "{0}" kontoen som er tilknyttet brugeren {2}. Hvis dette var dig, bedes du klikke på forbindet herunder for at forbinde de to konti\n\n{3}\n\nDette link vil udløbe efter {5}.\n\nHvis du ikke vil forbinde disse konti, kan du bare ignore denne besked. Hvis du vælger at forbinde de to konti, kan du logge ind som {1} via {0}.
+-identityProviderLinkBodyHtml=<p>Nogen vil forbinde din <b>{1}</b> konto med <b>{0}</b> kontoen som er tilknyttet brugeren {2}. Hvis dette var dig, bedes du klikke på forbindet herunder for at forbinde de to konti</p><p><a href="{3}">Bekræft</a></p><p>Dette link vil udløbe efter {5}.</p><p>nHvis du ikke vil forbinde disse konti, kan du bare ignore denne besked. Hvis du vælger at forbinde de to konti, kan du logge ind som {1} via {0}.
++identityProviderLinkBodyHtml=<p>Nogen vil forbinde din <b>{1}</b> konto med <b>{0}</b> kontoen som er tilknyttet brugeren {2}. Hvis dette var dig, bedes du klikke på forbindet herunder for at forbinde de to konti</p><p><a href="{3}">Bekræft</a></p><p>Dette link vil udløbe efter {5}.</p><p>nHvis du ikke vil forbinde disse konti, kan du bare ignore denne besked. Hvis du vælger at forbinde de to konti, kan du logge ind som {1} via {0}.</p>
+ passwordResetSubject=Gendan adgangskode
+ passwordResetBody=Nogen har forsøgt at nulstille adgangskoden til {2}. Hvis dette var dig, bedes du klikke på linket herunder for at nulstille adgangskoden.\n\n{0}\n\nDette link og kode vil udløbe efter {3}.\n\nHvis du ikke ønsker at nulstille din adgangskode, kan du se bort fra denne besked.
+ passwordResetBodyHtml=<p>Nogen har forsøgt at nulstille adgangskoden til {2}. Hvis dette var dig, bedes du klikke på linket herunder for at nulstille adgangskoden.</p><p><a href="{0}">Nulstil adgangskode</a></p><p>Dette link og kode vil udløbe efter {3}.</p><p>Hvis du ikke ønsker at nulstille din adgangskode, kan du se bort fra denne besked.</p>
+ executeActionsSubject=Opdater din konto
+ executeActionsBody=Din administrator beder dig opdatere din {2} konto ved at udføre følgende handling(er): {3}. Klik på linket herunder for at starte processen.\n\n{0}\n\nDette link udløber efter {4}.\n\nHvis du ikke mener at din administrator har efterspurgt dette, kan du blot se bort fra denne besked.
+ executeActionsBodyHtml=<p>Din administrator beder dig opdatere din {2} konto ved at udføre følgende handling(er): {3}. Klik på linket herunder for at starte processen.</p><p><a href="{0}">Opdater konto</a></p><p>Dette link udløber efter {4}.</p><p>Hvis du ikke mener at din administrator har efterspurgt dette, kan du blot se bort fra denne besked.</p>
+ eventLoginErrorSubject=Logind fejl
+ eventLoginErrorBody=Et fejlet logind forsøg er blevet registreret på din konto d. {0} fra {1}. Hvis dette ikke var dig, bedes du kontakte din administrator omgående.
+diff --git a/themes/src/main/resources-community/theme/base/email/messages/messages_fa.properties b/themes/src/main/resources-community/theme/base/email/messages/messages_fa.properties
+index 776d88f..71c506c 100644
+--- a/themes/src/main/resources-community/theme/base/email/messages/messages_fa.properties
++++ b/themes/src/main/resources-community/theme/base/email/messages/messages_fa.properties
+@@ -1,14 +1,14 @@
+ emailVerificationSubject=تایید ایمیل
+ emailVerificationBody=شخصی با این آدرس ایمیل یک حساب {2} ایجاد کرده است. اگر این شما بودید، روی پیوند زیر کلیک کنید تا آدرس ایمیل خود را تأیید کنید\n\n{0}\n\nاین پیوند در {3} منقضی می‌شود.\n\nاگر شما این حساب را ایجاد نکرده‌اید، فقط این پیام را نادیده بگیرید .
+ emailVerificationBodyHtml=<p>شخصی با این آدرس ایمیل یک حساب {2} ایجاد کرده است. اگر این شما بودید، برای تأیید آدرس ایمیل خود روی پیوند زیر کلیک کنید</p><p><a href="{0}">پیوند به تأیید آدرس ایمیل</a></p><p>این پیوند در {3} منقضی می‌شود.</p><p>اگر شما این حساب را ایجاد نکرده‌اید، فقط این پیام را نادیده بگیرید.</p>
+ emailUpdateConfirmationSubject=تایید ایمیل جدید
+ emailUpdateConfirmationBody=برای به‌روزرسانی حساب {2} خود با آدرس ایمیل {1}، روی پیوند زیر کلیک کنید\n\n{0}\n\nاین پیوند ظرف {3} منقضی می‌شود.\n\nاگر نمی‌خواهید ادامه دهید این تغییر، فقط این پیام را نادیده بگیرید.
+-emailUpdateConfirmationBodyHtml=<p>برای به‌روزرسانی حساب {2} خود با آدرس ایمیل {1}، روی پیوند زیر کلیک کنید</p><p><a href="{0}">{0}</a></p>< p>این پیوند در مدت {3} منقضی می‌شود.</p><p>اگر نمی‌خواهید به این اصلاح ادامه دهید، فقط این پیام را نادیده بگیرید.</p>
++emailUpdateConfirmationBodyHtml=<p>برای به‌روزرسانی حساب {2} خود با آدرس ایمیل {1}، روی پیوند زیر کلیک کنید</p><p><a href="{0}">{0}</a></p><p>این پیوند در مدت {3} منقضی می‌شود.</p><p>اگر نمی‌خواهید به این اصلاح ادامه دهید، فقط این پیام را نادیده بگیرید.</p>
+ emailTestSubject=[KEYCLOAK] - پیام آزمایشی SMTP
+ emailTestBody=این یک پیام آزمایشی است
+ emailTestBodyHtml=<p>این یک پیام آزمایشی است</p>
+ identityProviderLinkSubject=پیوند {0}
+ identityProviderLinkBody=شخصی می خواهد حساب "{1}" شما را با حساب "{0}" کاربر {2} پیوند دهد. اگر این شما بودید، برای پیوند دادن حساب‌ها روی پیوند زیر کلیک کنید\n\n{3}\n\nاین پیوند در {5} منقضی می‌شود.\n\nاگر نمی‌خواهید حساب را پیوند دهید، فقط این پیام را نادیده بگیرید. اگر حساب‌ها را پیوند دهید، می‌توانید از طریق {0} به {1} وارد شوید.
+ identityProviderLinkBodyHtml=<p>شخصی می خواهد حساب <b>{1}</b> شما را به حساب <b>{0}</b> کاربر {2} پیوند دهد. اگر این شما بودید، برای پیوند دادن حساب‌ها روی پیوند زیر کلیک کنید</p><p><a href="{3}">پیوند برای تأیید پیوند حساب</a></p><p>این پیوند در مدت زمان منقضی می‌شود. {5}.</p><p>اگر نمی‌خواهید حساب را پیوند دهید، فقط این پیام را نادیده بگیرید. اگر حساب‌ها را پیوند دهید، می‌توانید از طریق {0} به {1} وارد شوید.</p>
+ passwordResetSubject=بازنشانی رمز عبور
+ passwordResetBody=شخصی به تازگی درخواست کرده است که اعتبارنامه حساب {2} شما را تغییر دهد. اگر این شما بودید، روی پیوند زیر کلیک کنید تا آنها را بازنشانی کنید.\n\n{0}\n\nاین پیوند و کد در مدت {3} منقضی می‌شوند.\n\nاگر نمی‌خواهید اطلاعات کاربری خود را بازنشانی کنید، فقط این پیام را نادیده بگیرید و چیزی تغییر نخواهد کرد.
+diff --git a/themes/src/main/resources-community/theme/base/email/messages/messages_hu.properties b/themes/src/main/resources-community/theme/base/email/messages/messages_hu.properties
+index 00bc29a..a68e56f 100644
+--- a/themes/src/main/resources-community/theme/base/email/messages/messages_hu.properties
++++ b/themes/src/main/resources-community/theme/base/email/messages/messages_hu.properties
+@@ -1,14 +1,14 @@
+ emailVerificationSubject=E-mail cím megerősítése
+ emailVerificationBody=Ezzel az e-mail címmel valaki létrehozott egy {2} tartomány felhasználói fiókot. Amennyiben a fiókot Ön hozta létre, kérem, kattintson a lenti hivatkozásra, hogy megerősítse fiókját és ezt az e-mail címet.\n\n{0}\n\nA hivatkozás érvényét veszti {3} múlva.\n\nHa nem ön hozta létre a felhasználói fiókot, akkor kérem, hagyja figyelmen kívül ezt az üzenetet.
+ emailVerificationBodyHtml=<p>Ezzel az e-mail címmel valaki létrehozott egy {2} tartomány felhasználói fiókot. Amennyiben a fiókot Ön hozta létre, kérem, kattintson a lenti hivatkozásra, hogy megerősítse fiókját és ezt az e-mail címet.</p><p><a href="{0}">Hivatkozás a fiók és az e-mail cím megerősítéséhez</a></p><p>A hivatkozás érvényét veszti {3} múlva.</p><p>Ha nem ön hozta létre a felhasználói fiókot, akkor kérem, hagyja figyelmen kívül ezt az üzenetet.</p>
+ emailUpdateConfirmationSubject=Új e-mail cím megerősítése
+ emailUpdateConfirmationBody=Valaki módosítani szeretné az Ön "{2}" tartományi fiókjának e-mail címét. Amennyiben az e-mail cím módosítását Ön kezdeményezte, kérem, kattintson a lenti hivatkozásra a jóváhagyáshoz\n\n{0}\n\nA hivatkozás érvényét veszti {3} múlva.\n\nHa nem ön kérte az e-mail cím megváltoztatását, akkor kérem, hagyja figyelmen kívül ezt az üzenetet, az e-mail címe nem fog megváltozni.
+-***emailUpdateConfirmationBodyHtml=<p>Valaki módosítani szeretné az Ön <b>{2}</b> tartományi fiókjának e-mail címét. Amennyiben az e-mail cím módosítását Ön kezdeményezte, kérem, kattintson a lenti hivatkozásra a jóváhagyáshoz</p><p><a href="{0}">{0}</a></p><p>A hivatkozás érvényét veszti {3} múlva.</p><p>Ha nem ön kérte az e-mail cím megváltoztatását, akkor kérem, hagyja figyelmen kívül ezt az üzenetet, az e-mail címe nem fog megváltozni.</p>
++emailUpdateConfirmationBodyHtml=<p>Valaki módosítani szeretné az Ön <b>{2}</b> tartományi fiókjának e-mail címét. Amennyiben az e-mail cím módosítását Ön kezdeményezte, kérem, kattintson a lenti hivatkozásra a jóváhagyáshoz</p><p><a href="{0}">{0}</a></p><p>A hivatkozás érvényét veszti {3} múlva.</p><p>Ha nem ön kérte az e-mail cím megváltoztatását, akkor kérem, hagyja figyelmen kívül ezt az üzenetet, az e-mail címe nem fog megváltozni.</p>
+ emailTestSubject=[KEYCLOAK] - SMTP teszt üzenet
+ emailTestBody=Ez egy KEYCLOAK teszt üzenet.
+ emailTestBodyHtml=<p>Ez egy KEYCLOAK teszt üzenet.</p>
+ identityProviderLinkSubject={0} összekötés
+ identityProviderLinkBody=Valaki össze kívánja kötni az Ön "{1}" tartományi fiókját a(z) "{0}" személyazonosság-kezelő {2} felhasználói fiókjával. Amennyiben az összekötést Ön kezdeményezte kérem, kattintson a lenti hivatkozásra, hogy összekösse fiókjait.\n\n{3}\n\nA hivatkozás érvényét veszti {5} múlva.\n\nHa nem ön kezdeményezte a felhasználói fiókok összekötését, akkor kérem, hagyja figyelmen kívül ezt az üzenetet.\n\nHa összeköti a fiókjait, akkor beléphet a(z) {1} tartományba a(z) {0} szolgáltatón keresztül.
+ identityProviderLinkBodyHtml=<p>Valaki össze kívánja kötni az Ön <b>{1}</b> tartomány fiókját a(z) <b>{0}</b> személyazonosság-kezelő {2} felhasználói fiókjával. Amennyiben az összekötést Ön kezdeményezte kérem, kattintson a lenti hivatkozásra, hogy összekösse fiókjait.</p><p><a href="{3}">Hivatkozás a fiók összekötés megerősítéshez</a></p><p>A hivatkozás érvényét veszti {5} múlva.</p><p>Ha nem ön kezdeményezte a felhasználói fiókok összekötését, akkor kérem, hagyja figyelmen kívül ezt az üzenetet.</p><p>Ha összeköti a fiókjait, akkor beléphet a(z) {1} tartományba a(z) {0} szolgáltatón keresztül.</p>
+ passwordResetSubject=Jelszó visszaállítás
+ passwordResetBody=Valaki vissza kívánja állítani az Ön "{2}" tartományi fiókjának jelszavát. Amennyiben a jelszó visszaállítást Ön kezdeményezte, kérem, kattintson a lenti hivatkozásra a jelszava megváltoztatásához.\n\n{0}\n\nA hivatkozás érvényét veszti {3} múlva.\n\nHa nem ön kérte a jelszó visszaállítást, akkor kérem, hagyja figyelmen kívül ezt az üzenetet, a jelszava nem fog megváltozni.
+diff --git a/themes/src/main/resources-community/theme/base/email/messages/messages_lt.properties b/themes/src/main/resources-community/theme/base/email/messages/messages_lt.properties
+index ee5afa9..8dd2512 100644
+--- a/themes/src/main/resources-community/theme/base/email/messages/messages_lt.properties
++++ b/themes/src/main/resources-community/theme/base/email/messages/messages_lt.properties
+@@ -1,20 +1,20 @@
+ emailVerificationSubject=El. pašto patvirtinimas
+ emailVerificationBody=Paskyra {2} sukurta naudojant šį el. pašto adresą. Jei tai buvote Jūs, tuomet paspauskite žemiau esančią nuorodą\n\n{0}\n\nŠi nuoroda galioja {1} min.\n\nJei paskyros nekūrėte, tuomet ignuoruokite šį laišką. 
+-emailVerificationBodyHtml=<p>Paskyra {2} sukurta naudojant šį el. pašto adresą. Jei tao buvote Jūs, tuomet paspauskite žemiau esančią nuorodą</p><p><a href=LT"{0}">{0}</a></p><p>Ši nuoroda galioja {1} min.</p><p>nJei paskyros nekūrėte, tuomet ignuoruokite šį laišką.</p>
++emailVerificationBodyHtml=<p>Paskyra {2} sukurta naudojant šį el. pašto adresą. Jei tao buvote Jūs, tuomet paspauskite žemiau esančią nuorodą</p><p><a href="{0}">{0}</a></p><p>Ši nuoroda galioja {1} min.</p><p>nJei paskyros nekūrėte, tuomet ignuoruokite šį laišką.</p>
+ identityProviderLinkSubject=Sąsaja {0}
+ identityProviderLinkBody=Kažas pageidauja susieti Jūsų "{1}" paskyrą su "{0}" {2} naudotojo paskyrą. Jei tai buvote Jūs, tuomet paspauskite žemiau esančią nuorodą norėdami susieti paskyras\n\n{3}\n\nŠi nuoroda galioja {4} min.\n\nJei paskyrų susieti nenorite, tuomet ignoruokite šį laišką. Jei paskyras susiesite, tuomet prie {1} galėsiste prisijungti per {0}.
+-identityProviderLinkBodyHtml=<p>žas pageidauja susieti Jūsų <b>{1}</b> paskyrą su <b>{0}</b> {2} naudotojo paskyrą. Jei tai buvote Jūs, tuomet paspauskite žemiau esančią nuorodą norėdami susieti paskyras</p><p><a href=LT"{3}">{3}</a></p><p>Ši nuoroda galioja {4} min.</p><p>Jei paskyrų susieti nenorite, tuomet ignoruokite šį laišką. Jei paskyras susiesite, tuomet prie {1} galėsiste prisijungti per {0}.</p>
++identityProviderLinkBodyHtml=<p>žas pageidauja susieti Jūsų <b>{1}</b> paskyrą su <b>{0}</b> {2} naudotojo paskyrą. Jei tai buvote Jūs, tuomet paspauskite žemiau esančią nuorodą norėdami susieti paskyras</p><p><a href="{3}">{3}</a></p><p>Ši nuoroda galioja {4} min.</p><p>Jei paskyrų susieti nenorite, tuomet ignoruokite šį laišką. Jei paskyras susiesite, tuomet prie {1} galėsiste prisijungti per {0}.</p>
+ passwordResetSubject=Slaptažodžio atkūrimas
+ passwordResetBody=Kažkas pageidauja pakeisti Jūsų paskyros {2} slaptažodį. Jei tai buvote Jūs, tuomet paspauskite žemiau esančią nuorodą slaptažodžio pakeitimui.\n\n{0}\n\nŠi nuoroda ir kodas galioja {1} min.\n\nJei nepageidajate keisti slaptažodžio, tuomet ignoruokite šį laišką ir niekas nebus pakeista.
+-passwordResetBodyHtml=<p>Kažkas pageidauja pakeisti Jūsų paskyros {2} slaptažodį. Jei tai buvote Jūs, tuomet paspauskite žemiau esančią nuorodą slaptažodžio pakeitimui.</p><p><a href=LT"{0}">Kredencialų nustatymo iš naujo nuoroda</a></p><p>Ši nuoroda ir kodas galioja {1} min.</p><p>Jei nepageidajate keisti slaptažodžio, tuomet ignoruokite šį laišką ir niekas nebus pakeista.</p>
++passwordResetBodyHtml=<p>Kažkas pageidauja pakeisti Jūsų paskyros {2} slaptažodį. Jei tai buvote Jūs, tuomet paspauskite žemiau esančią nuorodą slaptažodžio pakeitimui.</p><p><a href="{0}">Kredencialų nustatymo iš naujo nuoroda</a></p><p>Ši nuoroda ir kodas galioja {1} min.</p><p>Jei nepageidajate keisti slaptažodžio, tuomet ignoruokite šį laišką ir niekas nebus pakeista.</p>
+ executeActionsSubject=Atnaujinkite savo paskyrą
+ executeActionsBody=Sistemos administratorius pageidauja, kad Jūs atnaujintumėte savo {2} paskyrą. Paspauskite žemiau esančią nuorodą paskyros duomenų atnaujinimui.\n\n{0}\n\nŠi nuoroda galioja {1} min.\n\nJei Jūs neasate tikri, kad tai administratoriaus pageidavimas, tuomet ignoruokite šį laišką ir niekas nebus pakeista.
+-executeActionsBodyHtml=<p>Sistemos administratorius pageidauja, kad Jūs atnaujintumėte savo {2} paskyrą. Paspauskite žemiau esančią nuorodą paskyros duomenų atnaujinimui.</p><p><a href=LT"{0}">{0}</a></p><p>Ši nuoroda galioja {1} min.</p><p>Jei Jūs neasate tikri, kad tai administratoriaus pageidavimas, tuomet ignoruokite šį laišką ir niekas nebus pakeista.</p>
++executeActionsBodyHtml=<p>Sistemos administratorius pageidauja, kad Jūs atnaujintumėte savo {2} paskyrą. Paspauskite žemiau esančią nuorodą paskyros duomenų atnaujinimui.</p><p><a href="{0}">{0}</a></p><p>Ši nuoroda galioja {1} min.</p><p>Jei Jūs neasate tikri, kad tai administratoriaus pageidavimas, tuomet ignoruokite šį laišką ir niekas nebus pakeista.</p>
+ eventLoginErrorSubject=Nesėkmingas bandymas prisijungti prie jūsų paskyros
+ eventLoginErrorBody=Bandymas prisijungti prie jūsų paskyros {0} iš {1} nesėkmingas. Jei tai nebuvote jūs, tuomet susisiekite su administratoriumi
+ eventLoginErrorBodyHtml=<p>Bandymas prisijungti prie jūsų paskyros {0} iš {1} nesėkmingas. Jei tai nebuvote jūs, tuomet susisiekite su administratoriumi</p>
+ eventRemoveTotpSubject=OTP pašalinimas
+ eventRemoveTotpBody=Kažkas pageidauja atsieti TOPT Jūsų {1} paskyroje su {0}. Jei tai nebuvote Jūs, tuomet susisiekite su administratoriumi
+ eventRemoveTotpBodyHtml=<p>Kažkas pageidauja atsieti TOPT Jūsų <b>{1}</b> paskyroje su <b>{0}</b>. Jei tai nebuvote Jūs, tuomet susisiekite su administratoriumi</p>
+ eventUpdatePasswordSubject=Slaptažodžio atnaujinimas
+ eventUpdatePasswordBody={1} paskyroje {0} pakeisas jūsų slaptažodis. Jei Jūs nekeitėte, tuomet susisiekite su administratoriumi
+diff --git a/themes/src/main/resources-community/theme/base/email/messages/messages_nl.properties b/themes/src/main/resources-community/theme/base/email/messages/messages_nl.properties
+index f52b06f..fcb48c2 100644
+--- a/themes/src/main/resources-community/theme/base/email/messages/messages_nl.properties
++++ b/themes/src/main/resources-community/theme/base/email/messages/messages_nl.properties
+@@ -1,11 +1,11 @@
+ emailVerificationSubject=Bevestig e-mailadres
+ emailVerificationBody=Iemand heeft een {2} account aangemaakt met dit e-mailadres. Als u dit was, klikt u op de onderstaande koppeling om uw e-mailadres te bevestigen \n\n{0}\n\nDeze koppeling zal binnen {3} vervallen.\n\nU kunt dit bericht negeren indien u dit account niet heeft aangemaakt.
+-emailVerificationBodyHtml=<p>Iemand heeft een {2} account aangemaakt met dit e-mailadres. Als u dit was, klikt u op de onderstaande koppeling om uw e-mailadres te bevestigen</p><p><a href="{0}">Koppeling naar e-mailadres bevestiging</a></p><p>Deze koppeling zal binnen {3} vervallen.</p<p>U kunt dit bericht negeren indien u dit account niet heeft aangemaakt.</p>
++emailVerificationBodyHtml=<p>Iemand heeft een {2} account aangemaakt met dit e-mailadres. Als u dit was, klikt u op de onderstaande koppeling om uw e-mailadres te bevestigen</p><p><a href="{0}">Koppeling naar e-mailadres bevestiging</a></p><p>Deze koppeling zal binnen {3} vervallen.</p><p>U kunt dit bericht negeren indien u dit account niet heeft aangemaakt.</p>
+ emailTestSubject=[KEYCLOAK] - SMTP testbericht
+ emailTestBody=Dit is een testbericht
+ emailTestBodyHtml=<p>Dit is een testbericht</p>
+ identityProviderLinkSubject=Koppel {0}
+ identityProviderLinkBody=Iemand wil uw "{1}" account koppelen met "{0}" account van gebruiker {2}. Als u dit was, klik dan op de onderstaande link om de accounts te koppelen\n\n{3}\n\nDeze link zal over {5} vervallen.\n\nAls u de accounts niet wilt koppelen, negeer dan dit bericht. Als u accounts koppelt, dan kunt u bij {1} inloggen via {0}.
+ identityProviderLinkBodyHtml=<p>Iemand wil uw "{1}" account koppelen met "{0}" account van gebruiker {2}. Als u dit was, klik dan op de onderstaande link om de accounts te koppelen</p><p><a href="{3}">Link om accounts te koppelen</a></p><p>Deze link zal over {5} vervallen.</p><p>Als u de accounts niet wilt koppelen, negeer dan dit bericht. Als u accounts koppelt, dan kunt u bij {1} inloggen via {0}.</p>
+ passwordResetSubject=Wijzig wachtwoord
+ passwordResetBody=Iemand verzocht de aanmeldgegevens van uw {2} account te wijzigen. Als u dit was, klik dan op de onderstaande koppeling om ze te wijzigen.\n\n{0}\n\nDe link en de code zullen binnen {3} vervallen.\n\nAls u uw aanmeldgegevens niet wilt wijzigen, negeer dan dit bericht en er zal niets gewijzigd worden.
+diff --git a/themes/src/main/resources-community/theme/base/email/messages/messages_no.properties b/themes/src/main/resources-community/theme/base/email/messages/messages_no.properties
+index e5905ae..721d244 100644
+--- a/themes/src/main/resources-community/theme/base/email/messages/messages_no.properties
++++ b/themes/src/main/resources-community/theme/base/email/messages/messages_no.properties
+@@ -1,13 +1,13 @@
+ emailVerificationSubject=Bekreft e-postadresse
+ emailVerificationBody=Noen har opprettet en {2} konto med denne e-postadressen. Hvis dette var deg, klikk på lenken nedenfor for å bekrefte e-postadressen din\n\n{0}\n\nDenne lenken vil utløpe om {1} minutter.\n\nHvis du ikke opprettet denne kontoen, vennligst ignorer denne meldingen.
+ emailVerificationBodyHtml=<p>Noen har opprettet en {2} konto med denne e-postadressen. Hvis dette var deg, klikk på lenken nedenfor for å bekrefte e-postadressen din</p><p><a href="{0}">Lenke for å bekrefte e-postadresse</a></p><p>Denne lenken vil utløpe om {1} minutter.</p><p>Hvis du ikke opprettet denne kontoen, vennligst ignorer denne meldingen.</p>
+ identityProviderLinkSubject=Lenke {0}
+-identityProviderLinkBody=Noen vil koble din <b>{1}</b> konto med <b>{0}</b> konto til bruker {2}. Hvis dette var deg, klikk på lenken nedenfor for å koble kontoene\n\n{3}\n\nDenne lenken vil utløpe om {4} minutter\n\nHvis du ikke vil koble kontoene, vennligst ignorer denne meldingen. Hvis du kobler kontoene sammen vil du kunne logge inn til {1} gjennom {0}.
++identityProviderLinkBody=Noen vil koble din {1} konto med {0} konto til bruker {2}. Hvis dette var deg, klikk på lenken nedenfor for å koble kontoene\n\n{3}\n\nDenne lenken vil utløpe om {4} minutter\n\nHvis du ikke vil koble kontoene, vennligst ignorer denne meldingen. Hvis du kobler kontoene sammen vil du kunne logge inn til {1} gjennom {0}.
+ identityProviderLinkBodyHtml=<p>Noen vil koble din <b>{1}</b> konto med <b>{0}</b> konto til bruker {2}. Hvis dette var deg, klikk på lenken nedenfor for å koble kontoene.</p><p><a href="{3}">Lenke for å koble konto</a></p><p>Denne lenken vil utløpe om {4} minutter.</p><p>Hvis du ikke vil koble kontoene, vennligst ignorer denne meldingen. Hvis du kobler kontoene sammen vil du kunne logge inn til {1} gjennom {0}.</p>
+ passwordResetSubject=Tilbakestill passord
+ passwordResetBody=Noen har bedt om å endre innloggingsdetaljene til din konto {2}. Hvis dette var deg, klikk på lenken nedenfor for å tilbakestille dem.\n\n{0}\n\nDenne lenken vil utløpe om {1} minutter.\n\nHvis du ikke vil tilbakestille din innloggingsdata, vennligst ignorer denne meldingen og ingenting vil bli endret.
+ passwordResetBodyHtml=<p>Noen har bedt om å endre innloggingsdetaljene til din konto {2}. Hvis dette var deg, klikk på lenken nedenfor for å tilbakestille dem.</p><p><a href="{0}">Lenke for å tillbakestille innloggingsdetaljene</a></p><p>Denne lenken vil utløpe om {1} minutter.</p><p>Hvis du ikke vil tilbakestille din innloggingsdata, vennligst ignorer denne meldingen og ingenting vil bli endret.</p>
+ executeActionsSubject=Oppdater kontoen din
+ executeActionsBody=Administrator har anmodet at du oppdaterer din {2} konto. Klikk på lenken nedenfor for å starte denne prosessen\n\n{0}\n\nDenne lenken vil utløpe om {1} minutter.\n\nHvis du ikke var klar over at administrator har bedt om dette, vennligst ignorer denne meldingen og ingenting vil bli endret.
+ executeActionsBodyHtml=<p>Administrator har anmodet at du oppdaterer din {2} konto. Klikk på linken nedenfor for å starte denne prosessen.</p><p><a href="{0}">Lenke for å oppdatere din konto</a></p><p>Denne lenken vil utløpe om {1} minutter.</p><p>Hvis du ikke var klar over at administrator har bedt om dette, ignorer denne meldingen og ingenting vil bli endret. </p>
+ eventLoginErrorSubject=Innlogging feilet
+diff --git a/themes/src/main/resources-community/theme/base/email/messages/messages_tr.properties b/themes/src/main/resources-community/theme/base/email/messages/messages_tr.properties
+index 5605f10..3ce3daa 100755
+--- a/themes/src/main/resources-community/theme/base/email/messages/messages_tr.properties
++++ b/themes/src/main/resources-community/theme/base/email/messages/messages_tr.properties
+@@ -1,17 +1,17 @@
+ emailVerificationSubject=E-postayı doğrula
+ emailVerificationBody=Birisi bu e-posta adresiyle bir {2} hesap oluşturdu. Bu sizseniz, e-posta adresinizi doğrulamak için aşağıdaki bağlantıya tıklayın\n\n{0}\n\nBu bağlantı {3} içinde sona erecek.\n\nBu hesabı oluşturmadıysanız, sadece bu iletiyi yoksayınız.
+ emailVerificationBodyHtml=<p>Birisi bu e-posta adresiyle bir {2} hesap oluşturdu. Bu sizseniz, e-posta adresinizi doğrulamak için aşağıdaki bağlantıyı tıklayın.</p><p><a href="{0}">E-posta adresi doğrulama adresi</a></p><p>Bu bağlantının süresi {3} içerisinde sona erecek.</p><p>Bu hesabı siz oluşturmadıysanız, bu mesajı göz ardı edin.</p>
+ emailTestSubject=[KEYCLOAK] - SMTP test mesajı
+ emailTestBody=Bu bir test mesajı
+ emailTestBodyHtml=<p>Bu bir test mesajı</p>
+ identityProviderLinkSubject=Link {0}
+ identityProviderLinkBody=Birisi "{1}" hesabınızı "{0}" kullanıcı hesabı {2} ile bağlamak istiyor. Bu sizseniz, hesapları bağlamak için aşağıdaki bağlantıyı tıklayın:\n\n{3}\n\nBu bağlantı {5} içinde sona erecek.\n\nHesabınızı bağlamak istemiyorsanız bu mesajı göz ardı edin. Hesapları bağlarsanız, {1} ile {0} arasında oturum açabilirsiniz.
+-identityProviderLinkBodyHtml=<p>Birisi <b> {1} </ b> hesabınızı {2} kullanıcısı <b> {0} </ b> hesabına bağlamak istiyor. Bu sizseniz, bağlantı vermek için aşağıdaki bağlantıyı tıklayın</p><p><a href="{3}">Hesap bağlantısını onaylamak için bağlantı</a></p><p>Bu bağlantının süresi {5} içerisinde sona erecek.</p><p>Hesabı bağlamak istemiyorsanız, bu mesajı göz ardı edin. Hesapları bağlarsanız, {1} ile {0} arasında oturum açabilirsiniz.</p>
++identityProviderLinkBodyHtml=<p>Birisi <b> {1} </b> hesabınızı {2} kullanıcısı <b> {0} </b> hesabına bağlamak istiyor. Bu sizseniz, bağlantı vermek için aşağıdaki bağlantıyı tıklayın</p><p><a href="{3}">Hesap bağlantısını onaylamak için bağlantı</a></p><p>Bu bağlantının süresi {5} içerisinde sona erecek.</p><p>Hesabı bağlamak istemiyorsanız, bu mesajı göz ardı edin. Hesapları bağlarsanız, {1} ile {0} arasında oturum açabilirsiniz.</p>
+ passwordResetSubject=Şifreyi sıfırla
+ passwordResetBody=Birisi, {2} hesabınızın kimlik bilgilerini değiştirmeyi istedi.Bu sizseniz, sıfırlamak için aşağıdaki bağlantıyı tıklayın.\n\n{0}\n\nBu bağlantı ve kod {3} içinde sona erecek.\n\nFakat bilgilerinizi sıfırlamak istemiyorsanız, Sadece bu mesajı görmezden gelin ve hiçbir şey değişmeyecek.
+ passwordResetBodyHtml=<p>Birisi, {2} hesabınızın kimlik bilgilerini değiştirmeyi istedi. Sizseniz, sıfırlamak için aşağıdaki linke tıklayınız.</p><p><a href="{0}">Kimlik bilgilerini sıfırlamak için bağlantı</a></p><p>Bu bağlantının süresi {3} içerisinde sona erecek.</p><p>Kimlik bilgilerinizi sıfırlamak istemiyorsanız, bu mesajı göz ardı edin.</p>
+ executeActionsSubject=Hesabınızı Güncelleyin
+ executeActionsBody=Yöneticiniz aşağıdaki işlemleri gerçekleştirerek {2} hesabınızı güncelledi: {3}. Bu işlemi başlatmak için aşağıdaki linke tıklayın.\n\n{0}\n\nBu bağlantının süresi {4} içerisinde sona erecek.\n\nYöneticinizin bunu istediğinden habersizseniz, bu mesajı göz ardı edin ve hiçbir şey değişmez.
+ executeActionsBodyHtml=<p>Yöneticiniz aşağıdaki işlemleri gerçekleştirerek {2} hesabınızı güncelledi: {3}. Bu işlemi başlatmak için aşağıdaki linke tıklayın.</p><p><a href="{0}">Hesap güncelleme bağlantısı</a></p><p>Bu bağlantının süresi {4} içerisinde sona erecek.</p><p>Yöneticinizin bunu istediğinden habersizseniz, bu mesajı göz ardı edin ve hiçbir şey değişmez.</p>
+ eventLoginErrorSubject=Giriş hatası
+ eventLoginErrorBody={1} ''den {0} tarihinde başarısız bir giriş denemesi yapıldı. Bu siz değilseniz, lütfen yöneticiyle iletişime geçin.
+diff --git a/themes/src/main/resources-community/theme/base/email/messages/messages_uk.properties b/themes/src/main/resources-community/theme/base/email/messages/messages_uk.properties
+index f5487ac..0318979 100755
+--- a/themes/src/main/resources-community/theme/base/email/messages/messages_uk.properties
++++ b/themes/src/main/resources-community/theme/base/email/messages/messages_uk.properties
+@@ -1,14 +1,14 @@
+ emailVerificationSubject=Підтвердити адресу електронної пошти
+ emailVerificationBody=Хтось створив обліковий запис {2} із цією адресою електронної пошти. Якщо це були Ви, натисніть на посилання нижче, щоб підтвердити свою адресу електронної пошти\n\n{0}\n\nЦе посилання дійсне протягом {3}.\n\nЯкщо Ви не створювали цей обліковий запис, просто проігноруйте цей лист.
+ emailVerificationBodyHtml=<p>Хтось створив обліковий запис {2} із цією адресою електронної пошти. Якщо це були Ви, натисніть на посилання нижче, щоб підтвердити свою адресу електронної пошти</p><p><a href="{0}">Посилання на підтвердження адресу електронної пошти</a></p><p>Це посилання дійсне протягом {3}.</p><p>Якщо Ви не створювали цей обліковий запис, просто проігноруйте цей лист.</p>
+ emailUpdateConfirmationSubject=Підтвердіть нову адресу електронної пошти
+ emailUpdateConfirmationBody=Щоб оновити адресу електронної пошти {1} облікового запису {2}, натисніть на посилання нижче\n\n{0}\n\nЦе посилання дійсне протягом {3}.\n\nЯкщо Ви не бажаєте застосувати ці зміни, просто проігноруйте цей лист.
+-emailUpdateConfirmationBodyHtml=<p>Щоб оновити адресу електронної пошти {1} облікового запису {2}, натисніть на посилання нижче</p><p><a href="{0}">{0}</a></p ><p>Це посилання дійсне протягом {3}.</p><p>Якщо Ви не бажаєте застосувати ці зміни, просто проігноруйте цей лист.</p>
++emailUpdateConfirmationBodyHtml=<p>Щоб оновити адресу електронної пошти {1} облікового запису {2}, натисніть на посилання нижче</p><p><a href="{0}">{0}</a></p><p>Це посилання дійсне протягом {3}.</p><p>Якщо Ви не бажаєте застосувати ці зміни, просто проігноруйте цей лист.</p>
+ emailTestSubject=[KEYCLOAK] - тестове повідомлення SMTP
+ emailTestBody=Це тестове повідомлення
+ emailTestBodyHtml=<p>Це тестове повідомлення</p>
+ identityProviderLinkSubject=Посилання {0}
+ identityProviderLinkBody=Хтось хоче зв''язати Ваш обліковий запис "{1}" з обліковим записом "{0}" користувача {2}. Якщо це були Ви, натисніть на посилання нижче, щоб зв''язати облікові записи\n\n{3}\n\nЦе посилання дійсне протягом {5}.\n\nЯкщо Ви не бажаєте зв''язати облікові записи, просто проігноруйте цей лист. Якщо зв''язати облікові записи, Ви зможете увійти в {1} через {0}.
+ identityProviderLinkBodyHtml=<p>Хтось хоче зв''язати Ваш обліковий запис <b>{1}</b> з обліковим записом <b>{0}</b> користувача {2}. Якщо це були Ви, натисніть на посилання нижче, щоб зв''язати облікові записи</p><p><a href="{3}">Посилання для підтвердження зв''язування облікових записів</a></p><p>Це посилання дійсне протягом {5}.</p><p>Якщо Ви не бажаєте зв''язати облікові записи, просто проігноруйте цей лист. Якщо зв''язати облікові записи, Ви зможете увійти в {1} через {0}.</p>
+ passwordResetSubject=Скинути пароль
+ passwordResetBody=Хтось щойно запросив зміну паролю Вашого облікового запису {2}. Якщо це були Ви, натисніть на посилання нижче, щоб скинути пароль.\n\n{0}\n\nЦе посилання дійсне протягом {3}.\n\nЯкщо Ви не бажаєте скинути пароль, просто проігноруйте цей лист, і нічого не зміниться.
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_ar.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_ar.properties
+index c6488c3..c24def8 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_ar.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_ar.properties
+@@ -458,21 +458,21 @@ webauthn-login-title=تسجيل الدخول باستخدام مفتاح الأ
+ webauthn-registration-title=تسجيل مفتاح أمان
+ webauthn-available-authenticators=مفاتيح الأمان المتاحة
+ webauthn-unsupported-browser-text=الخاصية WebAuthn غير مدعومة في هذا المتصفح. جرب متصفح آخر أو تواصل مع مسؤول النظام.
+ webauthn-doAuthenticate=تسجيل الدخول باستخدام مفتاح الأمان
+ webauthn-createdAt-label=تم إنشاؤه في
+ 
+ # WebAuthn Error
+ webauthn-error-title=خطأ في مفتاح الأمان
+-webauthn-error-registration=فشل في تسجيل مفتاح الأمان الخاص بك.<br/> {0}
+-webauthn-error-api-get=فشلت المصادقة بواسطة مفتاح الأمان.<br/> {0}
++webauthn-error-registration=فشل في تسجيل مفتاح الأمان الخاص بك.<br /> {0}
++webauthn-error-api-get=فشلت المصادقة بواسطة مفتاح الأمان.<br /> {0}
+ webauthn-error-different-user=أول مستخدم تمت مصادقته ليس هو الشخص الذي تمت مصادقته بواسطة مفتاح الأمان.
+-webauthn-error-auth-verification=نتيجة مصادقة مفتاح الأمان غير صالحة.<br/> {0}
+-webauthn-error-register-verification=نتيجة تسجيل مفتاح الأمان غير صالحة.<br/> {0}
++webauthn-error-auth-verification=نتيجة مصادقة مفتاح الأمان غير صالحة.<br /> {0}
++webauthn-error-register-verification=نتيجة تسجيل مفتاح الأمان غير صالحة.<br /> {0}
+ webauthn-error-user-not-found=مستخدم غير معروف تمت مصادقته بواسطة مفتاح الأمان.
+ 
+ # Identity provider
+ identity-provider-redirector=اتصل بمزود حسابات آخر
+ identity-provider-login-label=أو قم بتسجيل الدخول باستخدام
+ idp-email-verification-display-name=تأكيد البريد الإلكتروني
+ idp-email-verification-help-text=ربط حسابك عن طريق التحقق من صحة البريد الإلكتروني الخاص بك.
+ idp-username-password-form-display-name=اسم المستخدم و كلمة المرور
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_ca.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_ca.properties
+index 65dbb2b..3320ce5 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_ca.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_ca.properties
+@@ -415,21 +415,21 @@ webauthn-login-title=Entrada amb clau de seguretat
+ webauthn-registration-title=Registre d''una clau de seguretat
+ webauthn-available-authenticators=Claus de seguretat disponibles
+ webauthn-unsupported-browser-text=El WebAuthn no està implementat per aquest navegador. Proveu-ho amb un altre o contacteu amb l''administrador.
+ webauthn-doAuthenticate=Entra amb una clau de seguretat
+ webauthn-createdAt-label=Creada
+ 
+ # WebAuthn Error
+ webauthn-error-title=Error de la clau de seguretat
+-webauthn-error-registration=No s''ha pogut registrar la vostra clau de seguretat.<br/> {0}
+-webauthn-error-api-get=No s''ha pogut identificar amb la clau de seguretat.<br/> {0}
++webauthn-error-registration=No s''ha pogut registrar la vostra clau de seguretat.<br /> {0}
++webauthn-error-api-get=No s''ha pogut identificar amb la clau de seguretat.<br /> {0}
+ webauthn-error-different-user=L''usuari identificat primer no és l''autenticat per la clau de seguretat.
+-webauthn-error-auth-verification=El resultat de l''autenticació amb clau de seguretat no és vàlid.<br/>{0}
+-webauthn-error-register-verification=El resultat del registre amb clau de seguretat no és vàlid.<br/>{0}
++webauthn-error-auth-verification=El resultat de l''autenticació amb clau de seguretat no és vàlid.<br />{0}
++webauthn-error-register-verification=El resultat del registre amb clau de seguretat no és vàlid.<br />{0}
+ webauthn-error-user-not-found=L''usuari identificat per la clau de seguretat és desconegut.
+ 
+ # Identity provider
+ identity-provider-redirector=Connecta amb un altre proveïdor d''identitat
+ identity-provider-login-label=O entra amb
+ idp-email-verification-display-name=Verificació de correu electrònic
+ idp-email-verification-help-text=Enllaceu el compte verificant la vostra adreça de correu electrònic.
+ idp-username-password-form-display-name=Nom d''usuari i contrasenya
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_cs.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_cs.properties
+index 17d73bc..45fed6f 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_cs.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_cs.properties
+@@ -458,21 +458,21 @@ webauthn-login-title=Přihlášení přístupovým klíčem
+ webauthn-registration-title=Registrace přístupového klíče
+ webauthn-available-authenticators=Dostupné přístupové klíče
+ webauthn-unsupported-browser-text=WebAuthn není v tomto prohlížeči podporováno. Zkuste jiný prohlížeč nebo kontaktujte svého administrátora.
+ webauthn-doAuthenticate=Přihlášení přístupovým klíčem
+ webauthn-createdAt-label=Vytvořeno
+ 
+ # WebAuthn Error
+ webauthn-error-title=Chyba přístupového klíče
+-webauthn-error-registration=Selhala registrace vašeho přístupového klíče.<br/> {0}
+-webauthn-error-api-get=Selhalo přihlášení pomocí přístupového klíče.<br/> {0}
++webauthn-error-registration=Selhala registrace vašeho přístupového klíče.<br /> {0}
++webauthn-error-api-get=Selhalo přihlášení pomocí přístupového klíče.<br /> {0}
+ webauthn-error-different-user=První přihlášený uživatel není totožný s uživatelem přihlášeným pomocí přístupového klíče.
+-webauthn-error-auth-verification=Nevalidní výsledek přihlášení pomocí přístupového klíče.<br/> {0}
+-webauthn-error-register-verification=Nevalidní výsledek registrace přístupového klíče.<br/> {0}
++webauthn-error-auth-verification=Nevalidní výsledek přihlášení pomocí přístupového klíče.<br /> {0}
++webauthn-error-register-verification=Nevalidní výsledek registrace přístupového klíče.<br /> {0}
+ webauthn-error-user-not-found=Neznámý uživatel přihlášen pomocí přístupového klíče.
+ 
+ # Identity provider
+ identity-provider-redirector=Propojit s jiným poskytovatelem identit
+ identity-provider-login-label=Nebo se přihlaste pomocí
+ idp-email-verification-display-name=Ověření e-mailu
+ idp-email-verification-help-text=Proveďte spárování účtu ověřením e-mailu.
+ idp-username-password-form-display-name=Jméno a příjmení
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_de.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_de.properties
+index 8c58605..477d9ae 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_de.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_de.properties
+@@ -412,21 +412,21 @@ webauthn-login-title=Anmeldung mit Passkey
+ webauthn-registration-title=Passkey registrieren
+ webauthn-available-authenticators=Verfügbare Passkeys
+ webauthn-unsupported-browser-text=WebAuthn wird von diesem Browser nicht unterstützt. Versuchen Sie es mit einem anderen oder wenden Sie sich an Ihren Administrator.
+ webauthn-doAuthenticate=Anmelden mit Passkey
+ webauthn-createdAt-label=Erstellt
+ 
+ # WebAuthn Error
+ webauthn-error-title=Passkey Fehler
+-webauthn-error-registration=Fehler beim Registrieren Ihres Passkeys.<br/> {0}
+-webauthn-error-api-get=Fehler beim Authentifizieren mit dem Passkey.<br/> {0}
++webauthn-error-registration=Fehler beim Registrieren Ihres Passkeys.<br /> {0}
++webauthn-error-api-get=Fehler beim Authentifizieren mit dem Passkey.<br /> {0}
+ webauthn-error-different-user=Der erste authentifizierte Benutzer ist nicht derjenige, der durch den Passkey authentifiziert wurde.
+-webauthn-error-auth-verification=Das Ergebnis der Passkey-Authentifizierung ist ungültig.<br/> {0}
+-webauthn-error-register-verification=Das Ergebnis der Passkey-Registrierung ist ungültig.<br/> {0}
++webauthn-error-auth-verification=Das Ergebnis der Passkey-Authentifizierung ist ungültig.<br /> {0}
++webauthn-error-register-verification=Das Ergebnis der Passkey-Registrierung ist ungültig.<br /> {0}
+ webauthn-error-user-not-found=Unbekannter Benutzer, der mit dem Passkey authentifiziert wurde.
+ 
+ # Identity provider
+ identity-provider-redirector=Mit einem anderen Indentitätsprovider verbinden
+ identity-provider-login-label=Oder anmelden mit
+ idp-email-verification-display-name=E-Mail Verifizierung
+ idp-email-verification-help-text=Verknüpfen Sie Ihr Benutzerkonto durch die Bestätigung ihre E-Mail-Adresse.
+ idp-username-password-form-display-name=Passwort Verifizierung
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_el.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_el.properties
+index 7c1a5dd..0ef74e5 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_el.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_el.properties
+@@ -410,21 +410,21 @@ webauthn-login-title=Είσοδος με Κλειδί Ασφαλείας
+ webauthn-registration-title=Εγγραφή Κλειδιού Ασφαλείας
+ webauthn-available-authenticators=Διαθέσιμα Κλειδιά Ασφαλείας
+ webauthn-unsupported-browser-text=Το WebAuthn δεν υποστηρίζεται από αυτόν τον browser. Δοκιμάστε κάποιον άλλον ή επικοινωνήστε με τον διαχειριστή.
+ webauthn-doAuthenticate=Σύνδεση με το Κλειδί Ασφαλείας
+ webauthn-createdAt-label=Δημιουργήθηκε
+ 
+ # WebAuthn Error
+ webauthn-error-title=Σφάλμα Κλειδιού Ασφαλείας
+-webauthn-error-registration=Αποτυχία εγγραφής του κλειδιού ασφαλείας σας.<br/> {0}
+-webauthn-error-api-get=Αποτυχία ταυτοποίησης μέσω του Κλειδιού ασφαλείας.<br/> {0}
++webauthn-error-registration=Αποτυχία εγγραφής του κλειδιού ασφαλείας σας.<br /> {0}
++webauthn-error-api-get=Αποτυχία ταυτοποίησης μέσω του Κλειδιού ασφαλείας.<br /> {0}
+ webauthn-error-different-user=Ο αρχικός ταυτοποιημένος χρήστης δεν είναι ο ίδιος με αυτόν που ταυτοποιήθηκε με το Κλειδί ασφαλείας.
+-webauthn-error-auth-verification=Μη έγκυρο αποτέλεσμα ταυτοποίησης του Κλειδιού ασφαλείας.<br/> {0}
+-webauthn-error-register-verification=Μη έγκυρο αποτέλεσμα εγγραφής του Κλειδιού ασφαλείας.<br/> {0}
++webauthn-error-auth-verification=Μη έγκυρο αποτέλεσμα ταυτοποίησης του Κλειδιού ασφαλείας.<br /> {0}
++webauthn-error-register-verification=Μη έγκυρο αποτέλεσμα εγγραφής του Κλειδιού ασφαλείας.<br /> {0}
+ webauthn-error-user-not-found=Άγνωστος χρήστης ταυτοποιήθηκε με το Κλειδί ασφαλείας.
+ 
+ # Identity provider
+ identity-provider-redirector=Σύνδεση με έναν άλλο Πάροχο Ταυτότητας
+ identity-provider-login-label=Ή σύνδεση με
+ idp-email-verification-display-name=Πιστοποίηση Email
+ idp-email-verification-help-text=Σύνδεση του λογαριασμού με επιβεβαίωση του email σας.
+ idp-username-password-form-display-name=Όνομα χρήστη και κωδικός πρόσβασης
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_es.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_es.properties
+index 1c40f6d..431bca4 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_es.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_es.properties
+@@ -434,21 +434,21 @@ webauthn-login-title=Inicio de sesión con Passkey
+ webauthn-registration-title=Registro de Passkey
+ webauthn-available-authenticators=Passkeys disponibles
+ webauthn-unsupported-browser-text=WebAuthn no es compatible con este navegador. Pruebe con otro o comuníquese con su administrador.
+ webauthn-doAuthenticate=Iniciar sesión con Passkey
+ webauthn-createdAt-label=Creada
+ 
+ # WebAuthn Error
+ webauthn-error-title=Error de Passkey
+-webauthn-error-registration=No se pudo registrar su Passkey. <br/> {0}
+-webauthn-error-api-get=No se pudo autenticar con el Passkey. <br/> {0}
++webauthn-error-registration=No se pudo registrar su Passkey. <br /> {0}
++webauthn-error-api-get=No se pudo autenticar con el Passkey. <br /> {0}
+ webauthn-error-different-user=El primer usuario autenticado no es el autenticado por el Passkey.
+-webauthn-error-auth-verification=El resultado de la autenticación con el Passkey no es válido. <br/> {0}
+-webauthn-error-register-verification=El resultado de registro del Passkey no es válido. <br/> {0}
++webauthn-error-auth-verification=El resultado de la autenticación con el Passkey no es válido. <br /> {0}
++webauthn-error-register-verification=El resultado de registro del Passkey no es válido. <br /> {0}
+ webauthn-error-user-not-found=Usuario desconocido autenticado por el Passkey.
+ 
+ 
+ finalDeletionConfirmation=Si elimina su cuenta, no se puede restaurar. Para mantener su cuenta, haga clic en Cancelar.
+ irreversibleAction=Esta acción es irreversible
+ deleteAccountConfirm=Eliminar la confirmación de la cuenta
+ deletingImplies=Eliminar su cuenta implica:
+ errasingData=Borrando todos sus datos
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_fa.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_fa.properties
+index 8271b66..0dadb8f 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_fa.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_fa.properties
+@@ -449,21 +449,21 @@ webauthn-login-title=ورود به سیستم کلید امنیتی
+ webauthn-registration-title=ثبت کلید امنیتی
+ webauthn-available-authenticators=کلیدهای امنیتی موجود
+ webauthn-unsupported-browser-text=WebAuthn توسط این مرورگر پشتیبانی نمی شود. یکی دیگر را امتحان کنید یا با سرپرست خود تماس بگیرید.
+ webauthn-doAuthenticate=با کلید امنیتی وارد شوید
+ webauthn-createdAt-label=ایجاد شده در
+ 
+ # WebAuthn Error
+ webauthn-error-title=خطای کلید امنیتی
+-webauthn-error-registration=کلید امنیتی شما ثبت نشد.<br/> {0}
+-webauthn-error-api-get=با کلید امنیتی احراز هویت انجام نشد.<br/> {0}
++webauthn-error-registration=کلید امنیتی شما ثبت نشد.<br /> {0}
++webauthn-error-api-get=با کلید امنیتی احراز هویت انجام نشد.<br /> {0}
+ webauthn-error-different-user=.اولین کاربر احراز هویت شده کسی نیست که توسط کلید امنیتی احراز هویت شده است
+-webauthn-error-auth-verification=نتیجه احراز هویت کلید امنیتی نامعتبر است.<br/> {0}
+-webauthn-error-register-verification=نتیجه ثبت کلید امنیتی نامعتبر است.<br/> {0}
++webauthn-error-auth-verification=نتیجه احراز هویت کلید امنیتی نامعتبر است.<br /> {0}
++webauthn-error-register-verification=نتیجه ثبت کلید امنیتی نامعتبر است.<br /> {0}
+ webauthn-error-user-not-found=.کاربر ناشناس با کلید امنیتی احراز هویت شده است
+ 
+ # Identity provider
+ identity-provider-redirector=با یک ارائه‌دهنده هویت دیگر ارتباط برقرار کنید
+ identity-provider-login-label=یا ورود با
+ idp-email-verification-display-name=تایید ایمیل
+ idp-email-verification-help-text=.حساب خود را با اعتبارسنجی ایمیل خود پیوند دهید
+ idp-username-password-form-display-name=نام کاربری و رمز عبور
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_fi.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_fi.properties
+index 7fce200..ff18d30 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_fi.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_fi.properties
+@@ -392,21 +392,21 @@ webauthn-passwordless-help-text=Käytä Turva-avaintasi kirjatuaksesi sisään i
+ webauthn-login-title=Turva-avain kirjautuminen
+ webauthn-registration-title=Turva-avain rekisteröinti
+ webauthn-available-authenticators=Saatavilla olevat todentajat
+ webauthn-unsupported-browser-text="WebAuthn" ei ole tuettu tällä selaimella. Kokeile jotain toista tai ota yhteyttä järjestelmänvalvojaan.
+ webauthn-doAuthenticate=Kirjaudu sisään Turva-avaimella
+ 
+ # WebAuthn Error
+ webauthn-error-title=Turva-avain virhe
+-webauthn-error-registration=Turva-avaimen rekisteröinti epäonnistui.<br/> {0}
+-webauthn-error-api-get=Tunnistautuminen Turva-avaimella epäonnistui.<br/> {0}
++webauthn-error-registration=Turva-avaimen rekisteröinti epäonnistui.<br /> {0}
++webauthn-error-api-get=Tunnistautuminen Turva-avaimella epäonnistui.<br /> {0}
+ webauthn-error-different-user=Ensiksi tunnistautunut käyttäjä ei ole sama kuin Turva-avaimella tunnistaunut.
+-webauthn-error-auth-verification=Turva-avain -tunnistautumisen tulos on virheellinen.<br/> {0}
+-webauthn-error-register-verification=Turva-avaimen rekisteröinnin tulos on virheellinen.<br/> {0}
++webauthn-error-auth-verification=Turva-avain -tunnistautumisen tulos on virheellinen.<br /> {0}
++webauthn-error-register-verification=Turva-avaimen rekisteröinnin tulos on virheellinen.<br /> {0}
+ webauthn-error-user-not-found=Tuntematon käyttäjä tunnistautui Turva-avaimella.
+ 
+ # Identity provider
+ identity-provider-redirector=Yhdistä käyttämällä toista henkilöllisyyden tarjoajaa
+ identity-provider-login-label=Tai kirjaudu jollain näistä:
+ 
+ finalDeletionConfirmation=Jos poistat tilisi, sitä ei voida enää palauttaa. Säilyttääksesi tilisi, paina Peruuta.
+ irreversibleAction=Tätä toimintoa ei voi peruuttaa
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_fr.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_fr.properties
+index 46b2733..96e892a 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_fr.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_fr.properties
+@@ -369,21 +369,21 @@ webauthn-login-title=Connexion avec une Clé de Sécurité
+ webauthn-registration-title=Enregistrement d''une Clé de Sécurité
+ webauthn-available-authenticators=Clés de Sécurité disponibles
+ webauthn-unsupported-browser-text=WebAuthn n''est pas supporté par ce navigateur. Essayez une autre méthode ou contactez votre administrateur.
+ webauthn-doAuthenticate=Se connecter avec une Clé de Sécurité
+ webauthn-createdAt-label=Créé le
+ 
+ # WebAuthn Error
+ webauthn-error-title=Erreur lors de l''utilisation de la Clé de Sécurité
+-webauthn-error-registration=L''enregistrement de la Clé de Sécurité a échoué.<br/> {0}
+-webauthn-error-api-get=L''authentification via la Clé de Sécurité a échoué.<br/> {0}
++webauthn-error-registration=L''enregistrement de la Clé de Sécurité a échoué.<br /> {0}
++webauthn-error-api-get=L''authentification via la Clé de Sécurité a échoué.<br /> {0}
+ webauthn-error-different-user=Le premier utilisateur authentifié ne correspond pas à celui qui est authentifié par la Clé de Sécurité.
+-webauthn-error-auth-verification=Le résultat de l''authentification produite par la clé de sécurité est invalide.<br/> {0}
+-webauthn-error-register-verification=Le résultat de l''enregistrement de la clé de sécurité est invalide.<br/> {0}
++webauthn-error-auth-verification=Le résultat de l''authentification produite par la clé de sécurité est invalide.<br /> {0}
++webauthn-error-register-verification=Le résultat de l''enregistrement de la clé de sécurité est invalide.<br /> {0}
+ webauthn-error-user-not-found=La Clé de Sécurité a authentifié un utilisateur inconnu.
+ finalDeletionConfirmation=Si vous supprimez votre compte, il ne pourra pas être restauré. Pour conserver votre compte, cliquez sur Annuler.
+ irreversibleAction=Cette action est irréversible
+ deleteAccountConfirm=Confirmation de suppression de compte
+ deletingImplies=Supprimer votre compte implique:
+ errasingData=Supprimer toutes vos données
+ loggingOutImmediately=Vous déconnecter immédiatement
+ accountUnusable=Toute utilisation future de l''application sera impossible avec ce compte
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_hr.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_hr.properties
+index 75c99f5..90477d2 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_hr.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_hr.properties
+@@ -471,21 +471,21 @@ webauthn-unsupported-browser-text=WebAuthn nije podržan u ovom pregledniku. Pok
+ webauthn-doAuthenticate=Prijavite se pomoću sigurnosnog ključa
+ webauthn-createdAt-label=Stvoren
+ webauthn-registration-init-label=Pristupni ključ (Zadana oznaka)
+ webauthn-registration-init-label-prompt=Molimo unesite oznaku vašeg pristupnog ključa
+ 
+ 
+ # WebAuthn Error
+ webauthn-error-title=Greška sigurnosnog ključa
+-webauthn-error-registration=Neuspješna registracija sigurnosnog ključa.<br/> {0}
+-webauthn-error-api-get=Neuspješna autentifikacija putem sigurnosnog ključa.<br/> {0}
++webauthn-error-registration=Neuspješna registracija sigurnosnog ključa.<br /> {0}
++webauthn-error-api-get=Neuspješna autentifikacija putem sigurnosnog ključa.<br /> {0}
+ webauthn-error-different-user=Prvi autentificirani korisnik nije isti kao korisnik autentificiran putem sigurnosnog ključa.
+-webauthn-error-auth-verification=Rezultat autentifikacije putem sigurnosnog ključa nije valjan.<br/> {0}
+-webauthn-error-register-verification=Rezultat registracije sigurnosnog ključa nije valjan.<br/> {0}
++webauthn-error-auth-verification=Rezultat autentifikacije putem sigurnosnog ključa nije valjan.<br /> {0}
++webauthn-error-register-verification=Rezultat registracije sigurnosnog ključa nije valjan.<br /> {0}
+ webauthn-error-user-not-found=Nepoznati korisnik autentificiran putem sigurnosnog ključa.
+ 
+ # Passkey
+ passkey-login-title=Prijava pristupnim ključem
+ passkey-available-authenticators=Dostupni pristupni ključevi
+ passkey-unsupported-browser-text=Pristupni ključ nije podržan unutar ovog preglednika. Pokušajte drugi ili kontaktirajte svog administratora.
+ passkey-doAuthenticate=Prijavite se pristupnim ključem
+ passkey-createdAt-label=Kreiran
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_ka.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_ka.properties
+index 39e6b3c..d7e23f9 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_ka.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_ka.properties
+@@ -164,19 +164,19 @@ webauthn-unsupported-browser-text=ამ ბრაუზერს WebAuthn-ი
+ webauthn-doAuthenticate=Passkey-ით შესვლა
+ webauthn-registration-init-label=Passkey (ნაგულისხმევი ჭდე)
+ 
+ 
+ # WebAuthn Error
+ webauthn-error-title=Passkey-ის შეცდომა
+ webauthn-createdAt-label=შეიქმნა
+ webauthn-registration-init-label-prompt=შეიყვანეთ თქვენი დარეგისტრირებული Passkey-ის ჭდე
+-webauthn-error-registration=თქვენი Passkey-ის რეგისტრაცია ჩავარდა.<br/>{0}
++webauthn-error-registration=თქვენი Passkey-ის რეგისტრაცია ჩავარდა.<br />{0}
+ passkey-unsupported-browser-text=Passkey-ის მხარდაჭერა ამ ბრაუზერს არ აქვს. სცადეთ სხვა ან დაუკავშირდით თქვენს ადმინისტრატორს.
+-webauthn-error-api-get=Passkey-ით ავთენტიკაცია ჩავარდა.<br/>{0}
++webauthn-error-api-get=Passkey-ით ავთენტიკაცია ჩავარდა.<br />{0}
+ passkey-doAuthenticate=Passkey-ით შესვლა
+ webauthn-error-different-user=პირველი მომხმარებელი, ვინც ავთენტიკაცია გაიარა, Passkey-ით ავთენტიკაციის მომხმარებელს არ ემთხვევა.
+ passkey-createdAt-label=შეიქმნა
+ passkey-autofill-select=აირჩიეთ თქვენი Passkey
+ idp-email-verification-help-text=მიაბით თქვენი ანგარიში თქვენი ანგარიშის დადასტურებით.
+ idp-username-password-form-display-name=მომხმარებელი და პაროლი
+ 
+ # Identity provider
+@@ -443,18 +443,18 @@ auth-username-password-form-help-text=შედით თქვენი მო
+ recovery-code-config-warning-message=დარწმუნდით, რომ დაბეჭდოთ, გადმოწეროთ ან შეინახოთ ისინი პაროლების მმართველში და იქონიეთ ისინი უსაფრთხოდ. ამ პარამეტრების გაუქმება თქვენი ანგარიშიდან ამ კოდებს წაშლის.
+ recovery-codes-action-complete=მორგების დასრულება
+ recovery-codes-action-cancel=მორგების გაუქმება
+ recovery-codes-download-file-header=შეინახეთ ეს კოდები სადმე უსაფრთხო ადგილას.
+ recovery-codes-download-file-date=ეს კოდები დააგენერირა
+ webauthn-login-title=Passkey-ით შესვლა
+ webauthn-registration-title=Passkey-ისის რეგისტრაცია
+ webauthn-available-authenticators=ხელმისაწვდომი Passkeys
+-webauthn-error-auth-verification=Passkey-ით ავთენტიკაციის შედეგი არასწორია.<br/>{0}
+-webauthn-error-register-verification=Passkey-ის რეგისტრაციის შედეგი არასწორია.<br/>{0}
++webauthn-error-auth-verification=Passkey-ით ავთენტიკაციის შედეგი არასწორია.<br />{0}
++webauthn-error-register-verification=Passkey-ის რეგისტრაციის შედეგი არასწორია.<br />{0}
+ webauthn-error-user-not-found=Passkey-ით ავთენტიკაციაგავლილი მომხმარებელი უცნობია.
+ irreversibleAction=ეს ქმედება შეუქცევადია
+ accountUnusable=ამ ანგარიშით ამის შემდეგ აპლიკაციას ვერ გამოიყენებთ
+ 
+ # Passkey
+ passkey-login-title=Passkey-ით შესვლა
+ passkey-available-authenticators=ხელმისაწვდომი Passkeys
+ idp-email-verification-display-name=ელფოსტის გადამოწმება
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_ko.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_ko.properties
+index 28e107d..a52a2df 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_ko.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_ko.properties
+@@ -472,21 +472,21 @@ webauthn-available-authenticators=사용 가능한 패스키
+ webauthn-unsupported-browser-text=이 브라우저는 WebAuthn을 지원하지 않습니다. 다른 브라우저를 사용하거나 관리자에게 문의하세요.
+ webauthn-doAuthenticate=패스키로 로그인
+ webauthn-createdAt-label=생성됨
+ webauthn-registration-init-label=패스키 (기본 라벨)
+ webauthn-registration-init-label-prompt=등록한 패스키의 라벨을 입력하세요
+ 
+ # WebAuthn Error
+ webauthn-error-title=패스키 오류
+-webauthn-error-registration=패스키 등록에 실패했습니다.<br/> {0}
+-webauthn-error-api-get=패스키로 인증하는 데 실패했습니다.<br/> {0}
++webauthn-error-registration=패스키 등록에 실패했습니다.<br /> {0}
++webauthn-error-api-get=패스키로 인증하는 데 실패했습니다.<br /> {0}
+ webauthn-error-different-user=첫 번째 인증된 사용자가 패스키로 인증된 사용자가 아닙니다.
+-webauthn-error-auth-verification=패스키 인증 결과가 잘못되었습니다.<br/> {0}
+-webauthn-error-register-verification=패스키 등록 결과가 잘못되었습니다.<br/> {0}
++webauthn-error-auth-verification=패스키 인증 결과가 잘못되었습니다.<br /> {0}
++webauthn-error-register-verification=패스키 등록 결과가 잘못되었습니다.<br /> {0}
+ webauthn-error-user-not-found=패스키로 인증된 알 수 없는 사용자.
+ 
+ # Passkey
+ passkey-login-title=패스키 로그인
+ passkey-available-authenticators=사용 가능한 패스키
+ passkey-unsupported-browser-text=이 브라우저는 패스키를 지원하지 않습니다. 다른 브라우저를 사용하거나 관리자에게 문의하세요.
+ passkey-doAuthenticate=패스키로 로그인
+ passkey-createdAt-label=생성됨
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties
+index cadc42b..4800777 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties
+@@ -63,17 +63,17 @@ address=Adresas
+ street=Gatvė
+ locality=Miestas arba vietovė
+ region=Rajonas
+ postal_code=Pašto kodas
+ country=Šalis
+ emailVerified=El. pašto adresas patvirtintas
+ gssDelegationCredential=GSS prisijungimo duomenų delegavimas
+ 
+-loginTotpStep1=Įdiekite <a href="https://freeotp.github.io/" target="_blank">FreeOTP</a> arba Google Authenticator savo įrenginyje. Programėlės prieinamos <a href="https://play.google.com">Google Play</a> ir Apple App Store.
++loginTotpStep1=Installa una delle seguenti applicazioni sul tuo cellulare:
+ loginTotpStep2=Atidarykite programėlę ir nuskenuokite barkodą arba įveskite kodą.
+ loginTotpStep3=Įveskite programėlėje sugeneruotą vieną kartą galiojantį kodą ir paspauskite Saugoti norėdami prisijungti.
+ loginOtpOneTime=Vienkartinis kodas
+ 
+ oauthGrantRequest=Ar Jūs suteikiate šias prieigos teises?
+ inResource=į
+ 
+ emailVerifyInstruction1=El. paštas su instrukcijomis ir patvirtinimo nuoroda nusiųsti į Jūsų el. paštą.
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_no.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_no.properties
+index ebb9e2f..b88fe5a 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_no.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_no.properties
+@@ -63,17 +63,17 @@ address=Adresse
+ street=Gate-/veinavn + husnummer
+ locality=By
+ region=Fylke
+ postal_code=Postnummer
+ country=Land
+ emailVerified=E-postadresse bekreftet
+ gssDelegationCredential=GSS legitimasjons-delegering
+ 
+-loginTotpStep1=Installer <a href="https://freeotp.github.io/" target="_blank">FreeOTP</a> eller Google Authenticator på din mobiltelefon. Begge applikasjoner er tilgjengelige på <a href="https://play.google.com">Google Play</a> og Apple App Store.
++loginTotpStep1=Installer en av følgende applikasjoner på mobilen din:
+ loginTotpStep2=Åpne applikasjonen og skann strekkoden eller skriv inn koden
+ loginTotpStep3=Skriv inn engangskoden fra applikasjonen og klikk send inn for å fullføre
+ loginOtpOneTime=Engangskode
+ 
+ oauthGrantRequest=Vil du gi disse tilgangsrettighetene?
+ inResource=i
+ 
+ emailVerifyInstruction1=En e-post med instruksjoner for å bekrefte din e-postadresse har blitt sendt til deg.
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_sk.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_sk.properties
+index 25c6a6c..786f2cf 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_sk.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_sk.properties
+@@ -22,17 +22,17 @@ kerberosNotConfigured=Kerberos nie je nakonfigurovaný
+ kerberosNotConfiguredTitle=Kerberos nie je nakonfigurovaný
+ bypassKerberosDetail=Buď nie ste prihlásený cez Kerberos, alebo váš prehliadač nie je nastavený na prihlásenie do Kerberos. Kliknutím na tlačidlo Pokračovať sa prihláste iným spôsobom
+ kerberosNotSetUp=Kerberos nie je nastavený. Nemôžete sa prihlásiť.
+ registerTitle=Registrácia
+ loginAccountTitle=Prihláste sa do svojho účtu
+ loginTitle=Prihlásenie do {0}
+ loginTitleHtml={0}
+ impersonateTitle={0} prevteliť sa
+-impersonateTitleHtml=<strong>{0}</strong> Prevteliť sa</strong>
++impersonateTitleHtml=<strong>{0}</strong> Prevteliť sa
+ realmChoice=Realm
+ unknownUser=Neznámy používateľ
+ loginTotpTitle=Nastavenie mobilného autentifikátora
+ loginProfileTitle=Aktualizácia informácií o účte
+ loginIdpReviewProfileTitle=Aktualizácia informácií o účte
+ loginTimeout=Prihlasovanie trvalo príliš dlho. Prihlasovací proces začína od začiatku.
+ reauthenticate=Pre pokračovanie sa prosím prihláste znova
+ oauthGrantTitle=Poskytnúť prístup {0}
+@@ -115,17 +115,17 @@ addressScopeConsentText=Adresa
+ phoneScopeConsentText=Telefónne číslo
+ offlineAccessScopeConsentText=Offline prístup
+ samlRoleListScopeConsentText=Moje role
+ rolesScopeConsentText=Užívateľské roly
+ 
+ restartLoginTooltip=Znovu spustiť prihlásenie
+ 
+ loginTotpIntro=Pre prístup k tomuto účtu je potrebné nastaviť generátor jednorazových kódov
+-loginTotpStep1=Nainštalujte <a href="https://freeotp.github.io/" target="_blank">FreeOTP</a> alebo Google Authenticator na mobil. Obidve aplikácie sú k dispozícii v <a href="https://play.google.com">Google Play</a> a Apple App Store.
++loginTotpStep1=Nainštalujte si do mobilu jednu z nasledujúcich aplikácií:
+ loginTotpStep2=Otvorte aplikáciu a skenujte čiarový kód alebo zadajte kľúč
+ loginTotpStep3=Zadajte jednorazový kód poskytnutý aplikáciou a kliknutím na tlačidlo Odoslať dokončite nastavenie
+ loginTotpStep3DeviceName=Uveďte názov zariadenia, ktorý vám pomôže spravovať zariadenia OTP. 
+ loginTotpManualStep2=Otvorte aplikáciu a zadajte kľúč
+ loginTotpManualStep3=Používajte nasledujúce hodnoty konfigurácie, ak aplikácia umožňuje ich nastavenie
+ loginTotpUnableToScan=Nemožno skenovať?
+ loginTotpScanBarcode=Skenovať čiarový kód?
+ loginCredential=Prihlasovacie údaje 
+@@ -458,21 +458,21 @@ webauthn-login-title=Prihlásenie prihlasovacím kľúčom
+ webauthn-registration-title=Registrácia prihlasovacím kľúčom
+ webauthn-available-authenticators=Dostupné prihlasovacie kľúče
+ webauthn-unsupported-browser-text=WebAuthn nie je podporovaný týmto prehliadačom. Skúste iný alebo kontaktujte svojho administrátora.
+ webauthn-doAuthenticate=Prihlásenie pomocou prihlasovacieho kľúča
+ webauthn-createdAt-label=Vytvorené
+ 
+ # WebAuthn Error
+ webauthn-error-title=Chybný prihlasovací kľúč
+-webauthn-error-registration=Nepodarilo sa zaregistrovať prihlasovací kľúč.<br/> {0}
+-webauthn-error-api-get=Nepodarilo sa overiť pomocou prihlasovacieho kľúča.<br/> {0}
++webauthn-error-registration=Nepodarilo sa zaregistrovať prihlasovací kľúč.<br /> {0}
++webauthn-error-api-get=Nepodarilo sa overiť pomocou prihlasovacieho kľúča.<br /> {0}
+ webauthn-error-different-user=Prvý overený používateľ nie je ten, ktorý bol overený prihlasovacím kľúčom.
+-webauthn-error-auth-verification=Výsledok overenia prihlasovacieho kľúča je neplatný.<br/> {0}
+-webauthn-error-register-verification=Výsledok registrácie prihlasovacieho kľúča je neplatný.<br/> {0}
++webauthn-error-auth-verification=Výsledok overenia prihlasovacieho kľúča je neplatný.<br /> {0}
++webauthn-error-register-verification=Výsledok registrácie prihlasovacieho kľúča je neplatný.<br /> {0}
+ webauthn-error-user-not-found=Neznámy používateľ overený prihlasovacím kľúčom.
+ 
+ # Identity provider
+ identity-provider-redirector=Pripojenie k inému poskytovateľovi identít
+ identity-provider-login-label=Prihláste sa pomocou
+ idp-email-verification-display-name=Overenie e-mailu
+ idp-email-verification-help-text=Pripojte svoj účet overením e-mailu.
+ idp-username-password-form-display-name=Prihlasovacie meno a heslo
+@@ -493,9 +493,9 @@ access-denied-when-idp-auth=Prístup zamietnutý pri overovaní pomocou {0}
+ 
+ frontchannel-logout.title=Odhlásenie
+ frontchannel-logout.message=Odhlasujete sa z nasledujúcich aplikácií
+ logoutConfirmTitle=Odhlásenie
+ logoutConfirmHeader=Chcete sa odhlásiť?
+ doLogout=Odhlásiť
+ 
+ readOnlyUsernameMessage=Nemôžete aktualizovať svoje používateľské meno, pretože je iba na čítanie.
+-error-invalid-multivalued-size=Atribút {0} musí mať najmenej {1} {1,choice,0#hodnôt|1#hodnotu|1<hodnoty|4<hodnôt} a najviac {2} {1,choice,0#hodnôt|1#hodnotu|1<hodnoty|4<hodnôt}.
+\ No newline at end of file
++error-invalid-multivalued-size=Atribút {0} musí mať najmenej {1} {1,choice,0#hodnôt|1#hodnotu|1<hodnoty|4<hodnôt} a najviac {2} {2,choice,0#hodnôt|1#hodnotu|1<hodnoty|4<hodnôt}.
+\ No newline at end of file
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_sv.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_sv.properties
+index bbc738a..6ee0237 100755
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_sv.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_sv.properties
+@@ -60,17 +60,17 @@ address=Adress
+ street=Gata
+ locality=Postort
+ region=Stat, Provins eller Region
+ postal_code=Postnummer
+ country=Land
+ emailVerified=E-post verifierad
+ gssDelegationCredential=GSS Delegation Credential
+ 
+-loginTotpStep1=Installera <a href="https://freeotp.github.io/" target="_blank">FreeOTP</a> eller Google Authenticator på din mobil. Båda applikationerna finns tillgängliga hos <a href="https://play.google.com">Google Play</a> och Apple App Store.
++loginTotpStep1=Installera en av följande applikationer på din mobil:
+ loginTotpStep2=Öppna applikationen och skanna streckkoden eller skriv i nyckeln
+ loginTotpStep3=Fyll i engångskoden som tillhandahålls av applikationen och klicka på Spara för att avsluta inställningarna
+ loginOtpOneTime=Engångskod
+ 
+ oauthGrantRequest=Godkänner du tillgång till de här rättigheterna?
+ inResource=i
+ 
+ emailVerifyInstruction1=Ett e-postmeddelande med instruktioner om hur du verifierar din e-postadress har skickats till dig.
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_th.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_th.properties
+index ee2165a..5b0fb6c 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_th.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_th.properties
+@@ -454,21 +454,21 @@ webauthn-login-title=การเข้าสู่ระบบด้วยค
+ webauthn-registration-title=การลงทะเบียนคีย์รักษาความปลอดภัย
+ webauthn-available-authenticators=คีย์รักษาความปลอดภัยที่มีอยู่
+ webauthn-unsupported-browser-text=เว็บเบราว์เซอร์นี้ไม่สนับสนุน WebAuthn ลองใช้เบราว์เซอร์อื่นหรือติดต่อผู้ดูแลระบบของคุณ
+ webauthn-doAuthenticate=เข้าสู่ระบบด้วยคีย์รักษาความปลอดภัย
+ webauthn-createdAt-label=สร้างแล้ว
+ 
+ # WebAuthn Error
+ webauthn-error-title=ข้อผิดพลาดของคีย์รักษาความปลอดภัย
+-webauthn-error-registration=การลงทะเบียนคีย์รักษาความปลอดภัยของคุณไม่สำเร็จ<br/> {0}
+-webauthn-error-api-get=การพิสูจน์ตัวจริงโดยใช้คีย์รักษาความปลอดภัยไม่สำเร็จ<br/> {0}
++webauthn-error-registration=การลงทะเบียนคีย์รักษาความปลอดภัยของคุณไม่สำเร็จ<br /> {0}
++webauthn-error-api-get=การพิสูจน์ตัวจริงโดยใช้คีย์รักษาความปลอดภัยไม่สำเร็จ<br /> {0}
+ webauthn-error-different-user=ผู้ใช้งานที่พิสูจน์ตัวจริงรายแรกไม่ใช่รายที่ได้รับการพิสูจน์ตัวจริงจากคีย์รักษาความปลอดภัย
+-webauthn-error-auth-verification=ผลการพิสูจน์ตัวจริงของคีย์รักษาความปลอดภัยไม่ถูกต้อง<br/> {0}
+-webauthn-error-register-verification=ผลการลงทะเบียนของคีย์รักษาความปลอดภัยไม่ถูกต้อง<br/> {0}
++webauthn-error-auth-verification=ผลการพิสูจน์ตัวจริงของคีย์รักษาความปลอดภัยไม่ถูกต้อง<br /> {0}
++webauthn-error-register-verification=ผลการลงทะเบียนของคีย์รักษาความปลอดภัยไม่ถูกต้อง<br /> {0}
+ webauthn-error-user-not-found=ผู้ใช้งานที่ไม่รู้จักได้รับการพิสูจน์ตัวจริงจากคีย์รักษาความปลอดภัย
+ 
+ # Identity provider
+ identity-provider-redirector=เชื่อมต่อกับผู้ให้บริการตัวตนอื่น
+ identity-provider-login-label=หรือเข้าสู่ระบบโดยใช้
+ idp-email-verification-display-name=การทวนสอบอีเมล
+ idp-email-verification-help-text=เชื่อมโยงบัญชีของคุณโดยการทวนสอบอีเมลของคุณ
+ idp-username-password-form-display-name=ชื่อผู้ใช้งานและรหัสผ่าน
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_tr.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_tr.properties
+index 20710e0..a32b761 100755
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_tr.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_tr.properties
+@@ -461,21 +461,21 @@ webauthn-passwordless-display-name= Geçiş Anahtarı,
+ webauthn-passwordless-help-text= Şifresiz giriş için Geçiş Anahtarınızı kullanın.,
+ webauthn-login-title= Geçiş Anahtarıyla Giriş,
+ webauthn-registration-title= Geçiş Anahtarıyla Kayıt,
+ webauthn-available-authenticators= Geçerli Geçiş Anahtarları ,
+ webauthn-unsupported-browser-text= WebAuthn tarayıcınız tarafından desteklenmemektedir. Başka bir tarayıcıdan ulaşmayı deneyin veya yöneticinizle iletişime geçin.,
+ webauthn-doAuthenticate= Geçiş Anahtarı ile giriş yap,
+ webauthn-createdAt-label= Oluşturuldu,
+ webauthn-error-title= Geçiş Anahtarı hatası,
+-webauthn-error-registration= Geçiş Anahatarınızı kaydederken hata oluştu.<br/> {0},
+-webauthn-error-api-get= Geçiş Anahtarınızı doğrularken hata oluştu.<br/> {0},
++webauthn-error-registration= Geçiş Anahatarınızı kaydederken hata oluştu.<br /> {0},
++webauthn-error-api-get= Geçiş Anahtarınızı doğrularken hata oluştu.<br /> {0},
+ webauthn-error-different-user= İlk doprulanan kullanıcı ile Geçiş Anahtarı işe doğrulanan kullanıcı aynı değil..,
+-webauthn-error-auth-verification= Geçiş Anahtarı doğrulaması geçersiz.<br/> {0},
+-webauthn-error-register-verification= Geçiş Anahtarı doğrulaması geçersiz.<br/> {0},
++webauthn-error-auth-verification= Geçiş Anahtarı doğrulaması geçersiz.<br /> {0},
++webauthn-error-register-verification= Geçiş Anahtarı doğrulaması geçersiz.<br /> {0},
+ webauthn-error-user-not-found= Bilinmeyen kullanıcı Geçiş Anahtarı ile doğrulandı.,
+ identity-provider-redirector= Başka bir Kimlik Sağlayıcı ile iletişime geçiniz.,
+ identity-provider-login-label= Veya giriş yap,
+ idp-email-verification-display-name= E-posta doğrulama,
+ idp-email-verification-help-text= E-postanızı doğrulayarak hesabınızı bağlayın.,
+ idp-username-password-form-display-name= Kullanıcı adı ve şifte,
+ idp-username-password-form-help-text= Giriş yaparak hesabınızı bağlayın.,
+ finalDeletionConfirmation= Hesabınızı silerseniz geri kurtarılamaz. Hesabınızı korumak için İptal''e tıklayın.,
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_uk.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_uk.properties
+index 057f9c9..6588286 100755
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_uk.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_uk.properties
+@@ -451,21 +451,21 @@ webauthn-login-title=Ключ безпеки для входу
+ webauthn-registration-title=Реєстрація ключа безпеки
+ webauthn-available-authenticators=Доступні ключі безпеки
+ webauthn-unsupported-browser-text=WebAuthn не підтримується цим браузером. Спробуйте інший або зверніться до адміністратора.
+ webauthn-doAuthenticate=Увійти за допомогою ключа безпеки
+ webauthn-createdAt-label=Створено
+ 
+ # WebAuthn Error
+ webauthn-error-title=Помилка ключа безпеки
+-webauthn-error-registration=Не вдалося зареєструвати ваш ключ безпеки.<br/> {0}
+-webauthn-error-api-get=Помилка автентифікації за допомогою ключа безпеки.<br/> {0}
++webauthn-error-registration=Не вдалося зареєструвати ваш ключ безпеки.<br /> {0}
++webauthn-error-api-get=Помилка автентифікації за допомогою ключа безпеки.<br /> {0}
+ webauthn-error-different-user=Перший автентифікований користувач не є тим, хто автентифікований ключем безпеки.
+-webauthn-error-auth-verification=Результат автентифікації ключа безпеки невірний.<br/> {0}
+-webauthn-error-register-verification=Результат реєстрації ключа безпеки невірний.<br/> {0}
++webauthn-error-auth-verification=Результат автентифікації ключа безпеки невірний.<br /> {0}
++webauthn-error-register-verification=Результат реєстрації ключа безпеки невірний.<br /> {0}
+ webauthn-error-user-not-found=Невідомий користувач автентифікований за допомогою ключа безпеки.
+ 
+ # Identity provider
+ identity-provider-redirector=Підключіться до іншого провайдера облікових записів
+ identity-provider-login-label=Або увійдіть за допомогою
+ idp-email-verification-display-name=Підтвердження електронної пошти
+ idp-email-verification-help-text=Підв''яжіть свій обліковий запис, підтвердивши свою електронну адресу.
+ idp-username-password-form-display-name=Ім''я користувача та пароль
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_zh_CN.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_zh_CN.properties
+index d11363b..413eab3 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_zh_CN.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_zh_CN.properties
+@@ -458,21 +458,21 @@ webauthn-login-title=安全密钥登录
+ webauthn-registration-title=安全密钥注册
+ webauthn-available-authenticators=可用的安全密钥
+ webauthn-unsupported-browser-text=此浏览器不支持 WebAuthn。请尝试其他浏览器或联系管理员。
+ webauthn-doAuthenticate=使用安全密钥登录
+ webauthn-createdAt-label=创建于
+ 
+ # WebAuthn Error
+ webauthn-error-title=安全密钥错误
+-webauthn-error-registration=注册您的安全密钥失败。<br/> {0}
+-webauthn-error-api-get=通过安全密钥进行身份验证失败。<br/> {0}
++webauthn-error-registration=注册您的安全密钥失败。<br /> {0}
++webauthn-error-api-get=通过安全密钥进行身份验证失败。<br /> {0}
+ webauthn-error-different-user=首次经过身份验证的用户不是通过安全密钥经过身份验证的用户。
+-webauthn-error-auth-verification=安全密钥身份验证结果无效。<br/> {0}
+-webauthn-error-register-verification=安全密钥注册结果无效。<br/> {0}
++webauthn-error-auth-verification=安全密钥身份验证结果无效。<br /> {0}
++webauthn-error-register-verification=安全密钥注册结果无效。<br /> {0}
+ webauthn-error-user-not-found=通过安全密钥进行身份验证的用户未知。
+ 
+ # Identity provider
+ identity-provider-redirector=连接到另一个身份提供者
+ identity-provider-login-label=或使用以下方式登录
+ idp-email-verification-display-name=电子邮件验证
+ idp-email-verification-help-text=通过验证您的电子邮件来链接您的帐户。
+ idp-username-password-form-display-name=用户名和密码
+diff --git a/themes/src/main/resources-community/theme/base/login/messages/messages_zh_TW.properties b/themes/src/main/resources-community/theme/base/login/messages/messages_zh_TW.properties
+index df77811..6cc29fa 100644
+--- a/themes/src/main/resources-community/theme/base/login/messages/messages_zh_TW.properties
++++ b/themes/src/main/resources-community/theme/base/login/messages/messages_zh_TW.properties
+@@ -465,21 +465,21 @@ webauthn-unsupported-browser-text=此瀏覽器不支援 WebAuthn。請嘗試其
+ webauthn-doAuthenticate=透過安全金鑰進行登入
+ webauthn-createdAt-label=已建立
+ webauthn-registration-init-label=安全金鑰 (預設標籤)
+ webauthn-registration-init-label-prompt=請為註冊的安全金鑰輸入標籤
+ 
+ 
+ # WebAuthn Error
+ webauthn-error-title=安全金鑰錯誤
+-webauthn-error-registration=無法註冊您的安全金鑰。<br/> {0}
+-webauthn-error-api-get=無法透過安全金鑰進行驗證。<br/> {0}
++webauthn-error-registration=無法註冊您的安全金鑰。<br /> {0}
++webauthn-error-api-get=無法透過安全金鑰進行驗證。<br /> {0}
+ webauthn-error-different-user=第一個驗證的使用者不是這個安全金鑰驗證的使用者。
+-webauthn-error-auth-verification=安全金鑰驗證結果無效。<br/> {0}
+-webauthn-error-register-verification=安全金鑰註冊結果無效。<br/> {0}
++webauthn-error-auth-verification=安全金鑰驗證結果無效。<br /> {0}
++webauthn-error-register-verification=安全金鑰註冊結果無效。<br /> {0}
+ webauthn-error-user-not-found=未知的使用者透過安全金鑰進行驗證。
+ 
+ # Identity provider
+ identity-provider-redirector=連結到其他身份提供者
+ identity-provider-login-label=或透過其他身份提供者登入
+ idp-email-verification-display-name=電子信箱驗證
+ idp-email-verification-help-text=透過驗證您的電子信箱來連結您的帳戶。
+ idp-username-password-form-display-name=使用者名稱和密碼
+diff --git a/themes/src/main/resources/theme/base/admin/messages/messages_en.properties b/themes/src/main/resources/theme/base/admin/messages/messages_en.properties
+index c373dbb..090b13f 100644
+--- a/themes/src/main/resources/theme/base/admin/messages/messages_en.properties
++++ b/themes/src/main/resources/theme/base/admin/messages/messages_en.properties
+@@ -61,9 +61,9 @@ error-pattern-no-match=Invalid value.
+ error-invalid-uri=Invalid URL.
+ error-invalid-uri-scheme=Invalid URL scheme.
+ error-invalid-uri-fragment=Invalid URL fragment.
+ error-user-attribute-required=Please specify attribute {0}.
+ error-invalid-date=Attribute {0} is invalid date.
+ error-user-attribute-read-only=Attribute {0} is read only.
+ error-username-invalid-character={0} contains invalid character.
+ error-person-name-invalid-character={0} contains invalid character.
+-error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} value(s).
+\ No newline at end of file
++error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.
+\ No newline at end of file
+diff --git a/themes/src/main/resources/theme/base/login/messages/messages_en.properties b/themes/src/main/resources/theme/base/login/messages/messages_en.properties
+index 5ac9b18..8bf39f0 100644
+--- a/themes/src/main/resources/theme/base/login/messages/messages_en.properties
++++ b/themes/src/main/resources/theme/base/login/messages/messages_en.properties
+@@ -479,21 +479,21 @@ webauthn-unsupported-browser-text=WebAuthn is not supported by this browser. Try
+ webauthn-doAuthenticate=Sign in with Passkey
+ webauthn-createdAt-label=Created
+ webauthn-registration-init-label=Passkey (Default Label)
+ webauthn-registration-init-label-prompt=Please input your registered passkey''s label
+ 
+ 
+ # WebAuthn Error
+ webauthn-error-title=Passkey Error
+-webauthn-error-registration=Failed to register your Passkey.<br/> {0}
+-webauthn-error-api-get=Failed to authenticate by the Passkey.<br/> {0}
++webauthn-error-registration=Failed to register your Passkey.<br /> {0}
++webauthn-error-api-get=Failed to authenticate by the Passkey.<br /> {0}
+ webauthn-error-different-user=First authenticated user is not the one authenticated by the Passkey.
+-webauthn-error-auth-verification=Passkey authentication result is invalid.<br/> {0}
+-webauthn-error-register-verification=Passkey registration result is invalid.<br/> {0}
++webauthn-error-auth-verification=Passkey authentication result is invalid.<br /> {0}
++webauthn-error-register-verification=Passkey registration result is invalid.<br /> {0}
+ webauthn-error-user-not-found=Unknown user authenticated by the Passkey.
+ 
+ # Passkey
+ passkey-login-title=Passkey login
+ passkey-available-authenticators=Available Passkeys
+ passkey-unsupported-browser-text=Passkey is not supported by this browser. Try another one or contact your administrator.
+ passkey-doAuthenticate=Sign in with Passkey
+ passkey-createdAt-label=Created
+@@ -522,16 +522,16 @@ access-denied-when-idp-auth=Access denied when authenticating with {0}
+ 
+ frontchannel-logout.title=Logging out
+ frontchannel-logout.message=You are logging out from following apps
+ logoutConfirmTitle=Logging out
+ logoutConfirmHeader=Do you want to log out?
+ doLogout=Logout
+ 
+ readOnlyUsernameMessage=You can''t update your username as it is read-only.
+-error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} value(s).
++error-invalid-multivalued-size=Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.
+ 
+ organization.confirm-membership.title=You are about to join organization ${kc.org.name}
+ organization.confirm-membership=By clicking on the link below, you will become a member of the {0} organization:
+ organization.member.register.title=Create an account to join the ${kc.org.name} organization
+ organization.select=Select an organization to proceed:
+ notMemberOfOrganization=User is not a member of the organization {0}
+ notMemberOfAnyOrganization=User is not a member of any organization
+\ No newline at end of file

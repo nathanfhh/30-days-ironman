@@ -1,0 +1,347 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T10:05:06+00:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "keycloak-37634 — refs/ncr/pr（Shorter encoding of access token，closes #37118）",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "本次變更的資料路徑只涉及 OAuth2 / OIDC access token 的識別碼編碼（services/src/main/java/org/keycloak/protocol/oidc/encode/），沒有病歷號、身分證字號、就醫紀錄或任何 HL7 / FHIR / DICOM payload。PHI 不在範圍內，C 面向的升級規則不適用。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "已檢查 diff 內的 commit message、Javadoc、程式碼註解與字串常數，未發現任何指向審查流程本身的文字。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "把 session type / token type / grant type 編進 access token 的 jti，讓這些資訊不必靠非標準 claim 就能取回（services/src/main/java/org/keycloak/protocol/oidc/encode/TokenContextEncoderProvider.java:25-30 的 Javadoc 說明了動機），對應 commit message 標註的 #37118。舊格式（沒有 ':' 的純 UUID）在 DefaultTokenContextEncoderProvider.java:67-69 有明確的回退分支，相容性有被考慮進去。"
+    },
+    "right_mr": {
+      "verdict": "doubt",
+      "note": "主體（新 SPI、encoder、各 grant 的 shortcut、測試）確實同屬一件事，但 services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java:867-869 把 requestedAucienceClients 改名成 requestedAudienceClients 是與本議題無關的拼字修正。PR-CHECKLIST.md 明列「The PR does not contain changes not relevant to the GitHub Issue」，這一處雖然無害，但嚴格說屬於夾帶。是否要求拆出去由 maintainer 決定。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "這是後續解碼功能（getTokenContextFromTokenId 的消費端）的地基，先落地編碼側再接消費端是合理順序；沒有發現時程上必須延後的理由。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "ruff",
+      "status": "ok",
+      "exit_code": 1,
+      "artifact": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/scan-keycloak-37634.ruff.json",
+      "counts": {
+        "in_diff": 0,
+        "outside_diff": 6
+      },
+      "skipped_reason": ""
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "ty 未安裝（不在 PATH 上）。附帶說明：本 PR 為純 Java 變更，ty 即使存在也不涵蓋。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "oxlint 未安裝（不在 PATH 上）。diff 中沒有 JavaScript / TypeScript 檔案。"
+    },
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "trivy 未安裝（不在 PATH 上）；供應鏈、misconfig 與 secret 掃描本次完全沒有執行。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "opengrep 未安裝，且 NCR_OPENGREP_RULES 指向的規則目錄不存在；SAST 本次完全沒有執行。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "codegraph 未安裝；E 與 I 面向的呼叫路徑列舉全部改用 grep 完成（已對 OAuth2GrantTypeFactory 實作、Constants.GRANT_TYPE 寫入點、createTokenResponse / createClientAccessToken 呼叫端逐一列舉）。"
+    },
+    {
+      "tool": "javac / maven",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "執行環境沒有 Maven 網路存取，整個專案無法編譯或跑測試。本報告中所有關於「會不會編不過 / 測試會不會過」的判斷都來自閱讀原始碼與 grep，沒有任何一項是由 build 驗證的。"
+    },
+    {
+      "tool": "ncr-fresh-eyes",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本次執行環境沒有可用的 subagent 派發工具（無 Agent / Task tool），fresh eyes 這一步沒有執行，也沒有以主 agent 自行模擬。少了一次未被 checklist 框住的閱讀。"
+    },
+    {
+      "tool": "ncr-quality-check",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "同上，無法派發 subagent；報告 JSON 只經過 report_model.py 的結構驗證，沒有經過 quality-check 的獨立複核。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "fail",
+      "note": "AccessTokenContext.java:73 的 requireNonNull 訊息與實際被檢查的參數不一致（F-004）；AssertEvents.java:482 的註解說 shortcut 從第 4 個字元開始，程式碼卻取 substring(3, 5)，註解與程式碼互相矛盾（併入 F-001）。其餘命名（SessionType / TokenType / getShortcut）語意清楚，enum shortcut 值有對應的常數化處理。"
+    },
+    "B": {
+      "verdict": "fail",
+      "note": "TokenContextEncoderProvider.getTokenContextFromTokenId 在整個 repo 中沒有任何 production 呼叫端，只有單元測試在用（F-009）。其餘部分沒有重複邏輯或過度設計；encoder 抽成 SPI 是為了讓 grant 註冊表可擴充，屬於有理由的間接層。"
+    },
+    "C": {
+      "verdict": "pass",
+      "note": "編進 jti 的三段資訊（session type / token type / grant type）對持有該 token 的一方而言本來就可推知，沒有新增機密材料，也沒有把使用者識別資訊放進 token id。解碼端 DefaultTokenContextEncoderProvider.java:66-98 雖然會解析外部輸入，但目前沒有 production 呼叫端，且對長度與未知 shortcut 都是明確丟例外而非靜默接受。沒有發現未驗證輸入、SQL 拼接、硬編碼憑證或 eval 類問題。"
+    },
+    "D": {
+      "verdict": "na",
+      "note": "本次沒有新增或修改任何 HTTP endpoint、URL、HTTP verb 或請求/回應 schema；新增的都是 server 內部 Java SPI 介面（TokenContextEncoderProvider / TokenContextEncoderProviderFactory / TokenContextEncoderSpi）。token endpoint 回應中 jti 值的格式變化屬於既有欄位的內容變化，已於 F 面向與 Q-001 處理。"
+    },
+    "E": {
+      "verdict": "fail",
+      "note": "「誰負責寫入 Constants.GRANT_TYPE」這個決定散落在 5 個呼叫點（OAuth2GrantTypeBase.java:109、ResourceOwnerPasswordCredentialsGrantType.java:134、PreAuthorizedCodeGrantType.java:82、TokenManager.java:248、StandardTokenExchangeProvider.java:237），而 grant shortcut 卻是在 factory 上宣告，兩邊沒有機制保證對得起來——實際上就漏了兩個（F-002）。另有 Context.grantType 的衍生欄位會過期（F-007）、以及執行期補寫 shortcut 對照表時繞過重複性驗證（F-008）。"
+    },
+    "F": {
+      "verdict": "pass",
+      "note": "沒有 schema 變更、沒有多步寫入、沒有共享狀態的讀改寫。jti 是既有欄位的格式變化，屬於「改變既有形狀」的情境，但相容性設計是完整的：DefaultTokenContextEncoderProvider.java:57-60 對不含 ':' 的舊 token id 回傳 UNKNOWN 而非丟例外，且全 repo grep 過 UUID.fromString 沒有任何一處拿 access token id 去解析（只有 client session / broker state 在解析 UUID），事件表的 Details.TOKEN_ID 也只是不透明字串。外部消費端的部分無法從 repo 內確認，見 Q-001。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "本 PR 唯一的整合層驗證 AssertEvents.isAccessTokenId 因為偏移量錯誤加上判斷式反向，實際上永遠不會失敗（F-001）；單元測試 testIncorrectGrantType 則是靠吞掉 NullPointerException 才通過，並非驗證了它宣稱的 IllegalArgumentException（F-005）。testSuccess* 與 testOldToken 三個案例的斷言品質沒有問題（有比對實際欄位值並驗證 encode/decode 往返）。"
+    },
+    "H": {
+      "verdict": "pass",
+      "note": "diff 中的非 Java 檔只有兩個 META-INF service loader 檔。新增的 services/src/main/resources/META-INF/services/org.keycloak.protocol.oidc.encode.TokenContextEncoderProviderFactory 內容與實作類 FQN 一致，org.keycloak.provider.Spi 也正確加入了 TokenContextEncoderSpi 一行；兩者都已與原始碼中的類別名稱逐字比對過。沒有 Dockerfile、nginx.conf、docker-compose 或 migration 檔。"
+    },
+    "I": {
+      "verdict": "fail",
+      "note": "OAuth2GrantTypeFactory 新增了沒有 default 實作的 getShortcut()，repo 內 9 個實作（grep + META-INF/services/org.keycloak.protocol.oidc.grants.OAuth2GrantTypeFactory 交叉確認）全數更新，但 repo 外的實作會在啟動時踩到（F-006）。AbstractTokenExchangeProvider 的三個子類沒有跟上 StandardTokenExchangeProvider 的新行為（F-003）。另外已確認：OAuth2GrantType.Context 被移除的複製建構子在 repo 內沒有任何呼叫端（唯一的建構點是 TokenEndpoint.java:149）；getShouldUseLightweightToken 由 package-private 改為 public static 不影響既有呼叫端；TokenManager.validateToken 只有 refreshAccessToken 一個呼叫端，所以在該處寫死 REFRESH_TOKEN 不會誤標其他流程。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "G",
+      "severity": "Critical",
+      "status": "new",
+      "title": "AssertEvents.isAccessTokenId 的比對永遠成立，本 PR 唯一的整合層驗證等於沒有生效",
+      "evidence": [
+        "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:476-491",
+        "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:145",
+        "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:173",
+        "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:182",
+        "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:244",
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:101-117"
+      ],
+      "rationale": "matchesSafely 這一行同時有兩個錯：`if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`。第一，編碼格式是 2 字元 sessionType + 2 字元 tokenType + 2 字元 grantType（encodeTokenId 於 DefaultTokenContextEncoderProvider.java:114-117 依序串接），grant shortcut 位於索引 4-5，substring(3, 5) 取到的是索引 3-4，跨在 tokenType 與 grantType 之間。第二，判斷式方向相反——相等時 return false、不相等時繼續往下通過。兩者疊加的結果是：以 authorization_code 為例，token id 為 `onrtac:<uuid>`，substring(3, 5) 得到 \"ta\"，與期望值 \"ac\" 不相等，於是直接落到 `return isUUID().matches(items[1])` 而通過；反過來，真正符合期望的 token 若剛好讓索引 3-4 等於期望值，才會被判為失敗。也就是說 expectCodeToToken / expectDeviceCodeToToken / expectRefresh / expectAuthReqIdToToken 這四處的 TOKEN_ID 斷言，從 isUUID() 換成 isAccessTokenId() 之後，對 grant shortcut 沒有做任何實質檢查，只剩「有一個冒號、後半是 UUID」。本 PR 的核心行為（每個 grant 落在 token id 上的 shortcut 是否正確）因此沒有任何一層測試在守。此外本 repo 的 build 不會攔下這個問題：這是語意錯誤不是編譯錯誤，services/pom.xml 也沒有配置 checkstyle 或 spotbugs。附帶一提，AssertEvents.java:482 上方的註解寫「starts at character 4th char」，與 substring(3, 5) 自相矛盾，修正時一併處理。",
+      "fix": "把判斷式改成取正確位移並反向：`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`，同時把註解改成與程式碼一致的敘述（context 段固定 6 字元，grant shortcut 位於索引 4-5）。建議再補一道長度防護，避免 items[0] 短於 6 時丟出 StringIndexOutOfBoundsException 而不是回傳不符合：`if (items[0].length() != 6) return false;`。修好之後值得在本機實際跑一次 AccessTokenTest / RefreshTokenTest / OAuth2DeviceAuthorizationGrantTest 等會用到這四個 expect* 的案例，確認斷言是真的會因為 shortcut 不對而失敗。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-002",
+      "dimension": "E",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "client_credentials 與 uma-ticket 宣告了 shortcut，但沒有任何路徑會寫入 Constants.GRANT_TYPE，實際編碼永遠是 \"na\"",
+      "evidence": [
+        "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantTypeFactory.java:38-41",
+        "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java:139-141",
+        "services/src/main/java/org/keycloak/protocol/oidc/grants/PermissionGrantTypeFactory.java:38-41",
+        "services/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeBase.java:107-110",
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:57-60",
+        "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:38-40"
+      ],
+      "rationale": "clientSessionCtx.setAttribute(Constants.GRANT_TYPE, ...) 只出現在 5 個地方（OAuth2GrantTypeBase.java:109、ResourceOwnerPasswordCredentialsGrantType.java:134、PreAuthorizedCodeGrantType.java:82、TokenManager.java:248、StandardTokenExchangeProvider.java:237，已用 grep 對全 repo 列舉）。而 OAuth2GrantTypeBase.createTokenResponse 的呼叫端只有三個 grant：AuthorizationCodeGrantType.java:208、CibaGrantType.java:204、DeviceGrantType.java:359。ClientCredentialsGrantType 走的是自己的 responseBuilder（ClientCredentialsGrantType.java:139-141），PermissionGrantType 則轉交 AuthorizationTokenService 建 RPT，兩者都沒有寫入該 attribute。於是 DefaultTokenContextEncoderProvider.java:57-60 讀到 null，落入 UNKNOWN，client_credentials 與 uma-ticket 發出的 access token 一律編成 \"na\"，兩個 factory 上宣告的 \"cc\" 與 \"pg\" 在 production 不可能出現。反向驗證過：沒有其他寫入點、也沒有由 factory id 推導 shortcut 的後備路徑（getTokenContextFromClientSessionContext 只讀 attribute）。單元測試把 \"cc\" 對應到 CLIENT_CREDENTIALS（DefaultTokenContextEncoderProviderTest.java:38-40），讀起來像是這條路徑有覆蓋到，實際上沒有。",
+      "fix": "兩個方向擇一。最小改動是在 ClientCredentialsGrantType 取得 clientSessionCtx 之後（ClientCredentialsGrantType.java:122 附近）與 PermissionGrantType 交給 AuthorizationTokenService 之前，各補一行 setAttribute(Constants.GRANT_TYPE, context.getGrantType())。比較耐久的做法是把這個寫入從各 grant 上收回到單一位置——例如在 TokenManager.createClientAccessToken / initToken 取不到 attribute 時，改由 OAuth2GrantType.Context 或 session context 取得目前的 grant，讓「新增一個 grant」不必記得同時改兩處。無論選哪一種，建議補一個測試釘住「每個有宣告 shortcut 的 grant 都真的會編出該 shortcut」，否則同樣的漏接會在下一個 grant 重演。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-003",
+      "dimension": "I",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "token exchange 只有 standard（V2）路徑會標記 grant type，V1 / impersonation / federated 三條路徑仍是 \"na\"",
+      "evidence": [
+        "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java:237",
+        "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/AbstractTokenExchangeProvider.java:384-411",
+        "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/V1TokenExchangeProvider.java:51",
+        "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/SubjectImpersonationTokenExchangeProvider.java:54",
+        "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/FederatedTokenExchangeProvider.java:41"
+      ],
+      "rationale": "新增的那一行寫在 StandardTokenExchangeProvider 覆寫的 exchangeClientToOIDCClient 內（StandardTokenExchangeProvider.java:237）。AbstractTokenExchangeProvider 的另外三個子類（V1TokenExchangeProvider、SubjectImpersonationTokenExchangeProvider、FederatedTokenExchangeProvider）沒有覆寫這個方法，走的是基底類別 AbstractTokenExchangeProvider.java:384-411 那份，該處直接 responseBuilder.generateAccessToken() 而沒有寫入 Constants.GRANT_TYPE。結果是：同樣一個 grant_type=urn:ietf:params:oauth:grant-type:token-exchange 的請求，token id 會因為啟用的是 V1 還是 standard V2 而編出 \"na\" 或 \"te\"。之後任何依 shortcut 分流的邏輯，看到 \"na\" 時無法分辨是舊 token、是未覆蓋的 grant，還是 V1 token exchange。已反向確認：三個子類確實都沒有自己的 setAttribute（grep Constants.GRANT_TYPE 全 repo 只有前述 5 處）。",
+      "fix": "把 setAttribute(Constants.GRANT_TYPE, OAuth2Constants.TOKEN_EXCHANGE_GRANT_TYPE) 上移到 AbstractTokenExchangeProvider.exchangeClientToOIDCClient 的共用版本（validateConsents 之後、generateAccessToken 之前），讓 StandardTokenExchangeProvider 的覆寫版本繼承同樣的行為，四條路徑就一致了。若刻意只想標記 V2，請在該行加註解說明 V1 保持 \"na\" 是有意為之，否則下一個維護者只會讀成漏改。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-004",
+      "dimension": "A",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "AccessTokenContext 建構子的 null 檢查複製貼上，rawTokenId 實際上沒有被檢查",
+      "evidence": [
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:69-78"
+      ],
+      "rationale": "第 72 與 73 行都在檢查 grantType：`Objects.requireNonNull(grantType, \"Null grantType not allowed\")` 之後緊接 `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`。第二行的訊息說的是 rawTokenId，檢查的卻是 grantType，所以 rawTokenId 為 null 時會安靜地建構成功，接著 encodeTokenId 會產出字面上是 \"onrtac:null\" 的 token id——一個沒有任何地方會擋下、但已經不是有效識別碼的值。這個類別是 public 的，日後 SPI 的其他實作也會呼叫這個建構子，訊息與檢查對不上還會讓例外訊息誤導除錯方向。目前 production 的唯一呼叫端（TokenManager.java:1053）傳的是 KeycloakModelUtils.generateId()，不會是 null，所以現在不會出事——這也是把嚴重度放在 Suggestion 而非 Critical 的理由。",
+      "fix": "第 73 行改成 `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\");`。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-005",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "testIncorrectGrantType 是靠吞掉 NullPointerException 通過的，並非驗證了它宣稱的 IllegalArgumentException",
+      "evidence": [
+        "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:76-85",
+        "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:31-44",
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:121-126"
+      ],
+      "rationale": "before() 只呼叫 factory.init(null) 並手動塞 grantsByShortcuts / grantsToShortcuts，沒有呼叫 postInit()，因此 factory 的 sessionFactory 欄位是 null。testIncorrectGrantType 傳入 \"ofrtac:5678\"，sessionType 與 tokenType 都查得到，接著 getGrantTypeByShortcut(\"ac\") 在 map 中找不到，就走進 DefaultTokenContextEncoderProviderFactory.java:125 的補查分支，對 null 的 sessionFactory 呼叫 getProviderFactoriesStream(...) 而丟出 NullPointerException。測試的 catch 寫的是 RuntimeException（變數名 iae 顯示原意是 IllegalArgumentException），把 NPE 一併吞下，所以測試通過了，但它宣稱要驗證的那條 IllegalArgumentException（DefaultTokenContextEncoderProvider.java:91-93）從來沒有被執行到。把那個 throw 整段刪掉，這個測試依然會綠。順帶一提，第 80 行的 ctx 指派後未使用。",
+      "fix": "把 catch 收斂成 `catch (IllegalArgumentException iae)`，並在 before() 裡讓 getGrantTypeByShortcut 的補查分支有辦法走完——最簡單的是把 sessionFactory 設成一個回傳空 stream 的 stub，或是把補查分支改成 sessionFactory == null 時直接回傳 null。收斂 catch 型別之後，這個測試才會真的釘住「未知 grant shortcut 要丟 IllegalArgumentException」這件事。同時刪掉未使用的 ctx 區域變數。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-006",
+      "dimension": "I",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "OAuth2GrantTypeFactory 新增無 default 的 getShortcut()，repo 外的 grant 實作會在伺服器啟動時失敗",
+      "evidence": [
+        "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:26-33",
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:65-85",
+        "services/src/main/resources/META-INF/services/org.keycloak.protocol.oidc.grants.OAuth2GrantTypeFactory:1-9"
+      ],
+      "rationale": "repo 內的 9 個 OAuth2GrantTypeFactory 實作全部都補上了 getShortcut()（grep 到的實作清單與 META-INF service 檔的 9 行完全對得起來），所以本 repo 不會編不過。問題在 repo 外：OAuth2GrantType / OAuth2GrantTypeFactory 是自訂 grant 的擴充點，既有的第三方實作沒有這個方法，而 DefaultTokenContextEncoderProviderFactory.postInit 會對「每一個」註冊的 grant factory 呼叫 gtf.getShortcut()（第 74 行），因此不是等到該 grant 被使用才出事，而是伺服器啟動階段就 AbstractMethodError。另外 postInit 第 82-85 行的重複性檢查是以拋 IllegalStateException 結束，代表第三方 grant 只要選到與內建 grant 相同的 2 字元 shortcut，同樣是啟動失敗——這個行為本身有註解說明是刻意的，但它讓「升級後起不來」的可能原因多了一種。此處嚴重度不到 Critical，是因為 server-spi-private 依 Keycloak 的定位屬於內部 API，不保證相容性。",
+      "fix": "考慮給 getShortcut() 一個 default 實作（例如回傳 null 或依 getId() 推導），並在 DefaultTokenContextEncoderProviderFactory.postInit 對 null / 重複 shortcut 的 grant 改為記錄警告並退回 \"na\"，而不是讓整台伺服器起不來。若決定維持破壞性變更，請依 PR-CHECKLIST.md 的「Including updates to release notes and upgrade guide if applicable」在 docs/documentation/upgrading/topics/changes/ 補一則說明，明確告訴擴充作者要新增 getShortcut() 並自行避開 ac/cc/ci/dg/pc/pg/ro/rt/te/na 這幾個已占用的值。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-007",
+      "dimension": "E",
+      "severity": "Nit",
+      "status": "new",
+      "title": "Context.grantType 在建構時就固定，setFormParams 之後會與 formParams 不一致",
+      "evidence": [
+        "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java:85-103",
+        "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java:105-107"
+      ],
+      "rationale": "建構子在第 102 行把 formParams.getFirst(GRANT_TYPE) 快取進 grantType 欄位，但同一個類別在第 105 行提供了 public 的 setFormParams()，換掉 formParams 之後 grantType 不會跟著更新，getGrantType() 就會回報上一組表單的值。目前 repo 內沒有任何 setFormParams 的呼叫端（已 grep 全 repo，只有宣告本身），所以現在不會出錯；但這是 server-spi-private 上的 public setter，衍生欄位與來源不同步是日後容易被踩到的形狀。",
+      "fix": "在 setFormParams 內一併更新 grantType，或把 getGrantType() 改成每次從 formParams 現算（this.formParams.getFirst(OAuth2Constants.GRANT_TYPE)），讓單一來源只有 formParams。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-008",
+      "dimension": "E",
+      "severity": "Nit",
+      "status": "new",
+      "title": "執行期補寫 shortcut 對照表時繞過了 postInit 的重複性驗證",
+      "evidence": [
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:82-85",
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:106-118",
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:121-135"
+      ],
+      "rationale": "postInit 用兩個 map 的 size 差異來偵測 shortcut 重複，重複就拋 IllegalStateException——啟動期是大聲失敗。但 getShortcutByGrantType 與 getGrantTypeByShortcut 為了支援「執行期才部署的新 grant」而補寫這兩個 map 時，都是直接 put，沒有重跑那個檢查。若後部署的 grant 選了已被占用的 shortcut，grantsByShortcuts 中原本的對應會被靜默覆蓋，之後 getTokenContextFromTokenId 對同一個 shortcut 會解出另一個 grant，而不是像啟動期那樣直接失敗。同一個不變式在兩條路徑上有兩種強度。",
+      "fix": "在補寫之前先檢查該 shortcut（或該 grant）是否已對應到不同的值，衝突時記錄警告並拒絕寫入，讓執行期與啟動期對「shortcut 必須唯一」保持同樣的立場。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-009",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "解碼側 getTokenContextFromTokenId 目前沒有任何 production 呼叫端",
+      "evidence": [
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/TokenContextEncoderProvider.java:35",
+        "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:66-98",
+        "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java:1052-1054"
+      ],
+      "rationale": "全 repo grep TokenContextEncoderProvider 的使用，production 端只有 TokenManager.java:1052-1054 用到 getTokenContextFromClientSessionContext 與 encodeTokenId；getTokenContextFromTokenId 只有單元測試在呼叫。以「先落地編碼、解碼留給後續 PR」來說這是合理的，只是這一版合併後，這段解析邏輯（包含長度必須是 6、未知 shortcut 一律丟 IllegalArgumentException 的嚴格行為）會有一段時間沒有真實呼叫端在校準它。特別是未來若由 token introspection 之類會接收外部輸入的路徑呼叫，對格式錯誤的 token id 丟例外還是回傳 UNKNOWN，是需要先講清楚的決定。",
+      "fix": "在 TokenContextEncoderProvider.java 的 Javadoc 補一句說明這個方法預定的消費端與時程（或直接引用後續 issue 編號），並順帶寫明對「非本伺服器簽發／格式不符」的 token id 期望的行為是丟例外而非回退，讓下一個接手的人不必從測試反推設計意圖。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "F",
+      "question": "access token 的 jti 從純 UUID 變成 `<6 字元>:<UUID>`，外部既有的消費端（SIEM、以 jti 為索引的 token 黑名單、資源伺服器的稽核紀錄、把 jti 當 UUID 欄位存的下游系統）會不會因為格式或長度而壞掉？",
+      "context": "repo 內側已經查過並確認安全：全 repo grep UUID.fromString 沒有任何一處是拿 access token id 去解析（命中的都是 client session id 與 broker state），事件表的 Details.TOKEN_ID 只當不透明字串存取，解碼端對不含 ':' 的舊 token id 也有回退分支。但 jti 是簽發出去給第三方讀的值，Hyrum's Law 的風險在 repo 外，從這份 checkout 無法判斷。",
+      "what_would_settle_it": "確認這個變更是否已（或將）寫進 docs/documentation/release_notes 與 docs/documentation/upgrading/topics/changes/ 的升級說明；以及與 maintainer 確認 jti 是否曾被文件承諾為 UUID 格式。若沒有承諾過，只需要一則 release note；若有，就需要一個可關閉的開關或分階段推出。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "H",
+      "question": "本 PR 是否需要在同一個 PR 或關聯 PR 中附上 release notes / upgrade guide？",
+      "context": "PR-CHECKLIST.md 明列「Required documentation is included in the PR or an associated PR. Including updates to release notes and upgrade guide if applicable」。這個 diff 沒有動到 docs/documentation/release_notes/ 或 docs/documentation/upgrading/topics/changes/ 底下任何檔案，而它同時改變了對外可見的 jti 格式（見 Q-001）與 server-spi-private 的介面（見 F-006）。但 checklist 允許放在關聯 PR，從這份 checkout 看不到關聯 PR，因此無法斷定是漏了還是已在別處處理。",
+      "what_would_settle_it": "作者確認是否有關聯的 docs PR；若沒有，補一則 release note 說明 jti 格式變更，以及一則 upgrading 說明給自訂 OAuth2GrantTypeFactory 的擴充作者。"
+    }
+  ],
+  "rereview": null,
+  "conclusion": "Request Changes",
+  "summary": "本次為第 1 輪 local_branch 審查，目標為 keycloak-37634（Shorter encoding of access token）。設計方向本身是清楚的：把 session type / token type / grant type 各 2 字元編進 access token 的 jti 前綴，舊格式有明確回退分支，repo 內沒有任何地方把 access token id 當 UUID 解析，相容性這一側是站得住的。擋下這次合併的是驗證層：AssertEvents.isAccessTokenId 因為偏移量錯誤加上判斷式反向，四處整合斷言實際上完全沒有檢查 grant shortcut（F-001）；單元測試 testIncorrectGrantType 也是靠吞掉 NullPointerException 才通過（F-005）。功能面則有兩處覆蓋漏接：client_credentials 與 uma-ticket 宣告了 shortcut 卻沒有任何路徑寫入 Constants.GRANT_TYPE（F-002），token exchange 只有 standard V2 路徑被標記（F-003），這三種情況發出的 token 都會編成 \"na\"。執行環境限制需一併揭露：沒有 Maven 網路存取，整個專案無法編譯或執行測試，所有判斷都來自閱讀原始碼與 grep；trivy / opengrep / ty / oxlint / codegraph 皆未安裝，ruff 有跑但 diff 內沒有 Python 檔案（專案既有問題 6 件不計入）；此外本次環境無法派發 subagent，ncr-fresh-eyes 與 ncr-quality-check 兩步都沒有執行。"
+}

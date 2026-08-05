@@ -1,0 +1,117 @@
+{
+  "slug": "cal_com-8330",
+  "issues": [
+    {
+      "text": "The working-hours check in checkIfIsAvailable uses the wrong quantifier: it rejects a slot as soon as ANY working-hours entry does not contain it, instead of rejecting only when NO entry contains it, so a day with two working-hours ranges (or an organizer whose local hours cross UTC midnight) loses every slot.",
+      "zh": "checkIfIsAvailable 的 working hours 檢查量詞相反，一天有兩段（或跨 UTC 午夜）的班表會讓全部時段消失",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "When a date override exists for the slot's day, checkIfIsAvailable returns true early and skips the busy[] check entirely, so slots already taken by existing bookings or external calendar events are reported as available, allowing double booking.",
+      "zh": "有 date override 的日期會提早 return true，完全跳過 busy 檢查，可能造成重複預約",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "Converting a date override into invitee-local minutes-of-day cannot express a range that crosses the invitee's local midnight; the result has startTime > endTime, buildSlots silently drops it via `if (start >= end) continue`, and the whole day returns zero slots.",
+      "zh": "時區位移讓 date override 跨過邀請者當地午夜時 startTime > endTime，該日整天沒有任何可預約時段",
+      "finding_id": "F-003",
+      "severity": "Critical"
+    },
+    {
+      "text": "The variable `end` is computed with exactly the same expression as `start` (slotStartTime.hour() * 60 + slotStartTime.minute()), so the slot's end time never participates in the working-hours comparison; slotEndTime should be used instead.",
+      "zh": "變數 end 的算式與 start 完全相同，slot 的結束時間實際上沒有被檢查",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Two freshly constructed Dayjs objects are compared with ===, which compares object references and can never be true, making the 'override start equals end means the whole day is unavailable' branch dead code; isSame() should be used.",
+      "zh": "用 === 比較兩個 Dayjs 物件，這個分支永遠不會成立",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The date-override day comparison mixes a local-mode dayjs(date.start).format(\"YYYY MM DD\") with a UTC-mode slotStartTime.format(...), so the override is matched to the wrong day whenever the server timezone is not UTC.",
+      "zh": "date override 的日期比對混用 local 模式與 utc 模式的 dayjs，結果隨伺服器時區而變",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The third checkIfIsAvailable call site (selectedSlots / seats path) does not pass workingHours and dateOverrides, so the newly added filtering never applies on that path and the same slot is judged by different availability rules depending on which path it takes.",
+      "zh": "第三個 checkIfIsAvailable 呼叫點沒有帶 workingHours 與 dateOverrides，同一批 slot 在不同路徑套用不同規則",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "TimeRange.timeZone is declared optional but packages/lib/slots.ts calls .tz(override.timeZone) as if it were required; when it is undefined dayjs silently falls back to the server's local timezone instead of failing.",
+      "zh": "TimeRange.timeZone 宣告為 optional，但 packages/lib/slots.ts 當成必填使用，缺值時會靜默退回伺服器時區",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The added test switches the invitee timezone to +6:00 while keeping the organizer timezone and aligning the query window to the same UTC interval, then asserts the slots are identical, so it would still pass with the old conversion and does not cover the organizer-to-invitee offset that was actually fixed.",
+      "zh": "新增的測試沒有覆蓋到這次修正的行為",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The two new branches added to checkIfIsAvailable (date override and working hours) have no tests at all, and the existing fixture has only a single working-hours range so it structurally cannot trigger the regression.",
+      "zh": "checkIfIsAvailable 新增的兩段新分支則完全沒有測試",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "organizerTimeZone is resolved with one precedence when generating slots (eventType.timeZone || schedule.timeZone || user timezone, passed to getTimeSlots) and with a different one when filtering them (each user's schedule.timeZone passed to checkIfIsAvailable), so the two stages can use different offsets.",
+      "zh": "organizerTimeZone 在產生 slot 與過濾 slot 兩個階段用了不同的定義",
+      "finding_id": "F-010",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The same dayjs conversion expression, dayjs(date.start).add(utcOffset, \"minutes\"), is rebuilt five times inside one function (and twice more in packages/lib/slots.ts) within a nested per-slot per-override loop; it should be hoisted into a local const.",
+      "zh": "同一個 dayjs 換算式在一個函式內重複建構五次",
+      "finding_id": "N-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "Array.prototype.find is used purely as a boolean test where .some() is the correct method; find also misreports a falsy element as 'not found'.",
+      "zh": "Array.prototype.find 被當布林條件用",
+      "finding_id": "N-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "The find callbacks only return true inside the if branch and otherwise fall through to an implicit undefined, the pattern ESLint's array-callback-return flags.",
+      "zh": "callback 沒有明確的 return",
+      "finding_id": "N-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "The find predicate sets the outer variable dateOverrideExist as a side effect, which readers cannot easily anticipate; it should be computed in its own separate pass.",
+      "zh": "第 113 行在 find 的 predicate 裡設定外層變數 dateOverrideExist，是 predicate 帶副作用，讀者不容易預期。",
+      "finding_id": "N-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "override.start.toString() is passed to dayjs instead of the Date itself, producing a non-ISO string that falls back to implementation-defined new Date(string) parsing, and it is inconsistent with the dayjs(override.start) form used a few lines below.",
+      "zh": "override.start.toString() 先轉字串再交給 dayjs 解析，多餘且依賴非標準的字串格式",
+      "finding_id": "N-013",
+      "severity": "Nit"
+    },
+    {
+      "text": "The diff contains three blank-line-only additions/removals unrelated to the timezone fix, which add noise to future git blame and bisect.",
+      "zh": "與主題無關的空行增刪讓 diff 多出雜訊",
+      "finding_id": "N-014",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Which concrete scenario is the new date-override / working-hours filtering layer in checkIfIsAvailable meant to fix? getSlots already uses the same workingHours and dateOverrides, so this layer can only remove slots, never add them, and it is unclear whether it patches a real gap or is purely defensive duplication.",
+      "zh": "checkIfIsAvailable 新增的這層 date override / working hours 過濾，是為了修哪一個具體情境？"
+    },
+    {
+      "text": "When dayjs.tz(date.start, organizerTimeZone) is given a Date object, does the plugin treat it as wall-clock time in that zone or as an absolute instant? The two interpretations give different utcOffset values on a DST transition day.",
+      "zh": "`dayjs.tz(date.start, organizerTimeZone)` 傳入 Date 物件時，plugin 是把它當成該時區的牆上時間還是絕對時刻？在 DST 轉換當天兩者會給出不同的 utcOffset。"
+    }
+  ]
+}

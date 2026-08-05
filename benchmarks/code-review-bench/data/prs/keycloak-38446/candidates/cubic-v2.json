@@ -1,0 +1,6 @@
+[
+  "`getMyUser(user)` can return `null` for an unknown user, causing a `NullPointerException` at `myUser.recoveryCodes`. Add a null check like the other credential methods do (e.g., `isConfiguredFor`).",
+  "`getCredential(...)` can return a user-storage credential, but the code below still removes and evaluates it as if it were a local stored credential. That breaks the \"last code used\" cleanup/prompt logic for federated users and can also inspect the wrong credential when both sources exist.",
+  "Persisting recovery codes through the generic user-storage path can make them reusable for federated users, because user-storage validators are not required to consume a code after successful use.",
+  "The reconstructed `RecoveryAuthnCodesCredentialModel` loses the stored credential's ID. `createFromValues` does not call `setId()`, so the returned model will have a `null` ID. Add `model.setId(myUser.recoveryCodes.getId())` after the `createFromValues` call to preserve the original credential ID."
+]

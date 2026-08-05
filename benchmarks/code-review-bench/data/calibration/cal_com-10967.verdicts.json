@@ -1,0 +1,383 @@
+{
+  "slug": "cal_com-10967",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "redundant-optional-chain-broken-integration-email",
+      "evidence": "packages/emails/src/templates/BrokenIntegrationEmail.tsx:87-90",
+      "reason": "The code is `let calendar = mainHostDestinationCalendar ? mainHostDestinationCalendar?.integration.split(\"_\") : \"calendar\"` — the ternary already established truthiness, so the `?.` in the consequent is dead. Note this is a different site from EventManager.ts:119, where the same property access has no guard at all."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "self-matching-find-external-id",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:302-304,316,327-329",
+      "reason": "In deleteEvent the else-branch runs only when externalCalendarId is falsy, and it then searches `cal.externalId === externalCalendarId` (i.e. === undefined), which never matches since externalId is a non-null String column; calendarId falls back to \"primary\", and the callback resolves() on err.code 404, so the failed delete is reported as success."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "webhook-payload-breaking-change",
+      "evidence": "packages/types/Calendar.d.ts:171; packages/features/webhooks/lib/sendPayload.ts:19-31; apps/web/playwright/webhook.e2e.ts:249",
+      "reason": "WebhookDataType is `CalendarEvent & ...`, so destinationCalendar is serialized verbatim to subscribers (the e2e snapshots assert on it), and the field changes from object|null to array with no version marker or changelog entry anywhere in the diff."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "no-tests-for-refactor",
+      "evidence": "benchmarks diff: 22 changed files, only apps/web/playwright/webhook.e2e.ts:249 is a test change",
+      "reason": "I counted the files in the diff: 22, and the sole test-side change is the snapshot value null -> []. No test covers the multi-destination fan-out in createAllCalendarEvents, the Meet fallback, or the credentialId-null legacy branch."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "redundant-optional-chain-request-reschedule",
+      "evidence": "packages/trpc/server/routers/viewer/bookings/requestReschedule.handler.ts:240-242",
+      "reason": "`bookingToReschedule?.destinationCalendar ? [bookingToReschedule?.destinationCalendar] : []` — the second `?.` sits in the branch where the object was just proven truthy, so it is dead syntax."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "schedulingtype-literal-vs-enum",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:688 vs :805",
+      "reason": "Line 688 now uses `[\"COLLECTIVE\", \"ROUND_ROBIN\"].includes(eventType.schedulingType)` while line 805 still uses `SchedulingType.ROUND_ROBIN` from the same imported enum; both compile (Prisma emits a string-literal union) but the file now carries two styles and the literals are unchecked."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "google-create-credentialid-match-fails",
+      "evidence": "packages/prisma/schema.prisma:159 (`credentialId Int?`); packages/app-store/googlecalendar/lib/CalendarService.ts:145-147,152",
+      "reason": "DestinationCalendar.credentialId is nullable, and createAllCalendarEvents also reaches the provider through the no-credentialId branch; in both cases `find((cal) => cal.credentialId === credentialId)` returns undefined and `selectedCalendar || \"primary\"` writes the event to the primary calendar, whereas the pre-change code used destinationCalendar.externalId directly."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "null-destinationcalendar-push-noop",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:1063-1067,1077-1078",
+      "reason": "evt.destinationCalendar is literally `: null` when neither eventType nor organizerUser has one, and the append is `evt.destinationCalendar?.push(...teamDestinationCalendars)` — a no-op on null, so a COLLECTIVE event whose calendars live only on secondary hosts gets an empty destination list. Line numbers cited match the file exactly."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "recurring-cancel-block-nested-in-loop",
+      "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:423,444-470",
+      "reason": "The recurring branch itself loops over every `_calendar` credential of the user and every updatedBooking; it is now inside `for (const reference of bookingCalendarReference)`, so with N calendar references the identical set of deleteEvent calls is issued N times (previously the reference was a single `.find()` result)."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "org-slug-condition-inverted",
+      "evidence": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:150-152",
+      "reason": "The spread went from `...(!IS_TEAM_BILLING_ENABLED && { slug })` to `...(IS_TEAM_BILLING_ENABLED ? { slug } : {})` while metadata.requestedSlug kept the same condition, so with billing on the org gets both slug and requestedSlug and with billing off it gets neither — an unrelated behavioural inversion riding along in this PR."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "null-destinationcalendar-push-noop",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:1063-1067,1077-1078",
+      "reason": "Same defect as c008 stated as a silent-drop: no throw, no log, and teamDestinationCalendars is discarded in exactly the COLLECTIVE scenario the PR targets."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "dropped-organization-select",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:733-742 vs :320-327",
+      "reason": "The rewritten dynamic-user query keeps userSelect + credentials + metadata but drops the `organization: { select: { slug: true } }` block the old query had; the hosts query at 320-327 still selects it, so the two paths now return differently shaped users."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "webhook-payload-shape-inconsistent",
+      "evidence": "apps/web/playwright/webhook.e2e.ts:119 (null), :249 ([]), :373 (null)",
+      "reason": "The e2e expectations confirm it: BOOKING_CREATED and BOOKING_REQUESTED still assert null (handleNewBooking:1067 falls back to `null`), BOOKING_REJECTED now asserts [], and configured bookings send a populated array. Three shapes for one field, undocumented."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "unclear",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "null-credentialid-row-count",
+      "evidence": "packages/prisma/schema.prisma:159",
+      "reason": "The schema confirms credentialId is nullable, but how many production rows are actually NULL is data I do not have. A `SELECT count(*) FROM \"DestinationCalendar\" WHERE \"credentialId\" IS NULL` against production would settle whether a backfill must precede the merge."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "null-destinationcalendar-push-noop",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:1063-1067,1077-1078",
+      "reason": "Same finding as c008/c011, worded as the silent no-op of `?.push()` against a null initial value."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "legacy-branch-omits-externalid",
+      "evidence": "packages/core/EventManager.ts:370 vs :380",
+      "reason": "The credentialId branch calls `createEvent(credential, event, destination.externalId)` while the no-credentialId branch calls `createEvent(c, event)`, so EventResult.externalId is undefined and EventManager.ts:174 writes the booking reference with `externalCalendarId: undefined` for that path."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "credential-lookup-n-plus-1",
+      "evidence": "packages/core/EventManager.ts:344,516; packages/features/bookings/lib/handleCancelBooking.ts:432",
+      "reason": "All three new `prisma.credential.findUnique` calls are inside per-destination or per-reference loops on the synchronous booking create/cancel paths; a single findMany with `id IN (...)` hoisted above the loop would do the same work in one round trip."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "loadusers-error-flattening",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:755-761",
+      "reason": "The catch rewrites HttpError to a fixed 400 (discarding its statusCode) and turns everything else into a generic 500 \"Unable to load users\"; the thrown messages inside loadUsers (e.g. \"dynamicUserList is not properly defined or empty.\") never reach the response, and nothing in the catch logs the original error."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "recurring-cancel-uses-first-reference-only",
+      "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:449-458",
+      "reason": "Cited lines match exactly: inside the per-reference loop the recurring branch ignores `reference` and does `updBooking.references.find((ref) => ref.type.includes(\"_calendar\"))`, so only the first calendar reference of each updated booking is ever deleted, and it iterates `bookingToDelete.user.credentials` rather than the credential just fetched from the DB at 431-441."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "unscoped-credential-fetch",
+      "evidence": "packages/core/EventManager.ts:343-355,515-527; packages/features/bookings/lib/handleCancelBooking.ts:431-437",
+      "reason": "Factually accurate: the three new lookups are `findUnique({ where: { id } })` with no userId/teamId predicate, and they return the credential key, whereas the previous code only ever searched this.calendarCredentials / bookingToDelete.user.credentials. The ids come from the booking's own rows rather than request input, so it is a trust-boundary question rather than an exploitable IDOR, but it is a deliberate widening a maintainer should sign off on."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "duplicated-credential-lookup-block",
+      "evidence": "packages/core/EventManager.ts:343-367 and :515-539; packages/features/bookings/lib/handleCancelBooking.ts:431-441",
+      "reason": "The two EventManager blocks are byte-for-byte the same include/where/hand-map sequence and handleCancelBooking has a third, thinner variant; the hand-mapping also silently drops the credential entirely when `app.slug` is absent."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "destination-not-forwarded-to-provider",
+      "evidence": "packages/core/EventManager.ts:336-381; packages/core/CalendarManager.ts:262-269; packages/app-store/larkcalendar/lib/CalendarService.ts:128",
+      "reason": "createEvent(credential, calEvent, externalId) records externalId in the result but passes only `(calEvent, credential.id)` to the provider, so providers that read destinationCalendar[0] (Lark, Office365, the CalDAV base service) write every iteration of the loop to the same first calendar."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "High",
+      "cluster": "updateevent-called-with-undefined-credential",
+      "evidence": "packages/core/EventManager.ts:511-542; packages/core/CalendarManager.ts:272-322",
+      "reason": "First half is right — a stale credentialId leaves `credential` undefined and updateEvent then dereferences `credential.appName` at CalendarManager.ts:315 after getCalendar returns null. The second half is wrong in a way that understates it: `return Promise.all(result)` is not awaited, so the rejection escapes the try/catch entirely rather than being converted into the per-reference failure results at 597-608."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "singular-names-for-arrays",
+      "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:418-422; packages/core/EventManager.ts:479",
+      "reason": "`bookingCalendarReference` is now a `.filter()` result tested with `.length > 0`, and `calendarReference` is declared `PartialReference[] | undefined`; both names still read as single objects."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "updateevent-called-with-undefined-credential",
+      "evidence": "packages/core/EventManager.ts:528-542 vs :368-373; packages/core/CalendarManager.ts:279,315",
+      "reason": "Exactly right, including the escape: getCalendar(undefined) returns null so the TypeError lands on `credential.appName` in updateEvent's return object, and because updateAllCalendarEvents does `return Promise.all(result)` without await, the rejection is not caught by its own catch — while createAllCalendarEvents guards the identical case with `if (credential)` at line 368."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "google-patch-undefined-calendarid",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:145-147,152,166",
+      "reason": "The insert call applies `selectedCalendar || \"primary\"` but the hangout-link `events.patch` at line 166 passes the raw `selectedCalendar`, so when the find misses, the event is created in primary and the follow-up patch is issued with calendarId undefined (fire-and-forget, no callback, so the failure is invisible)."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "loadusers-scope-creep",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:724-761",
+      "reason": "loadUsers is rewritten from a ternary chain into a try/catch with if/else branches and new validation; none of it touches destinationCalendar, and it is one of the larger diffs in the PR (it is also where the organization select was silently dropped)."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "restating-comment-google-service",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:143-147",
+      "reason": "The comment `// Find in calEventRaw.destinationCalendar the one with the same credentialId` is followed by a blank line and then the exact code it paraphrases; it explains neither why credentialId is the key nor why the fallback is primary."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "duplicate-destinations-not-deduped",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:990-994,1077-1078; packages/core/EventManager.ts:337-373",
+      "reason": "Settled by reading the code rather than left open: teamDestinationCalendars is pushed with no comparison against the entry already in evt.destinationCalendar, and createAllCalendarEvents iterates every entry calling createEvent once each with no dedupe, so two rows pointing at the same externalId/credentialId produce two Google inserts into the same calendar."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "dropped-organization-select",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:733-742,351-355,870",
+      "reason": "Accurate on all three points: the select no longer contains organization.slug, IsFixedAwareUser still declares `organization: { slug: string }`, and it type-checks only because of `users as IsFixedAwareUser[]` at line 870. Nothing reads user.organization.slug in this flow today, so the damage is latent rather than immediate."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "office365-update-delete-signatures",
+      "evidence": "packages/app-store/office365calendar/lib/CalendarService.ts:94,111; diff hunk for that file",
+      "reason": "The signatures are as described, but the diff only touches Office365's createEvent — updateEvent/deleteEvent are untouched pre-existing code, and TypeScript accepts an implementation with fewer parameters, so nothing about this change breaks the interface."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "updateevent-called-with-undefined-credential",
+      "evidence": "packages/core/EventManager.ts:528-542; packages/core/CalendarManager.ts:315",
+      "reason": "`credential` is only assigned when `credentialFromDB && credentialFromDB.app?.slug`, and updateEvent is called regardless; getCalendar tolerates the undefined but `credential.appName` in updateEvent's return does not."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "hoist-destructure-out-of-reduce",
+      "evidence": "packages/lib/CalendarService.ts:508-509",
+      "reason": "The `const [mainHostDestinationCalendar] = event?.destinationCalendar ?? []` line sits inside the reduce callback body, so it is re-destructured once per calendar even though `event` is loop-invariant."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "legacy-branch-omits-externalid",
+      "evidence": "packages/core/EventManager.ts:370 vs :380",
+      "reason": "Same omission as c016, phrased via its consequence on the written booking reference; the sibling branch passes destination.externalId and this one does not."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "not_real",
+      "confidence": 0.55,
+      "severity": null,
+      "cluster": "createevent-arity-interface",
+      "evidence": "packages/types/Calendar.d.ts:222; packages/app-store/larkcalendar/lib/CalendarService.ts:125; packages/app-store/office365calendar/lib/CalendarService.ts:72",
+      "reason": "The premise is right but the conclusion is not: TypeScript allows a method with fewer parameters to satisfy a wider signature, so `implements Calendar` still compiles and nothing breaks at runtime. The genuine problem — those providers ignoring the per-destination selection — is asserted separately in c022/c039/c042."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Critical",
+      "cluster": "eventmanager-unguarded-destructure",
+      "evidence": "packages/core/EventManager.ts:118-120",
+      "reason": "`const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` followed by `mainHostDestinationCalendar.integration` with no guard: handleNewBooking:1067 hands back null exactly when no destination calendar exists, so booking a Google Meet event without one throws a TypeError where the old `evt.destinationCalendar?.integration !== \"google_calendar\"` correctly fell back to Cal Video. This is the counterpart of c001 — the optional chain is redundant there and missing here."
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "updateevent-called-with-undefined-credential",
+      "evidence": "packages/core/EventManager.ts:542",
+      "reason": "Line 542 is `result.push(updateEvent(credential, event, bookingRefUid, calenderExternalId))` with no `if (credential)`, reachable whenever both the in-memory filter and the DB fallback fail to produce one."
+    },
+    {
+      "claim_id": "c038",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "misleading-mainhost-name",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:1063-1065; packages/core/EventManager.ts:118",
+      "reason": "Index 0 is eventType.destinationCalendar when the event type has one, and only otherwise the organizer's; the PR's own comment at EventManager.ts:117 admits it is just \"the first one\", so the name asserts a host-selection decision that has not been made."
+    },
+    {
+      "claim_id": "c039",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "destination-not-forwarded-to-provider",
+      "evidence": "packages/core/CalendarManager.ts:259-269 (externalId only lands in the returned EventResult)",
+      "reason": "Confirmed by reading CalendarManager: externalId is threaded into the result object only; the provider call is `calendar.createEvent(calEvent, credential.id)`. Google recovers via the credentialId match, but every provider that reads destinationCalendar[0] does not."
+    },
+    {
+      "claim_id": "c040",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "High",
+      "cluster": "eventmanager-unguarded-destructure",
+      "evidence": "packages/core/EventManager.ts:118-119",
+      "reason": "There is a genuine unguarded case, but the claim overstates the count: of the five new `const [first] = ... ?? []` sites (EventManager, Lark x4, Office365, packages/lib/CalendarService, BrokenIntegrationEmail) only EventManager.ts:119 dereferences without `?.`."
+    },
+    {
+      "claim_id": "c041",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "self-matching-find-external-id",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:248-250",
+      "reason": "The core assertion holds even though the polarity in the wording is inverted (the find runs when externalCalendarId is *absent*): `find((cal) => cal.externalId === externalCalendarId)` compares against undefined and can never match, so selectedCalendar becomes undefined and events.update is called with calendarId undefined, replacing the previous `event.destinationCalendar?.externalId` fallback."
+    },
+    {
+      "claim_id": "c042",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "destination-not-forwarded-to-provider",
+      "evidence": "packages/app-store/larkcalendar/lib/CalendarService.ts:128,164,192,237",
+      "reason": "All four cited lines exist and do `const [mainHostDestinationCalendar] = event.destinationCalendar ?? []`; since EventManager calls the provider once per destination but always passes the whole array, Lark writes every collective event to entry 0."
+    }
+  ]
+}

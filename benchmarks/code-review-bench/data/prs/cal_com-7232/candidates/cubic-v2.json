@@ -1,0 +1,8 @@
+[
+  "Passing `true` to deleteScheduledEmailReminder bypasses the new deferred email-cancellation flow and reintroduces the SendGrid cancellation-cap bug for reschedules",
+  "deleteScheduledEmailReminder and deleteScheduledSMSReminder are async functions called inside .forEach() without await in handleCancelBooking.ts - promises are fire-and-forget, cancellations may not complete before booking data is deleted, and failures surface as unhandled rejections",
+  "When immediateDelete is true in deleteScheduledEmailReminder, the function cancels the SendGrid scheduled send but returns without deleting or marking the workflowReminder DB record as cancelled, leaving stale reminder rows in the database",
+  "deleteScheduledEmailReminder and deleteScheduledSMSReminder are async functions called inside .forEach() without await in handleNewBooking.ts - reminder deletions are fire-and-forget, failures won't be caught by try/catch, and no guarantee they complete before response is sent",
+  "The cancellation pass in scheduleEmailReminders.ts should restrict to reminders that are already scheduled email sends - otherwise an unscheduled or non-email reminder can produce an invalid SendGrid batch_id and prevent other cancellations from running",
+  "Both call sites (handleCancelBooking.ts:488 and handleNewBooking.ts:968) invoke deleteScheduledEmailReminder async function inside .forEach() without await - async DB/SendGrid work becomes fire-and-forget and rejections are silently lost"
+]

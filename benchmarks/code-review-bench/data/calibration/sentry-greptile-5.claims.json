@@ -1,0 +1,249 @@
+{
+  "slug": "sentry-greptile-5",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "validate_timestamp/validate_age use self.initial_data.get(...) which treats 0 as 'absent', allowing both age=0 and timestamp to pass the mutual-exclusion rule - should check key presence or 'is not None' instead of truthiness"
+    },
+    {
+      "claim_id": "c002",
+      "text": "UseGetTraceItemAttributeValuesProps extends UseTraceItemAttributeBaseProps which provides projects?: Project[], but hook uses projectIds?: PageFilters['projects'] (number[]) - incompatible types"
+    },
+    {
+      "claim_id": "c003",
+      "text": "BrowserReportSerializer allows reports with neither age nor timestamp since both fields are required=False and field-level validators only run when their respective field is present; need object-level validate() method to ensure at least one field is provided"
+    },
+    {
+      "claim_id": "c004",
+      "text": "get_environment_info is called once per issue (up to 5) inside the list comprehension that builds the PR comment body, each call doing a Snuba query with a possible fallback second query, adding up to 5-10 extra remote calls to a path that previously made zero."
+    },
+    {
+      "claim_id": "c005",
+      "text": "requests.post call lacks a timeout, which could cause tests to hang indefinitely if Snuba is unresponsive"
+    },
+    {
+      "claim_id": "c006",
+      "text": "Meta is missing the 'id' column - rows include 'id' but meta.fields/meta.units don't list it, leading to undefined metadata lookups"
+    },
+    {
+      "claim_id": "c007",
+      "text": "The submitted changeset isn't shaped like a mergeable MR: 106 files and 32 unrelated changes bundled together (a revert, two migrations turned into no-ops, dozens of unrelated frontend refactors), such that no single problem in it could be reverted independently."
+    },
+    {
+      "claim_id": "c008",
+      "text": "analytics.record for the preprod artifact assemble endpoint is called before the feature-flag check, so requests from organizations without the feature enabled (which get a 404) are still counted as assemble events, skewing feature-adoption metrics in the direction opposite to what the data is meant to show."
+    },
+    {
+      "claim_id": "c009",
+      "text": "`attempts` should allow `0`; the Reporting API sends first-delivery reports with `attempts: 0`, so this validation rejects valid browser reports"
+    },
+    {
+      "claim_id": "c010",
+      "text": "After traceWaterfall's outer container was changed from height: 100% to flex={1}, does the layout still render the same on the actual page across all drawer layouts?"
+    },
+    {
+      "claim_id": "c011",
+      "text": "replay breadcrumbs and errors are merged in chronological order by comparing timestamps that are in different units (errors in seconds, breadcrumbs in milliseconds), so the merge condition is always true for real data and all error messages get dumped before the first breadcrumb; the new tests pass because they feed a 'seconds' value into a field that is really milliseconds."
+    },
+    {
+      "claim_id": "c012",
+      "text": "Override detection uses 'if (cell)' which ignores valid ReactNodes like 0, empty string, or null and falls back to default renderer unexpectedly - should check 'cell !== undefined' instead (same issue in body-cell renderer)"
+    },
+    {
+      "claim_id": "c013",
+      "text": "format_comment_subtitle is now dead code in both the GitHub and GitLab integrations (no remaining callers), and it is not declared as an abstract method on the base class either, so there's no interface reason for it to still exist."
+    },
+    {
+      "claim_id": "c014",
+      "text": "The PR comment template ends with its own trailing newline, and the code also joins entries with \"\\n\", producing an extra blank line between each issue and after the last one, turning a Markdown tight list into a loose list with unintended visual spacing."
+    },
+    {
+      "claim_id": "c015",
+      "text": "Mutual-exclusion validation for age/timestamp uses truthy-based check with self.initial_data.get(...) which treats 0 as falsey - should use key presence check instead"
+    },
+    {
+      "claim_id": "c016",
+      "text": "A blanket `except Exception` in get_environment_info turns any Snuba timeout, retention-boundary error, or serialization failure into an empty string, which is indistinguishable from an issue genuinely having no environment."
+    },
+    {
+      "claim_id": "c017",
+      "text": "HIDDEN_ATTRIBUTES filtering only applies inside the search-query filter branch; the early return for the no-search-query case (the default view most users see) happens before that filter, so the fields meant to stay hidden are still shown by default."
+    },
+    {
+      "claim_id": "c018",
+      "text": "Rewriting already-applied migration files (0917, 0920) into no-ops is irreversible for environments that already ran them, and this kind of change should be split out from the other 32 bundled changes and have its rollout timing evaluated on its own."
+    },
+    {
+      "claim_id": "c019",
+      "text": "useGetTraceItemAttributeValues call defaults to page filters instead of using provided projectIds prop, returning results from wrong project scope"
+    },
+    {
+      "claim_id": "c020",
+      "text": "This feature-flagged path drops the real table results and always renders an empty table for flagged organizations"
+    },
+    {
+      "claim_id": "c021",
+      "text": "Switching useTraceItemAttributeKeys from useApiQuery to useQuery drops the original retry: false option, which has no global default, so the query now retries three times on failure, unnecessarily delaying the UI's failure state for what is just autocomplete helper data."
+    },
+    {
+      "claim_id": "c022",
+      "text": "When useApiQuery is disabled or idle, data can be undefined, so data.summary will throw and break the page for orgs without the feature flag"
+    },
+    {
+      "claim_id": "c023",
+      "text": "When the new table-widget-visualization flag branch is taken, it renders a hardcoded empty table (empty columns and tableData) instead of wiring in the already-computed result, producing a table with no headers and no data."
+    },
+    {
+      "claim_id": "c024",
+      "text": "Breaking changes in error response format"
+    },
+    {
+      "claim_id": "c025",
+      "text": "Detector validator uses wrong key when updating type"
+    },
+    {
+      "claim_id": "c026",
+      "text": "The variable disable_error_fetching is a negated rename of the enable_error_context query parameter, so reading `if disable_error_fetching:` requires mentally negating twice, and the variable name (fetching) doesn't even match the parameter name's concept (context)."
+    },
+    {
+      "claim_id": "c027",
+      "text": "TriggerLabelWrap renders a span while Flex renders a div - nesting div inside span can break inline layout/ellipsis behavior"
+    },
+    {
+      "claim_id": "c028",
+      "text": "The diff under review does not match the PR title 'Replays Self-Serve Bulk Delete System': the merge-base resolves to the feature's own squash commit rather than its parent, so the actual diff spans 32 unrelated already-merged PRs, and the bulk-delete feature itself is not present in the diff at all."
+    },
+    {
+      "claim_id": "c029",
+      "text": "_truncate_title can return a string longer than max_length because it adds '...' after slicing - should slice to max_length - 3 before appending ellipsis"
+    },
+    {
+      "claim_id": "c030",
+      "text": "A commit titled as just 'adding environment info' also removed the culprit/subtitle field from merged-PR Suspect Issues comments, replacing it with `environment`, which is often an empty string when no recommended event is found \u2014 so for some issues the comment silently loses information with nothing filling the gap, and this user-visible regression isn't mentioned in the commit title."
+    },
+    {
+      "claim_id": "c031",
+      "text": "The 'use-table-widget-visualization' feature flag referenced in the frontend has no corresponding registration anywhere in the backend feature registry, so it can never be enabled and the branch that depends on it can never be exercised or rolled out."
+    },
+    {
+      "claim_id": "c032",
+      "text": "get_request_data sorts the caller-supplied error_events list in place, an undocumented side effect that isn't implied by the function's name (which only promises to 'get request data')."
+    },
+    {
+      "claim_id": "c033",
+      "text": "sentry/preprod/analytics.py has no __all__ defined, so `from .analytics import *` in __init__.py pulls in every non-underscore name including the `analytics` module it itself imports, creating an ambiguous name that can refer to either the submodule or sentry.analytics depending on import order."
+    },
+    {
+      "claim_id": "c034",
+      "text": "request.user.id may raise an error if the user is anonymous when recording analytics"
+    },
+    {
+      "claim_id": "c035",
+      "text": "With the added Snuba query and nodestore batch read, is the response time of project_replay_summarize_breadcrumbs (a GET endpoint) still acceptable given the 150ms target?"
+    },
+    {
+      "claim_id": "c036",
+      "text": "When deleting recording blobs, exceptions other than NotFound raised inside the ThreadPoolExecutor are never observed (pool.map's generator is never iterated), so deletion failures are silently discarded and the replay is still marked as deleted even though the blob was never removed from storage."
+    },
+    {
+      "claim_id": "c037",
+      "text": "When use-table-widget-visualization is enabled, TableWidgetVisualization renders with columns=[] and empty tableData, so the table will always appear blank even when result.data/meta are present"
+    },
+    {
+      "claim_id": "c038",
+      "text": "Is turning migrations 0917 and 0920 into no-ops actually safe for every environment (SaaS and self-hosted) that may have already applied them?"
+    },
+    {
+      "claim_id": "c039",
+      "text": "The browser reporting collector rejects an entire batch with a 422 as soon as one report in it fails validation, discarding already-valid reports in the same batch, even though the endpoint's stated purpose is observing real-world browser data and the Reporting API will keep retrying the whole failing batch."
+    },
+    {
+      "claim_id": "c040",
+      "text": "The rewrite of useTraceItemAttributeKeys widens its returned `attributes` type from always being a TagCollection to potentially `undefined` while loading or on error; the current caller happens to be safe against this, but a future caller that indexes attributes directly would break."
+    },
+    {
+      "claim_id": "c041",
+      "text": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment)."
+    },
+    {
+      "claim_id": "c042",
+      "text": "_truncate_title slices to max_length and then appends '...', so the returned string can exceed ISSUE_TITLE_MAX_LENGTH by 3 characters"
+    },
+    {
+      "claim_id": "c043",
+      "text": "Feature-flag path passes empty columns and empty tableData to TableWidgetVisualization, causing blank tables even when results exist"
+    },
+    {
+      "claim_id": "c044",
+      "text": "HIDDEN_ATTRIBUTES filter is only applied when searchQuery is non-empty; when searchQuery is empty (default state), internal attributes (is_segment, project_id, received) are visible to users because the early return at line 62 returns sorted directly without filtering"
+    },
+    {
+      "claim_id": "c045",
+      "text": "Typo in story text: duplicated 'the' in 'Below is the the most basic example'"
+    },
+    {
+      "claim_id": "c046",
+      "text": "Broad exception catch (Exception) may hide underlying issues - should catch more specific exceptions like NodeStoreError, KeyError"
+    },
+    {
+      "claim_id": "c047",
+      "text": "Custom renderers that return falsy React nodes (0, '', false, null) are treated as 'no render' due to truthy check - should use explicit undefined check"
+    },
+    {
+      "claim_id": "c048",
+      "text": "The updated test covering the max_segment_id=None null guard patches out delete_matched_rows entirely and only asserts on the mock's call arguments, so the actual guarded line of code is never executed by the test that is supposed to protect it."
+    },
+    {
+      "claim_id": "c049",
+      "text": "Because both `age` and `timestamp` are required=False and DRF's validate_<field> only runs for fields present in the input, a report containing neither field entirely skips validation and is accepted, even though the referenced spec requires exactly one of the two to be present."
+    },
+    {
+      "claim_id": "c050",
+      "text": "Typo in comment: 'segements' should be 'segments'"
+    },
+    {
+      "claim_id": "c051",
+      "text": "If max_segment_id is NULL, no blobs get deleted at all \u2014 could this leave orphaned recording files in storage for replays whose in-window rows all have NULL segment_id but which have real segments outside that window?"
+    },
+    {
+      "claim_id": "c052",
+      "text": "The updated browser-reporting-collector tests (test_basic and test_handles_multiple_reports_both_specs) dropped the real content_type=\"application/reports+json\" and the logger.info assertion, so no test exercises the actual content type real browsers send, and the assertion that browser_report_received was logged is gone."
+    },
+    {
+      "claim_id": "c053",
+      "text": "Analytics event is recorded before feature flag check, meaning analytics will be recorded for all requests including those that return 404 due to feature being disabled"
+    },
+    {
+      "claim_id": "c054",
+      "text": "fetch_error_details swallows all exceptions (nodestore failure, timeout, parse error) and returns an empty list, which is indistinguishable from the normal case of a replay simply having no errors, so failures silently produce a summary that looks complete but is missing all error context."
+    },
+    {
+      "claim_id": "c055",
+      "text": "Is the diff range submitted for review actually correct, given that the merge-base resolves to the feature's own squash commit rather than its parent?"
+    },
+    {
+      "claim_id": "c056",
+      "text": "The mutual-exclusion check between `age` and `timestamp` uses truthy checks instead of presence checks, so a report that has both `timestamp` and `age: 0` (a common case, since age 0 means 'sent immediately') incorrectly passes the exclusivity validation."
+    },
+    {
+      "claim_id": "c057",
+      "text": "Truthiness check on `.get(\"age\")` will miss `age=0` (a valid value meaning \"just generated\"), allowing both `timestamp` and `age` to coexist. Use `\"age\" in self.initial_data` to test for key presence instead of relying on the value being truthy"
+    },
+    {
+      "claim_id": "c058",
+      "text": "Removing the redundant Type row from the Grouping Information panel also removed each grouping variant's unique explanatory text (with no other place it's shown), and as a side effect the CUSTOM_FINGERPRINT and BUILT_IN_FINGERPRINT switch cases are now word-for-word identical, since the removed tooltip text was the only thing distinguishing them."
+    },
+    {
+      "claim_id": "c059",
+      "text": "error_ids taken from the Snuba aggregation are passed to nodestore.get_multi with no upper bound, creating unbounded fan-out on a synchronous GET endpoint when a replay is associated with many errors."
+    },
+    {
+      "claim_id": "c060",
+      "text": "HIDDEN_ATTRIBUTES filter is only applied when searchQuery is present - when searchQuery is empty, hidden attributes like is_segment, project_id, received will still be visible"
+    },
+    {
+      "claim_id": "c061",
+      "text": "After removing ParameterizationRegexExperiment, the nested function _handle_regex_match defined inside parametrize_w_experiments has no remaining caller and is now dead code; ruff doesn't catch this because it doesn't flag unused nested functions, and a same-named function used elsewhere in the file must not be confused with this dead one."
+    }
+  ]
+}

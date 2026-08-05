@@ -1,0 +1,4 @@
+[
+  "For legacy -webkit-box/-moz-box flexbox syntax, *-box-ordinal-group is 1-based (whereas modern order is 0-based), so using $val directly can shift ordering by 1 in older browsers - need to offset the *-box-ordinal-group value",
+  "-ms-align-items is not a recognized MS flexbox property (IE10/11 use -ms-flex-align instead), keeping it emits invalid CSS declarations and makes debugging harder"
+]

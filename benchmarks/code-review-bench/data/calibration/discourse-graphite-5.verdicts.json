@@ -1,0 +1,212 @@
+{
+  "slug": "discourse-graphite-5",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "custom-message-p-margin",
+      "evidence": "app/assets/stylesheets/common/base/topic-post.scss:291; app/assets/javascripts/discourse/templates/components/small-action.hbs:16",
+      "reason": ".custom-message renders {{{post.cooked}}}, which is arbitrary cooked markdown and can contain several <p> elements; the diff changes p { margin: 5px 0 } to margin: 0, so consecutive paragraphs lose all vertical separation."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "incomplete-relanded-file-set",
+      "evidence": "git show --stat 2ad2ab5 vs HEAD 5b22931",
+      "reason": "2ad2ab5 (\"aligning text-logos and header with flexbox\", reverted by 83593fe) touched 6 files; this commit replays only header.scss, topic-post.scss, topic.scss and badges.css.scss, leaving out desktop/header.scss (.fa-home padding 8px -> 0 8px 0 0) and mobile/header.scss (dropping .title height: 39px), both of which were part of making the flex row align."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "mixin-prefix-order-inconsistency",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:105-119",
+      "reason": "flexbox() emits webkit-box, moz-box, ms-flexbox, webkit-flex, flex; inline-flex() emits webkit-inline-box, webkit-inline-flex, moz-inline-box, ms-inline-flexbox, inline-flex - the moz/ms/webkit-flex positions are swapped between two mixins that express the same mapping."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "order-mixin-legacy-ordinal-base",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:129-135",
+      "reason": "order($val) writes $val straight into -webkit-box-ordinal-group / -moz-box-ordinal-group, whose legacy definition is a positive integer starting at 1; @include order(0) - the initial value of modern `order` - would emit ordinal-group: 0, which those implementations drop as invalid."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "contents-clearfix-in-flex",
+      "evidence": "app/assets/javascripts/discourse/templates/header.hbs:2; app/assets/stylesheets/common/foundation/helpers.scss:53-62",
+      "reason": "header.hbs still renders <div class='contents clearfix'> and .clearfix generates ::before/::after with content:\" \"; now that .d-header .contents is display:flex those two pseudo-elements become real flex items (blockified from display:table) and the clear:both on ::after has no meaning in a flex formatting context."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "ms-align-items-nonexistent",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:124",
+      "reason": "-ms-align-items was never shipped by IE or Edge; IE10's 2012-draft property is -ms-flex-align (already emitted on the line above) and IE11+ takes unprefixed align-items, so this declaration is dead weight."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "mobile-custom-message-negative-margin",
+      "evidence": "app/assets/stylesheets/common/base/topic-post.scss:280; app/assets/stylesheets/mobile/topic-post.scss:516-523",
+      "reason": "The mobile .custom-message { margin-left: -40px } was added by ccc07605 while .small-action-desc still had padding-left: 4em, and this diff replaces that padding with 0 1.5% without touching it; the negative margin now overhangs the flex item's border box instead of eating into its padding. Net visual shift is small only because the avatar became its own 45px flex column, so the predicted misalignment is overstated, but the coupling really is stale."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "align-items-colon-space",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:125",
+      "reason": "The last line of align-items() is `align-items:$alignment;` while the four lines above it and every other declaration in the file use `prop: value`."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "mixin-trailing-whitespace",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:123",
+      "reason": "`cat -A` shows two trailing spaces after `-ms-flex-align: $alignment;` on the new line in align-items()."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "ie10-auto-margin",
+      "evidence": "app/assets/stylesheets/common/base/header.scss:38-42",
+      "reason": ".panel now relies on margin-left: auto for its right alignment and the mixin deliberately emits -ms-flexbox for IE10, so the question is well aimed, but whether IE10's 2012-draft implementation resolves auto margins as free-space absorption cannot be settled from this repository. Testing in IE10 (or the March 2012 flexbox WD text) would settle it."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "align-items-colon-space",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:125",
+      "reason": "Same missing space after the colon in `align-items:$alignment;`; every other declaration in mixins.scss has one."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "align-items-missing-moz-box-align",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:105-135",
+      "reason": "flexbox() emits `display: -moz-box` and order() emits `-moz-box-ordinal-group`, but align-items() emits no -moz-box-align, so a Firefox old enough to need the -moz-box fallback gets the box display and ordering but no cross-axis alignment."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "mobile-custom-message-negative-margin",
+      "evidence": "app/assets/stylesheets/common/base/topic-post.scss:280; app/assets/stylesheets/mobile/topic-post.scss:521",
+      "reason": "The file/line and the mechanism check out and -40px against ~4.5px of 1.5% padding does put .custom-message ~35px outside .small-action-desc's border box. The stated consequence is overstated though: the old padding was 4em of a 0.9em/14px font (~50px, not ~64px), and .small-action-desc now starts 45px in because .topic-avatar is its own flex item, so the custom message lands within about a pixel of where it was rather than overflowing the row."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "percentage-padding-small-action-desc",
+      "evidence": "app/assets/stylesheets/common/base/topic-post.scss:280",
+      "reason": "`padding: 0 1.5%` is the only percentage padding in the whole file (grep for 'padding.*%' returns this line alone) and it now resolves against the .small-action flex container, so the gap is ~4.5px on a 320px phone and ~10px on desktop where the rest of the file uses px/em."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "extra-info-order-not-flex-item",
+      "evidence": "app/assets/javascripts/discourse/components/header-extra-info.js.es6:1; app/assets/javascripts/discourse/templates/components/header-extra-info.hbs:1; app/assets/stylesheets/common/base/topic.scss:29",
+      "reason": "header-extra-info is a plain Ember.Component with no tagName override, so it renders its own div.ember-view inside .contents and .extra-info-wrapper is that div's child; `order` only applies to flex items, so the new @include order(2) is inert and the layout depends on source order."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "align-items-keyword-passthrough",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:120-126",
+      "reason": "-webkit-box-align and -ms-flex-align take start/end/center/baseline/stretch, not flex-start/flex-end, and the mixin does no keyword translation. The two call sites in this diff pass center and baseline so nothing breaks today, but the mixin silently drops the legacy declarations for any flex-start/flex-end caller."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "revert-reason-unknown",
+      "evidence": "git show 83593fe (Revert \"aligning text-logos and header with flexbox\")",
+      "reason": "The revert commit body is only the boilerplate \"This reverts commit 2ad2ab5...\" with no stated reason, and this commit's message does not name one either, so the question is well founded but nothing in the repository answers it. The original discussion or the reverter's reasoning would settle it."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "order-mixin-legacy-ordinal-base",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:129-135",
+      "reason": "-webkit-box-ordinal-group / -moz-box-ordinal-group are 1-based with initial value 1 while modern `order` is 0-based with initial value 0; the mixin passes $val to both without the +1 offset, so legacy-box browsers see a different relative ordering from modern ones."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "order-mixin-legacy-ordinal-base",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:130-131",
+      "reason": "Same off-by-one: the fix is to emit $val + 1 for the two *-box-ordinal-group properties while leaving -ms-flex-order/-webkit-order/order at $val."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "order-mixin-legacy-ordinal-base",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:129-135",
+      "reason": "Same 1-based vs 0-based mismatch between the legacy box ordinal-group properties and modern `order`, stated for old WebKit and Firefox."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "align-items-indentation",
+      "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:120-126",
+      "reason": "align-items() indents its five declarations with 4 spaces while flexbox(), inline-flex() and order() - added in the same hunk - use 2. The blanket \"rest of mixins.scss uses 2-space\" is not quite exact (the pre-existing clearfix() mixin also uses 4), but the inconsistency inside the new code is real."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "panel-float-removal-noscript-header",
+      "evidence": "app/views/application/_header.html.erb:13-19; app/assets/stylesheets/vendor/bootstrap.scss:36-47; app/assets/stylesheets/common/base/header.scss:35-40",
+      "reason": "The server-rendered header (rendered inside <noscript> in layouts/application.html.erb and by layouts/no_ember.html.erb) nests .panel inside .row next to .title.span13, so .panel is not a flex item of .contents. Removing float: right and replacing it with margin-left: auto (a no-op on an auto-width block) plus order: 3 (a no-op outside a flex container) leaves the login panel with nothing pushing it right."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "extra-info-order-not-flex-item",
+      "evidence": "app/assets/javascripts/discourse/components/header-extra-info.js.es6; app/assets/javascripts/discourse/templates/components/header-extra-info.hbs:1; app/assets/stylesheets/common/base/topic.scss:29",
+      "reason": "Confirmed the component sets no tagName, so Ember wraps the template in div.ember-view and .extra-info-wrapper is a grandchild of the .contents flex container; order applies only to direct flex items, making the new declaration dead CSS."
+    }
+  ]
+}

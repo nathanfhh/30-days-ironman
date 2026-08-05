@@ -1,0 +1,291 @@
+{
+  "slug": "keycloak-38446",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 20,
+      "text": "BackwardsCompatibilityUserStorageTest.java:481 calls org.junit.Assert.assertEquals with the fully qualified name although the file already imports org.keycloak.testsuite.Assert, which extends it and is used everywhere else in the file.",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "The removal / disable path for recovery codes in user storage has no test at all, while OTP has two in the same file.",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 0,
+      "text": "Recovery codes stored in user storage are never consumed: BackwardsCompatibilityUserStorage.isValid matches any of the 12 codes with anyMatch and never modifies myUser.recoveryCodes, and getCredentials rebuilds the model from the full original list every time, so remainingCodes stays 12, allCodesUsed() is never true, the login page always asks for code #1, and one code can be reused for unlimited logins \u2014 the one-time property of recovery codes is inverted.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 1,
+      "text": "RecoveryAuthnCodesUtils.getCredential can now return a credential built by the user storage provider, but RecoveryAuthnCodesFormAuthenticator still calls credentialManager().removeStoredCredentialById(model.getId()), which only touches Keycloak's local or federated storage and never notifies the provider \u2014 a silent no-op once the code counter actually advances.",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 3,
+      "text": "Line 340 only checks whether the submitted code exists but never updates the stored list, allowing the same recovery code to be replayed indefinitely and preventing the federated path from reaching exhausted-credential cleanup",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 21,
+      "text": "When user storage takes over creating recovery codes, the user's existing local recovery-authn-codes credential is not removed, leaving two credentials \u2014 is that deliberate or an oversight? The same structure already exists for OTP.",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 0,
+      "text": "Line 125 returns on the user-storage path without removing any existing local recovery-code credentials, leaving stale DB entries in the database after a successful user-storage write",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 0,
+      "text": "`getMyUser(user)` can return `null` for an unknown user, causing a `NullPointerException` at `myUser.recoveryCodes`. Add a null check like the other credential methods do (e.g., `isConfiguredFor`).",
+      "claim_id": "c008"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "Unsafe raw List deserialization without type safety. Calling Optional.get() directly on the Optional returned by RecoveryAuthnCodesUtils.getCredential(user) without checking isPresent() can lead to a NoSuchElementException if the Optional is empty.",
+      "claim_id": "c009"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "The testsuite provider implements only the write side of CredentialInputUpdater for the new type: disableCredentialType and getDisableableCredentialTypesStream still handle OTP only, so deleting recovery codes returns 204 while the credential stays in user storage \u2014 unlike OTP, which has two removal tests in the same file.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 0,
+      "text": "RecoveryAuthnCodesUtils.getCredential() can return credentials from user storage (CredentialInputUpdater#getCredentials); if those CredentialModels don't have credentialData/secretData in Keycloak's expected JSON format, the subsequent RecoveryAuthnCodesCredentialModel.createFromCredentialModel(...) will throw at runtime and break login",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 14,
+      "text": "The recoveryCodeCredentialProvider is fetched at the top of the method but only used in the else branch, so the getProvider call is wasted whenever user storage handles the credential.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 2,
+      "text": "RecoveryAuthnCodesFormAuthenticator.isRecoveryAuthnCodeInputValid() calls removeStoredCredentialById() which targets local storage, not federated storage, so cleanup would fail for federated credentials",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 1,
+      "text": "Recovery codes validation in BackwardsCompatibilityUserStorage.isValid() accepts any matching code rather than only the next sequential one, violating the security contract",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "Typo in config alias: \"suthenticator\" should be \"authenticator\" in \"delayed-suthenticator-config\"",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 3,
+      "text": "TestAppHelper.logout() relies on refreshToken set by completeLogin(), but this test never calls completeLogin() after submitting the recovery code; logout may become a no-op and leave sessions behind for later tests",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 1,
+      "text": "`getCredential(...)` can return a user-storage credential, but the code below still removes and evaluates it as if it were a local stored credential. That breaks the \"last code used\" cleanup/prompt logic for federated users and can also inspect the wrong credential when both sources exist.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "createRecoveryCodesCredential takes both the RecoveryAuthnCodesCredentialModel (hashed) and the List<String> of raw codes, two representations of the same secret where the first is derived from the second, and nothing checks that the caller passes a consistent pair.",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 0,
+      "text": "Recovery codes in BackwardsCompatibilityUserStorage.isValid() are never consumed after use, allowing infinite reuse of the same recovery code",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "The new test never asserts that a code already used cannot be used a second time, which is exactly why it cannot detect the missing consumption.",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 15,
+      "text": "The new getCredentials dereferences the result of getMyUser without a null check, while getDisableableCredentialTypesStream, isConfiguredFor and isValid in the same class all guard against null; the method is called on every recovery-code form render and validation.",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 17,
+      "text": "log.error in getCredentials drops the IOException instead of passing it, so the stack trace disappears when deserialization fails.",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 5,
+      "text": "getDisableableCredentialTypesStream() does not handle recovery codes credential type, preventing credential disabling for federated users",
+      "claim_id": "c024"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "configureBrowserFlowWithRecoveryAuthnCodes and enterRecoveryCodes were copied almost verbatim from RecoveryAuthnCodesAuthenticatorTest, dragging along a delay parameter that is always 0 here and a REQUIRED delayed-authenticator execution that serves no purpose in this test (it exists in the original only for the simultaneous-login race test).",
+      "claim_id": "c025"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 4,
+      "text": "disableCredentialType() does not handle recovery codes credential type, preventing credential deletion for federated users",
+      "claim_id": "c026"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 13,
+      "text": "createRecoveryCodesCredential returns void, so the caller cannot tell whether the credential ended up in user storage or the local database, unlike createOTPCredential in the same file which has the identical if/else structure and returns boolean.",
+      "claim_id": "c027"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "For the recovery-authn-codes type, CredentialInput.getChallengeResponse() carries two completely different shapes \u2014 a JSON array of all 12 raw codes when writing via updateCredential, and a single raw code when validating \u2014 with no javadoc stating it, and the format is hardcoded independently in server-spi-private (CredentialHelper) and in the testsuite provider, so a third party can only reverse-engineer it and a format change must be made in both modules.",
+      "claim_id": "c028"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 2,
+      "text": "Recovery-code validation accepts any stored code and never consumes/removes it, which makes recovery codes reusable and ignores the sequential 'code #N' behavior enforced by RecoveryAuthnCodesCredentialProvider",
+      "claim_id": "c029"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 2,
+      "text": "Persisting recovery codes through the generic user-storage path can make them reusable for federated users, because user-storage validators are not required to consume a code after successful use.",
+      "claim_id": "c030"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "The new test never submits an invalid recovery code to check that it is rejected, although the existing OTP test in the same file does exactly that with a wrong OTP and getInputError().",
+      "claim_id": "c031"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 18,
+      "text": "That same log message names the credential type 'recovery-codes' while the actual TYPE constant is 'recovery-authn-codes', so searching for the string will not find the code.",
+      "claim_id": "c032"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 11,
+      "text": "The typo in config.setAlias(\"delayed-suthenticator-config\") was copied along with it, so the misspelling now exists in two files.",
+      "claim_id": "c033"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "Test helper parameters are vestigial: assertUserHasRecoveryKeysCredentialInUserStorage(boolean) is only ever called with true, and setupRecoveryKeysForUserWithRequiredAction's logoutOtherSessions is always true so its if branch is never executed.",
+      "claim_id": "c034"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 19,
+      "text": "Stray double spaces in the new code: inside the log message between 'deserialize' and 'credential', in `}  else {`, and after the assignment operator in CredentialHelper.java:119.",
+      "claim_id": "c035"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "The test ends at appPage.assertCurrent(), which only confirms the page loaded; it does not assert the login event and its credential-type detail the way the existing RecoveryAuthnCodesAuthenticatorTest does.",
+      "claim_id": "c036"
+    }
+  ]
+}

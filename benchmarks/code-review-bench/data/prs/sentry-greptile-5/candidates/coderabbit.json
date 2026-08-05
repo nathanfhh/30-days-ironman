@@ -1,0 +1,20 @@
+[
+  "_truncate_title can return a string longer than max_length because it adds '...' after slicing - should slice to max_length - 3 before appending ellipsis",
+  "Mutual-exclusion validation for age/timestamp uses truthy-based check with self.initial_data.get(...) which treats 0 as falsey - should use key presence check instead",
+  "events.values() order from nodestore.backend.get_multi() may not align with error_ids order, causing wrong event data to be associated with wrong IDs when zipping",
+  "Missing events (where data is None) are filtered out but corresponding error_ids are still zipped, causing misalignment",
+  "Broad exception catch (Exception) may hide underlying issues - should catch more specific exceptions like NodeStoreError, KeyError",
+  "Typo in comment: 'segements' should be 'segments'",
+  "TriggerLabelWrap renders a span while Flex renders a div - nesting div inside span can break inline layout/ellipsis behavior",
+  "When useApiQuery is disabled or idle, data can be undefined, so data.summary will throw and break the page for orgs without the feature flag",
+  "Feature-flag path passes empty columns and empty tableData to TableWidgetVisualization, causing blank tables even when results exist",
+  "Custom renderers that return falsy React nodes (0, '', false, null) are treated as 'no render' due to truthy check - should use explicit undefined check",
+  "Meta is missing the 'id' column - rows include 'id' but meta.fields/meta.units don't list it, leading to undefined metadata lookups",
+  "Typo in story text: duplicated 'the' in 'Below is the the most basic example'",
+  "UseGetTraceItemAttributeValuesProps extends UseTraceItemAttributeBaseProps which provides projects?: Project[], but hook uses projectIds?: PageFilters['projects'] (number[]) - incompatible types",
+  "useGetTraceItemAttributeValues call defaults to page filters instead of using provided projectIds prop, returning results from wrong project scope",
+  "requests.post call lacks a timeout, which could cause tests to hang indefinitely if Snuba is unresponsive",
+  "HIDDEN_ATTRIBUTES filter is only applied when searchQuery is present - when searchQuery is empty, hidden attributes like is_segment, project_id, received will still be visible",
+  "Analytics event is recorded before feature flag check, meaning analytics will be recorded for all requests including those that return 404 due to feature being disabled",
+  "request.user.id may raise an error if the user is anonymous when recording analytics"
+]

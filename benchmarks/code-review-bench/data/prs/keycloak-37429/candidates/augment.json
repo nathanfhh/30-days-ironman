@@ -1,0 +1,7 @@
+[
+  "In verifySafeHtml(), IO failures are rethrown as RuntimeException, while verify() otherwise reports IO problems as MojoExecutionException - exception types should be consistent for easier plugin failure interpretation",
+  "The prefix/suffix trimming (start/end) can yield overlapping indices which would throw StringIndexOutOfBoundsException and abort verification - needs an overlap/bounds guard",
+  "The error message 'Didn't find anchor tag ...' doesn't include the message key or file, making it hard to locate the failing translation in large bundles",
+  "Lithuanian bundle has totpStep1 set to Italian text ('Installa una delle seguenti\u2026') which is a copy/paste mismatch - same issue appears in the login bundle",
+  "messages_zh_CN.properties entry uses Traditional Chinese characters (\u624b\u6a5f, \u61c9\u7528\u7a0b\u5f0f) which is inconsistent with the zh_CN (Simplified) locale"
+]

@@ -1,0 +1,301 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T10:00:00+08:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "discourse-graphite-6 (refs/ncr/base..refs/ncr/pr, 267d8be)「UX: show complete URL path if website domain is same as instance domain」",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "本次變更只碰使用者自行填寫的個人網站欄位（app/serializers/user_serializer.rb:133-151）與其前端呈現，資料路徑不觸及任何病患身分或臨床內容，PHI 不在範圍內。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "diff 內的註解（user_serializer.rb:142、145、148）都只是說明比對情境的範例網域，commit message 只描述功能意圖，沒有任何指向審查流程本身的文字。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "把「網址要顯示多少」的判斷從前端搬到後端是合理的：判斷需要 instance hostname，那是 server 才知道的資訊，原本前端 app/assets/javascripts/discourse/controllers/user.js.es6 的 website.split(\"/\")[2] 只能永遠顯示 host，做不到這個需求。"
+    },
+    "right_mr": {
+      "verdict": "ok",
+      "note": "四個檔案（serializer、controller、template、spec）都圍繞同一件事，沒有夾帶無關變更；前端舊 computed property 也一併移除，沒有留下半套狀態。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "純新增 serializer attribute，對既有 API 是 expand-only，沒有資料庫 schema 或 migration 依賴，時機上沒有前置條件未滿足的問題。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "trivy 未安裝（不在 PATH 上），preflight 已確認。相依套件漏洞、設定錯誤與 secret 掃描本次完全沒有執行，Gemfile.lock 的套件版本沒有被檢查過。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "opengrep 未安裝，且預設規則目錄（$HOME 下的 semgrep-rules）不存在，兩個前提都缺。SAST 沒有執行，本報告的安全類發現全部來自人工閱讀，不是工具佐證。"
+    },
+    {
+      "tool": "ruff",
+      "status": "ok",
+      "exit_code": 0,
+      "artifact": "scan.lint.json",
+      "counts": {
+        "in_diff": 0,
+        "outside_diff": 0
+      },
+      "skipped_reason": "已執行、exit code 0、零告警，但這個結果沒有覆蓋意義：本 repo 一個 .py 檔都沒有，ruff 實際上沒有分析到任何檔案，更不用說 diff 內的 .rb / .js.es6 / .hbs。請不要把這一列讀成「靜態檢查通過」。"
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "ty 未安裝（不在 PATH 上）。本 repo 也沒有任何 .py 檔，即使安裝也無事可做。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "oxlint 未安裝（不在 PATH 上）。這是本次唯一能覆蓋 diff 中 .js.es6 檔案的 linter，因此 app/assets/javascripts/discourse/controllers/user.js.es6 沒有得到任何靜態檢查。"
+    },
+    {
+      "tool": "rubocop",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本 repo 沒有 .rubocop.yml，環境也沒有安裝任何 gem、沒有網路可安裝。diff 主體 app/serializers/user_serializer.rb 與 spec/serializers/user_serializer_spec.rb 因此沒有經過 Ruby linter，也無法執行 rspec 驗證新增測試會通過。"
+    },
+    {
+      "tool": "ncr-fresh-eyes（subagent）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本次執行環境沒有可派工 subagent 的工具，無法派出 Phase 3 的 fresh-eyes。依 skill 規定不得由主 agent 自行模擬，因此這一輪缺少一次「未被本 skill 的分類與嚴重度詞彙塑形過」的獨立閱讀，可能漏掉不落在九個 dimension 命名範圍內的問題。"
+    },
+    {
+      "tool": "ncr-quality-check（subagent）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "同上，無法派工。Phase 4 的報告品質複檢沒有執行，本報告只通過 report_model.py 的機械驗證，沒有第二雙眼睛檢查措辭、嚴重度校準與四項發布規則。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "codegraph 未安裝，Phase 0 的符號索引沒有建立。呼叫關係與完整性（誰還在用 websiteName、誰在用 UserSerializer）全部改用 grep 逐一確認。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "fail",
+      "note": "website_name（user_serializer.rb:137-151）用了 rescue modifier 吞掉所有 StandardError，且單一 elsif 條件裡塞了巢狀三元運算子，需要讀好幾次才看得懂。詳見 F-005、F-006。另一方面 models/user.js.es6 把錯誤的 @property websiteName 修正為 profileBackground，是這次變更順手改對的一處文件。"
+    },
+    "B": {
+      "verdict": "fail",
+      "note": "同一個 URI(website.to_s) 在 website_name 內最多解析兩次、split('.') 最多重算六次（user_serializer.rb:138-149），且 include_website_name 是一段永遠不會被呼叫的死碼。詳見 F-002、F-006。"
+    },
+    "C": {
+      "verdict": "fail",
+      "note": "新增的 website_name 沒有納入 untrusted_attributes，繞過了 TL0 使用者對匿名訪客的欄位限制（F-001，Critical）；同網域判斷的 label 數啟發式在 com.br / co.uk 這類雙層公共後綴上會誤判成同組織（F-004）。"
+    },
+    "D": {
+      "verdict": "fail",
+      "note": "include_website_name 少了問號（user_serializer.rb:153），不符合 ActiveModel::Serializers 0.8.3 的 include_<attr>? 契約，也不符合本 repo 內 100 處同類方法的慣例，導致該 attribute 無條件出現在每一份 user payload 上。詳見 F-002。"
+    },
+    "E": {
+      "verdict": "pass",
+      "note": "把顯示邏輯放在 serializer 與本 repo 既有做法一致（bio_excerpt、profile_background 等都在 UserSerializer 內做呈現層加工），沒有把商業邏輯下沉到錯誤的層。前端 controller 的 websiteName computed property 也乾淨移除，沒有留下兩份互相競爭的實作。"
+    },
+    "F": {
+      "verdict": "pass",
+      "note": "website_name 讀的是 object.user_profile.website（user_serializer.rb:133-138），與既有的 website attribute 完全同一個 association，不會多打一次查詢、不會產生 N+1；沒有 schema 變更、沒有 migration、沒有多步寫入或共用狀態。對外 API 是純新增欄位（expand），沒有移除或改變既有欄位形狀。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "新增的三個 example 都有實際斷言（比對回傳字串而非只檢查 present），品質沒問題；但同一個 spec 檔第 11 行的 untrusted_attributes 清單沒有一起補上 website_name，且註解宣稱要處理的 www.example.com vs forum.example.com 分支完全沒有測試。詳見 F-003。另註：環境沒有安裝 gem 也沒有網路，rspec 無法執行，這些測試「會不會過」本次沒有實測。"
+    },
+    "H": {
+      "verdict": "pass",
+      "note": "diff 含 .hbs 與 .js.es6。user.hbs:66-72 三個分支（linkWebsite 為真的 <a>、為假的 <span>、以及 website_name 為空時整段不顯示）都檢查過，改寫前後結構一致；{{model.website_name}} 走 Handlebars 預設跳脫，即使 path 段含有使用者可控字元也無法注入標記。全 repo grep websiteName 已無任何殘留引用（含 test/javascripts/ 與 plugins/）。"
+    },
+    "I": {
+      "verdict": "pass",
+      "note": "UserSerializer 的三個消費端（users_controller.rb:33、users_controller.rb:100、session_controller.rb:262）取得的都是純新增欄位，不會因此壞掉；CurrentUserSerializer 與 UserWordpressSerializer 繼承自 BasicUserSerializer 而非 UserSerializer，不受影響；websiteName 在 repo 內零殘留引用。唯一無法從這裡確認的是 repo 外的 theme／plugin 若覆寫過 user.hbs 並引用 {{websiteName}}，升級後會靜默失效——這在 Discourse 是真實存在的擴充模式，值得在 release note 提一句。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "C",
+      "severity": "Critical",
+      "status": "new",
+      "title": "website_name 未納入 untrusted_attributes，繞過 TL0 使用者對匿名訪客的欄位限制",
+      "evidence": [
+        "app/serializers/user_serializer.rb:43",
+        "app/serializers/user_serializer.rb:105",
+        "app/serializers/user_serializer.rb:109",
+        "app/serializers/user_serializer.rb:25",
+        "app/serializers/user_serializer.rb:137",
+        "lib/guardian/user_guardian.rb:58",
+        "app/controllers/users_controller.rb:33",
+        "app/assets/javascripts/discourse/templates/user/user.hbs:66"
+      ],
+      "rationale": "UserSerializer 的 untrusted_attributes（user_serializer.rb:105-111）把 :website 列進去，由 user_serializer.rb:25-32 產生的 include_website? 在 scope.restrict_user_fields?(object) 成立時回傳 false。該判斷是 lib/guardian/user_guardian.rb:58 的 `user.trust_level == TrustLevel[0] && anonymous?`——也就是「TL0 帳號被匿名訪客觀看」這個典型的洗連結情境。這次新增的 :website_name（user_serializer.rb:43）是從同一份 object.user_profile.website 推導出來的資料，卻沒有加進 untrusted_attributes，本身的 include_website_name（user_serializer.rb:153）又因為少了問號而從不被呼叫（見 F-002），因此這條路徑上完全沒有守門。已逐一確認每一條到達點：users_controller.rb:33 的 users/:username.json 端點（匿名可存取）、users_controller.rb:100、session_controller.rb:262 都是同一個 UserSerializer 與同一個 guardian scope，沒有任何一條另外擋住 website_name。前端 user.hbs:66 的 {{#if model.website_name}} 只看 website_name，所以在 website 被遮蔽、website_name 沒被遮蔽時，畫面會渲染出 <a href=\"\">spam.example.com</a>——網域文字照樣曝光給匿名訪客，連結卻指向空字串，同時是安全退化與顯示瑕疵。",
+      "fix": "把 :website_name 加進 user_serializer.rb:105 的 untrusted_attributes 清單，並刪掉 user_serializer.rb:153-155 手寫的 include_website_name。untrusted_attributes 產生的方法本身就同時做了 `return false if scope.restrict_user_fields?(object)` 與 `send(attr).present?`，一次補齊 TL0 遮蔽與空值省略兩件事：\n\n```ruby\n  untrusted_attributes :bio_raw,\n                       :bio_cooked,\n                       :bio_excerpt,\n                       :location,\n                       :website,\n                       :website_name,\n                       :profile_background,\n                       :card_background\n```\n\n同時把 spec/serializers/user_serializer_spec.rb:11 的清單補上 website_name，讓這個退化有回歸測試守住。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": {
+        "poc": "在任一 Discourse instance 上：(1) 用 TL0 帳號在偏好設定頁的 website 欄位填 http://spam.example.com/promo；(2) 完全不帶 cookie 以匿名身分請求該使用者的 profile JSON：\n\n```bash\ncurl -s https://forum.example.org/users/tl0spammer.json | jq '.user | {website, website_name}'\n```\n\n預期（修正前）：`website` 這個 key 不存在（已被 untrusted_attributes 遮蔽），但 `website_name` 回傳 \"spam.example.com\"。以瀏覽器匿名開啟同一位使用者的 profile 頁也會看到該網域文字。",
+        "blast_radius": "任何 TL0 帳號自行填寫的網站網域，會對未登入訪客與爬蟲曝光在 profile 頁面上，正是 restrict_user_fields? 這道防線要擋掉的洗連結行為；當該網域與 instance 網域同源時連完整路徑一併曝光。影響範圍是全站所有 TL0 使用者的 profile，觸發條件只是「匿名開啟該頁」，不需要任何權限或前置條件。連結本身因為 href={{model.website}} 為空而不可點、也不會傳遞 SEO 權重，所以損害限於可見文字層級，不是可點擊的外連。本變更不涉及 PHI。",
+        "treatment": "Mitigate",
+        "fix_reference": "app/serializers/user_serializer.rb:105-111"
+      },
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-002",
+      "dimension": "D",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "include_website_name 少了問號，ActiveModel::Serializers 永遠不會呼叫它",
+      "evidence": [
+        "app/serializers/user_serializer.rb:153",
+        "app/serializers/user_serializer.rb:161",
+        "app/serializers/user_serializer.rb:9",
+        "app/serializers/user_serializer.rb:18",
+        "app/serializers/user_serializer.rb:28",
+        "Gemfile.lock:22"
+      ],
+      "rationale": "ActiveModel::Serializers 0.8.3（Gemfile.lock:22）查的是 include_<attr>? 這個帶問號的方法名。這件事在本檔案內就有三處自證：user_serializer.rb:9、18、28 的 staff_attributes / private_attributes / untrusted_attributes 三個 helper 都是 define_method \"include_#{attr}?\"；同一個 diff 裡緊接著的 include_card_image_badge_id?（user_serializer.rb:161）也帶問號。全 repo 的 app/、lib/、plugins/ 底下 def include_xxx? 有 100 處，不帶問號的只有 4 處，其中 3 處（category_serializer.rb:47、topic_view_serializer.rb:218、invited_user_serializer.rb:48）是既有問題、不屬於本次變更。後果是這個守門條件是死碼：website_name 會無條件出現在每一份 user payload，使用者沒填網站時以 null 送出，而作者寫這段的用意顯然是要省略它。",
+      "fix": "最小修法是補上問號改成 `def include_website_name?`。但更貼合本檔案慣例、也順帶解掉 F-001 的做法是完全刪掉這三行，改把 :website_name 放進 user_serializer.rb:105 的 untrusted_attributes——它產生的 include_website_name? 已經包含 `send(attr).present?`，語意與作者原本寫的完全一致，還多加上 TL0 遮蔽。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-003",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "測試沒有覆蓋 untrusted 清單與註解宣稱要處理的子網域分支",
+      "evidence": [
+        "spec/serializers/user_serializer_spec.rb:11",
+        "spec/serializers/user_serializer_spec.rb:75",
+        "app/serializers/user_serializer.rb:144",
+        "app/serializers/user_serializer.rb:153"
+      ],
+      "rationale": "作者正好改的就是這個 spec 檔，但漏了三塊：(1) 第 11 行的 untrusted_attributes 清單沒有加上 website_name，因此 F-001 那條退化完全沒有回歸測試擋著——這個 example 存在的目的就是防止有人新增欄位時忘記遮蔽，卻在新增欄位時沒被想起來。(2) user_serializer.rb:144-146 的 elsif 分支（註解寫的 www.example.com == forum.example.com，也就是「兩邊都有子網域、母網域相同」）是整個方法裡邏輯最多的一段，三個新增 example 分別覆蓋了「完全不同網域」「完全相同」「website 是 instance 的母網域」，唯獨沒有覆蓋它。(3) 沒有 example 驗證使用者沒填網站時 website_name 這個 key 應該不存在（F-002 的行為）。新增的三個 example 本身斷言品質是好的：比對的是實際回傳字串，不是 present 或 not_nil。",
+      "fix": "在 spec/serializers/user_serializer_spec.rb:11 的清單補上 website_name；在「has a website name」context 內補一個 elsif 分支的 example，例如把 user.user_profile.website 設為 'http://www.example.com/user'、Discourse.stubs(:current_hostname).returns('forums.example.com')，斷言得到 'www.example.com/user'；再補一個空 website 的 example 斷言 `expect(json).not_to have_key(:website_name)`。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-004",
+      "dimension": "C",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "以「label 數相同 + 去掉第一段後相等」判斷同組織，在 com.br / co.uk 這類雙層公共後綴上會誤判",
+      "evidence": [
+        "app/serializers/user_serializer.rb:144",
+        "app/serializers/user_serializer.rb:146"
+      ],
+      "rationale": "user_serializer.rb:144-146 的判斷是：兩個 host 的 label 數相同且大於 2，就把各自去掉第一段後的字串拿來比對，相等即視為同組織並顯示完整路徑。這個啟發式假設「倒數兩段 = 可註冊網域」，但雙層公共後綴（com.br、co.uk、com.au、com.tw、co.jp）打破這個假設。舉例：instance 架在 forum.com.br，任一使用者填 spam.com.br/promo，兩邊都是 3 段、去掉第一段後都是 'com.br'，於是被判定為同組織，回傳 'spam.com.br/promo'——一個毫無關係的網域拿到了本來只保留給站方自家網域的「顯示完整路徑」待遇，等於讓外部連結在 profile 上多曝光一整段路徑文字。這是純邏輯推導、不需要執行即可確認，且方向恰好與 F-001 相同：讓外站網址比預期顯示得更多。註：這個 repo 沒有 public_suffix 或同類 gem（Gemfile.lock 查無），所以無法直接改用可註冊網域比對。",
+      "fix": "兩個方向擇一。保守做法是拿掉 label 數啟發式，只保留兩個確定安全的情境——host 完全相等，或 instance host 是 website host 的子網域（現有 else 分支的 ends_with? 檢查）——其餘一律只顯示 host；這會少掉 www.example.com vs forum.example.com 這個便利情境，但不會誤判。要保留該情境的話，需要引進 public_suffix gem，改以 PublicSuffix.domain(host) 取得可註冊網域再比對：\n\n```ruby\n  same_org = PublicSuffix.domain(website_host) == PublicSuffix.domain(discourse_host)\n```\n\n無論選哪一個，都請一併補上 F-003 提到的該分支測試，並加上 com.br 這類反例的 example。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-005",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "rescue modifier 吞掉所有 StandardError，含空白的網址從此完全不顯示",
+      "evidence": [
+        "app/serializers/user_serializer.rb:138",
+        "app/assets/javascripts/discourse/templates/user/user.hbs:66"
+      ],
+      "rationale": "`URI(website.to_s).host rescue nil`（user_serializer.rb:138）的 rescue modifier 會攔下所有 StandardError，不只是 URI::InvalidURIError。實測（ruby -ruri）確認：URI(\"http://example.com/a b\") 會丟 URI::InvalidURIError，於是 website_name 回傳 nil，user.hbs:66 的 {{#if model.website_name}} 為假，整個地球圖示與網站連結區塊都不顯示。變更前的前端寫法 website.split(\"/\")[2] 對同一個字串會得到 \"example.com\" 並正常顯示。app/models/user_profile.rb 對 website 欄位沒有任何格式驗證，前端 preferences.hbs:158 也只是普通文字輸入框，所以含空白的值確實存得進來。影響很小（要填出這種網址才會遇到），但確實是這次變更帶來的行為退化。另外附帶確認：這裡 rescue 之後有 `return if website_host.nil?`，所以後面 141-149 行沒有包 rescue 的 URI(website.to_s) 呼叫不會再丟例外——這點不是問題。",
+      "fix": "把 rescue 收斂到預期的例外，並讓解析結果只算一次（與 F-006 同一處修改）：\n\n```ruby\n  def website_name\n    uri = begin\n      URI(website.to_s)\n    rescue URI::InvalidURIError\n      nil\n    end\n    return if uri.nil? || uri.host.nil?\n    ...\n  end\n```\n\n若希望維持舊行為不退化，可在 rescue 分支回退成 website.to_s.split(\"/\")[2]。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-006",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "website_name 內重複解析與重複切分，單行巢狀三元運算子難讀",
+      "evidence": [
+        "app/serializers/user_serializer.rb:138",
+        "app/serializers/user_serializer.rb:143",
+        "app/serializers/user_serializer.rb:144",
+        "app/serializers/user_serializer.rb:146",
+        "app/serializers/user_serializer.rb:149"
+      ],
+      "rationale": "同一個 URI(website.to_s) 在一次呼叫中最多解析兩次（138 行取 host、143/146/149 行取 path），split('.') 最多重算六次（144 行三次、146 行兩次以上）。146 行是一個 133 字元、把「同組織判斷」與「回傳值選擇」壓在一起的巢狀三元運算子，接在一個同樣複合的 elsif 條件後面，需要來回讀好幾次才能確定哪個條件對應哪個結果。這裡不是要求重寫成別的演算法，而是這段的判斷規則本身（見 F-004）之後很可能還要調整，現在的寫法會讓下一次修改難以確認有沒有改對。",
+      "fix": "把解析結果與 label 陣列各存一次區域變數，並把「是否同組織」抽成一個具名述詞，讓三個分支各自只剩一行回傳：\n\n```ruby\n  def website_name\n    uri = parsed_website\n    return if uri.nil? || uri.host.nil?\n    same_domain_family?(uri.host) ? \"#{uri.host}#{uri.path}\" : uri.host\n  end\n```\n\n同組織判斷的細節（完全相等、母網域、同母網域的兄弟子網域）收進 same_domain_family? 內，F-004 的修正也落在同一個地方。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": false,
+      "security": null,
+      "accepted_risk": ""
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "C",
+      "question": "Discourse.current_hostname 有沒有可能帶上 port（例如 localhost:3000）？若會，所有比對都會落到「不同網域」分支，這個功能在非標準 port 的部署上等於沒作用。",
+      "context": "lib/discourse.rb:178-184 的 current_hostname 在 SiteSetting.force_hostname 為空時回傳 RailsMultisite::ConnectionManagement.current_hostname。lib/pretty_text.rb:131 與 app/views/common/_discourse_javascript.html.erb:37 使用同一個值時都特地接了 .replace(/:[\\d]*$/,\"\") 把 port 去掉，這暗示該值在某些情境下確實可能含 port。而 URI(...).host 永遠不含 port，兩邊格式不對等。環境沒有安裝 gem、也沒有網路，無法讀 rails_multisite 原始碼或實際跑起來確認，因此不下判斷。",
+      "what_would_settle_it": "在一個跑在非 80/443 port 的 dev instance 上印出 Discourse.current_hostname；或直接讀 rails_multisite gem 的 ConnectionManagement.current_hostname 實作。若確認會帶 port，修法是比照 pretty_text.rb 先 sub(/:\\d+\\z/, '') 正規化後再比對。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "C",
+      "question": "「website 是 instance 的子網域」這個反向情境（website 填 blog.example.com、instance 架在 example.com）刻意只顯示 host 不顯示路徑，還是漏掉的？",
+      "context": "此情境下兩個 host 的 label 數不同（3 vs 2），會落到 user_serializer.rb:147-149 的 else，而該行檢查的是 discourse_host.ends_with?(\".\" + website_host)，也就是「instance 是 website 的子網域」，方向相反，結果為 false，只回傳 host。正向情境（website example.com、instance forums.example.com）則有測試覆蓋且會顯示完整路徑。程式碼與 commit message「if website domain is same as instance domain」都沒有說明這個不對稱是不是刻意的。",
+      "what_would_settle_it": "作者說明產品意圖：「同網域家族」是否應該雙向對稱。若是，else 分支要同時檢查 website_host.ends_with?(\".\" + discourse_host)，並補上對應測試。"
+    }
+  ],
+  "rereview": null,
+  "conclusion": "Request Changes",
+  "summary": "這個變更的方向是對的：把「網站網址要顯示到哪一層」的判斷從前端搬到後端，前端舊的 websiteName computed property 也乾淨移除，全 repo 已無殘留引用。問題出在新增 serializer attribute 時漏了既有的那道防線——:website 在 untrusted_attributes 清單裡，:website_name 不在，於是 TL0 帳號的網站網域對匿名訪客照樣曝光（F-001，Critical）。同一處還有 include_website_name 少了問號因而從不生效（F-002），以及作者剛好改過的那個 spec 檔裡的 untrusted 清單沒有同步（F-003）——這三件事的修法會落在同一次編輯上。另外同網域判斷用的 label 數啟發式在 com.br / co.uk 這類雙層公共後綴會誤判成同組織（F-004）。本次執行環境沒有安裝任何 gem、沒有網路，rubocop 與 rspec 都無法執行，trivy / opengrep / oxlint / ty / codegraph 也都不在，唯一跑起來的 ruff 在這個沒有 Python 檔的 repo 上等於零覆蓋；換句話說，以上發現全部來自人工閱讀原始碼，沒有任何工具佐證，新增的測試也沒有實際跑過。此外環境不支援派工 subagent，Phase 3 的 ncr-fresh-eyes 獨立閱讀與 Phase 4 的 ncr-quality-check 報告複檢都沒有執行（已列在掃描表中），這兩項缺席會降低本報告的覆蓋廣度與措辭品質保證。",
+  "publication": null,
+  "pushback": []
+}

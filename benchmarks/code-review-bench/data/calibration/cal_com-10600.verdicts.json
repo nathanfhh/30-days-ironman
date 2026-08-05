@@ -1,0 +1,383 @@
+{
+  "slug": "cal_com-10600",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "backup-codes-object-url-leak",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:98-99",
+      "reason": "revokeObjectURL is called only right before createObjectURL on a new setup run; resetState() (lines 71-75) does not touch backupCodesUrl and there is no unmount cleanup, so the last blob URL survives until the tab closes."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "password-toggle-tabindex",
+      "evidence": "packages/ui/components/form/inputs/Input.tsx:47-51",
+      "reason": "The diff adds tabIndex={-1} to the show/hide password <button>, which removes the only control for that functionality from the tab order; keyboard-only users can no longer reveal the password."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Critical",
+      "cluster": "password-bypass-backupcode-totp",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:118-131",
+      "reason": "The password check is guarded by `if (user.password && !credentials.totpCode)`, so any non-empty totpCode skips it; the new `if (user.twoFactorEnabled && credentials.backupCode)` branch then authenticates on the backup code alone and never validates totpCode. Before this PR the arbitrary totpCode would have failed totpAuthenticatorCheck, so the bypass is new."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "login-error-map-bypassed",
+      "evidence": "apps/web/pages/auth/login.tsx:72-79 vs 155-157",
+      "reason": "login.tsx already keeps an `errorMessages` lookup keyed by ErrorCode; the two new codes are instead handled by ad-hoc `else if` chains in onSubmit, leaving two competing mechanisms in the same file."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "missing-backup-code-tests",
+      "evidence": "apps/web/playwright/login.2fa.e2e.ts:12,110-125",
+      "reason": "The only new test coverage is the display/download/copy UI; the author's own TODO on line 12 concedes there are no tests for logging in with a backup code, disabling 2FA with one, or reuse failing."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "migration-timestamp-out-of-order",
+      "evidence": "packages/prisma/migrations/20230804153419_add_backup_codes vs packages/prisma/migrations/20230828094603_add_include_calendar_event",
+      "reason": "The new migration directory's timestamp is earlier than 20230828094603, which is already present on this branch, so the migration sorts before a migration that environments have already applied."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "nested-ternary-render",
+      "evidence": "apps/web/pages/auth/login.tsx:216",
+      "reason": "The line is literally `twoFactorRequired ? !twoFactorLostAccess ? <TwoFactor center /> : <BackupCode center /> : null`, replacing a plain `&&`; the nested unparenthesised ternary is harder to read."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Critical",
+      "cluster": "password-bypass-backupcode-totp",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:118-131",
+      "reason": "Same finding as verified for c003: a crafted credentials POST with any truthy totpCode plus a valid backupCode skips `verifyPassword` entirely and still authenticates through the new backup-code branch."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "backup-codes-json-parse-unguarded",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:139-144; apps/web/pages/api/auth/two-factor/totp/disable.ts:58",
+      "reason": "Neither call site wraps symmetricDecrypt/JSON.parse in try/catch nor checks that the result is an array, while the adjacent TOTP branch does sanity-check the decrypted secret length (next-auth-options.ts:151-156). symmetricDecrypt throws on a wrong key, producing an uncatalogued 500."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "dismiss-skips-onenable",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-136,263-272; apps/web/pages/settings/security/two-factor-auth.tsx:62-72",
+      "reason": "handleEnable now only advances the step; onEnable() (which calls utils.viewer.me.invalidate()) fires solely from the Close button, whereas Esc/outside-click routes through onOpenChange, which just sets enableModalOpen=false and never invalidates, leaving the Switch showing 2FA disabled."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "dismiss-leaves-stale-step",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:62-75,222-231; apps/web/pages/settings/security/two-factor-auth.tsx:62",
+      "reason": "EnableTwoFactorModal is rendered unconditionally by the page, so its state outlives the Radix dialog; resetState() is invoked only from Cancel and Close, so an Esc dismissal leaves step=DisplayBackupCodes and the old backupCodes array in place for the next open."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "missing-backup-code-tests",
+      "evidence": "apps/web/playwright/login.2fa.e2e.ts:110-127",
+      "reason": "Same gap as c005 — the added steps exercise only the download/copy/close buttons; no test ever submits a backup code to the credentials provider or to the disable endpoint."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "exhausted-backup-codes-wrong-error",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:137,148-156",
+      "reason": "Used codes are replaced with null and the whole array re-encrypted, so user.backupCodes stays a non-empty ciphertext; `if (!user.backupCodes)` can therefore never fire after setup, and an exhausted user gets IncorrectBackupCode instead of MissingBackupCodes."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "backup-codes-state-untyped",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:64",
+      "reason": "`useState([])` with no type argument infers never[]; the value assigned at line 92 comes from `body` (any, from response.json()), so nothing is type-checked. useState<string[]>([]) would restore the guarantee. Note this compiles today — it is a lost-typing issue, not a build break."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "backup-codes-stored-reversible",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/setup.ts:68; packages/lib/crypto.ts:15-24",
+      "reason": "symmetricEncrypt is aes256 with the site-wide CALENDSO_ENCRYPTION_KEY, and the verification paths only ever need equality (indexOf), so hashing would suffice; as written a DB dump plus the key yields every user's plaintext backup codes."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "backup-codes-stored-reversible",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/setup.ts:68; packages/lib/crypto.ts:29-41",
+      "reason": "Same finding as c015 — reversible symmetricEncrypt/symmetricDecrypt rather than a one-way hash."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "password-field-type-override",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:174-182; packages/ui/components/form/inputs/Input.tsx:35-39",
+      "reason": "PasswordField renders `type={isPasswordVisible ? \"text\" : \"password\"}` and then spreads `{...props}` after it, so the explicit type=\"password\" passed at this call site always wins and the newly introduced eye toggle does nothing here. (The claim locates the spread in InputField rather than PasswordField, but the mechanism and effect are as described.)"
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "backup-codes-object-url-leak",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:71-75",
+      "reason": "resetState() clears only password, errorMessage and step; backupCodes and backupCodesUrl survive and the outstanding object URL is never revoked."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "backup-code-case-sensitivity-authorize",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:144; apps/web/pages/api/auth/two-factor/totp/setup.ts:61",
+      "reason": "Codes are generated as lowercase hex (randomBytes().toString(\"hex\")) and compared with Array.indexOf after only stripping dashes, so a user who types the code in uppercase — which the XXXXX-XXXXX placeholder invites — is rejected."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "disable-error-message-wording",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/disable.ts:50",
+      "reason": "The copy-pasted console.error says \"cannot proceed with backup code login\" inside the 2FA disable handler."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "first-e2e-skips-backup-screen",
+      "evidence": "apps/web/playwright/login.2fa.e2e.ts:44-53 vs 108-127",
+      "reason": "The first test fills the OTP and jumps straight to the two-factor-switch assertion; unlike the second test it never clicks backup-codes-close, so the dialog stays on the backup-codes step and onEnable()/invalidate() is never triggered — which is exactly why the added FIXME says the assertion passes regardless."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "backup-code-race-double-use",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:139-156",
+      "reason": "The decrypt / indexOf / mutate / update sequence is a read-modify-write with no transaction, conditional update or unique constraint, so two concurrent authorize() calls with the same code both find index !== -1 and both succeed before either write lands."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "anchor-wrapping-button",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:283-287; packages/ui/components/button/Button.tsx:211",
+      "reason": "Button renders a <button> when no href is given, and here it is wrapped in a plain <a download href={...}>, producing nested interactive elements."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "backup-code-use-no-notification",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:148-156",
+      "reason": "The factual premise checks out — the consumed code is set to null with no email, audit record or regeneration prompt anywhere in the diff — but whether cal.com wants to notify or audit on backup-code use is a product/security-policy decision, not something the code can settle."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "backup-code-input-validation",
+      "evidence": "apps/web/components/auth/BackupCode.tsx:28-29",
+      "reason": "minLength={10}/maxLength={11} is the only constraint: 11 undashed characters, 10 dashed characters and arbitrary non-hex input all pass client validation and fail server-side as a generic \"incorrect\"."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "backup-code-timing-comparison",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:144",
+      "reason": "Array.prototype.indexOf uses short-circuiting string equality, which is not constant-time; the description of the primitive is accurate, though exploitability over HTTP with the existing rate limiter is marginal, hence Low."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "clipboard-write-unawaited",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:278-279",
+      "reason": "writeText() returns a Promise that is neither awaited nor .catch()-ed, and showToast(success) runs unconditionally on the next line, so a rejected clipboard write still reports success."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "sso-users-cannot-use-backup-codes",
+      "evidence": "packages/features/auth/lib/next-auth-options.ts:111-117 vs 131",
+      "reason": "Both early guards are conditioned on `!credentials.totpCode` only, so a non-CAL user submitting backupCode with an empty totpCode throws ThirdPartyIdentityProviderEnabled (or IncorrectEmailPassword) before reaching the backup-code branch. Such users do exist: the Google/SAML callbacks redirect 2FA-enabled users to loginWithTotp (lines 610-736)."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "external-totp-footer-no-lost-access",
+      "evidence": "apps/web/pages/auth/login.tsx:179-185",
+      "reason": "footerText picks ExternalTotpFooter whenever totpEmail is set, and only TwoFactorFooter carries the new \"lost access\" button, so users arriving via the /auth/login?totp= SSO path get no backup-code entry point."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "backup-codes-stored-reversible",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/setup.ts:68",
+      "reason": "Same finding as c015/c016 stated as a recommendation; the codes are only ever equality-compared, so a one-way hash is sufficient and strictly safer."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "ischecked-promise-assertion",
+      "evidence": "apps/web/playwright/login.2fa.e2e.ts:53 vs 127",
+      "reason": "`expect(page.locator(...).isChecked()).toBeTruthy()` asserts on the unresolved Promise, which is always truthy; the correct data-state form already exists on line 127 of the same file."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "backup-codes-json-parse-unguarded",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/disable.ts:58-61; packages/features/auth/lib/next-auth-options.ts:139-144",
+      "reason": "Same finding as c009 — decrypt+parse is unguarded and the decoded shape is never validated before indexOf is called on it."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "ischecked-promise-assertion",
+      "evidence": "apps/web/playwright/login.2fa.e2e.ts:50-53",
+      "reason": "Same always-true assertion as c031; this PR added the FIXME comment acknowledging it rather than applying the fix that already exists on line 127."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "backup-code-body-type-unvalidated",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/disable.ts:48,61",
+      "reason": "req.body is untyped and unvalidated; a JSON number or array passes the truthy check on line 48 and then throws a TypeError at .replaceAll() on line 61, surfacing as a 500 rather than a 400 with an ErrorCode."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "duplicate-security-modal-not-updated",
+      "evidence": "apps/web/components/security/EnableTwoFactorModal.tsx; apps/web/components/security/TwoFactorAuthSection.tsx",
+      "reason": "The duplicate set under components/security/ genuinely exists and was not touched by this PR. Grepping shows TwoFactorAuthSection is imported nowhere, so it is unreachable dead code and there is no user impact — but the divergence is now larger and a maintainer would want the copy deleted."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "backup-code-label-a11y",
+      "evidence": "apps/web/components/auth/BackupCode.tsx:19-32; packages/ui/components/form/inputs/TextField.tsx:87-100,152-165",
+      "reason": "The standalone <Label> has no htmlFor, and InputField renders its own label with the empty string passed as label=\"\"; worse, its htmlFor uses useId() while the input's id is overridden to \"backup-code\" by the passThrough spread, so nothing is associated at all."
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "backup-code-case-sensitivity-disable",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/disable.ts:61",
+      "reason": "The disable endpoint repeats the same lowercase-hex indexOf comparison with no normalisation of the user's input, so uppercase entry blocks disabling 2FA via backup code as well."
+    },
+    {
+      "claim_id": "c038",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "backup-codes-object-url-leak",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:95-99",
+      "reason": "The blob holds the ten formatted plaintext codes and is revoked only when a subsequent setup run replaces it; there is no useEffect cleanup and resetState() ignores it."
+    },
+    {
+      "claim_id": "c039",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "backupcode-component-misnamed",
+      "evidence": "apps/web/components/auth/BackupCode.tsx:13",
+      "reason": "The new file declares `export default function TwoFactor({ center = true })` — a copy-paste leftover from TwoFactor.tsx that makes the component name contradict the file and its imports."
+    },
+    {
+      "claim_id": "c040",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "ischecked-promise-assertion",
+      "evidence": "apps/web/playwright/login.2fa.e2e.ts:53",
+      "reason": "Same always-true Promise assertion as c031/c033, with the correct remedy (an awaited toBeChecked / data-state locator) named."
+    },
+    {
+      "claim_id": "c041",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "dismiss-skips-onenable",
+      "evidence": "apps/web/components/settings/EnableTwoFactorModal.tsx:166,263-272; apps/web/pages/settings/security/two-factor-auth.tsx:63-72",
+      "reason": "Same finding as c010 — Radix routes Esc/outside-click to onOpenChange, which only flips enableModalOpen; utils.viewer.me.invalidate() lives in onEnable, which now fires only from the Close button on the backup-codes step."
+    },
+    {
+      "claim_id": "c042",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "no-backup-code-regeneration",
+      "evidence": "apps/web/pages/api/auth/two-factor/totp/setup.ts:42-44,61; apps/web/pages/settings/security/two-factor-auth.tsx",
+      "reason": "Grepping backupCodes across apps/ and packages/ finds generation only in setup.ts, which returns TwoFactorAlreadyEnabled for anyone with 2FA on; the settings page offers no regenerate action and no remaining-codes count."
+    }
+  ]
+}

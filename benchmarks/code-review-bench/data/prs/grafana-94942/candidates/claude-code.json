@@ -1,0 +1,4 @@
+[
+  "The enableSqlExpressions security check only guards the ReadQuery code path used when FlagExpressionParser is enabled, but in default configuration buildCMDNode calls UnmarshalSQLCommand directly for TypeSQL, completely bypassing this check - the security gate should be added to the TypeSQL case in buildCMDNode or within UnmarshalSQLCommand",
+  "The enableSqlExpressions function always returns false in both branches, making the feature flag check and negation dead code - the function body should be simplified to just return false to avoid confusing future maintainers who might misinterpret the inverted flag logic"
+]

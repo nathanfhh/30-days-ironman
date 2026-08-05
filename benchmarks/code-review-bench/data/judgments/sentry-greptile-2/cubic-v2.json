@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-greptile-2",
+  "tool": "cubic-v2",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.85,
+     "reasoning": "Both describe the enable_advanced_features negative-offset path slicing a QuerySet with a negative index and crashing; ties to the OptimizedCursorPaginator branch under discussion."},
+    {"golden_index": 2, "candidate_index": 1, "confidence": 0.85,
+     "reasoning": "Both state floor/ceil applied to a datetime key raises TypeError, matching the OptimizedCursorPaginator.get_item_key issue."},
+    {"golden_index": 2, "candidate_index": 2, "confidence": 0.93,
+     "reasoning": "Both specifically identify OptimizedCursorPaginator failing on the datetime sort key used in organization_auditlogs.py via floor/ceil."}
+  ]
+}

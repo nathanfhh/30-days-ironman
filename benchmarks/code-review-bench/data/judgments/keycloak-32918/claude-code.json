@@ -1,0 +1,10 @@
+{
+  "slug": "keycloak-32918",
+  "tool": "claude-code",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both identify the test cleanup using the hardcoded string 'alias' instead of the actual per-iteration alias (e.g. 'idp-alias-' + i)."}
+  ]
+}

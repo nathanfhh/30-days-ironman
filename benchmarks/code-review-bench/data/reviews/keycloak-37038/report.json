@@ -1,0 +1,300 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T10:05:40+00:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "keycloak-37038 (refs/ncr/base..refs/ncr/pr) — Add Groups resource type and scopes to authorization schema and evaluation implementation",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "此變更全部落在 Keycloak 管理端授權模型（AdminPermissionsSchema、*PermissionsV2、Admin REST resource）。資料面接觸到的是 realm / group / user 的識別資訊與管理權限，屬於 IAM 中繼資料，不含病歷號、身分證字號、就診或檢驗內容，也沒有 HL7 / FHIR / DICOM 載荷。故 PHI 不在範圍內。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "diff 內的註解與字串（含 test 內 `// trying with non existent role as we need to test manage permission for groups`、`// todo this method should be removed ...`）都是在描述實作意圖，沒有任何一段是對審查流程本身下指令。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "FGAP V2（ADMIN_FINE_GRAINED_AUTHZ_V2）已經有 Users 與 Clients 兩個 resource type，Groups 是這套 schema 明顯缺的一塊；沒有它就沒有辦法用 V2 的方式表達「這個 admin 只能管這個群組」。補上是這個 feature 走完的必要步驟。"
+    },
+    "right_mr": {
+      "verdict": "doubt",
+      "note": "主線（Groups resource type + GroupPermissionsV2 + 對應測試）是一件事，但同一個 MR 還夾了三類無關改動：(1) `ModelToRepresentation.searchGroupModelsByAttributes` 這個 server-spi-private 公開靜態方法被整個刪除，改由 GroupsResource 直接呼叫 `session.groups()`；(2) `AdminPermissions.registerListener` 把 feature 判斷從事件處理時搬到註冊時（見 F-003）；(3) `ApiUtil.handleCreatedResponse` 改寫成 try-with-resources。第 (1) 與 (3) 是無害的清理，但第 (2) 是有行為差異的改動，混在一個 700 行的授權模型 MR 裡很容易被略過。建議把 (2) 拆出去單獨說明，或至少在 MR 描述裡點名。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "ADMIN_FINE_GRAINED_AUTHZ_V2 仍是 EXPERIMENTAL（common/src/main/java/org/keycloak/common/Profile.java:58），此時擴充 schema 的破壞面最小，時機合理。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "skipped_reason": "trivy 未安裝（不在 PATH 上），略過相依套件漏洞、設定錯誤與 secret 掃描。本次無 supply chain / secret 的工具佐證。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "skipped_reason": "opengrep 未安裝，且預設 ruleset 目錄（NCR_OPENGREP_RULES 指向的位置）不存在；SAST 完全未執行。即使有安裝，Semgrep 官方 rules 也沒有本次 diff 用得上的 Java 目錄對應（本 diff 全為 .java）。"
+    },
+    {
+      "tool": "ruff",
+      "status": "ok",
+      "exit_code": 1,
+      "artifact": "scan.lint.json",
+      "counts": {
+        "in_diff": 0,
+        "outside_diff": 6
+      },
+      "skipped_reason": ""
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "skipped_reason": "ty 未安裝（不在 PATH 上）。即使安裝也不適用：本 diff 全部是 Java。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "skipped_reason": "oxlint 未安裝（不在 PATH 上）。即使安裝也不適用：本 diff 沒有 JavaScript/TypeScript 檔。"
+    },
+    {
+      "tool": "javac / maven",
+      "status": "skipped",
+      "skipped_reason": "此環境沒有 Maven repository 存取，專案無法編譯，因此沒有任何編譯器或 Java 靜態分析（checkstyle、spotbugs、error-prone）的結果可用。本報告中所有關於「會不會編不過 / 會不會壞掉」的判斷，都是靠閱讀 checkout 內的原始碼與 grep 得到，不是靠 build。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "skipped_reason": "codegraph 未安裝，Phase 3 的呼叫路徑列舉全部改用 grep 於完整 checkout 上進行。"
+    },
+    {
+      "tool": "ncr-fresh-eyes (subagent)",
+      "status": "skipped",
+      "skipped_reason": "此執行環境沒有可用的 subagent 派發工具（Agent/Task tool 不存在），Phase 3 的 fresh eyes 這一步完全沒有執行。依 SKILL.md 的規定不在本體內模擬，故本報告缺少一份「未被本 skill 框架塑形」的獨立觀察，findings 全部來自 dimension 檢查。"
+    },
+    {
+      "tool": "ncr-quality-check (subagent)",
+      "status": "skipped",
+      "skipped_reason": "同上，無法派發 subagent，Phase 4 步驟 3 的品質複核未執行。報告只經過 report_model.py 與 render_report.py 的機械驗證（結論推導、fix 必填、Critical security 三件套、維度齊全、無本機路徑），沒有第二個 agent 針對語氣、證據強度與嚴重度校準做過檢查。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "fail",
+      "note": "新增的 Javadoc 有兩處與實際行為不符（F-004、F-005），另有 double semicolon 與尾隨空白（F-007）。"
+    },
+    "B": {
+      "verdict": "pass",
+      "note": "重複邏輯確實被收斂：`canManageDefault` / `canViewDefault` / `getGroupsWithViewPermission(GroupModel)` / `searchGroupModelsByAttributes` 移除後全 repo 已無殘留呼叫端（grep 確認），`UsersResource.searchForUser` 也拿掉了與 `toRepresentation` 重複的 `canView` filter。import 也乾淨（`java.util.function.Predicate` 移除後 UsersResource 內確實無用）。"
+    },
+    "C": {
+      "verdict": "fail",
+      "note": "GroupPermissionsV2.canManage() 以 VIEW scope 授予 manage，唯一的呼叫端是建立/搬移 top-level group 的 POST endpoint（F-002）。"
+    },
+    "D": {
+      "verdict": "pass",
+      "note": "沒有新增或修改 REST 路徑、HTTP verb 或 query 參數；URL 命名、冪等語意、驗證 schema 都不在本次變更範圍。所有 endpoint 的授權檢查位置（requireManage / requireView / requireViewMembers）維持原樣，只有背後的評估邏輯換掉。"
+    },
+    "E": {
+      "verdict": "fail",
+      "note": "AdminPermissions.registerListener 把 feature flag 的判斷從「每次事件」移到「註冊當下」，讓 listener 的存在與否綁死在 session factory 建立的瞬間（F-003）。"
+    },
+    "F": {
+      "verdict": "fail",
+      "note": "GroupPermissionsV2 對 Resource 的 id / name 兩個欄位用反，導致 findByName 永遠查不到、findByType 永遠只掃到 all-groups 那一筆（F-001）。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "新增的 GroupResourceTypeEvaluationTest 覆蓋了 per-group 權限與 all-groups MANAGE，但沒有覆蓋 all-groups VIEW_MEMBERS/MANAGE_MEMBERS（F-001 的爆點）與 all-groups VIEW 之下的 requireManage()（F-002 的爆點），這兩條正是本次唯二的 Critical（F-008）。"
+    },
+    "H": {
+      "verdict": "pass",
+      "note": "本 diff 全部是 .java，非 Python 檔的檢查有觸發。此維度列名的子項（Vue / Dockerfile / nginx.conf / docker-compose / Alembic migration）都不在 diff 內，因此改以 Java 一般慣例審查：package 結構、繼承關係、Javadoc 正確性、try-with-resources 的資源釋放皆已逐項看過，問題記在 A 與 I。"
+    },
+    "I": {
+      "verdict": "fail",
+      "note": "簽章相容性本身沒問題（三個被刪除的方法全 repo 已無呼叫端），但 GroupPermissionsV2 覆寫 getGroupIdsWithViewPermission 時違反了呼叫端對回傳值的隱含契約——呼叫端把它當 group id 用（F-001）。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "I",
+      "severity": "Critical",
+      "status": "new",
+      "title": "GroupPermissionsV2.getGroupIdsWithViewPermission() 回傳的是 Resource 的 UUID 而不是 group id，且查詢用錯欄位",
+      "evidence": [
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:121",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:123",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:130",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissions.java:315",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissions.java:117",
+        "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:121",
+        "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:274",
+        "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:450",
+        "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:398"
+      ],
+      "rationale": "這段程式碼在三個地方把 Resource 的 `id`（隨機 UUID）與 `name`（在 FGAP V2 裡就是 group id）當成同一個東西：\n\n1. `granted.add(groupResource.getId())` — 回傳集合被塞入 Resource 的 UUID。但呼叫端把它當 group id 用：`UsersResource.searchForUser` 把它放進 `session.setAttribute(UserModel.GROUPS, groupIds)`（UsersResource.java:450），`getUsersCount(realm, ..., auth.groups().getGroupIdsWithViewPermission())`（UsersResource.java:398、425、430 三處）也直接當 group id 丟進 user query。方法名字與新增的 Javadoc 都寫明是 group id。對照 V1 的同名方法，它做的是 `resource.getName().substring(RESOURCE_NAME_PREFIX.length())`（GroupPermissions.java:315），也就是從 name 取出 group id——V2 這裡少了這一步。\n\n2. `hasPermission(groupResource.getId(), ...)` — `hasPermission(String groupId, ...)` 內部是 `resourceStore.findByName(server, groupId)`（GroupPermissionsV2.java:141）。傳進去的是 UUID，而 resource 的 name 是 group id，兩者永遠不相等，因此 `findByName` 必然回 null，接著掉進「all-groups fallback」分支——每一筆的評估對象都變成 all-groups 那個 resource，而不是原本想檢查的那個群組。\n\n3. `resourceStore.findByType(server, GROUPS_RESOURCE_TYPE, ...)` 本身就掃不到 group resource。FGAP V2 的 per-group resource 是 `AdminPermissionsSchema.getOrCreateResource()` 用 `resourceStore.create(resourceServer, name, owner)` 建的（AdminPermissionsSchema.java:121），**完全沒有呼叫 `setType`**；只有初始化時建立的 all-resource 才有 `resource.setType(type)`（AdminPermissionsSchema.java:274）。而 `findByType` 對應的 JPA query 是 `where ... r.type = :type`（model/jpa/.../ResourceEntity.java:64-65）。相對地 V1 是明確做了 `groupResource.setType(\"Group\")`（GroupPermissions.java:117）才敢用 findByType。\n\n合起來的實際行為：這個方法要嘛回空集合（沒有 all-groups 權限時），要嘛回一個只含 all-groups resource UUID 的集合。後者最糟——admin 明明被授予 all-groups 的 `view-members`，UsersResource.getUsers 這條查詢卻會被 `UserModel.GROUPS` 限縮到一個不存在的 group，結果是 **0 個使用者**，UsersResource.getUsersCount 也回 0。前者的情況下 query 退化成全表掃描後再逐筆跑 `canView(user)` 的 policy 評估，而 `firstResult/maxResults` 是在 filter 之前套用的，分頁會回傳比 max 少的筆數。\n\n反證檢查：新增的 `testCanViewUserByViewGroupMembers` 之所以會過，正是因為權限建在單一 group 上、all-groups 沒有任何 policy，`hasPermission` 走 fallback 後回 false，`granted` 停在空集合，最後靠 `toRepresentation` 裡的逐筆 `usersEvaluator::canView` 把 Alice 撈出來——測試通過並不代表這個方法有回對東西。",
+      "fix": "三處都要改，缺一不可：\n\n1. 在 `AdminPermissionsSchema.getOrCreateResource()` 建立 resource 之後補上 `resource.setType(resourceType)`（與 AdminPermissionsSchema.java:274 的 all-resource 一致），`findByType` 才掃得到 per-group resource。\n2. `hasPermission(...)` 的參數改傳 resource 的 name：`hasPermission(groupResource.getName(), ...)`；或把 `hasPermission` 多開一個直接吃 `Resource` 的 overload，避免再經過一次 name 查詢。\n3. `granted.add(...)` 改成 `granted.add(groupResource.getName())`，讓回傳值真的是 group id。\n\n建議同時補一個測試：對 myadmin 建立 all-groups 的 `VIEW_MEMBERS` 權限，然後斷言 `users().search(null, -1, -1)` 會回傳 topGroup 的成員（而不是空集合），這條測試在修好之前應該是紅的。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-002",
+      "dimension": "C",
+      "severity": "Critical",
+      "status": "new",
+      "title": "GroupPermissionsV2.canManage() 把 VIEW scope 當成 manage 權限，只讀 admin 可以建立與搬移群組",
+      "evidence": [
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:65",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:47",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:74",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:78",
+        "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java:181",
+        "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java:198"
+      ],
+      "rationale": "無參數的 `canManage()` 寫成 `hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE)`，與同一個檔案裡 `canView()`（GroupPermissionsV2.java:47）的條件一字不差。也就是說：只要 caller 擁有 all-groups 的 `view` scope，`canManage()` 就回 true。\n\n這與同檔案的 group 版本互相矛盾——`canManage(GroupModel group)`（GroupPermissionsV2.java:74）只認 `AdminPermissionsSchema.MANAGE`，沒有 VIEW。同一個 class 裡兩個 canManage 對「什麼叫 manage」給出不同答案，比較像是從 canView() 複製過來忘了刪 VIEW。\n\n危險操作路徑列舉：全 repo grep `groups().requireManage()` 與 `groups().canManage()`，呼叫端只有一個——`GroupsResource.addTopLevelGroup`（GroupsResource.java:181），也就是 `POST admin/realms/{realm}/groups`。這個 endpoint 有兩條分支，兩條都只被這一個守衛擋著：`rep.getId() == null` 時 `realm.createGroup(groupName)` 建立新的 top-level group；`rep.getId() != null` 時走 `realm.moveGroup(child, null)`（GroupsResource.java:198），把**任何一個既有子群組拔離它的父群組、變成 top-level**。\n\n第二條分支是真正的問題：群組階層在 FGAP 裡是有語意的——`UserPermissions.canViewByGroup` / `canManageByGroup` 是沿著 group 的 parent 鏈往上評估（UserPermissions.java:567-589 的 `evaluateHierarchy`）。把一個群組搬離父群組，等於把掛在父群組上的 members 權限一次剝掉。一個只被授予「看得到所有群組」的 admin 不應該有這個能力。\n\n新增的 Javadoc（GroupPermissionEvaluator.java:74-78）把這個行為寫成規格（\"For V2 only: Also if it has permission to VIEW or MANAGE groups\"），所以文件不會擋下這個錯誤，反而讓它看起來像設計。",
+      "fix": "把 `canManage()` 的 scope 清單縮成只有 MANAGE，與 `canManage(GroupModel)` 對齊：\n\n```java\n@Override\npublic boolean canManage() {\n    if (root.hasOneAdminRole(AdminRoles.MANAGE_USERS)) {\n        return true;\n    }\n    return hasPermission(null, AdminPermissionsSchema.MANAGE);\n}\n```\n\n同時修正 GroupPermissionEvaluator.java:74-78 的 Javadoc（拿掉 VIEW），並在 GroupResourceTypeEvaluationTest 補一條負向測試：對 myadmin 只建立 all-groups 的 `VIEW` 權限，斷言 `groups().add(...)` 回 403（現行程式碼會回 201）。",
+      "source": "dimension",
+      "counter_evidence_checked": true,
+      "security": {
+        "poc": "1. 啟用 admin-fine-grained-authz:v2 並對 realm `myrealm` 開啟 admin permissions。\n2. 以 realm admin 身分，對 admin-permissions client 建立一個「只有 view」的 all-groups scope permission（不指定 resources 即為 all-groups），policy 綁到只讀管理員 `myadmin`：\n\n```bash\nADMIN_CLIENT=$(curl -s -H \"Authorization: Bearer $ROOT_TOKEN\" \\\n  \"$KC/admin/realms/myrealm/clients?clientId=admin-permissions\" | jq -r '.[0].id')\n\ncurl -s -X POST -H \"Authorization: Bearer $ROOT_TOKEN\" -H 'Content-Type: application/json' \\\n  \"$KC/admin/realms/myrealm/clients/$ADMIN_CLIENT/authz/resource-server/permission/scope\" \\\n  -d '{\"name\":\"view-all-groups\",\"resourceType\":\"Groups\",\"scopes\":[\"view\"],\"policies\":[\"'\"$MYADMIN_POLICY_ID\"'\"]}'\n```\n\n3. 用 `myadmin` 取得 token（該帳號沒有 manage-users、也沒有任何 Groups 的 manage 權限），然後：\n\n```bash\n# 預期 403，實際 201 —— 建立 top-level group\ncurl -i -X POST -H \"Authorization: Bearer $MYADMIN_TOKEN\" -H 'Content-Type: application/json' \\\n  \"$KC/admin/realms/myrealm/groups\" -d '{\"name\":\"attacker-group\"}'\n\n# 預期 403，實際 204 —— 把既有子群組 $CHILD_ID 拔到 top level\ncurl -i -X POST -H \"Authorization: Bearer $MYADMIN_TOKEN\" -H 'Content-Type: application/json' \\\n  \"$KC/admin/realms/myrealm/groups\" -d '{\"id\":\"'\"$CHILD_ID\"'\",\"name\":\"child\"}'\n```",
+        "blast_radius": "取得者：任何被授予 all-groups `view` scope 的管理員——這是 FGAP V2 裡最低權限的群組角色，本來的語意就只是「看得到群組清單」。取得的能力：(a) 在 realm 內無限制建立 top-level group；(b) 把 realm 內任一個子群組搬成 top-level。(b) 的連帶效果是切斷群組階層，而 `UserPermissions.evaluateHierarchy` 正是沿著 parent 鏈判斷「誰能看/管這個 user」，所以搬動群組會直接改變其他管理員對使用者的可見與可管範圍，等於用唯讀權限改寫授權拓撲。影響面限於單一 realm，且需要先被授予 all-groups view 權限（不是未授權的外部攻擊者）。PHI 不在此系統範圍內（見 meta.phi_trigger），因此沒有臨床資料成本。此功能仍是 EXPERIMENTAL，尚未 GA，所以目前的曝險是「隨 nightly 一起外流到早期採用者」而非既有生產叢集。",
+        "treatment": "Mitigate",
+        "fix_reference": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:65"
+      }
+    },
+    {
+      "id": "F-003",
+      "dimension": "E",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "AdminPermissions.registerListener 把 feature 判斷移到註冊時，執行期才開啟 FGAP V1 的情境會失去清理 listener",
+      "evidence": [
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:74",
+        "services/src/main/java/org/keycloak/services/DefaultKeycloakSessionFactory.java:122",
+        "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/integration/QuarkusKeycloakSessionFactory.java:88",
+        "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/rest/TestingResourceProvider.java:993",
+        "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/admin/UsersTest.java:228"
+      ],
+      "rationale": "改動本身很單純：`if (Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ))` 從 `onEvent` 內部搬到 `manager.register(...)` 外面，省掉每次事件的旗標查詢。但這也把「listener 存不存在」凍結在 session factory 建立的那一刻。\n\n`registerListener` 只在 `DefaultKeycloakSessionFactory.init()`（:122）與 `QuarkusKeycloakSessionFactory.init()`（:88）各呼叫一次。生產環境的 Profile 在開機時就定案，所以生產行為不變。\n\n問題在測試路徑：`TestingResourceProvider.updateFeature` 會直接呼叫 `Profile.init(current.getName(), updatedFeatures)`（:993）改寫旗標，而 `@EnableFeature(..., skipRestart = true)` 就是刻意不重啟伺服器。這種用法在 repo 裡不是假想——`UsersTest`（:228、235、258、295、302、325）與六個 tokenexchange 測試都用了 `@EnableFeature(value = ADMIN_FINE_GRAINED_AUTHZ, skipRestart = true)`。在這些情境下，開機時旗標是關的、listener 沒註冊，之後把旗標打開也不會補註冊，於是 role / client / group 被刪除時的 `setPermissionsEnabled(..., false)` 清理不會發生，authz policy 變孤兒。\n\n反證檢查（兩件事查過了，都不成立）：(1) 「V1 與 V2 同時開啟時，`management()` 會回 MgmtPermissionsV2，而 `GroupPermissionsV2.setPermissionsEnabled` 會丟 UnsupportedOperationException」——不成立，`Profile.configure` 對同一個 versioned feature 只允許一個版本為 true（common/src/main/java/org/keycloak/common/Profile.java:285-306 `features.put(f, f == enabledFeature)`，並對多版本同開直接丟 ProfileException），所以兩者互斥。(2) 「`registerListener` 會在 feature 熱佈署時重跑」——不成立，`FeatureDeployerUtil` 只重新佈署 provider factory，不重建 session factory。",
+      "fix": "把旗標判斷留在事件處理裡，改成早退，效果一樣但不綁定註冊時機：\n\n```java\nmanager.register((ProviderEvent event) -> {\n    if (!Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)) {\n        return;\n    }\n    ...\n});\n```\n\n如果保留註冊時判斷是刻意的（例如已經確認沒有測試依賴 skipRestart + FGAP V1），請在 commit message 或程式碼註解裡寫明這個前提，讓下一個看到 `@EnableFeature(skipRestart = true)` 的人不用重新推導一次。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-008",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "新測試沒有覆蓋 all-groups 的 members 權限與 all-groups VIEW 之下的寫入路徑",
+      "evidence": [
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java:88",
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java:106",
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java:136",
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java:247",
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java:276"
+      ],
+      "rationale": "測試涵蓋度本身不差：per-group 的 VIEW / MANAGE / VIEW_MEMBERS / MANAGE_MEMBERS / MANAGE_MEMBERSHIP，加上 all-groups 的 MANAGE（testManageAllGroups）與 all-groups 的 VIEW（testViewGroups）都有。斷言品質也是看實際行為（比對 username、group name、狀態碼），不是只檢查有回東西。\n\n缺的剛好是本次唯二兩個 Critical 的引爆點，兩個都是 all-groups × 特定 scope 的組合：\n\n1. **all-groups × VIEW_MEMBERS / MANAGE_MEMBERS**：`testCanViewUserByViewGroupMembers`（:88）與 `testCanViewUserByManageGroupMembers`（:106）都是把權限建在 topGroup 上。這條路徑下 `getGroupIdsWithViewPermission()` 回空集合，靠逐筆 `canView(user)` 過關，所以 F-001 的錯誤 id 從來沒有被觀察到。只要把權限改成 all-groups 版本（`createAllGroupsPermission(policy, Set.of(VIEW_MEMBERS))`），同樣的斷言就會失敗。\n\n2. **all-groups × VIEW 之後嘗試寫入**：`testViewGroups`（:247）建立了 all-groups VIEW 權限（:276），但之後只做 `groups().groups()` 讀取，沒有再試一次寫入。只要在最後補一個 `groups().add(...)` 並斷言 403，F-002 就會被擋下。\n\n另外 `testManageGroupMembership`（:284）在 `joinGroup(topGroup.getId())` 之後沒有任何斷言，僅仰賴「沒丟例外」。這條測試無法分辨「加入成功」與「呼叫成功但沒生效」。",
+      "fix": "補三條測試：\n\n```java\n// 1. F-001：all-groups view-members 應該讓 myadmin 看到所有群組成員\ncreateAllGroupsPermission(policy, Set.of(VIEW_MEMBERS));\nassertEquals(1, realmAdminClient.realm(realm.getName()).users().search(null, -1, -1).size());\n\n// 2. F-002：只有 all-groups view 時不得建立群組\ncreateAllGroupsPermission(policy, Set.of(VIEW));\ntry (Response r = realmAdminClient.realm(realm.getName()).groups().add(new GroupRepresentation())) {\n    assertEquals(Response.Status.FORBIDDEN.getStatusCode(), r.getStatus());\n}\n\n// 3. testManageGroupMembership 收尾加上實際結果的斷言\nassertThat(realmAdminClient.realm(realm.getName()).users().get(bobId).groups(),\n        hasItem(hasProperty(\"id\", equalTo(topGroup.getId()))));\n```",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-004",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "requireManageMembers 的 Javadoc 指向 canManageMembership，與實作不符",
+      "evidence": [
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:133",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:135",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissions.java:376"
+      ],
+      "rationale": "`requireManageMembership` 與 `requireManageMembers` 兩者的 Javadoc 一字不差，都寫 `Throws ForbiddenException if {@link #canManageMembership(GroupModel)} returns false`。實作上 `requireManageMembers` 走的是 `canManageMembers(group)`（GroupPermissions.java:376-380），而 members 與 membership 在這套 schema 裡是兩個不同的 scope（`manage-members` 對成員本身、`manage-membership` 對加入/移除關係）。這份新加的文件正好在最容易搞混的兩個名字上給了錯的答案，比沒有文件更糟。",
+      "fix": "把 GroupPermissionEvaluator.java:133 的 `{@link #canManageMembership(GroupModel)}` 改成 `{@link #canManageMembers(GroupModel)}`。",
+      "source": "dimension",
+      "counter_evidence_checked": false
+    },
+    {
+      "id": "F-005",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "getGroupIdsWithViewPermission 的 @return 寫成 Stream，且省略了 all-groups fallback 的行為",
+      "evidence": [
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:145",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:147"
+      ],
+      "rationale": "`@return Stream of IDs of groups with view permission.` 但回傳型別是 `Set<String>`。這個介面其他方法的 Javadoc 都相當精確，唯獨這裡型別寫錯，讀者會以為它是 lazy 的。另外描述只說「`UserPermissionEvaluator#canView()` 為 true 時回空集合」，沒有說「非 same-realm 或沒有 resource server 時同樣回空集合」——而空集合在呼叫端（UsersResource.java:448-451）代表「不設 GROUPS 限制」，語意上與「什麼群組都看不到」剛好相反，值得在文件裡點明。",
+      "fix": "改成 `@return IDs of the groups the caller may view members of; an empty set means no group-scoped restriction should be applied.`，並補一句說明空集合的三種來源（caller 本身可看所有 user、跨 realm、沒有 resource server）。",
+      "source": "dimension",
+      "counter_evidence_checked": false
+    },
+    {
+      "id": "F-006",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "GroupPermissionsV2.hasPermission 少了 UserPermissionsV2 同名方法有的 resourceId 比對",
+      "evidence": [
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:156",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java:123"
+      ],
+      "rationale": "兩個 V2 evaluator 的 `hasPermission` 幾乎是逐行對照的雙胞胎，但 user 版在展開 scope 之前多一層 `if (permission.getResourceId().equals(resource.getId()))`（UserPermissionsV2.java:123），group 版沒有。\n\n就目前的呼叫形式來說這一層是多餘的：`DecisionPermissionCollector.grantPermission` 在 `permission.getResource() != null` 時只會為那一個 resource 產生 Permission（server-spi-private/src/main/java/org/keycloak/authorization/policy/evaluation/DecisionPermissionCollector.java:185-190），而這裡傳進去的 resource 一定非 null。所以這不是安全漏洞。\n\n但兩份幾乎相同的程式碼有一處不明原因的差異，正是之後各自漂移的起點——下一個維護者會不知道 group 版是「刻意簡化」還是「漏抄」。",
+      "fix": "二選一並寫下理由：要嘛在 GroupPermissionsV2.java:156 補上同樣的 `permission.getResourceId().equals(resource.getId())` 判斷，要嘛把兩個 `hasPermission` 抽成共用的 helper（例如放進 `MgmtPermissionsV2` 或一個 package-private 工具方法），讓 Users / Groups / Clients 三個 V2 evaluator 共用同一份評估流程。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-007",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "新測試與 config 檔的排版瑕疵：多餘分號、尾隨空白、重複的狀態碼斷言",
+      "evidence": [
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java:68",
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java:73",
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java:300",
+        "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/RealmAdminPermissionsConfig.java:34",
+        "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:86"
+      ],
+      "rationale": "四處小瑕疵，都沒有行為影響，但會留在 blame 裡：\n\n- GroupResourceTypeEvaluationTest.java:68 結尾是 `new GroupRepresentation();;`（兩個分號）。\n- GroupResourceTypeEvaluationTest.java:73-75：`assertThat(response.getStatus(), equalTo(CREATED))` 之後緊接著 `ApiUtil.handleCreatedResponse(response)`，而後者第一件事就是 `Assertions.assertEquals(201, response.getStatus())`（test-framework/core/src/main/java/org/keycloak/testframework/util/ApiUtil.java:10）。同一個狀態碼斷言了兩次，三個測試方法都是這個寫法。\n- GroupResourceTypeEvaluationTest.java:300 是一行只有空白的空行；RealmAdminPermissionsConfig.java:34 與 GroupPermissionEvaluator.java:86 行尾有尾隨空白。\n\n附帶一提，`ApiUtil.handleCreatedResponse` 改成 `try (response)` 是好的改動——原本斷言失敗時 `response.close()` 不會被執行，現在無論如何都會關閉。",
+      "fix": "刪掉多餘的分號與尾隨空白；把 onBefore / testManageGroup / testViewGroups 裡的 `assertThat(response.getStatus(), equalTo(CREATED))` 拿掉，直接依賴 `handleCreatedResponse` 內建的 201 斷言（或反過來，讓 `handleCreatedResponse` 不再斷言、由呼叫端負責，但不要兩邊都做）。",
+      "source": "dimension",
+      "counter_evidence_checked": false
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "E",
+      "question": "當一個群組已經有自己的 per-group resource 時，all-groups 權限就完全不會被納入評估——這是刻意的語意嗎？",
+      "context": "`GroupPermissionsV2.hasPermission`（GroupPermissionsV2.java:141-149）只有在 `resourceStore.findByName(server, groupId)` 回 null 時才退到 all-groups resource。換句話說，只要某個群組因為任何理由被建立過 per-group resource（哪怕權限給的是 `manage-members`），一條 all-groups 的 `view` 權限就對這個群組失效。`testViewGroups`（GroupResourceTypeEvaluationTest.java:247-282）之所以沒撞到，是因為 myGroup 的 per-group 權限剛好就是 VIEW。同樣的結構在 `UserPermissionsV2.hasPermission`（UserPermissionsV2.java:105-113）已經存在於 base，不是這個 MR 引入的，所以無法判斷是既定設計還是共同的缺陷。",
+      "what_would_settle_it": "作者或 FGAP V2 的設計文件說明 per-group 與 all-groups 權限的疊加規則：是 union（兩者取聯集）還是 override（per-group 存在就蓋掉 all-groups）。若答案是 union，`hasPermission` 需要在 per-group 評估失敗後再評估一次 all-groups resource，而不是只在 resource 不存在時 fallback。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "F",
+      "question": "在這個 MR 之前就已經啟用 FGAP V2 的既有 realm，會不會因為缺少 `Groups` resource 與三個新 scope 而壞掉？",
+      "context": "`AdminPermissionsSchema.init`（AdminPermissionsSchema.java:246-278）開頭是 `if (client != null) { return; }`——admin-permissions client 已存在的 realm 不會再補建任何 resource 或 scope。這代表既有 realm 不會有 name 為 `Groups` 的 all-resource，也不會有 `manage-membership` / `manage-members` / `view-members` 這三個 scope。後果有二：`getResourceTypeResource(...)` 對 Groups 回 null，接著 `policyStore.findByResource(server, null)` 與 `resource.getScopes()` 會 NPE；而透過 admin API 建立 Groups scope permission 時 `getScope`（AdminPermissionsSchema.java:229-234）會丟 `Scope [view-members] does not exist.`。ADMIN_FINE_GRAINED_AUTHZ_V2 目前是 EXPERIMENTAL（Profile.java:58），Keycloak 對 experimental feature 通常不承諾升級路徑，所以這可能是已知且接受的限制，我無法從程式碼判斷。",
+      "what_would_settle_it": "確認專案對 experimental feature 的升級政策；若需要支援，則要有一段 migration（或把 `init` 改成 idempotent 的「補齊缺少的 resource 與 scope」而非 client 存在就 return），並且在 `getResourceTypeResource` 回 null 時給明確錯誤而不是 NPE。"
+    },
+    {
+      "id": "Q-003",
+      "dimension": "B",
+      "question": "`getOrCreateResource` 改用 `switch (resourceType)` 之後，resourceType 為 null 會變成 NPE，這條路徑實際到得了嗎？",
+      "context": "改動前是 `if (USERS.getType().equals(resourceType)) ... else if (CLIENTS...)`，null 會安然落到 `name == null` 再丟帶訊息的 IllegalStateException；改動後 Java 的 String switch 對 null 直接 NPE（AdminPermissionsSchema.java:107-112）。兩個呼叫端我都追了：`AuthorizationProvider` 的 policy create 路徑（AuthorizationProvider.java:299-304）在前面有 `throwExceptionIfResourceTypeOrScopesNotProvided` 擋著，但那個檢查只對 `ScopePermissionRepresentation` 生效（AdminPermissionsSchema.java:219）；`RepresentationToModel.updateResources`（RepresentationToModel.java:1423）直接用 `policy.getResourceType()`，沒有前置檢查。我找不到一條實際會帶 null resourceType 又帶 resources 進來的 policy 型別（`isSupportedPolicyType` 已擋掉 `resource` 型別），但也無法證明不存在。",
+      "what_would_settle_it": "列出 admin-permissions client 底下所有可能帶 `resources` 的 policy type，確認它們是否都保證有 resourceType；或直接在 switch 前加 `Objects.requireNonNull(resourceType, \"resourceType\")`，讓失敗訊息一致，這樣就不需要證明。"
+    }
+  ],
+  "conclusion": "Request Changes",
+  "summary": "這個 MR 把 Groups 補進 FGAP V2 的 authorization schema，方向與時機都對，V1 的重構（移除 canViewDefault / canManageDefault / getGroupsWithViewPermission(GroupModel)）也乾淨——grep 全 repo 已無殘留呼叫端。問題集中在新寫的 GroupPermissionsV2：一是 `getGroupIdsWithViewPermission()` 把 Resource 的 UUID 當 group id 用、且 `findByType` 掃不到沒有設 type 的 per-group resource，讓這個方法實際上永遠回不出正確的 group id（F-001）；二是無參數的 `canManage()` 把 VIEW 也當成 manage，而它唯一的呼叫端就是建立與搬移 top-level group 的 endpoint（F-002）。兩者都不會被現有測試抓到，因為新測試剛好避開了 all-groups × members / all-groups × view 這兩個組合（F-008）。此外 `AdminPermissions.registerListener` 把 feature 判斷提前到註冊時，會讓 `@EnableFeature(skipRestart = true)` 的測試情境失去清理 listener（F-003）。"
+}

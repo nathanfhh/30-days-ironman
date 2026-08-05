@@ -1,0 +1,14 @@
+{
+  "slug": "cal_com-10600",
+  "tool": "claude-code",
+  "n_golden": 4,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 4,
+      "confidence": 0.95,
+      "reasoning": "Both flag BackupCode.tsx exporting `function TwoFactor` instead of BackupCode."
+    }
+  ]
+}

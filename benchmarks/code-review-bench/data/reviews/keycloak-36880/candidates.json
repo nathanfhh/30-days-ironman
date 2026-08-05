@@ -1,0 +1,103 @@
+{
+  "slug": "keycloak-36880",
+  "issues": [
+    {
+      "text": "Adding the MgmtPermissionsV2.clients() override switches clients() to ClientPermissionsV2, whose canExchangeTo() throws UnsupportedOperationException; with token-exchange and admin-fine-grained-authz:v2 both enabled, a token exchange to another audience client returns an uncaught RuntimeException (HTTP 500) instead of 403 or success.",
+      "zh": "MgmtPermissionsV2.clients() 改指向 V2 之後，token exchange 會丟 UnsupportedOperationException",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "ClientPermissionsV2.getClientsWithPermission() looks resources up with findByType(CLIENTS_RESOURCE_TYPE), but per-client resources are created without ever calling setType, so the method can only ever return the literal all-clients resource name and never real client ids (its only consumer would then NPE on realm.getClientById).",
+      "zh": "getClientsWithPermission 依賴的 resource type 在 V2 從來沒被寫入，回傳值永遠不是 client id",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new CLIENTS resource type has no matching branch in AdminPermissionsSchema.getResourceName(), so Clients permissions fall through to resource.getDisplayName() which is null, and the admin console shows null instead of 'All clients' or the clientId.",
+      "zh": "新增 CLIENTS resource type 但 getResourceName 沒有跟著加分支，admin console 會顯示 null",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The all-clients fallback in hasPermission passes the result of getResourceTypeResource, which can be null, straight into PolicyStore.findByResource whose javadoc states the resource cannot be null; the JPA implementation calls resource.getId() and NPEs. Realms that enabled FGAP V2 before this change hit this path on every canManage/canView call.",
+      "zh": "all-clients fallback 會把 null 傳進契約上不接受 null 的 PolicyStore.findByResource",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "ClientPermissionsV2.hasPermission is missing the permission.getResourceId().equals(resource.getId()) guard that UserPermissionsV2 added deliberately to fix an over-granting bug, so the two nearly identical evaluators differ on a security-relevant filter with no explanation.",
+      "zh": "ClientPermissionsV2.hasPermission 少了 UserPermissionsV2 特意加上的 resourceId 過濾",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "ClientPermissionsV2 carries dead code copied from ClientPermissions: the never-called private getEvaluationContext method, an unused logger field, and unused imports (Scope, the static TOKEN_EXCHANGE, ClientModelIdentity, DefaultEvaluationContext, EvaluationContext).",
+      "zh": "ClientPermissionsV2 從 V1 抄過來的死碼未清",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "Two newly added javadocs describe void require methods as 'Returns true if ... returns true' (requireView and requireViewClientScopes), while every other require* method in the same file is documented as throwing ForbiddenException when the check fails.",
+      "zh": "兩處新增的 javadoc 把 void 的 require 方法寫成「Returns true」",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "The same scope-matching loop after evaluatePermission is repeated in three methods of ClientPermissionsV2 (hasPermission(ClientModel, String), hasPermission(String), hasGrantedPermission(Resource, String)), past the rule of three.",
+      "zh": "同一段 scope 比對迴圈在 ClientPermissionsV2 出現三次",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "Two of those methods build List<String> expectedScopes = Arrays.asList(scope) and then call contains() even though the parameter is a single scope; it is leftover from the varargs version in UserPermissionsV2 and the third method simply uses scope.equals(s).",
+      "zh": "另外前兩個都寫了 `List<String> expectedScopes = Arrays.asList(scope);` 再 `expectedScopes.contains(s)`，但參數只有一個 scope——第三個方法就直接用 `scope.equals(s)`。",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "hasPermission(String) fetches the all-clients resource with resourceStore.findByName(server, CLIENTS_RESOURCE_TYPE, server.getId()) while hasPermission(ClientModel, String) goes through AdminPermissionsSchema.getResourceTypeResource — the schema entry point that UserPermissionsV2 uses — so the two paths are inconsistent.",
+      "zh": "還有一處不對稱：hasPermission(String) 用 `resourceStore.findByName(server, CLIENTS_RESOURCE_TYPE, server.getId())` 直接撈 all-clients resource，而 hasPermission(ClientModel, String) 走的是 AdminPermissionsSchema.SCHEMA.getResourceTypeResource(...)。",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "AdminPermissionsSchema.java:53 was a blank line and is now four spaces of trailing whitespace, unrelated to what this change is doing.",
+      "zh": "AdminPermissionsSchema.java:53 原本是空行，這次變成四個空白的 trailing whitespace，和這個 MR 要做的事無關。",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "AdminPermissions.registerListener was reindented and had casts respaced in the same commit, so the block reads as a full rewrite in the diff while the only behaviour change is the new outer Profile check — the one line reviewers most need to see.",
+      "zh": "AdminPermissions.registerListener 那一段除了新增 Profile 判斷之外，還順手把 cast 全部加了空格、整段重新縮排……真正的行為變更只有最外層多包了一個 if——正是最需要 reviewer 注意、卻最容易被排版雜訊蓋掉的一行。",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "ClientPermissionsV2 is declared public with a public constructor while its counterpart UserPermissionsV2 and its parent ClientPermissions are package-private and its only creator lives in the same package, needlessly widening the API surface.",
+      "zh": "ClientPermissionsV2 的可見性與同層的 UserPermissionsV2、父類別不一致",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "PermissionClientTest mutates realm state shared across the class (renames myclient, moves a default client scope to optional, creates two client roles) without restoring it, although the same diff already uses realm.cleanup().add(...) elsewhere; this makes the tests order-dependent.",
+      "zh": "PermissionClientTest 的測試改動共用 realm 狀態但沒有還原",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "How does an existing realm that already enabled ADMIN_FINE_GRAINED_AUTHZ_V2 obtain the new Clients resource and the configure / map-roles-client-scope / map-roles-composite scopes after upgrading, given that AdminPermissionsSchema.init() returns early when the admin-permissions client already exists?",
+      "zh": "已經開啟 ADMIN_FINE_GRAINED_AUTHZ_V2 的既有 realm，升級到含這個變更的版本之後，要怎麼拿到新的 Clients resource 與 configure / map-roles-client-scope / map-roles-composite 三個 scope？"
+    },
+    {
+      "text": "When a client already has its own Resource, can permissions attached to other objects but sharing the same scope be counted in its evaluation, since the FGAP schema flattens all resource types onto one shared scope set and DefaultPolicyEvaluator also queries policies by scope with a null resource?",
+      "zh": "當某個 client 已經有自己的 Resource（因為另有一筆針對它的 permission），評估它時會不會把掛在「其他物件」上、但 scope 相同的 permission 一起算進來？"
+    },
+    {
+      "text": "Under V2, who cleans up the FGAP Resource and scope permissions left behind when a client, role or group is deleted, now that registerListener is gated on ADMIN_FINE_GRAINED_AUTHZ and therefore disabled under V2?",
+      "zh": "V2 之下刪除 client / role / group 時，FGAP 留下的 Resource 與 scope permission 由誰清理？"
+    }
+  ]
+}

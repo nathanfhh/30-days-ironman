@@ -1,0 +1,8 @@
+[
+  "isTeamAdminOrOwner uses && between isTeamAdmin and isTeamOwner, which requires user to be OWNER and blocks ADMIN users from adding guests",
+  "uniqueGuests doesn't actually de-duplicate the guests input and compares emails case-sensitively, allowing duplicates or case-variant blacklist bypasses to be inserted/sent downstream",
+  "sendAddGuestsEmails(evt, guests) uses the raw input rather than the filtered list that was actually added, which can misclassify new vs existing attendees and send the wrong email type",
+  "In onError, message is always a non-empty string (often starting with undefined:), so the unable_to_add_guests fallback will never be used and the toast can be confusing",
+  "onSuccess resets multiEmailValue but not isInvalidEmail, so reopening the dialog after a previous validation failure can immediately show the error state again",
+  "MultiEmail.tsx imports primitives from @calcom/ui while living inside packages/ui, which risks circular imports now that @calcom/ui also exports MultiEmail"
+]

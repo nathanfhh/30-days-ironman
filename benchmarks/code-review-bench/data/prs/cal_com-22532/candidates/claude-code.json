@@ -1,0 +1,6 @@
+[
+  "Multi-layer feature (17 files, DB migration, new data-deletion endpoint, UI component replacement) was developed without end-to-end testing against a real Google Calendar integration",
+  "The updateManyByCredentialId method is called with empty data {} relying on Prisma @updatedAt to auto-touch the timestamp, which could be confusing to future maintainers",
+  "No tests were added for the new tRPC endpoint or repository method",
+  "The conditional rendering logic in CredentialActionsDropdown changes behavior for delegation credentials - they now render nothing or a cache-only dropdown if cache exists, which should be verified as intentional"
+]

@@ -1,0 +1,4817 @@
+{
+  "ruff": {
+    "status": "ok",
+    "exit_code": 1,
+    "skipped_reason": "",
+    "output": [
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 27,
+          "row": 242
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/bitfield/types.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 242
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 242,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 19
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/broadcast_details.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 19
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 19,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 20
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/broadcast_details.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 20
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 20,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 27
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/broadcast_index.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 27
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 27,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 28
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/broadcast_index.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 28
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 28,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 54,
+          "row": 139
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/codeowners/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 139
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 139,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 140
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/codeowners/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 140
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 140,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 24
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/event_ai_suggested_fix.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 24
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 24,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 30
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/group_ai_autofix.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 30
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 30,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 31
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/group_ai_summary.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 31
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 31,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 30
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/group_autofix_setup_check.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 30
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 30,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 20
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/group_autofix_update.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 20
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 20,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 606
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_details.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 606
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 606,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 607
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_details.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 607
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 607,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 55,
+          "row": 129
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_member/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 129
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 129,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 51,
+          "row": 130
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_member/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 130
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 130,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 78,
+          "row": 131
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_member/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 131
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 131,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 74,
+          "row": 132
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_member/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 132
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 132,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 59,
+          "row": 133
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_member/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 133
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 133,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 41
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_member_unreleased_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 41
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 41,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 42
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/organization_member_unreleased_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 42
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 42,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 16
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/project_autofix_codebase_index_status.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 16
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 16,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 20
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/project_autofix_create_codebase_index.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 20
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 20,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 42,
+          "row": 10
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/relay/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 10
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 10,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 11
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/relay/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 11
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 11,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 38,
+          "row": 12
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/relay/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 12
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 12,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 57,
+          "row": 13
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/relay/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 13
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 13,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 49,
+          "row": 14
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/relay/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 14
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 14,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 49,
+          "row": 15
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/relay/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 15
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 15,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 63,
+          "row": 16
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/relay/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 16
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 16,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 61,
+          "row": 17
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/relay/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 17
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 17,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "F403",
+        "end_location": {
+          "column": 35,
+          "row": 1
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/release_thresholds/utils/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 1
+        },
+        "message": "`from .fetch_sessions_data import *` used; unable to detect undefined names",
+        "noqa_row": 1,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star"
+      },
+      {
+        "cell": null,
+        "code": "F403",
+        "end_location": {
+          "column": 44,
+          "row": 2
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/release_thresholds/utils/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 2
+        },
+        "message": "`from .get_errors_counts_timeseries import *` used; unable to detect undefined names",
+        "noqa_row": 2,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star"
+      },
+      {
+        "cell": null,
+        "code": "F403",
+        "end_location": {
+          "column": 36,
+          "row": 3
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/release_thresholds/utils/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 3
+        },
+        "message": "`from .get_new_issue_counts import *` used; unable to detect undefined names",
+        "noqa_row": 3,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 23
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/user_subscriptions.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 23
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 23,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 24
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/endpoints/user_subscriptions.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 24
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 24,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 38,
+          "row": 30
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/helpers/group_index/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 30
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 30,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 34,
+          "row": 33
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/api/helpers/group_index/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 33
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 33,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "F601",
+        "end_location": {
+          "column": 17,
+          "row": 414
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/apidocs/examples/event_examples.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "",
+              "end_location": {
+                "column": 23,
+                "row": 414
+              },
+              "location": {
+                "column": 21,
+                "row": 413
+              }
+            }
+          ],
+          "message": "Remove repeated key literal `\"userReport\"`"
+        },
+        "location": {
+          "column": 5,
+          "row": 414
+        },
+        "message": "Dictionary key literal `\"userReport\"` repeated",
+        "noqa_row": 414,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/multi-value-repeated-key-literal"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 41,
+          "row": 60
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/auth/providers/saml2/forms.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def processor(d):\n        return d.cleaned_data",
+              "end_location": {
+                "column": 41,
+                "row": 60
+              },
+              "location": {
+                "column": 5,
+                "row": 60
+              }
+            }
+          ],
+          "message": "Rewrite `processor` as a `def`"
+        },
+        "location": {
+          "column": 5,
+          "row": 60
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 60,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 64,
+          "row": 254
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/backup/services/import_export/impl.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "model_instance.get_relocation_scope() not in ok_relocation_scopes",
+              "end_location": {
+                "column": 64,
+                "row": 254
+              },
+              "location": {
+                "column": 41,
+                "row": 253
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 45,
+          "row": 253
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 253,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 84,
+          "row": 491
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/backup/services/import_export/impl.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "item.get_relocation_scope() not in allowed_relocation_scopes",
+              "end_location": {
+                "column": 84,
+                "row": 491
+              },
+              "location": {
+                "column": 24,
+                "row": 491
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 28,
+          "row": 491
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 491,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 29,
+          "row": 303
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/conf/server.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 303
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 303,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 37,
+          "row": 562
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/conf/server.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 562
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 562,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 14,
+          "row": 657
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/conf/server.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 657
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 657,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 34,
+          "row": 711
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/conf/server.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 711
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 711,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 37,
+          "row": 985
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/conf/server.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 985
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 985,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "F601",
+        "end_location": {
+          "column": 21,
+          "row": 2898
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/conf/server.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "",
+              "end_location": {
+                "column": 32,
+                "row": 2898
+              },
+              "location": {
+                "column": 32,
+                "row": 2897
+              }
+            }
+          ],
+          "message": "Remove repeated key literal `\"uptime-configs\"`"
+        },
+        "location": {
+          "column": 5,
+          "row": 2898
+        },
+        "message": "Dictionary key literal `\"uptime-configs\"` repeated",
+        "noqa_row": 2898,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/multi-value-repeated-key-literal"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 33,
+          "row": 5
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/conf/server_mypy.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 5
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 5,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 172
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/discover/endpoints/discover_saved_query_detail.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 172
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 172,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 173
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/discover/endpoints/discover_saved_query_detail.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 173
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 173,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 34,
+          "row": 528
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/grouping/fingerprinting/__init__.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def visit_empty(*a):\n        return None",
+              "end_location": {
+                "column": 34,
+                "row": 528
+              },
+              "location": {
+                "column": 5,
+                "row": 528
+              }
+            }
+          ],
+          "message": "Rewrite `visit_empty` as a `def`"
+        },
+        "location": {
+          "column": 5,
+          "row": 528
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 528,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 16
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/identity/bitbucket/provider.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 16
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 16,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 207
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/identity/oauth2.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 207
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 207,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 68,
+          "row": 1883
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/incidents/logic.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "action[\"target_identifier\"] not in mapped_slack_channels",
+              "end_location": {
+                "column": 68,
+                "row": 1883
+              },
+              "location": {
+                "column": 12,
+                "row": 1883
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 16,
+          "row": 1883
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 1883,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 44,
+          "row": 44
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/incidents/serializers/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 44
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 44,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 59,
+          "row": 45
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/incidents/serializers/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 45
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 45,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 72,
+          "row": 46
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/incidents/serializers/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 46
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 46,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 20,
+          "row": 5
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/discord/utils/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 5
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 5,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 23,
+          "row": 6
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/discord/utils/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 6
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 6,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 2,
+          "row": 14
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/github/tasks/language_parsers.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def stackframe_function_name(i):\n    return Function(\n    \"arrayElement\",\n    (Column(\"exception_frames.function\"), i),\n)",
+              "end_location": {
+                "column": 2,
+                "row": 14
+              },
+              "location": {
+                "column": 1,
+                "row": 11
+              }
+            }
+          ],
+          "message": "Rewrite `stackframe_function_name` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 11
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 11,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 59,
+          "row": 34
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/github_enterprise/webhook.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 34
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 34,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 73,
+          "row": 35
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/github_enterprise/webhook.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 35
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 35,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 74,
+          "row": 36
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/github_enterprise/webhook.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 36
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 36,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 39,
+          "row": 4
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/jira/views/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 4
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 4,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 68,
+          "row": 5
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/jira/views/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 5
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 5,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 60,
+          "row": 6
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/jira/views/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 6
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 6,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 61,
+          "row": 7
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/jira/views/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 7
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 7,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 34,
+          "row": 32
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/slack/webhooks/command.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 32
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 32,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 23
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/tasks/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 23
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 23,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 57,
+          "row": 24
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/tasks/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 24
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 24,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 39,
+          "row": 25
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/tasks/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 25
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 25,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 59,
+          "row": 26
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/tasks/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 26
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 26,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 53,
+          "row": 27
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/tasks/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 27
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 27,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 55,
+          "row": 28
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/tasks/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 28
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 28,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 29
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/tasks/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 29
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 29,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 53,
+          "row": 335
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/vsts/issues.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "data[\"old_state\"] not in done_states",
+              "end_location": {
+                "column": 53,
+                "row": 335
+              },
+              "location": {
+                "column": 17,
+                "row": 335
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 21,
+          "row": 335
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 335,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 67,
+          "row": 337
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/integrations/vsts/issues.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "data[\"new_state\"] not in done_states",
+              "end_location": {
+                "column": 67,
+                "row": 337
+              },
+              "location": {
+                "column": 31,
+                "row": 337
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 35,
+          "row": 337
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 337,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 89,
+          "row": 66
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/issues/endpoints/actionable_items.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def priority_get(x):\n            return priority_ranking.get(x[\"type\"], ActionPriority.UNKNOWN)",
+              "end_location": {
+                "column": 89,
+                "row": 66
+              },
+              "location": {
+                "column": 9,
+                "row": 66
+              }
+            }
+          ],
+          "message": "Rewrite `priority_get` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 66
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 66,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 112
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/issues/endpoints/project_event_details.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 112
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 112,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 113
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/issues/endpoints/project_event_details.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 113
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 113,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 2,
+          "row": 18
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/middleware/integrations/integration_control.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 14
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 14,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 74,
+          "row": 21
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/groupowner.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def ISSUE_OWNERS_DEBOUNCE_KEY(group_id):\n    return f\"owner_exists:1:{group_id}\"",
+              "end_location": {
+                "column": 74,
+                "row": 21
+              },
+              "location": {
+                "column": 1,
+                "row": 21
+              }
+            }
+          ],
+          "message": "Rewrite `ISSUE_OWNERS_DEBOUNCE_KEY` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 21
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 21,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 71,
+          "row": 23
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/groupowner.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def ASSIGNEE_EXISTS_KEY(group_id):\n    return f\"assignee_exists:1:{group_id}\"",
+              "end_location": {
+                "column": 71,
+                "row": 23
+              },
+              "location": {
+                "column": 1,
+                "row": 23
+              }
+            }
+          ],
+          "message": "Rewrite `ASSIGNEE_EXISTS_KEY` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 23
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 23,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 82,
+          "row": 28
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 28
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 28,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 40,
+          "row": 29
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 29
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 29,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 51,
+          "row": 30
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 30
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 30,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 46,
+          "row": 31
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 31
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 31,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 58,
+          "row": 32
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 32
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 32,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 50,
+          "row": 33
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 33
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 33,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 54,
+          "row": 34
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 34
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 34,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 62,
+          "row": 35
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 35
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 35,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 48,
+          "row": 36
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 36
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 36,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 67,
+          "row": 37
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/models/releases/set_commits.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 37
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 37,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 68
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/monitors/endpoints/organization_monitor_index.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 68
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 68,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 69
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/monitors/endpoints/organization_monitor_index.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 69
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 69,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 33
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/plugins/endpoints.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 33
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 33,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 45,
+          "row": 34
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/plugins/endpoints.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 34
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 34,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 2,
+          "row": 29
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/ratelimits/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 22
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 22,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 89,
+          "row": 93
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/release_health/metrics.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def empty_string_to_none(v: Any) -> (Any | None):\n        return None if v == \"\" else v",
+              "end_location": {
+                "column": 89,
+                "row": 93
+              },
+              "location": {
+                "column": 5,
+                "row": 93
+              }
+            }
+          ],
+          "message": "Rewrite `empty_string_to_none` as a `def`"
+        },
+        "location": {
+          "column": 5,
+          "row": 93
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 93,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 6,
+          "row": 570
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/release_health/metrics_sessions_v2.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def default_group_gen_func() -> Group:\n        return {\n            \"totals\": {field: default_for(field) for field in query.raw_fields},\n            \"series\": {\n                field: len(metrics_results[\"intervals\"]) * [default_for(field)]\n                for field in query.raw_fields\n            },\n        }",
+              "end_location": {
+                "column": 6,
+                "row": 570
+              },
+              "location": {
+                "column": 5,
+                "row": 564
+              }
+            }
+          ],
+          "message": "Rewrite `default_group_gen_func` as a `def`"
+        },
+        "location": {
+          "column": 5,
+          "row": 564
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 564,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 19,
+          "row": 174
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/replays/usecases/query/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 174
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 174,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 74,
+          "row": 176
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/replays/usecases/query/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 176
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 176,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 95,
+          "row": 177
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/replays/usecases/query/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 177
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 177,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 96,
+          "row": 178
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/replays/usecases/query/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 178
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 178,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 91,
+          "row": 179
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/replays/usecases/query/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 179
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 179,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 2,
+          "row": 183
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/replays/usecases/query/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 180
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 180,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 54,
+          "row": 18
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/rules/actions/sentry_apps/utils.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "action.get(\"id\") not in SENTRY_APP_ACTIONS",
+              "end_location": {
+                "column": 54,
+                "row": 18
+              },
+              "location": {
+                "column": 12,
+                "row": 18
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 16,
+          "row": 18
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 18,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 55,
+          "row": 18
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/rules/conditions/level.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def key(x: tuple[int, str]) -> int:\n    return x[0]",
+              "end_location": {
+                "column": 55,
+                "row": 18
+              },
+              "location": {
+                "column": 1,
+                "row": 18
+              }
+            }
+          ],
+          "message": "Rewrite `key` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 18
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 18,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 38,
+          "row": 519
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/rules/history/preview.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def k(a):\n                return a.timestamp",
+              "end_location": {
+                "column": 38,
+                "row": 519
+              },
+              "location": {
+                "column": 13,
+                "row": 519
+              }
+            }
+          ],
+          "message": "Rewrite `k` as a `def`"
+        },
+        "location": {
+          "column": 13,
+          "row": 519
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 519,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 72,
+          "row": 536
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/runner/commands/devservices.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "container.name[len(prefix) :] not in service",
+              "end_location": {
+                "column": 72,
+                "row": 536
+              },
+              "location": {
+                "column": 28,
+                "row": 536
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 32,
+          "row": 536
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 536,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 10,
+          "row": 500
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/search/events/builder/base.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def is_where_condition(x: list[WhereType]) -> bool:\n            return bool(\n                    x and len(x) == 1 and isinstance(x[0], Condition)\n                )",
+              "end_location": {
+                "column": 10,
+                "row": 500
+              },
+              "location": {
+                "column": 9,
+                "row": 498
+              }
+            }
+          ],
+          "message": "Rewrite `is_where_condition` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 498
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 498,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 49,
+          "row": 53
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/search/events/builder/utils.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def near_midnight(time: datetime) -> bool:\n        return (\n            time.minute <= 30 and time.hour == 0\n        ) or (time.minute >= 30 and time.hour == 23)",
+              "end_location": {
+                "column": 49,
+                "row": 53
+              },
+              "location": {
+                "column": 5,
+                "row": 51
+              }
+            }
+          ],
+          "message": "Rewrite `near_midnight` as a `def`"
+        },
+        "location": {
+          "column": 5,
+          "row": 51
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 51,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 96,
+          "row": 54
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/search/events/builder/utils.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def near_hour(time: datetime) -> bool:\n        return time.minute <= 15 or time.minute >= 45",
+              "end_location": {
+                "column": 96,
+                "row": 54
+              },
+              "location": {
+                "column": 5,
+                "row": 54
+              }
+            }
+          ],
+          "message": "Rewrite `near_hour` as a `def`"
+        },
+        "location": {
+          "column": 5,
+          "row": 54
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 54,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 90,
+          "row": 463
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/search/snuba/executors.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "sf.key.name not in self.postgres_only_fields.union([\"date\", \"timestamp\"])",
+              "end_location": {
+                "column": 91,
+                "row": 463
+              },
+              "location": {
+                "column": 16,
+                "row": 463
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 21,
+          "row": 463
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 463,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 62,
+          "row": 132
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/sentry_metrics/consumers/last_seen_updater.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def initial_value() -> set[int]:\n            return set()",
+              "end_location": {
+                "column": 62,
+                "row": 132
+              },
+              "location": {
+                "column": 9,
+                "row": 132
+              }
+            }
+          ],
+          "message": "Rewrite `initial_value` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 132
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 132,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 33,
+          "row": 14
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/sentry_metrics/indexer/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 14
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 14,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 36,
+          "row": 16
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/sentry_metrics/indexer/postgres/models.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 16
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 16,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E721",
+        "end_location": {
+          "column": 44,
+          "row": 60
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/sentry_metrics/querying/data/mapping/base.py",
+        "fix": null,
+        "location": {
+          "column": 16,
+          "row": 60
+        },
+        "message": "Use `is` and `is not` for type comparisons, or `isinstance()` for isinstance checks",
+        "noqa_row": 60,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/type-comparison"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 48,
+          "row": 441
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/sentry_metrics/querying/samples_list.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def metric_key(example):\n            return example[2]",
+              "end_location": {
+                "column": 48,
+                "row": 441
+              },
+              "location": {
+                "column": 9,
+                "row": 441
+              }
+            }
+          ],
+          "message": "Rewrite `metric_key` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 441
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 441,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 52,
+          "row": 748
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/sentry_metrics/querying/samples_list.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def metric_key(example):\n                return example[3]",
+              "end_location": {
+                "column": 52,
+                "row": 748
+              },
+              "location": {
+                "column": 13,
+                "row": 748
+              }
+            }
+          ],
+          "message": "Rewrite `metric_key` as a `def`"
+        },
+        "location": {
+          "column": 13,
+          "row": 748
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 748,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 52,
+          "row": 1113
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/sentry_metrics/querying/samples_list.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def metric_key(example):\n            return example[index]",
+              "end_location": {
+                "column": 52,
+                "row": 1113
+              },
+              "location": {
+                "column": 9,
+                "row": 1113
+              }
+            }
+          ],
+          "message": "Rewrite `metric_key` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 1113
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 1113,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 15,
+          "row": 23
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 23
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 23,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 24
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 24
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 24,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 46,
+          "row": 25
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 25
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 25,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 22,
+          "row": 26
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 26
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 26,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 27
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 27
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 27,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 30,
+          "row": 28
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 28
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 28,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 32,
+          "row": 29
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 29
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 29,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 23,
+          "row": 30
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 30
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 30,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 79,
+          "row": 32
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 32
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 32,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 48,
+          "row": 33
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 33
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 33,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 44,
+          "row": 35
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 35
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 35,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 42,
+          "row": 36
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 36
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 36,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 42,
+          "row": 37
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 37
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 37,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 82,
+          "row": 38
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 38
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 38,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 65,
+          "row": 39
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 39
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 39,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 65,
+          "row": 40
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 40
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 40,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 2,
+          "row": 46
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 41
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 41,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 72,
+          "row": 47
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 47
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 47,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 52,
+          "row": 48
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 48
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 48,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 58,
+          "row": 49
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 49
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 49,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 2,
+          "row": 55
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 50
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 50,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 62,
+          "row": 56
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 56
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 56,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 91,
+          "row": 57
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 57
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 57,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 87,
+          "row": 58
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 58
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 58,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 2,
+          "row": 63
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 59
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 59,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 2,
+          "row": 82
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 64
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 64,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 66,
+          "row": 83
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/snuba/metrics/datasource.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 83
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 83,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 2,
+          "row": 13
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/tasks/check_new_issue_threshold_met.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def new_issue_threshold_key(project_id):\n    return (f\"issues.priority.calculate_new_issue_threshold:{project_id}\")",
+              "end_location": {
+                "column": 2,
+                "row": 13
+              },
+              "location": {
+                "column": 1,
+                "row": 11
+              }
+            }
+          ],
+          "message": "Rewrite `new_issue_threshold_key` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 11
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 11,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 86,
+          "row": 35
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/tasks/commit_context.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def DEBOUNCE_PR_COMMENT_CACHE_KEY(pullrequest_id):\n    return f\"pr-comment-{pullrequest_id}\"",
+              "end_location": {
+                "column": 86,
+                "row": 35
+              },
+              "location": {
+                "column": 1,
+                "row": 35
+              }
+            }
+          ],
+          "message": "Rewrite `DEBOUNCE_PR_COMMENT_CACHE_KEY` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 35
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 35,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 93,
+          "row": 36
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/tasks/commit_context.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def DEBOUNCE_PR_COMMENT_LOCK_KEY(pullrequest_id):\n    return f\"queue_comment_task:{pullrequest_id}\"",
+              "end_location": {
+                "column": 93,
+                "row": 36
+              },
+              "location": {
+                "column": 1,
+                "row": 36
+              }
+            }
+          ],
+          "message": "Rewrite `DEBOUNCE_PR_COMMENT_LOCK_KEY` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 36
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 36,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 76,
+          "row": 24
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/tasks/groupowner.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def DEBOUNCE_CACHE_KEY(group_id):\n    return f\"process-suspect-commits-{group_id}\"",
+              "end_location": {
+                "column": 76,
+                "row": 24
+              },
+              "location": {
+                "column": 1,
+                "row": 24
+              }
+            }
+          ],
+          "message": "Rewrite `DEBOUNCE_CACHE_KEY` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 24
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 24,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 61,
+          "row": 199
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/testutils/pytest/fixtures.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def default_comparator(refval, output):\n    return refval != output",
+              "end_location": {
+                "column": 61,
+                "row": 199
+              },
+              "location": {
+                "column": 1,
+                "row": 199
+              }
+            }
+          ],
+          "message": "Rewrite `default_comparator` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 199
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 199,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E722",
+        "end_location": {
+          "column": 19,
+          "row": 88
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/testutils/pytest/kafka.py",
+        "fix": null,
+        "location": {
+          "column": 13,
+          "row": 88
+        },
+        "message": "Do not use bare `except`",
+        "noqa_row": 88,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/bare-except"
+      },
+      {
+        "cell": null,
+        "code": "F401",
+        "end_location": {
+          "column": 53,
+          "row": 374
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/testutils/silo.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "",
+              "end_location": {
+                "column": 1,
+                "row": 375
+              },
+              "location": {
+                "column": 1,
+                "row": 374
+              }
+            }
+          ],
+          "message": "Remove unused import: `sentry.db.models.base.ModelSiloLimit`"
+        },
+        "location": {
+          "column": 39,
+          "row": 374
+        },
+        "message": "`sentry.db.models.base.ModelSiloLimit` imported but unused",
+        "noqa_row": 374,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/unused-import"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 46,
+          "row": 674
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/tsdb/redis.py",
+        "fix": {
+          "applicability": "displayonly",
+          "edits": [
+            {
+              "content": "def wrapper(value):\n                    return value",
+              "end_location": {
+                "column": 46,
+                "row": 674
+              },
+              "location": {
+                "column": 17,
+                "row": 674
+              }
+            }
+          ],
+          "message": "Rewrite `wrapper` as a `def`"
+        },
+        "location": {
+          "column": 17,
+          "row": 674
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 674,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 73,
+          "row": 14
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/circuit_breaker.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def ERROR_COUNT_CACHE_KEY(key):\n    return f\"circuit_breaker:{key}-error-count\"",
+              "end_location": {
+                "column": 73,
+                "row": 14
+              },
+              "location": {
+                "column": 1,
+                "row": 14
+              }
+            }
+          ],
+          "message": "Rewrite `ERROR_COUNT_CACHE_KEY` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 14
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 14,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 77,
+          "row": 15
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/circuit_breaker.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def PASSTHROUGH_RATELIMIT_KEY(key):\n    return f\"circuit_breaker:{key}-passthrough\"",
+              "end_location": {
+                "column": 77,
+                "row": 15
+              },
+              "location": {
+                "column": 1,
+                "row": 15
+              }
+            }
+          ],
+          "message": "Rewrite `PASSTHROUGH_RATELIMIT_KEY` as a `def`"
+        },
+        "location": {
+          "column": 1,
+          "row": 15
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 15,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 88,
+          "row": 25
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/email/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 25
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 25,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 53,
+          "row": 26
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/email/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 26
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 26,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 37,
+          "row": 27
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/email/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 27
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 27,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 40,
+          "row": 28
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/email/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 28
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 28,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 41,
+          "row": 29
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/email/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 29
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 29,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 56,
+          "row": 30
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/email/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 30
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 30,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 59,
+          "row": 31
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/email/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 31
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 31,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 43,
+          "row": 32
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/email/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 32
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 32,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 17,
+          "row": 30
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/flag.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 30
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 30,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 29,
+          "row": 31
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/flag.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 31
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 31,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 50,
+          "row": 189
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/json.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def key_filter(key):\n            return key in keep_keys",
+              "end_location": {
+                "column": 50,
+                "row": 189
+              },
+              "location": {
+                "column": 9,
+                "row": 189
+              }
+            }
+          ],
+          "message": "Rewrite `key_filter` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 189
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 189,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 39,
+          "row": 191
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/json.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def key_filter(_key):\n            return True",
+              "end_location": {
+                "column": 39,
+                "row": 191
+              },
+              "location": {
+                "column": 9,
+                "row": 191
+              }
+            }
+          ],
+          "message": "Rewrite `key_filter` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 191
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 191,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 37,
+          "row": 429
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/performance_issues/performance_detection.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def set_tag(*args):\n            return None",
+              "end_location": {
+                "column": 37,
+                "row": 429
+              },
+              "location": {
+                "column": 9,
+                "row": 429
+              }
+            }
+          ],
+          "message": "Rewrite `set_tag` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 429
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 429,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E713",
+        "end_location": {
+          "column": 57,
+          "row": 95
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry/utils/tag_normalization.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "tag.split(\".\")[1] not in {\"javascript\", \"native\"}",
+              "end_location": {
+                "column": 57,
+                "row": 95
+              },
+              "location": {
+                "column": 8,
+                "row": 95
+              }
+            }
+          ],
+          "message": "Convert to `not in`"
+        },
+        "location": {
+          "column": 12,
+          "row": 95
+        },
+        "message": "Test for membership should be `not in`",
+        "noqa_row": 95,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/not-in-test"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 51,
+          "row": 14
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry_plugins/github/webhooks/events/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 14
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 14,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 72,
+          "row": 15
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry_plugins/github/webhooks/events/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 15
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 15,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 50,
+          "row": 16
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry_plugins/github/webhooks/events/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 16
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 16,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "E402",
+        "end_location": {
+          "column": 35,
+          "row": 17
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/src/sentry_plugins/github/webhooks/events/__init__.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 17
+        },
+        "message": "Module level import not at top of file",
+        "noqa_row": 17,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+      },
+      {
+        "cell": null,
+        "code": "F601",
+        "end_location": {
+          "column": 17,
+          "row": 38
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/api/endpoints/release_thresholds/health_checks/test_is_new_issue_count_healthy.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "",
+              "end_location": {
+                "column": 22,
+                "row": 38
+              },
+              "location": {
+                "column": 33,
+                "row": 37
+              }
+            }
+          ],
+          "message": "Remove repeated key literal `\"id\"`"
+        },
+        "location": {
+          "column": 13,
+          "row": 38
+        },
+        "message": "Dictionary key literal `\"id\"` repeated",
+        "noqa_row": 38,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/multi-value-repeated-key-literal"
+      },
+      {
+        "cell": null,
+        "code": "F601",
+        "end_location": {
+          "column": 17,
+          "row": 66
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/api/endpoints/release_thresholds/health_checks/test_is_new_issue_count_healthy.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "",
+              "end_location": {
+                "column": 22,
+                "row": 66
+              },
+              "location": {
+                "column": 33,
+                "row": 65
+              }
+            }
+          ],
+          "message": "Remove repeated key literal `\"id\"`"
+        },
+        "location": {
+          "column": 13,
+          "row": 66
+        },
+        "message": "Dictionary key literal `\"id\"` repeated",
+        "noqa_row": 66,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/multi-value-repeated-key-literal"
+      },
+      {
+        "cell": null,
+        "code": "F601",
+        "end_location": {
+          "column": 17,
+          "row": 85
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/api/endpoints/release_thresholds/health_checks/test_is_new_issue_count_healthy.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "",
+              "end_location": {
+                "column": 22,
+                "row": 85
+              },
+              "location": {
+                "column": 33,
+                "row": 84
+              }
+            }
+          ],
+          "message": "Remove repeated key literal `\"id\"`"
+        },
+        "location": {
+          "column": 13,
+          "row": 85
+        },
+        "message": "Dictionary key literal `\"id\"` repeated",
+        "noqa_row": 85,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/multi-value-repeated-key-literal"
+      },
+      {
+        "cell": null,
+        "code": "F601",
+        "end_location": {
+          "column": 17,
+          "row": 104
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/api/endpoints/release_thresholds/health_checks/test_is_new_issue_count_healthy.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "",
+              "end_location": {
+                "column": 22,
+                "row": 104
+              },
+              "location": {
+                "column": 33,
+                "row": 103
+              }
+            }
+          ],
+          "message": "Remove repeated key literal `\"id\"`"
+        },
+        "location": {
+          "column": 13,
+          "row": 104
+        },
+        "message": "Dictionary key literal `\"id\"` repeated",
+        "noqa_row": 104,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/multi-value-repeated-key-literal"
+      },
+      {
+        "cell": null,
+        "code": "F601",
+        "end_location": {
+          "column": 17,
+          "row": 142
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/api/endpoints/release_thresholds/health_checks/test_is_new_issue_count_healthy.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "",
+              "end_location": {
+                "column": 22,
+                "row": 142
+              },
+              "location": {
+                "column": 33,
+                "row": 141
+              }
+            }
+          ],
+          "message": "Remove repeated key literal `\"id\"`"
+        },
+        "location": {
+          "column": 13,
+          "row": 142
+        },
+        "message": "Dictionary key literal `\"id\"` repeated",
+        "noqa_row": 142,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/multi-value-repeated-key-literal"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 10,
+          "row": 296
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/api/endpoints/test_project_release_file_details.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def url(id):\n            return reverse(\n                    \"sentry-api-0-project-release-file-details\",\n                    kwargs={\n                        \"organization_id_or_slug\": self.organization.slug,\n                        \"project_id_or_slug\": self.project.slug,\n                        \"version\": self.release.version,\n                        \"file_id\": id,\n                    },\n                )",
+              "end_location": {
+                "column": 10,
+                "row": 296
+              },
+              "location": {
+                "column": 9,
+                "row": 288
+              }
+            }
+          ],
+          "message": "Rewrite `url` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 288
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 288,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 38,
+          "row": 13
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/api/serializers/test_snuba.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def sort_key(row):\n            return row[0]",
+              "end_location": {
+                "column": 38,
+                "row": 13
+              },
+              "location": {
+                "column": 9,
+                "row": 13
+              }
+            }
+          ],
+          "message": "Rewrite `sort_key` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 13
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 13,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 39,
+          "row": 3655
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/incidents/test_logic.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def key(action):\n            return action.id",
+              "end_location": {
+                "column": 39,
+                "row": 3655
+              },
+              "location": {
+                "column": 9,
+                "row": 3655
+              }
+            }
+          ],
+          "message": "Rewrite `key` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 3655
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 3655,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 78,
+          "row": 854
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/integrations/github/test_integration.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def repo_key(x):\n            return f\"github:repo:Test-Organization/{x}:source-code\"",
+              "end_location": {
+                "column": 78,
+                "row": 854
+              },
+              "location": {
+                "column": 9,
+                "row": 854
+              }
+            }
+          ],
+          "message": "Rewrite `repo_key` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 854
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 854,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "F811",
+        "end_location": {
+          "column": 35,
+          "row": 125
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/models/test_file.py",
+        "fix": null,
+        "location": {
+          "column": 33,
+          "row": 125
+        },
+        "message": "Redefinition of unused `fp` from line 124: `fp` redefined here",
+        "noqa_row": 125,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 10,
+          "row": 770
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/runner/commands/test_backup.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def importer_mock_fn(import_model_name, scope, flags, filter_by, pk_map, json_data, min_ordinal):\n            return RpcImportError(\n                    kind=RpcImportErrorKind.IntegrityError,\n                    on=InstanceID(model=str(get_model_name(Email)), ordinal=1),\n                    reason=\"Test integrity error\",\n                )",
+              "end_location": {
+                "column": 10,
+                "row": 770
+              },
+              "location": {
+                "column": 9,
+                "row": 766
+              }
+            }
+          ],
+          "message": "Rewrite `importer_mock_fn` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 766
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 766,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 88,
+          "row": 437
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/seer/similarity/test_utils.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def make_context_line(i):\n                return \"{snip}\" + context_line_factory(i) + \"{snip}\"",
+              "end_location": {
+                "column": 88,
+                "row": 437
+              },
+              "location": {
+                "column": 13,
+                "row": 437
+              }
+            }
+          ],
+          "message": "Rewrite `make_context_line` as a `def`"
+        },
+        "location": {
+          "column": 13,
+          "row": 437
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 437,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 14,
+          "row": 443
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/seer/similarity/test_utils.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def make_context_line(i):\n                return (\n                            \"{snip}\" + context_line_factory(i) + \"{snip}\"\n                            if i % 2 == 0\n                            else context_line_factory(i)\n                        )",
+              "end_location": {
+                "column": 14,
+                "row": 443
+              },
+              "location": {
+                "column": 13,
+                "row": 439
+              }
+            }
+          ],
+          "message": "Rewrite `make_context_line` as a `def`"
+        },
+        "location": {
+          "column": 13,
+          "row": 439
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 439,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 50,
+          "row": 1172
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_discover_query.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def similar(a, b):\n            return abs(a - b) < 0.001",
+              "end_location": {
+                "column": 50,
+                "row": 1172
+              },
+              "location": {
+                "column": 9,
+                "row": 1172
+              }
+            }
+          ],
+          "message": "Rewrite `similar` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 1172
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 1172,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 42,
+          "row": 139
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_entity_subscriptions.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def key(func):\n                return func.alias",
+              "end_location": {
+                "column": 42,
+                "row": 139
+              },
+              "location": {
+                "column": 13,
+                "row": 139
+              }
+            }
+          ],
+          "message": "Rewrite `key` as a `def`"
+        },
+        "location": {
+          "column": 13,
+          "row": 139
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 139,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 38,
+          "row": 201
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_entity_subscriptions.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def key(func):\n            return func.alias",
+              "end_location": {
+                "column": 38,
+                "row": 201
+              },
+              "location": {
+                "column": 9,
+                "row": 201
+              }
+            }
+          ],
+          "message": "Rewrite `key` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 201
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 201,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 42,
+          "row": 270
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_entity_subscriptions.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def key(func):\n                return func.alias",
+              "end_location": {
+                "column": 42,
+                "row": 270
+              },
+              "location": {
+                "column": 13,
+                "row": 270
+              }
+            }
+          ],
+          "message": "Rewrite `key` as a `def`"
+        },
+        "location": {
+          "column": 13,
+          "row": 270
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 270,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 37,
+          "row": 199
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_query_subscription_consumer.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def callback(a, b):\n            return None",
+              "end_location": {
+                "column": 37,
+                "row": 199
+              },
+              "location": {
+                "column": 9,
+                "row": 199
+              }
+            }
+          ],
+          "message": "Rewrite `callback` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 199
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 199,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 43,
+          "row": 200
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_query_subscription_consumer.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def other_callback(a, b):\n            return None",
+              "end_location": {
+                "column": 43,
+                "row": 200
+              },
+              "location": {
+                "column": 9,
+                "row": 200
+              }
+            }
+          ],
+          "message": "Rewrite `other_callback` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 200
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 200,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 37,
+          "row": 207
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_query_subscription_consumer.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def callback(a, b):\n            return None",
+              "end_location": {
+                "column": 37,
+                "row": 207
+              },
+              "location": {
+                "column": 9,
+                "row": 207
+              }
+            }
+          ],
+          "message": "Rewrite `callback` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 207
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 207,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 43,
+          "row": 208
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_query_subscription_consumer.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def other_callback(a, b):\n            return None",
+              "end_location": {
+                "column": 43,
+                "row": 208
+              },
+              "location": {
+                "column": 9,
+                "row": 208
+              }
+            }
+          ],
+          "message": "Rewrite `other_callback` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 208
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 208,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 50,
+          "row": 1635
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/snuba/test_transactions.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def similar(a, b):\n            return abs(a - b) < 0.001",
+              "end_location": {
+                "column": 50,
+                "row": 1635
+              },
+              "location": {
+                "column": 9,
+                "row": 1635
+              }
+            }
+          ],
+          "message": "Rewrite `similar` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 1635
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 1635,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 94,
+          "row": 105
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/utils/test_concurrent.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def callback(future):\n        return callback_results.append((future.result(), future.get_timing()))",
+              "end_location": {
+                "column": 94,
+                "row": 105
+              },
+              "location": {
+                "column": 5,
+                "row": 105
+              }
+            }
+          ],
+          "message": "Rewrite `callback` as a `def`"
+        },
+        "location": {
+          "column": 5,
+          "row": 105
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 105,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 75,
+          "row": 149
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/utils/test_concurrent.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def callback(future):\n        return callback_timings.append(future.get_timing())",
+              "end_location": {
+                "column": 75,
+                "row": 149
+              },
+              "location": {
+                "column": 5,
+                "row": 149
+              }
+            }
+          ],
+          "message": "Rewrite `callback` as a `def`"
+        },
+        "location": {
+          "column": 5,
+          "row": 149
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 149,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 41,
+          "row": 14
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/utils/test_retries.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def always_retry(i, e):\n            return True",
+              "end_location": {
+                "column": 41,
+                "row": 14
+              },
+              "location": {
+                "column": 9,
+                "row": 14
+              }
+            }
+          ],
+          "message": "Rewrite `always_retry` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 14
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 14,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 41,
+          "row": 21
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/utils/test_retries.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def never_retry(i, e):\n            return False",
+              "end_location": {
+                "column": 41,
+                "row": 21
+              },
+              "location": {
+                "column": 9,
+                "row": 21
+              }
+            }
+          ],
+          "message": "Rewrite `never_retry` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 21
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 21,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 40,
+          "row": 31
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/utils/test_retries.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def retry_once(i, e):\n            return i < 2",
+              "end_location": {
+                "column": 40,
+                "row": 31
+              },
+              "location": {
+                "column": 9,
+                "row": 31
+              }
+            }
+          ],
+          "message": "Rewrite `retry_once` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 31
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 31,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 59,
+          "row": 42
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/sentry/utils/test_retries.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def sometimes_retry(i, e):\n            return e is not errors[-1]",
+              "end_location": {
+                "column": 59,
+                "row": 42
+              },
+              "location": {
+                "column": 9,
+                "row": 42
+              }
+            }
+          ],
+          "message": "Rewrite `sometimes_retry` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 42
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 42,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      },
+      {
+        "cell": null,
+        "code": "E731",
+        "end_location": {
+          "column": 73,
+          "row": 37
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/sentry-80528/tests/snuba/api/endpoints/test_organization_events_facets.py",
+        "fix": {
+          "applicability": "unsafe",
+          "edits": [
+            {
+              "content": "def key(row):\n            return row[\"name\"] if row[\"name\"] is not None else \"\"",
+              "end_location": {
+                "column": 73,
+                "row": 37
+              },
+              "location": {
+                "column": 9,
+                "row": 37
+              }
+            }
+          ],
+          "message": "Rewrite `key` as a `def`"
+        },
+        "location": {
+          "column": 9,
+          "row": 37
+        },
+        "message": "Do not assign a `lambda` expression, use a `def`",
+        "noqa_row": 37,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+      }
+    ]
+  },
+  "ty": {
+    "status": "skipped",
+    "exit_code": null,
+    "skipped_reason": "ty 未安裝（不在 PATH 上）",
+    "output": null
+  },
+  "oxlint": {
+    "status": "skipped",
+    "exit_code": null,
+    "skipped_reason": "oxlint 未安裝（不在 PATH 上）",
+    "output": null
+  }
+}

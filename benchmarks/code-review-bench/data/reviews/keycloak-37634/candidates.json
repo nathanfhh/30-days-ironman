@@ -1,0 +1,81 @@
+{
+  "slug": "keycloak-37634",
+  "issues": [
+    {
+      "text": "AssertEvents.isAccessTokenId in the test helper combines a wrong substring offset (substring(3,5) instead of the grant shortcut's actual index 4-6) with an inverted condition (returns false when it matches, continues when it doesn't), so the four integration assertions that use it (expectCodeToToken, expectDeviceCodeToToken, expectRefresh, expectAuthReqIdToToken) effectively never check the grant shortcut at all — the PR's only integration-level test of its core behavior doesn't actually verify it.",
+      "zh": "AssertEvents.isAccessTokenId 的比對永遠成立，本 PR 唯一的整合層驗證等於沒有生效",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "ClientCredentialsGrantTypeFactory and PermissionGrantTypeFactory declare shortcuts (\"cc\" and \"pg\") but neither ClientCredentialsGrantType nor PermissionGrantType ever calls setAttribute(Constants.GRANT_TYPE, ...), so access tokens from client_credentials and uma-ticket grants are always encoded with the UNKNOWN shortcut \"na\" instead of their declared codes.",
+      "zh": "client_credentials 與 uma-ticket 宣告了 shortcut，但沒有任何路徑會寫入 Constants.GRANT_TYPE，實際編碼永遠是 na",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Only StandardTokenExchangeProvider (the V2 token-exchange path) sets Constants.GRANT_TYPE; the other three AbstractTokenExchangeProvider subclasses (V1TokenExchangeProvider, SubjectImpersonationTokenExchangeProvider, FederatedTokenExchangeProvider) don't override the method and fall through to the base class which never sets it, so the same grant_type=token-exchange request encodes as \"na\" or \"te\" depending on which exchange path handled it.",
+      "zh": "token exchange 只有 standard（V2）路徑會標記 grant type，V1 / impersonation / federated 三條路徑仍是 na",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "AccessTokenContext's constructor has a copy-pasted null check: the line that should validate rawTokenId instead re-checks grantType (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`), so a null rawTokenId silently passes and produces a literal \"...:null\" token id.",
+      "zh": "AccessTokenContext 建構子的 null 檢查複製貼上，rawTokenId 實際上沒有被檢查",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "testIncorrectGrantType only passes because its catch block catches RuntimeException (broad enough to also catch a NullPointerException thrown by an unrelated null sessionFactory in the test setup), not the IllegalArgumentException it's actually meant to verify — deleting the intended throw entirely would leave the test green.",
+      "zh": "testIncorrectGrantType 是靠吞掉 NullPointerException 通過的，並非驗證了它宣稱的 IllegalArgumentException",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The local variable `ctx` assigned in testIncorrectGrantType is never used afterward.",
+      "zh": "第 80 行的 ctx 指派後未使用",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "OAuth2GrantTypeFactory's new getShortcut() method has no default implementation, and DefaultTokenContextEncoderProviderFactory.postInit calls it unconditionally on every registered grant factory during server startup, so any third-party OAuth2GrantTypeFactory implementation outside this repo (which won't have this method) will throw AbstractMethodError at startup rather than only when that grant is used.",
+      "zh": "OAuth2GrantTypeFactory 新增無 default 的 getShortcut()，repo 外的 grant 實作會在伺服器啟動時失敗",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The duplicate-shortcut check in postInit throws IllegalStateException if a third-party grant happens to choose the same 2-character shortcut as a built-in grant, meaning upgrading can also break server startup purely from a shortcut collision, not just from a missing method.",
+      "zh": "第三方 grant 只要選到與內建 grant 相同的 2 字元 shortcut，同樣是啟動失敗",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "OAuth2GrantType.Context caches grantType from formParams.getFirst(GRANT_TYPE) at construction time, but the public setFormParams() setter doesn't update it afterward, so getGrantType() can report a stale value if formParams is ever replaced.",
+      "zh": "Context.grantType 在建構時就固定，setFormParams 之後會與 formParams 不一致",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "getShortcutByGrantType/getGrantTypeByShortcut patch the shortcut lookup maps at runtime for grants deployed after startup by directly put()-ing, without re-running the duplicate-shortcut validation that postInit enforces at boot — a colliding shortcut deployed later silently overwrites the existing map entry instead of failing loudly like it would at startup.",
+      "zh": "執行期補寫 shortcut 對照表時繞過了 postInit 的重複性驗證",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "TokenContextEncoderProvider.getTokenContextFromTokenId (the decode side) currently has no production caller anywhere in the repo — only unit tests exercise it — so its strict behavior (fixed length of 6, IllegalArgumentException on unknown shortcuts) is unverified against any real caller for now.",
+      "zh": "解碼側 getTokenContextFromTokenId 目前沒有任何 production 呼叫端",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Will external consumers of the access token's jti (SIEM systems, jti-indexed token blocklists, resource-server audit logs, downstream systems storing jti as a UUID column) break now that jti changed format from a plain UUID to `<6-char prefix>:<UUID>`?",
+      "zh": "access token 的 jti 從純 UUID 變成 <6 字元>:<UUID>，外部既有的消費端會不會因為格式或長度而壞掉？"
+    },
+    {
+      "text": "Does this PR need accompanying release notes / upgrade guide documentation, given it changes the externally-visible jti format and the server-spi-private OAuth2GrantTypeFactory interface, per PR-CHECKLIST.md's documentation requirement?",
+      "zh": "本 PR 是否需要在同一個 PR 或關聯 PR 中附上 release notes / upgrade guide？"
+    }
+  ]
+}

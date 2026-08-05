@@ -1,0 +1,6 @@
+[
+  "totalPages uses Math.floor(user_count / limit) + 1, which over-counts when user_count is an exact multiple of limit (e.g. 50/50 -> 2 pages), allowing next to set offset to user_count, yielding an empty last page and incorrect currentPage/totalPages display",
+  "The automatic variable may not be in scope for the item view template - if it resolves against the member context it may be undefined, causing the remove control to show even for automatic groups, which would allow clicking remove and likely surface a 422 without UI handling",
+  "offset = params[:offset].to_i can produce negative offsets and limit can be <= 0, which may raise or produce invalid queries in ActiveRecord - need to clamp/sanitize limit and offset before calling .limit(...).offset(...)",
+  "Spec uses xhr :put for remove_member but the route is defined as DELETE /admin/groups/:group_id/members - using PUT can let the spec pass while the real route/verb would behave differently"
+]

@@ -1,0 +1,17 @@
+{
+  "slug": "cal_com-14943",
+  "source_repo": "cal.com",
+  "language": "TypeScript",
+  "golden_url": "https://github.com/calcom/cal.com/pull/14943",
+  "pr_title": "SMS workflow reminder retry count tracking",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR14943__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR14943__20260122.git",
+  "base_sha": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "head_sha": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "stat": " .../ee/workflows/api/scheduleSMSReminders.ts       | 41 ++++++++++++++++++----\n .../migration.sql                                  |  2 ++\n packages/prisma/schema.prisma                      |  1 +\n 3 files changed, 38 insertions(+), 6 deletions(-)\n",
+  "name_status": "M\tpackages/features/ee/workflows/api/scheduleSMSReminders.ts\nA\tpackages/prisma/migrations/20240508134359_add_retry_count_to_workflow_reminder/migration.sql\nM\tpackages/prisma/schema.prisma\n",
+  "commits": "c790227 Merge branch 'main' into fix/add-retry-count-workflow-reminder\nf2a8eea Merge branch 'main' into fix/add-retry-count-workflow-reminder\nd320db0 Merge branch 'main' into fix/add-retry-count-workflow-reminder\nb7fdbb6 Merge branch 'main' into fix/add-retry-count-workflow-reminder\ne9b7f21 Merge branch 'main' into fix/add-retry-count-workflow-reminder\na12f3dc add logic to for retry count\nd8b0365 add retry count to workflow reminder\n"
+}

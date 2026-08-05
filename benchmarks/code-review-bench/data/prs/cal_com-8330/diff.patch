@@ -1,0 +1,364 @@
+diff --git a/apps/web/test/lib/getSchedule.test.ts b/apps/web/test/lib/getSchedule.test.ts
+index ec19757..fb1475a 100644
+--- a/apps/web/test/lib/getSchedule.test.ts
++++ b/apps/web/test/lib/getSchedule.test.ts
+@@ -779,16 +779,34 @@ describe("getSchedule", () => {
+       );
+ 
+       expect(scheduleForEventOnADayWithDateOverride).toHaveTimeSlots(
+         ["08:30:00.000Z", "09:30:00.000Z", "10:30:00.000Z", "11:30:00.000Z"],
+         {
+           dateString: plus2DateString,
+         }
+       );
++
++      const scheduleForEventOnADayWithDateOverrideDifferentTimezone = await getSchedule(
++        {
++          eventTypeId: 1,
++          eventTypeSlug: "",
++          startTime: `${plus1DateString}T18:30:00.000Z`,
++          endTime: `${plus2DateString}T18:29:59.999Z`,
++          timeZone: Timezones["+6:00"],
++        },
++        ctx
++      );
++      // it should return the same as this is the utc time
++      expect(scheduleForEventOnADayWithDateOverrideDifferentTimezone).toHaveTimeSlots(
++        ["08:30:00.000Z", "09:30:00.000Z", "10:30:00.000Z", "11:30:00.000Z"],
++        {
++          dateString: plus2DateString,
++        }
++      );
+     });
+ 
+     test("that a user is considered busy when there's a booking they host", async () => {
+       const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+       const { dateString: plus2DateString } = getDate({ dateIncrement: 2 });
+ 
+       createBookingScenario({
+         eventTypes: [
+diff --git a/packages/lib/slots.ts b/packages/lib/slots.ts
+index 4d65d22..9c688e9 100644
+--- a/packages/lib/slots.ts
++++ b/packages/lib/slots.ts
+@@ -203,21 +203,32 @@ const getSlots = ({
+     }
+   });
+   // an override precedes all the local working hour availability logic.
+   const activeOverrides = dateOverrides.filter((override) => {
+     return dayjs.utc(override.start).isBetween(startOfInviteeDay, startOfInviteeDay.endOf("day"), null, "[)");
+   });
+ 
+   if (!!activeOverrides.length) {
+-    const overrides = activeOverrides.flatMap((override) => ({
+-      userIds: override.userId ? [override.userId] : [],
+-      startTime: override.start.getUTCHours() * 60 + override.start.getUTCMinutes(),
+-      endTime: override.end.getUTCHours() * 60 + override.end.getUTCMinutes(),
+-    }));
++    const overrides = activeOverrides.flatMap((override) => {
++      const organizerUtcOffset = dayjs(override.start.toString()).tz(override.timeZone).utcOffset();
++      const inviteeUtcOffset = dayjs(override.start.toString()).tz(timeZone).utcOffset();
++      const offset = inviteeUtcOffset - organizerUtcOffset;
++
++      return {
++        userIds: override.userId ? [override.userId] : [],
++        startTime:
++          dayjs(override.start).utc().add(offset, "minute").hour() * 60 +
++          dayjs(override.start).utc().add(offset, "minute").minute(),
++        endTime:
++          dayjs(override.end).utc().add(offset, "minute").hour() * 60 +
++          dayjs(override.end).utc().add(offset, "minute").minute(),
++      };
++    });
++
+     // unset all working hours that relate to this user availability override
+     overrides.forEach((override) => {
+       let i = -1;
+       const indexes: number[] = [];
+       while (
+         (i = computedLocalAvailability.findIndex(
+           fromIndex(
+             (a) => !a.userIds?.length || (!!override.userIds[0] && a.userIds?.includes(override.userIds[0])),
+diff --git a/packages/trpc/server/routers/viewer/slots.ts b/packages/trpc/server/routers/viewer/slots.ts
+index d15162c..3a8d4a6 100644
+--- a/packages/trpc/server/routers/viewer/slots.ts
++++ b/packages/trpc/server/routers/viewer/slots.ts
+@@ -14,16 +14,17 @@ import { getDefaultEvent } from "@calcom/lib/defaultEvents";
+ import isTimeOutOfBounds from "@calcom/lib/isOutOfBounds";
+ import logger from "@calcom/lib/logger";
+ import { performance } from "@calcom/lib/server/perfObserver";
+ import getTimeSlots from "@calcom/lib/slots";
+ import type prisma from "@calcom/prisma";
+ import { availabilityUserSelect } from "@calcom/prisma";
+ import { EventTypeMetaDataSchema } from "@calcom/prisma/zod-utils";
+ import type { EventBusyDate } from "@calcom/types/Calendar";
++import type { WorkingHours } from "@calcom/types/schedule";
+ 
+ import { TRPCError } from "@trpc/server";
+ 
+ import { publicProcedure, router } from "../../trpc";
+ 
+ const getScheduleSchema = z
+   .object({
+     // startTime ISOString
+@@ -70,30 +71,90 @@ export type Slot = {
+   bookingUid?: string;
+   users?: string[];
+ };
+ 
+ const checkIfIsAvailable = ({
+   time,
+   busy,
+   eventLength,
++  dateOverrides = [],
++  workingHours = [],
+   currentSeats,
++  organizerTimeZone,
+ }: {
+   time: Dayjs;
+   busy: EventBusyDate[];
+   eventLength: number;
++  dateOverrides?: {
++    start: Date;
++    end: Date;
++  }[];
++  workingHours?: WorkingHours[];
+   currentSeats?: CurrentSeats;
++  organizerTimeZone?: string;
+ }): boolean => {
+   if (currentSeats?.some((booking) => booking.startTime.toISOString() === time.toISOString())) {
+     return true;
+   }
+ 
+   const slotEndTime = time.add(eventLength, "minutes").utc();
+   const slotStartTime = time.utc();
+ 
++  //check if date override for slot exists
++  let dateOverrideExist = false;
++
++  if (
++    dateOverrides.find((date) => {
++      const utcOffset = organizerTimeZone ? dayjs.tz(date.start, organizerTimeZone).utcOffset() * -1 : 0;
++
++      if (
++        dayjs(date.start).add(utcOffset, "minutes").format("YYYY MM DD") ===
++        slotStartTime.format("YYYY MM DD")
++      ) {
++        dateOverrideExist = true;
++        if (dayjs(date.start).add(utcOffset, "minutes") === dayjs(date.end).add(utcOffset, "minutes")) {
++          return true;
++        }
++        if (
++          slotEndTime.isBefore(dayjs(date.start).add(utcOffset, "minutes")) ||
++          slotEndTime.isSame(dayjs(date.start).add(utcOffset, "minutes"))
++        ) {
++          return true;
++        }
++        if (slotStartTime.isAfter(dayjs(date.end).add(utcOffset, "minutes"))) {
++          return true;
++        }
++      }
++    })
++  ) {
++    // slot is not within the date override
++    return false;
++  }
++
++  if (dateOverrideExist) {
++    return true;
++  }
++
++  //if no date override for slot exists check if it is within normal work hours
++  if (
++    workingHours.find((workingHour) => {
++      if (workingHour.days.includes(slotStartTime.day())) {
++        const start = slotStartTime.hour() * 60 + slotStartTime.minute();
++        const end = slotStartTime.hour() * 60 + slotStartTime.minute();
++        if (start < workingHour.startTime || end > workingHour.endTime) {
++          return true;
++        }
++      }
++    })
++  ) {
++    // slot is outside of working hours
++    return false;
++  }
++
+   return busy.every((busyTime) => {
+     const startTime = dayjs.utc(busyTime.start).utc();
+     const endTime = dayjs.utc(busyTime.end);
+ 
+     if (endTime.isBefore(slotStartTime) || startTime.isAfter(slotEndTime)) {
+       return true;
+     }
+ 
+@@ -110,17 +171,16 @@ const checkIfIsAvailable = ({
+     // Check if slot end time is between start and end time
+     else if (slotEndTime.isBetween(startTime, endTime)) {
+       return false;
+     }
+     // Check if startTime is between slot
+     else if (startTime.isBetween(time, slotEndTime)) {
+       return false;
+     }
+-
+     return true;
+   });
+ };
+ 
+ /** This should be called getAvailableSlots */
+ export const slotsRouter = router({
+   getSchedule: publicProcedure.input(getScheduleSchema).query(async ({ input, ctx }) => {
+     return await getSchedule(input, ctx);
+@@ -343,17 +403,21 @@ export async function getSchedule(input: z.infer<typeof getScheduleSchema>, ctx:
+         dateOverrides,
+         busy,
+         user: currentUser,
+       };
+     })
+   );
+   // flattens availability of multiple users
+   const dateOverrides = userAvailability.flatMap((availability) =>
+-    availability.dateOverrides.map((override) => ({ userId: availability.user.id, ...override }))
++    availability.dateOverrides.map((override) => ({
++      userId: availability.user.id,
++      timeZone: availability.timeZone,
++      ...override,
++    }))
+   );
+   const workingHours = getAggregateWorkingHours(userAvailability, eventType.schedulingType);
+   const availabilityCheckProps = {
+     eventLength: eventType.length,
+     currentSeats,
+   };
+ 
+   const isTimeWithinBounds = (_time: Parameters<typeof isTimeOutOfBounds>[0]) =>
+@@ -367,32 +431,34 @@ export async function getSchedule(input: z.infer<typeof getScheduleSchema>, ctx:
+ 
+   const getSlotsTime = 0;
+   let checkForAvailabilityTime = 0;
+   const getSlotsCount = 0;
+   let checkForAvailabilityCount = 0;
+ 
+   const timeSlots: ReturnType<typeof getTimeSlots> = [];
+ 
++  const organizerTimeZone =
++    eventType.timeZone || eventType?.schedule?.timeZone || userAvailability?.[0]?.timeZone;
++
+   for (
+     let currentCheckedTime = startTime;
+     currentCheckedTime.isBefore(endTime);
+     currentCheckedTime = currentCheckedTime.add(1, "day")
+   ) {
+     // get slots retrieves the available times for a given day
+     timeSlots.push(
+       ...getTimeSlots({
+         inviteeDate: currentCheckedTime,
+         eventLength: input.duration || eventType.length,
+         workingHours,
+         dateOverrides,
+         minimumBookingNotice: eventType.minimumBookingNotice,
+         frequency: eventType.slotInterval || input.duration || eventType.length,
+-        organizerTimeZone:
+-          eventType.timeZone || eventType?.schedule?.timeZone || userAvailability?.[0]?.timeZone,
++        organizerTimeZone,
+       })
+     );
+   }
+ 
+   let availableTimeSlots: typeof timeSlots = [];
+   // Load cached busy slots
+   const selectedSlots =
+     /* FIXME: For some reason this returns undefined while testing in Jest */
+@@ -418,39 +484,42 @@ export async function getSchedule(input: z.infer<typeof getScheduleSchema>, ctx:
+     const fixedHosts = userAvailability.filter((availability) => availability.user.isFixed);
+     return fixedHosts.every((schedule) => {
+       const startCheckForAvailability = performance.now();
+ 
+       const isAvailable = checkIfIsAvailable({
+         time: slot.time,
+         ...schedule,
+         ...availabilityCheckProps,
++        organizerTimeZone: schedule.timeZone,
+       });
+       const endCheckForAvailability = performance.now();
+       checkForAvailabilityCount++;
+       checkForAvailabilityTime += endCheckForAvailability - startCheckForAvailability;
+       return isAvailable;
+     });
+   });
++
+   // what else are you going to call it?
+   const looseHostAvailability = userAvailability.filter(({ user: { isFixed } }) => !isFixed);
+   if (looseHostAvailability.length > 0) {
+     availableTimeSlots = availableTimeSlots
+       .map((slot) => {
+         slot.userIds = slot.userIds?.filter((slotUserId) => {
+           const userSchedule = looseHostAvailability.find(
+             ({ user: { id: userId } }) => userId === slotUserId
+           );
+           if (!userSchedule) {
+             return false;
+           }
+           return checkIfIsAvailable({
+             time: slot.time,
+             ...userSchedule,
+             ...availabilityCheckProps,
++            organizerTimeZone: userSchedule.timeZone,
+           });
+         });
+         return slot;
+       })
+       .filter((slot) => !!slot.userIds?.length);
+   }
+ 
+   if (selectedSlots?.length > 0) {
+@@ -502,27 +571,29 @@ export async function getSchedule(input: z.infer<typeof getScheduleSchema>, ctx:
+             }
+             return r;
+           }, []);
+ 
+           if (!busy?.length && eventType.seatsPerTimeSlot === null) {
+             return false;
+           }
+ 
++          const userSchedule = userAvailability.find(({ user: { id: userId } }) => userId === slotUserId);
++
+           return checkIfIsAvailable({
+             time: slot.time,
+             busy,
+             ...availabilityCheckProps,
++            organizerTimeZone: userSchedule?.timeZone,
+           });
+         });
+         return slot;
+       })
+       .filter((slot) => !!slot.userIds?.length);
+   }
+-
+   availableTimeSlots = availableTimeSlots.filter((slot) => isTimeWithinBounds(slot.time));
+ 
+   const computedAvailableSlots = availableTimeSlots.reduce(
+     (
+       r: Record<string, { time: string; users: string[]; attendees?: number; bookingUid?: string }[]>,
+       { time: _time, ...passThroughProps }
+     ) => {
+       // TODO: Adds unit tests to prevent regressions in getSchedule (try multiple timezones)
+diff --git a/packages/types/schedule.d.ts b/packages/types/schedule.d.ts
+index 7b36261..7e39012 100644
+--- a/packages/types/schedule.d.ts
++++ b/packages/types/schedule.d.ts
+@@ -1,12 +1,13 @@
+ export type TimeRange = {
+   userId?: number | null;
+   start: Date;
+   end: Date;
++  timeZone?: string;
+ };
+ 
+ export type Schedule = TimeRange[][];
+ 
+ /**
+  * ```text
+  * Ensure startTime and endTime in minutes since midnight; serialized to UTC by using the organizer timeZone, either by using the schedule timeZone or the user timeZone.
+  * @see lib/availability.ts getWorkingHours(timeZone: string, availability: Availability[])

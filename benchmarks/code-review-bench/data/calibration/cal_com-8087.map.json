@@ -1,0 +1,211 @@
+{
+  "slug": "cal_com-8087",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 10,
+      "text": "Wrap the awaited appStore import in error handling - dynamic imports can reject and without try/catch this will throw and interrupt the refund flow (packages/trpc/server/routers/viewer/bookings.tsx:967)",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 5,
+      "text": "In packages/features/bookings/lib/handleCancelBooking.ts lines 589-596, app resolution and PaymentService instantiation happen outside the try-catch block - if either fails, the error bypasses handleRefundError leaving refund flow incomplete",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "The hand-maintained list of 28 apps in packages/app-store/index.ts has no gating test to keep it in sync with the generated app list.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 2,
+      "text": "Wrap the awaited appStore import in error handling so a failed async import doesn't throw past this function without context (packages/lib/payment/handlePayment.ts:26)",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "On cal.com's actual deployment runtime (Next.js server / Vercel serverless), will an unhandled rejected promise be swallowed, logged, or will it terminate the process?",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 5,
+      "text": "apiDeletes.push(deletedEvent) pushes the resolved value (not a promise), so it won't actually be awaited downstream in the Promise.all",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 7,
+      "text": "Wrap the awaited appStore lookup in error handling so a failed dynamic import doesn't throw out of deletePayment without a controlled response (packages/lib/payment/deletePayment.ts:16)",
+      "claim_id": "c007"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "The code uses forEach with async callbacks, which causes asynchronous operations (e.g., calendar/video event deletions, payment refunds) to run concurrently without being awaited. This 'fire-and-forget' behavior leads to unhandled promise rejections, race conditions, and incomplete cleanup, as surrounding try-catch blocks cannot properly handle errors from these unawaited promises. Replace forEach with for...of loops or Promise.all() with map() to ensure proper sequential execution and error handling.",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 7,
+      "text": "The calendar property in packages/core/CalendarManager.ts now holds Promise<Calendar | null> but property name doesn't indicate async nature - may confuse consumers expecting resolved Calendar object",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "wipemycalother/lib/reschedule.ts uses forEach(async ...) which doesn't await calendar deletions - same issue as vital/lib/reschedule.ts where forEach discards returned Promises",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "The for loop in getVideoAdapters serializes adapter loads, reducing performance compared to parallel loading",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 11,
+      "text": "Wrap the awaited appStore lookup with error handling so a failed async import doesn't throw out of the cancellation flow (packages/features/bookings/lib/handleCancelBooking.ts:589)",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 0,
+      "text": "All dynamic imports are evaluated immediately when the module is first required, so all 28 app bundles begin loading in parallel at startup - no true lazy loading benefit is achieved. Should use thunk functions (() => import(...)) so modules are only fetched when first accessed.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 6,
+      "text": "Handle errors from the awaited getCalendar call - rejected import will bubble out of createEvent without any recovery or logging (packages/core/CalendarManager.ts:233)",
+      "claim_id": "c014"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "Consider adding try-catch around the await to handle import failures gracefully",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 8,
+      "text": "Dynamic imports in packages/app-store/index.ts are still eager - each import() runs when module is evaluated, so importing appStore kicks off every provider load immediately instead of true on-demand loading",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "getCalendarCredentials remains a synchronous function, but the `calendar` field on its returned object is now a Promise instead of `Calendar | null`, which is misleading given the field name and the unchanged type alias consumers rely on.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "A commented-out example entry was translated into the new import syntax but still points to a directory that doesn't exist.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "getVideoAdapters awaits inside a loop; once F-001's fix (switching to thunks) lands, this loop will become genuinely sequential module loading instead of a no-op await.",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 3,
+      "text": "Handle errors from the awaited appStore import so a failed dynamic import doesn't surface as an unhandled rejection (packages/app-store/_utils/getCalendar.ts:15)",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "What is the actual measured impact of this change on cold start time and server bundle size?",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 8,
+      "text": "Handle failures from getCalendar - awaited call is not wrapped in error handling so rejected import inside async callback will go uncaught (packages/app-store/wipemycalother/lib/reschedule.ts:128)",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "vital/lib/reschedule.ts uses forEach(async ...) which doesn't await calendar deletions - forEach ignores the Promise returned by async callbacks, so deleteEvent calls run as detached fire-and-forget tasks and errors become unhandled Promise rejections",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 3,
+      "text": "In handleCancelBooking.ts:458, apiDeletes.push(deletedEvent) pushes the resolved value rather than a Promise, so Promise.all(prismaPromises.concat(apiDeletes)) will not wait for the deletions",
+      "claim_id": "c024"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 9,
+      "text": "The awaited getCalendar call has no error handling inside the async callback - if it rejects the error becomes unhandled because callback promise isn't awaited (packages/app-store/vital/lib/reschedule.ts:128)",
+      "claim_id": "c025"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "Does `tsc --noEmit` still pass on this branch, especially around the union type formed by the 28 module namespaces at the six `await appStore[...]` call sites?",
+      "claim_id": "c026"
+    }
+  ]
+}

@@ -1,0 +1,203 @@
+{
+  "slug": "grafana-97529",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "initwatcher-reorder-missed-events",
+      "evidence": "pkg/storage/unified/resource/server.go:305-317, pkg/storage/unified/resource/server.go:751-758, pkg/storage/unified/sql/backend.go:558-567",
+      "reason": "backend.WatchWriteEvents starts the poller from listLatestRVs() at call time, so moving initWatcher() after search.init() means the broadcaster's start RV is now taken after the whole index build instead of before it; writes landing in that window are never broadcast (they only reach a client via the SendInitialEvents backfill, not via an explicit req.Since)."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "duplicate-init-error-log",
+      "evidence": "pkg/storage/unified/resource/server.go:260, pkg/storage/unified/resource/server.go:314",
+      "reason": "Both lines log the literal string \"error initializing resource server\"; line 260 is added by this diff and line 314 already existed inside Init, so a single init failure emits the message twice. Line numbers in the claim match the file exactly."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "totaldocs-unsynchronized-read",
+      "evidence": "pkg/storage/unified/resource/search.go:216, pkg/storage/unified/search/bleve.go:144-154, pkg/storage/unified/search/bleve.go:136-138",
+      "reason": "bleveBackend.TotalDocs ranges over b.cache with no lock (it takes neither cacheMu nor RLock), while BuildIndex writes b.cache[key] under cacheMu. The new TotalDocs call sits ~10 lines after the watcher goroutine at search.go:207-213, whose handleEvent path reaches getOrCreateIndex -> build -> BuildIndex, so a concurrent map read/write fatal is reachable."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "stop-no-longer-guards-rpcs",
+      "evidence": "pkg/storage/unified/resource/server.go:320-321, pkg/storage/unified/resource/server.go:290-318",
+      "reason": "Stop() sets s.initErr = \"service is stopping\"/\"service is stopped\"; since s.once has already fired, Init() short-circuits and just returns that error, which is exactly what the removed per-RPC `if err := s.Init(ctx)` calls surfaced. With those calls deleted from Create/Update/Delete/Read/List/Watch/Search/History/Origin/IsHealthy/PutBlob/GetBlob, the shutdown flag no longer rejects anything."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "duplicate-init-error-log",
+      "evidence": "pkg/storage/unified/resource/server.go:258-261, pkg/storage/unified/resource/server.go:313-315",
+      "reason": "Same finding as the duplicate-log cluster: the new call site in NewResourceServer logs the error, and (*server).Init logs the identical message for the same initErr."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "postgres-test-skipped",
+      "evidence": "pkg/server/module_server_test.go:34-37",
+      "reason": "The added skip is unconditional for GRAFANA_TEST_DB=postgres (not CI-gated), with a `// TODO - fix this test for postgres` and no linked issue, so TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer never runs on postgres anywhere."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "init-counter-race",
+      "evidence": "pkg/storage/unified/resource/search.go:177-193",
+      "reason": "totalBatchesIndexed++ at line 189 runs inside group.Go with group.SetLimit(s.initWorkers) (WorkerThreads from cfg.IndexWorkers), so with more than one worker it is an unsynchronized read-modify-write; it is then read at line 199. Verified against the reverse-applied base that this line is pre-existing, not introduced here, but it is inside the function this diff edits and now always runs at startup."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "init-shared-err-race",
+      "evidence": "pkg/storage/unified/resource/search.go:182-193",
+      "reason": "Line 190 is `_, _, err = s.build(...)` assigning the outer `err` declared at line 182, then `return err` reads it; concurrent workers can interleave assignment and read so a build failure can be replaced by another goroutine's nil before errgroup captures it. Pre-existing per the base file, but factually correct and in the function this diff modifies."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.93,
+      "severity": "Medium",
+      "cluster": "newresourceserver-error-path-no-cancel",
+      "evidence": "pkg/storage/unified/resource/server.go:229, pkg/storage/unified/resource/server.go:258-261",
+      "reason": "ctx, cancel := context.WithCancel(...) is created at line 229 and cancel is only stored on the struct; the new `return nil, err` at line 261 drops the server without ever calling cancel (the classic lostcancel pattern). Partial init has already started the search watcher goroutine, which is worse still because search.init uses its own context.Background() watchctx that cancel would not reach anyway."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "postgres-failure-root-cause",
+      "evidence": "pkg/server/module_server_test.go:34-37, pkg/server/module_server_test.go:46-57",
+      "reason": "The commit message and skip text say only \"Only fails in drone. Will fix later\" with no root cause. The test starts the module server and immediately sleeps 500ms before GETting /metrics, and this PR moves full index building into NewResourceServer inside the dskit start function, so a slower postgres environment plausibly pushes startup past that fixed sleep — i.e. the skip may be masking a regression this PR introduces. Asking for the root cause before skipping is a legitimate and unanswered question."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "duplicate-init-error-log",
+      "evidence": "pkg/storage/unified/resource/server.go:260, pkg/storage/unified/resource/server.go:314",
+      "reason": "Both log calls use the identical message string \"error initializing resource server\" for the same failure."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Medium",
+      "cluster": "newresourceserver-no-ctx-param",
+      "evidence": "pkg/storage/unified/resource/server.go:182, pkg/storage/unified/resource/server.go:229-234, pkg/storage/unified/sql/service.go:103-116",
+      "reason": "NewResourceServer(opts ResourceServerOptions) takes no context; the ctx passed to s.Init is derived from context.Background() internally. The dskit starting function service.start(ctx) does have a context and sql.NewResourceServer receives it, but it is discarded at this boundary, so the index build now performed during construction cannot be cancelled or deadline-bounded by the caller."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.72,
+      "severity": "Medium",
+      "cluster": "eager-init-startup-latency",
+      "evidence": "pkg/storage/unified/sql/service.go:103-149, pkg/storage/unified/resource/server.go:258-262, pkg/storage/unified/resource/search.go:172-199",
+      "reason": "s.Init(ctx) now runs inside NewResourceServer, and service.start only registers the gRPC servers and calls handler.Run after it returns, so the storage server does not listen at all until every namespace index is built. The unavailability concern is directly verifiable; the specific \"dskit module startup tolerance\" framing is weaker since pkg/modules/modules.go uses StartAsync + AwaitStopped with no start deadline."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "stale-healthcheck-init-comment",
+      "evidence": "pkg/storage/unified/apistore/watcher_test.go:126-128, pkg/storage/unified/resource/server.go:933-935",
+      "reason": "watcher_test.go still has `// Issue a health check to ensure the server is initialized` followed by server.IsHealthy(...), but this diff removed the `if err := s.Init(ctx)` call from (*server).IsHealthy, so the health check no longer forces initialization; the comment and the call are now stale leftovers the PR did not clean up."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "buildindex-concurrent-same-key",
+      "evidence": "pkg/storage/unified/search/bleve.go:88-138, pkg/storage/unified/resource/search.go:286-306",
+      "reason": "Attribution checked against the reverse-applied base: BuildIndex previously took b.cacheMu.Lock() with defer unlock at function entry, so builds were serialized; now the lock only wraps b.cache[key] = idx. getOrCreateIndex explicitly documents that it does not dedupe (`TODO??? ... we don't want to block while anything in building, just the same key`), so two callers can now run bleve.New on the same key concurrently — for file-threshold indexes that means two bleve.New on the same dir."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "rv-shortcircuit-todo",
+      "evidence": "pkg/storage/unified/search/bleve.go:96-100, pkg/storage/unified/search/bleve.go:78-79",
+      "reason": "The diff turns a logged TODO into a bare `// TODO, check last RV so we can see if the numbers have changed` comment. The resourceVersion parameter's own doc comment says it \"can be used to know that we can skip calling the builder\", so the short-circuit is a real intended optimization with nothing tracking it."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "not_real",
+      "confidence": 0.97,
+      "severity": null,
+      "cluster": "docstring-coverage-threshold",
+      "evidence": "pkg/storage/unified/resource/server.go, pkg/storage/unified/search/bleve.go",
+      "reason": "This is a Go repository with no docstring-coverage tooling or 80% threshold anywhere; the changed files in fact carry doc comments (e.g. `// Init implements ResourceServer.`, `// TotalDocs returns the total number of documents across all indices`), so both the 0.00% measurement and the cited requirement are fabricated."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "postgres-test-skipped",
+      "evidence": "pkg/server/module_server_test.go:34-37, pkg/server/module_server_test.go:43-60",
+      "reason": "The test sets cfg.Target = []string{modules.StorageServer}, runs InitializeModuleServer, and GETs http://localhost:3001/metrics — exactly the storage-server startup and instrumentation-server path this PR changes. Skipping postgres drops that coverage rather than fixing the failure."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Low",
+      "cluster": "buildindex-span-ctx-not-propagated",
+      "evidence": "pkg/storage/unified/search/bleve.go:88, pkg/storage/unified/resource/search.go:173, pkg/storage/unified/resource/search.go:308, pkg/storage/unified/sql/backend.go:126",
+      "reason": "The diff changes `_, span :=` to `ctx, span :=` in searchSupport.init, searchSupport.build and backend.GetResourceStats, but bleveBackend.BuildIndex still discards the derived context with `_, span := b.tracer.Start(...)`. The builder callback it invokes closes over search.build's ctx, so the BuildIndex span ends up a childless sibling."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "postgres-test-skipped",
+      "evidence": "pkg/server/module_server_test.go:34-37",
+      "reason": "The skip keys off GRAFANA_TEST_DB alone, so it fires locally too even though the commit message says the test works locally; gating on a CI-specific variable and filing a follow-up is a valid, concrete alternative to the blanket skip."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "newresourceserver-error-path-no-cancel",
+      "evidence": "pkg/storage/unified/resource/server.go:229-234, pkg/storage/unified/resource/server.go:258-262, pkg/storage/unified/resource/search.go:201-213",
+      "reason": "Same defect as the other cancel claim: the new error path returns without cancel(), and nothing tears down what Init already created — the search watcher goroutine at search.go:207 loops on a channel derived from its own context.Background() watchctx, and any bleve indexes already placed in b.cache are simply dropped with the server."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "postgres-test-skipped",
+      "evidence": "pkg/server/module_server_test.go:34-37",
+      "reason": "module_server_test.go is the only test file in the diff and its only change is the postgres skip; the behaviour change (eager Init inside NewResourceServer, reordered watcher/search init, Init removed from every RPC) gets no new test at all."
+    }
+  ]
+}

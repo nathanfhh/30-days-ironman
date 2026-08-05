@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-10",
+  "tool": "greptile-v4-1",
+  "n_golden": 4,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Same issue: .where(id:).first returns nil and update/destroy dereference it, raising NoMethodError."
+    }
+  ]
+}

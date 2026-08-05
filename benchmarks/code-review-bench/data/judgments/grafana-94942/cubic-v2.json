@@ -1,0 +1,26 @@
+{
+  "slug": "grafana-94942",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "enableSqlExpressions always returns false in both branches, with inverted flag logic."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.7,
+      "reasoning": "Points at the stub in-memory DB making every SQL expression fail rather than reporting a disabled feature."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.75,
+      "reasoning": "Flags the generic 'not implemented' error returned by the stubbed DB path."
+    }
+  ]
+}

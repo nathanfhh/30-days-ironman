@@ -1,0 +1,5 @@
+[
+  "Cleanup log statements at line 534 use Error level for routine debug/informational output ('Annotations to clean by time', 'cleaned annotations by time'), which will pollute error logs and may trigger false alerts - should use Debug level instead",
+  "Log statement at line 537 uses Error level for an informational message reporting cleanup results - should be Debug or Info level",
+  "Cleanup scheduler ticker changed from 10 minutes to 1 minute, causing all cleanup jobs (snapshots, query history, short URLs, temp users, etc.) to run 10x more often instead of only changing annotation cleanup behavior"
+]

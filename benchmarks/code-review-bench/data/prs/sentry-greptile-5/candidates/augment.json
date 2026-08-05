@@ -1,0 +1,7 @@
+[
+  "validate_timestamp/validate_age use self.initial_data.get(...) which treats 0 as 'absent', allowing both age=0 and timestamp to pass the mutual-exclusion rule - should check key presence or 'is not None' instead of truthiness",
+  "zip(error_ids, events.values()) can misassociate event_id to data because get_multi() returns a dict whose value order isn't guaranteed to match error_ids/node_ids, and missing keys will silently drop IDs, leading to incorrect error context in Seer prompt",
+  "When use-table-widget-visualization is enabled, TableWidgetVisualization renders with columns=[] and empty tableData, so the table will always appear blank even when result.data/meta are present",
+  "Override detection uses 'if (cell)' which ignores valid ReactNodes like 0, empty string, or null and falls back to default renderer unexpectedly - should check 'cell !== undefined' instead (same issue in body-cell renderer)",
+  "_truncate_title slices to max_length and then appends '...', so the returned string can exceed ISSUE_TITLE_MAX_LENGTH by 3 characters"
+]

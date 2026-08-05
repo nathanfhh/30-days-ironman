@@ -1,0 +1,26 @@
+{
+  "slug": "sentry-greptile-1",
+  "tool": "greptile-v4-1",
+  "n_golden": 4,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.85,
+      "reasoning": "Both say Django querysets/ORM do not support negative slicing/indexing, causing a crash."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 3,
+      "confidence": 0.85,
+      "reasoning": "Both flag organization_context.member being None leading to an AttributeError when accessing has_global_access."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both say get_item_key's use of math.floor/ceil breaks on a datetime key, raising TypeError."
+    }
+  ]
+}

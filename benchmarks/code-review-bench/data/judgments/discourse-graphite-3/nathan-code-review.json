@@ -1,0 +1,12 @@
+{
+  "slug": "discourse-graphite-3",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 16,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 1, "confidence": 0.95,
+     "reasoning": "Both say the query-named predicate should_block?/should_block_email? writes stats (match_count/last_match_at) as a side effect of a read, which is exactly the golden's misleading-name-plus-side-effect complaint."},
+    {"golden_index": 0, "candidate_index": 2, "confidence": 0.6,
+     "reasoning": "The golden explicitly names race conditions in concurrent environments from the stat update, and this candidate identifies that same concurrency hazard as a non-atomic read-modify-write on match_count."}
+  ]
+}

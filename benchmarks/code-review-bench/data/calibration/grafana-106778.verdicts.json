@@ -1,0 +1,284 @@
+{
+  "slug": "grafana-106778",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "not_real",
+      "confidence": 0.95,
+      "severity": null,
+      "cluster": "groups-empty-map-crash",
+      "evidence": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:68",
+      "reason": "Optional chaining short-circuits the whole chain, not just the next access: `groups.at(0)?.rules.map(...)` evaluates to `undefined` when `at(0)` is undefined. Verified with node: `({data:{groups:[]}}).data.groups.at(0)?.rules.map(x=>x)` returns undefined, and React renders `undefined` as nothing."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "actions-array-identity",
+      "evidence": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:58-64,73-79; hooks/useAbilities.ts:214-216,403-405",
+      "reason": "Both action arrays are inline literals recreated on every render, and `useRulerRuleAbilities`/`useGrafanaPromRuleAbilities` list `actions` in their `useMemo` deps, so the memo recomputes every render. The recomputation is cheap (`actions.map`), hence Low."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "not_real",
+      "confidence": 0.95,
+      "severity": null,
+      "cluster": "groups-empty-map-crash",
+      "evidence": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:68",
+      "reason": "`.map()` is never reached when `at(0)` is nullish — optional chaining short-circuits the remainder of the chain. There is no runtime crash; the expression is `undefined` and renders nothing."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "requireatleastone-false-guarantee",
+      "evidence": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:25-28,66-70,139-150",
+      "reason": "I reproduced the type in tsc: the union is not discriminated, so after destructuring inside the component `rule ?? promRule` is still `... | undefined` and the code must (and does) fall back to `getEditableIdentifier` returning undefined + `logWarning`. Worse, `promRule` being a *cloud* prom rule satisfies the type but yields no identifier, so the component silently returns null and the whole actions column disappears."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "rule-vs-promruledto-compat",
+      "evidence": "public/app/types/unified-alerting.ts:19-73; public/app/types/unified-alerting-dto.ts:121-162",
+      "reason": "They are compatible. `Alert` is structurally identical to the inline element type of `PromAlertingRuleDTO.alerts`, `RuleHealth` is `string`, and every other member lines up; I compiled the exact shape with tsc --strict and got no error."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "useisruleeditable-early-query",
+      "evidence": "public/app/features/alerting/unified/hooks/useIsRuleEditable.ts:19-45; api/featureDiscoveryApi.ts:46-55",
+      "reason": "Calling the hook before the early return is mandated by the Rules of Hooks, not a defect; for the `grafana` rules source `discoverDsFeatures` resolves synchronously in its queryFn with no HTTP request, and RTKQ dedupes by arg. The function is also untouched by this diff."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "grafana-string-literal",
+      "evidence": "public/app/features/alerting/unified/hooks/useAbilities.ts:315,368; utils/datasource.ts:33",
+      "reason": "`GRAFANA_RULES_SOURCE_NAME` is exported as `'grafana'` and is the convention elsewhere (e.g. access-control.ts:147-148 uses it), but the two new call sites in useAbilities.ts hardcode the literal."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "silence-drawer-needs-rulerrule",
+      "evidence": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:104-106; components/silences/SilenceGrafanaRuleDrawer.tsx:11-14",
+      "reason": "The Silence menu item has no `rulerRule` gate in AlertRuleMenu (line 126) and `canSilence` can now be true purely from Grafana prom abilities, but the drawer is rendered only when `rulerRuleType.grafana.alertingRule(rule)` and `rule` is undefined on the promRule-only list path — the drawer requires `rulerRule: RulerGrafanaRuleDTO`. The new GrafanaGroupLoader test even asserts the Silence item is present, so the click path is reachable and dead."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "federated-immutability-lost",
+      "evidence": "public/app/features/alerting/unified/hooks/useAbilities.ts:222-229,243-250",
+      "reason": "The diff deletes `const isFederated = isFederatedRuleGroup(rule.group)` and makes `useAllAlertRuleAbilities` a thin wrapper over `useAllRulerRuleAbilities`, which hardcodes `isFederated = false`. `immutableRule` therefore no longer covers federated Mimir groups, so Update/Delete/Duplicate lose their guard."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "leftover-duplicate-comment",
+      "evidence": "public/app/features/alerting/unified/hooks/useAbilities.ts:289",
+      "reason": "`const { isEditable, isRemovable, loading } = useIsGrafanaPromRuleEditable(rule); // duplicate` — the trailing `// duplicate` is a development leftover with no meaning in the shipped code."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "list-view-pause-delete-gated",
+      "evidence": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:123,165; rule-list/GrafanaRuleListItem.tsx:47",
+      "reason": "GrafanaRuleListItem renders `<RuleActionsButtons promRule={rule} …/>` with no `rule`, so AlertRuleMenu receives `rulerRule === undefined`. Pause is gated by `rulerRuleType.grafana.rule(rulerRule)` and Delete by `rulerRule &&`, so neither item can render on this path regardless of `grafanaPauseAbility`/`grafanaDeleteAbility`. The new test confirms it by asserting exactly 4 menu items."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "missing-returnto",
+      "evidence": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:40; rule-list/DataSourceRuleListItem.tsx:36",
+      "reason": "The new component builds `createRelativeUrl(`/alerting/grafana/${uid}/view`)` with no second argument, while the deleted GrafanaRuleLoader used `{ returnTo }` from `createReturnTo()` and the sibling DataSourceRuleListItem still calls `createReturnTo()` at line 36."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "isprovisionedpromrule-narrowing",
+      "evidence": "public/app/features/alerting/unified/utils/rules.ts:128-138,171-173",
+      "reason": "TypeScript 5.5+ infers a type predicate for `(rule?: Rule) => isGrafanaPromAlertingRule(rule) || isGrafanaPromRecordingRule(rule)`; I reproduced the exact shape in tsc and `promRule.provenance` after the guard compiles clean. The repo relies on the same inference elsewhere in this PR (RuleActionsButtons.V2.tsx:139-143 dereferences `promRule.uid` under the same guard)."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "stale-ruler-comments",
+      "evidence": "rule-list/GrafanaGroupLoader.tsx:19,25; rule-list/hooks/prometheusGroupsGenerator.ts:81,84",
+      "reason": "Exactly as described: the `expectedRulesCount` JSDoc still talks about the Ruler response count, the component doc still says 'Prometheus and Ruler endpoints', the generator comment still says 'not mandatory to preload ruler rules', and the variable is still named `cacheAndRulerPreload` — all after the Ruler prefetch/query were deleted."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "usecansilence-hook-order",
+      "evidence": "public/app/features/alerting/unified/hooks/useAbilities.ts:560-581; hooks/useFolder.ts:15-22",
+      "reason": "Calling all hooks before the `if (!rule)` return is the required React pattern, not a bug — moving them after would violate the Rules of Hooks. `useFolder(undefined)` passes RTKQ's `skipToken`, so no request is issued. The function is also unchanged by this diff."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "new-file-dead-code",
+      "evidence": "rule-list/GrafanaRuleListItem.tsx:22,41-45,51; rule-list/GrafanaGroupLoader.test.tsx:42",
+      "reason": "All three are present: `operation?: RuleOperation` is declared and forwarded but no caller (GrafanaGroupLoader, FilterView) ever passes it; `ui.menuItems.delete` is defined in the new test and never used; and line 51 re-narrows with `rule && rule.type === PromRuleType.Alerting` inside an `if (prometheusRuleType.grafana.alertingRule(rule))` block (plus `rule?.health` optional chaining on a required prop)."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "missing-returnto",
+      "evidence": "rule-list/FilterView.tsx:156-163; rule-list/GrafanaRuleListItem.tsx:40",
+      "reason": "FilterView's grafana branch now renders GrafanaRuleListItem, whose href omits `returnTo`; previously GrafanaRuleLoader/GrafanaRuleListItem built the href with `createReturnTo()`. Back-navigation from the detail view to the filtered list state is lost."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "federated-immutability-lost",
+      "evidence": "hooks/useAbilities.ts:222-229,245; components/rules/RuleActionsButtons.tsx:57,84",
+      "reason": "The old table's Edit button comes from `useAlertRuleAbility(rule, AlertRuleAction.Update)` -> `useAllAlertRuleAbilities`, which after the rewrite gets `isFederated = false` from `useAllRulerRuleAbilities`. `MaybeSupportedUnlessImmutable` therefore stays true for federated groups and Edit reappears."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "grafana-prom-abilities-alerting-only",
+      "evidence": "hooks/useAbilities.ts:246,268-272 vs 302,324-328",
+      "reason": "The ruler version uses `rulerRuleType.grafana.rule` (alerting OR recording) for ModifyExport/Pause/Restore/DeletePermanently; the new prom version substitutes `prometheusRuleType.grafana.alertingRule`. Grafana recording rules reach RuleActionsButtons via RecordingRuleListItem, so on the new list they lose Export (and Pause/Restore) that the ruler path granted them."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "transitional-states-removed",
+      "evidence": "rule-list/GrafanaGroupLoader.tsx:66-81 (vs deleted matchRules/RuleOperation.Creating/Deleting block in diff.patch)",
+      "reason": "The Ruler-vs-Prometheus reconciliation (`matchRules`, `RuleOperation.Creating`, `RuleOperation.Deleting`, `RuleOperationListItem`) is deleted along with the tests that covered it, and nothing replaces it — the loader now renders only what Prometheus returns. The factual regression is verifiable even if the product intent isn't stated anywhere in the diff."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "not_real",
+      "confidence": 0.95,
+      "severity": null,
+      "cluster": "groups-empty-map-crash",
+      "evidence": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:68",
+      "reason": "The premise is wrong: optional chaining does not 'only apply to the .rules access' — `a?.b.c()` short-circuits the entire chain when `a` is nullish. No crash is possible from empty `groups` here."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "stale-ruler-comments",
+      "evidence": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:24-28,34-41",
+      "reason": "The doc block still reads 'Loads an evaluation group from Prometheus and Ruler endpoints' while `useGetGrafanaRulerGroupQuery` was removed and only `useGetGrafanaGroupsQuery` remains."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "filterview-missing-key",
+      "evidence": "public/app/features/alerting/unified/rule-list/FilterView.tsx:151-165",
+      "reason": "`key` is still destructured at line 152 and passed to the `datasource` and `default` branches, but the new `<GrafanaRuleListItem>` in the `grafana` branch has no `key`. Mixing keyed and unkeyed siblings in the same mapped array triggers React's key warning and breaks reconciliation as this infinite-scroll list grows."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "list-view-pause-delete-gated",
+      "evidence": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:83,87,123,165",
+      "reason": "`canPause`/`canDelete` are OR-ed across both ability sources, but the JSX still requires `rulerRuleType.grafana.rule(rulerRule)` and `rulerRule &&` respectively, so the Grafana-prom half of the OR can never surface a menu item."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "list-view-pause-delete-gated",
+      "evidence": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:87,165-175",
+      "reason": "Same defect narrowed to Delete: `canDelete` can be true from `grafanaDeleteAbility` alone, but `{canDelete && rulerRule && …}` gates rendering on a ruler rule that promRule-only consumers never pass."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "skiptoken-not-neutral",
+      "evidence": "hooks/useAbilities.ts:287-321 (Duplicate at 318); components/rule-viewer/AlertRuleMenu.tsx:73,91-92,135-141",
+      "reason": "With `skipToken` the hook runs `useAllGrafanaPromRuleAbilities(undefined)`: `loading` is false (useIsGrafanaPromRuleEditable returns early), `isPluginProvided` is false (getRulePluginOrigin returns undefined for undefined), so `duplicateSupported` is `AlwaysSupported` and Duplicate becomes `[true, ctx.hasPermission(AlertingRuleCreate)]` against the *grafana* permission set. Every other ability collapses to false, but Duplicate has no `rulerRule` gate in the menu, so it leaks onto cloud/datasource rules whose own ruler ability says no."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "no-empty-state-empty-groups",
+      "evidence": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:43-81",
+      "reason": "The only non-happy paths are `isPromResponseLoading` (skeletons) and `!promResponse` (error Alert). A successful response with `groups: []` falls through to `at(0)?.rules.map` which yields undefined, so the group renders as a blank region with no message."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "getgrafanarulekey-stray-brace",
+      "evidence": "public/app/features/alerting/unified/rule-list/FilterView.tsx:209",
+      "reason": "The template literal really does end `${rule.uid}}` with a stray closing brace, at exactly the cited line. Note this line is pre-existing — `git diff refs/ncr/base` on FilterView.tsx touches only the import and the JSX block — so it is correct but out of scope for the diff."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "test-locks-missing-pause-delete",
+      "evidence": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:42,191-207",
+      "reason": "The test grants Update/Delete/Create/Read/SilenceCreate, defines a `menuItems.delete` selector, then never uses it and asserts `menuItems.length).toBe(4)` with a comment claiming 'all 4 menu actions'. Fixing the Pause/Delete gating would fail this test, so it encodes the regression as the expectation."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "handledelete-signature",
+      "evidence": "components/rule-viewer/AlertRuleMenu.tsx:31,172; rule-list/components/RuleActionsButtons.V2.tsx:99; components/rules/RuleActionsButtons.tsx:115-118",
+      "reason": "There is no type mismatch: both call sites pass a nullary closure, which is assignable to `(rule: RulerRuleDTO, …) => void`, and each closure builds its own EditableRuleIdentifier for `showDeleteModal`. The declared-but-ignored parameter is untidy, but it is identical in `refs/ncr/base` and unchanged by this diff."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "ruledetails-test-descriptions",
+      "evidence": "public/app/features/alerting/unified/components/rules/RuleDetails.test.tsx:63,74,89,100",
+      "reason": "All four `it(...)` titles read 'Should not render Edit/Delete button for users with the update/delete permission' while the arrange step grants the permission — they read as asserting a permission violation. Note the titles are pre-existing; this PR only changed line 87 (`getCloudRule(..., { rulesSource: mimirDs })`)."
+    }
+  ]
+}

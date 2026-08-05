@@ -1,0 +1,14 @@
+{
+  "slug": "cal_com-22532",
+  "tool": "claude-code",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.55,
+      "reasoning": "Flags the same empty-data {} call relying on Prisma @updatedAt and argues for being explicit, though it frames it as maintainer confusion rather than a missed timestamp."
+    }
+  ]
+}

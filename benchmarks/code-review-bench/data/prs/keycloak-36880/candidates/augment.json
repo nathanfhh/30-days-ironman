@@ -1,0 +1,4 @@
+[
+  "getClientsWithPermission iterates all resources of type Clients, which includes the schema 'all-clients' resource whose name is also Clients; returning that value can break call sites that treat results as client IDs (e.g. realm.getClientById(cid) in AvailableRoleMappingResource). Consider excluding the resource-type entry (where resource.getName().equals(AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE)) from the returned set.",
+  "Test uses getDefaultClientScopes().get(1) without asserting the list has at least 2 elements, which can make it flaky if the default client-scope set changes. Consider asserting a minimum size (or selecting a scope deterministically) before indexing."
+]

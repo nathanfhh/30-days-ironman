@@ -1,0 +1,5 @@
+[
+  "The new `order()` method on `CryptoProvider` interface is missing the `default` keyword, making it a breaking API change that will cause third-party implementations to fail to compile or throw AbstractMethodError at runtime - should be `default int order() { return 0; }`",
+  "Test uses a single P-256 key pair for all three ECDSA algorithm tests (ES256, ES384, ES512), but P-256 keys produce ~32-byte r,s values so ES384 and ES512 tests only exercise zero-padding/unpadding rather than realistic signature sizes - should generate curve-appropriate keys (P-384 for ES384, P-521 for ES512)",
+  "Lines 114-115 in `concatenatedRSToASN1DER` are dead code that create two `ASN1Encoder` instances and write BigIntegers to them but discard the results - the actual DER encoding is performed by fresh encoders in the return statement at lines 117-121"
+]

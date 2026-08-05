@@ -1,0 +1,379 @@
+{
+  "slug": "cal_com-22532",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "The dropdown hardcodes raw Tailwind palette classes (text-gray-900 / text-gray-500 / dark:text-white) instead of the codebase's semantic tokens (text-emphasis / text-subtle), and in dark mode the secondary line becomes pure white, identical to the heading, destroying the intended hierarchy.",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 10,
+      "text": "getCacheStatusByCredentialIds should add early return for empty credential lists and deduplicate IDs",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 15,
+      "text": "ENV_FILE is the relative path \"../.env\", so running the script from anywhere but scripts/ silently creates and writes a .env in the wrong location.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 5,
+      "text": "Add tsx to devDependencies for reproducibility instead of using npx tsx",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 4,
+      "text": "ENV_FILE=\"../.env\" depends on the caller's current working directory, so running the script from repo root may update the wrong file path",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 7,
+      "text": "Mock getCacheStatusByCredentialIds should accept credentialIds parameter to match interface signature",
+      "claim_id": "c006"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "logic: macOS-specific sed syntax with empty string after -i flag will fail on Linux systems",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "The timestamp is formatted with new Intl.DateTimeFormat(\"en-US\", ...) even though the same component already calls useLocale(), so every non-English user sees US M/D/YY and 12-hour AM/PM next to fully translated text.",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 1,
+      "text": "Handler directly instantiates new CalendarCacheRepository() which bypasses the CalendarCache.init(...) feature-flag logic and its mock when calendar-cache is disabled, causing inconsistent cache status behavior across deployments",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "dev:cron was switched from ts-node (a declared devDependency) to `npx tsx`, but tsx appears in no package.json in the repo, so it is downloaded unpinned from the npm registry at run time \u2014 network-dependent, unreproducible and outside the lockfile.",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 6,
+      "text": "Unused loop variable 'i' in shell script should be replaced with '_'",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 8,
+      "text": "Missing guard against missing/duplicate credentialId values before cache lookup query",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 13,
+      "text": "Two changes unrelated to the cache-status UI are bundled into this MR: the dev:cron script change and the new scripts/test-gcal-webhooks.sh developer tooling.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 3,
+      "text": "new Intl.DateTimeFormat(\"en-US\", ...) hard-codes the timestamp formatting locale, causing inconsistent date formatting for non-English users compared to other UI parts that use i18n.language/user locale",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 3,
+      "text": "Script assumes /tmp/tmole.log exists when tmole is already running, causing false failure if log is missing or stale",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 21,
+      "text": "The wrapping <div className=\"flex w-32 justify-end\"> is now always rendered while only the inner component returns null, leaving an 8rem-wide empty column that squeezes the title and description on delegation-credential and read-only rows.",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 17,
+      "text": "The migration adds updatedAt with DEFAULT NOW(), so every pre-existing CalendarCache row gets the deployment timestamp and the UI presents it as a real 'last updated' value; expiresAt minus the 30-day caching time could backfill the true write time.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 0,
+      "text": "deleteCacheMutation doesn't invalidate connectedCalendars query after cache deletion, causing stale UI state when onSuccess isn't supplied",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 1,
+      "text": "The SelectedCalendar.updatedAt write (and the googleChannelId/updatedAt fields added to the select) is leftover from an earlier approach with no reader anywhere; it still costs an UPDATE over every SelectedCalendar row of the credential on each Google push notification and two unused columns on every authenticated session lookup.",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "Hardcoded 'en-US' locale in Intl.DateTimeFormat instead of using runtime locale from useLocale() i18n.language",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "Throwing a bare Error instead of TRPCError bypasses tRPC's error serialization - the client receives a generic INTERNAL_SERVER_ERROR (500) instead of the intended NOT_FOUND/FORBIDDEN status",
+      "claim_id": "c021"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "The updateManyByCredentialId call uses an empty data object, which prevents Prisma's @updatedAt decorator from updating the updatedAt timestamp. This results in inaccurate cache status tracking, as the timestamp isn't updated when the cache is refreshed. To fix this, explicitly set the updatedAt field.",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 14,
+      "text": "test-gcal-webhooks.sh uses the BSD/macOS form `sed -i '' -E ...`, which errors on GNU sed (Linux, containers, CI) so GOOGLE_WEBHOOK_URL is never written \u2014 yet the script still prints a success message; other scripts in the repo use the GNU form.",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 3,
+      "text": "Hardcoded 'en-US' locale for date formatting will format dates in US English for all users regardless of their browser or profile locale",
+      "claim_id": "c024"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 2,
+      "text": "deleteCache handler only checks credential.userId === user.id, blocking team members from clearing cache for team-owned credentials - needs teamId support in authorization",
+      "claim_id": "c025"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 0,
+      "text": "ENV_FILE is resolved relative to the caller's cwd, so running this from the repo root writes GOOGLE_WEBHOOK_URL to the wrong .env file",
+      "claim_id": "c026"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 9,
+      "text": "credentialId validation should use z.number().int().positive() instead of just z.number()",
+      "claim_id": "c027"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 2,
+      "text": "Throwing a plain Error instead of TRPCError will surface as INTERNAL_SERVER_ERROR in tRPC rather than preserving NOT_FOUND/FORBIDDEN semantics for clients",
+      "claim_id": "c028"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "The handler throws a plain Error(\"Credential not found or access denied\") instead of a TRPCError, so tRPC wraps it as INTERNAL_SERVER_ERROR and an ordinary not-found / not-yours case shows up as a 500 in monitoring.",
+      "claim_id": "c029"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "A bare <hr className=\"my-1\" /> is used as the separator instead of the exported DropdownMenuSeparator.",
+      "claim_id": "c030"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 19,
+      "text": "The migration directory timestamp (20250715160635) is earlier than 20250716135157, which already exists on the target branch, so after merging the migrations are no longer monotonically ordered and environments that applied the later one can be flagged as having an inconsistent history.",
+      "claim_id": "c031"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "Replacing DisconnectIntegration with CredentialActionsDropdown dropped the component's own isDelegationCredential(credentialId < 0) guard, leaving only the caller-supplied delegationCredentialId; on the getConnectedCalendars path that returns early without that field, 'Remove app' becomes clickable for an in-memory delegation credential and always fails with a generic error toast.",
+      "claim_id": "c032"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 0,
+      "text": "deleteCacheMutation does not invalidate the connectedCalendars query on success, so the dropdown continues to show the old cacheUpdatedAt timestamp until the user manually refreshes",
+      "claim_id": "c033"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "deleteCache does not follow the calendars router conventions: the zod schema is inlined in _router.tsx instead of a deleteCache.schema.ts exporting Z/T input types, the handler redefines its input type inline, and no entry was added to CalendarsRouterHandlerCache.",
+      "claim_id": "c034"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "CalendarCacheRepository is instantiated directly, bypassing the CalendarCache factory that checks the calendar-cache feature flag and returns CalendarCacheRepositoryMock when the feature is disabled",
+      "claim_id": "c035"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "That dependency is not declared in packages/features/package.json and only resolves through yarn workspace hoisting, so any change to hoisting or a stricter resolution mode breaks the build far from the change.",
+      "claim_id": "c036"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 22,
+      "text": "Does prisma.selectedCalendar.updateMany({ where: { credentialId }, data: {} }) actually emit SET \"updatedAt\" = now() on this project's Prisma 5.x, or is an empty data object rejected as an invalid update? There is no other empty-data updateMany in the repo to compare against and no test covering the line.",
+      "claim_id": "c037"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 0,
+      "text": "Multi-layer feature (17 files, DB migration, new data-deletion endpoint, UI component replacement) was developed without end-to-end testing against a real Google Calendar integration",
+      "claim_id": "c038"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "The static \"Cache Status / Last updated\" block is wrapped in a DropdownMenuItem, so Radix makes it focusable and selectable \u2014 keyboard users land on a menu entry that does nothing and closes the menu; DropdownMenuLabel is the right primitive and is already exported.",
+      "claim_id": "c039"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 2,
+      "text": "No tests were added for the new tRPC endpoint or repository method",
+      "claim_id": "c040"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 16,
+      "text": "The hasCache branch is not gated by disableConnectionModification, so on the event type Advanced tab \u2014 where 'Remove app' is deliberately hidden \u2014 the destructive 'Delete cached data' action is still rendered and clickable, wiping the availability cache for every calendar under that credential.",
+      "claim_id": "c041"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 1,
+      "text": "Script relies on an undeclared tsx binary, so yarn dev:cron can prompt to install or fetch a package outside the repo's lockfile",
+      "claim_id": "c042"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 20,
+      "text": "SelectedCalendarRepository.findMany dropped the `satisfies Prisma.SelectedCalendarFindManyArgs` constraint in favour of an inlined object, moving what was a compile-time check to a runtime Prisma error \u2014 and the change is unrelated to this feature.",
+      "claim_id": "c043"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 23,
+      "text": "Is 'Delete cached data' meant to force an immediate refresh or simply to clear the cache? The handler only deletes the rows without triggering a refetch, unlike unwatchCalendar which re-populates afterwards, so the status disappears until the next Google push notification.",
+      "claim_id": "c044"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 3,
+      "text": "The conditional rendering logic in CredentialActionsDropdown changes behavior for delegation credentials - they now render nothing or a cache-only dropdown if cache exists, which should be verified as intentional",
+      "claim_id": "c045"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "CredentialActionsDropdown in packages/features imports @calcom/platform-constants, a backwards dependency (platform builds on features, not the reverse) and the only such import outside packages/platform.",
+      "claim_id": "c046"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 0,
+      "text": "The connectedCalendars handler instantiates CalendarCacheRepository directly instead of going through CalendarCache.init(), bypassing the calendar-cache feature flag: the extra calendarCache.groupBy runs on every connectedCalendars query (8 call sites including the Booker and onboarding) regardless of the flag, and the newly added mock method is therefore unreachable.",
+      "claim_id": "c047"
+    }
+  ]
+}

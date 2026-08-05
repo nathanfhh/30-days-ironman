@@ -1,0 +1,10 @@
+{
+  "slug": "keycloak-32918",
+  "tool": "augment",
+  "n_golden": 2,
+  "n_candidates": 1,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both identify the cleanup using the literal 'alias' instead of the per-iteration alias, leaving created IDPs un-cleaned."}
+  ]
+}

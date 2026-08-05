@@ -1,0 +1,8 @@
+[
+  "The permission check uses `&&` (AND) instead of `||` (OR). This requires the user to be both a team admin and a team owner simultaneously, which is almost never true. A team admin or team owner should each independently have permission to add guests.",
+  "The blacklist comparison lowercases the blacklisted emails but not the incoming `guest` email. A user can bypass the blacklist by submitting an email with different casing (e.g., `Blocked@example.com`).",
+  "Seat bookings need seat-level scoping, but this new action updates by `bookingId` only. On seats events it can add guests to the shared booking instead of the current seat.",
+  "`uniqueGuests` only filters against existing booking attendees and the blacklist, but does not deduplicate the input `guests` array itself. Submitting the same email twice in the request will create duplicate attendee records.",
+  "`sendAddGuestsEmails` is called with the raw `guests` input instead of `uniqueGuests`. This means notification emails may be sent for guests who were already attendees or were filtered out by the blacklist.",
+  "Spread `props` before the fixed template props, otherwise callers can override this email's subject, title, and header."
+]

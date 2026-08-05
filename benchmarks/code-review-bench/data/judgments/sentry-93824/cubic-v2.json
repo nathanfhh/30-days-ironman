@@ -1,0 +1,16 @@
+{
+  "slug": "sentry-93824",
+  "tool": "cubic-v2",
+  "n_golden": 5,
+  "n_candidates": 5,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 3, "confidence": 0.95,
+     "reasoning": "Both flag inconsistent metric tag keys 'shard' vs 'shards' splitting metrics in the monitoring system."},
+    {"golden_index": 2, "candidate_index": 0, "confidence": 0.95,
+     "reasoning": "Both explain the isinstance check against multiprocessing.Process is always false for spawn-context processes, so hung processes are never killed."},
+    {"golden_index": 3, "candidate_index": 2, "confidence": 0.9,
+     "reasoning": "Both note the sleep in the test is a no-op because time.sleep was monkeypatched, so it doesn't actually wait for the flusher."},
+    {"golden_index": 4, "candidate_index": 4, "confidence": 0.93,
+     "reasoning": "Both describe breaking out of the loop on deadline as skipping termination of remaining flusher processes, leaving them running."}
+  ]
+}

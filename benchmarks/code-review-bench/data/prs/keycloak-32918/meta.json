@@ -1,0 +1,17 @@
+{
+  "slug": "keycloak-32918",
+  "source_repo": "keycloak",
+  "language": "Java",
+  "golden_url": "https://github.com/keycloak/keycloak/pull/32918",
+  "pr_title": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR32918__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR32918__20260122.git",
+  "base_sha": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "head_sha": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "stat": " .../InfinispanIdentityProviderStorageProvider.java |  96 +++++++++++-\n .../models/IdentityProviderStorageProvider.java    |   1 +\n .../OrganizationAwareIdentityProviderBean.java     |   4 +-\n .../organization/cache/OrganizationCacheTest.java  | 170 +++++++++++++++++++++\n 4 files changed, 268 insertions(+), 3 deletions(-)\n",
+  "name_status": "M\tmodel/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java\nM\tserver-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java\nM\tservices/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java\nM\ttestsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java\n",
+  "commits": "e944e2a Add cache for IdentityProviderStorageProvider.getForLogin\n"
+}

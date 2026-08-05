@@ -1,0 +1,6 @@
+[
+  "Dead code \u2014 Lines 114\u2013115 create ASN1Encoder instances, call write() on them, and then discard the result. The actual encoding happens in writeDerSeq call on line 117, so these two lines have no effect and can be removed.",
+  "Trailing comma in log message \u2014 the loop always appends ', ' after the last provider name, leaving a trailing ', ' in the message",
+  "Unsafe format string in log \u2014 logger.debugf(builder.toString()) passes the built string as a format pattern, which would throw a MissingFormatArgumentException if any class name contained '%'",
+  "Consider using context class loader for crypto init \u2014 AuthzClient.class.getClassLoader() is the module/app class loader, but in environments with custom or modular class loading (e.g. Jakarta EE, OSGi) the service-provider JAR may only be visible to Thread.currentThread().getContextClassLoader()"
+]

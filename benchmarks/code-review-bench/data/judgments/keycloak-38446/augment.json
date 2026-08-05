@@ -1,0 +1,14 @@
+{
+  "slug": "keycloak-38446",
+  "tool": "augment",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both say createFromValues does not set an id, breaking flows keyed on credential id such as removeStoredCredentialById."
+    }
+  ]
+}

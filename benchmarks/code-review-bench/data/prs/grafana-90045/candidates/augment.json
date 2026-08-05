@@ -1,0 +1,10 @@
+[
+  "On unified-store Create failure this records recordLegacyDuration using startStorage, which should be recordStorageDuration (otherwise the legacy duration metric will be polluted)",
+  "The async legacy Create uses obj (the pre-storage object) rather than created returned by unified storage, which can drop server-assigned fields and cause legacy/unified divergence",
+  "Async legacy writes inherit the request ctx; if the apiserver cancels it when the request completes, the safe measure legacy write may be canceled before it runs",
+  "Context logger is set to d.Log instead of the enriched log, so name/kind/method values won't be attached to log lines emitted by downstream calls",
+  "recordStorageDuration is labeled with name here, but the metric's third label is kind; this will make the dual_writer_storage_duration_seconds{kind=...} series inconsistent with other methods",
+  "Mode3 previously attempted legacy deletion even when unified storage returned NotFound; now any error from Storage.Delete returns early and skips the legacy cleanup, which may leave stray legacy objects during migrations",
+  "The async legacy Update reuses the original objInfo; since Storage.Update already applied the update, calling Legacy.Update with the same UpdatedObjectInfo can compute a different object or run update logic twice",
+  "In TestMode3_Create, the failing case only stubs Legacy.Create, but Mode3 calls Storage.Create first; without a storage expectation this won't exercise the intended error path (and may panic due to an unexpected mock call)"
+]

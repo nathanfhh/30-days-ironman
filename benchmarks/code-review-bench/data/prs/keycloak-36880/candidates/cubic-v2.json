@@ -1,0 +1,4 @@
+[
+  "The listener skips permission cleanup when only ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled, causing stale fine-grained admin permission resources to remain when removing a role, client, or group for the V2 implementation",
+  "Client resources are added but getResourceName() has no CLIENTS case, so these resources resolve to a null label instead of a client name"
+]

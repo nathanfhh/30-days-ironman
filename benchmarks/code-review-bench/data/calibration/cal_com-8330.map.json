@@ -1,0 +1,227 @@
+{
+  "slug": "cal_com-8330",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 1,
+      "text": "When a date override exists for the slot's day, checkIfIsAvailable returns true early and skips the busy[] check entirely, so slots already taken by existing bookings or external calendar events are reported as available, allowing double booking.",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "The date-override day comparison mixes a local-mode dayjs(date.start).format(\"YYYY MM DD\") with a UTC-mode slotStartTime.format(...), so the override is matched to the wrong day whenever the server timezone is not UTC.",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 1,
+      "text": "Line 123 uses strict isAfter for the end boundary but the start boundary (lines 117-120) uses isBefore || isSame; a slot starting exactly at the override end time passes the check and is incorrectly marked available. Add || slotStartTime.isSame(...) to line 123 for consistency.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 1,
+      "text": "When dateOverrideExist is true, the code returns true before checking busy, which could surface slots inside an override even if they overlap an existing booking/calendar event - bypassing busy checks on overridden days may be unintended",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 3,
+      "text": "The workingHours.find predicate returns true when a slot is outside a particular workingHour, so if there are multiple working-hour ranges for the same day, a slot valid in one range can be rejected because it's outside another, causing false unavailable results for split schedules",
+      "claim_id": "c005"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "Incorrect end time calculation using slotStartTime instead of slotEndTime",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 17,
+      "text": "Which concrete scenario is the new date-override / working-hours filtering layer in checkIfIsAvailable meant to fix? getSlots already uses the same workingHours and dateOverrides, so this layer can only remove slots, never add them, and it is unclear whether it patches a real gap or is purely defensive duplication.",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 4,
+      "text": "override.timeZone is optional on TimeRange but is assumed present when calling tz(override.timeZone) - if undefined, the offset math may be incorrect or throw depending on Dayjs config",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "The third checkIfIsAvailable call site (selectedSlots / seats path) does not pass workingHours and dateOverrides, so the newly added filtering never applies on that path and the same slot is judged by different availability rules depending on which path it takes.",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "UTC offset sign is negated \u2014 `utcOffset() * -1` moves override boundaries in the wrong direction for non-UTC organizers, causing incorrect day-boundary checks and wrong slot-range filtering",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "Array.prototype.find is used purely as a boolean test where .some() is the correct method; find also misreports a falsy element as 'not found'.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 16,
+      "text": "The diff contains three blank-line-only additions/removals unrelated to the timezone fix, which add noise to future git blame and bisect.",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 13,
+      "text": "The find callbacks only return true inside the if branch and otherwise fall through to an implicit undefined, the pattern ESLint's array-callback-return flags.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "The two new branches added to checkIfIsAvailable (date override and working hours) have no tests at all, and the existing fixture has only a single working-hours range so it structurally cannot trigger the regression.",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "Lines 102-140: .find() returns on first override that doesn't contain the slot, causing false rejection even if another override on the same day does - should use .filter() to collect all overrides for the day, then .some() to check if any contain the slot",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 18,
+      "text": "When dayjs.tz(date.start, organizerTimeZone) is given a Date object, does the plugin treat it as wall-clock time in that zone or as an absolute instant? The two interpretations give different utcOffset values on a DST transition day.",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "The added test switches the invitee timezone to +6:00 while keeping the organizer timezone and aligning the query window to the same UTC interval, then asserts the slots are identical, so it would still pass with the old conversion and does not cover the organizer-to-invitee offset that was actually fixed.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 14,
+      "text": "The find predicate sets the outer variable dateOverrideExist as a side effect, which readers cannot easily anticipate; it should be computed in its own separate pass.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "Using === for dayjs object comparison will always return false as it compares object references, not values. Use .isSame() method instead: dayjs(date.start).add(utcOffset, 'minutes').isSame(dayjs(date.end).add(utcOffset, minutes))",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 0,
+      "text": "The working-hours check in checkIfIsAvailable uses the wrong quantifier: it rejects a slot as soon as ANY working-hours entry does not contain it, instead of rejecting only when NO entry contains it, so a day with two working-hours ranges (or an organizer whose local hours cross UTC midnight) loses every slot.",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 3,
+      "text": "Working-hours check blocks slot if it falls outside ANY single entry, not ALL entries - if a user has two working-hour windows and the slot sits inside the second window, it will still be rejected because the first entry's check evaluates to true. Should use `some()` to allow slot if at least one working-hour entry fully contains it",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 4,
+      "text": "Line 212 uses override.timeZone which is optional - if undefined, dayjs may default to local TZ and mis-shift overrides. Should add fallback and avoid toString() parsing",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "organizerTimeZone is resolved with one precedence when generating slots (eventType.timeZone || schedule.timeZone || user timezone, passed to getTimeSlots) and with a different one when filtering them (each user's schedule.timeZone passed to checkIfIsAvailable), so the two stages can use different offsets.",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 11,
+      "text": "The same dayjs conversion expression, dayjs(date.start).add(utcOffset, \"minutes\"), is rebuilt five times inside one function (and twice more in packages/lib/slots.ts) within a nested per-slot per-override loop; it should be hoisted into a local const.",
+      "claim_id": "c024"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "TimeRange.timeZone is declared optional but packages/lib/slots.ts calls .tz(override.timeZone) as if it were required; when it is undefined dayjs silently falls back to the server's local timezone instead of failing.",
+      "claim_id": "c025"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 3,
+      "text": "When a slot falls within a date override window, checkIfIsAvailable returns true at line 134 without checking the busy array, allowing double bookings during date override periods. The fix: remove the early return true at line 134 and let execution fall through to the busy.every() check at line 153.",
+      "claim_id": "c026"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "Converting a date override into invitee-local minutes-of-day cannot express a range that crosses the invitee's local midnight; the result has startTime > endTime, buildSlots silently drops it via `if (start >= end) continue`, and the whole day returns zero slots.",
+      "claim_id": "c027"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 15,
+      "text": "override.start.toString() is passed to dayjs instead of the Date itself, producing a non-ISO string that falls back to implementation-defined new Date(string) parsing, and it is inconsistent with the dayjs(override.start) form used a few lines below.",
+      "claim_id": "c028"
+    }
+  ]
+}

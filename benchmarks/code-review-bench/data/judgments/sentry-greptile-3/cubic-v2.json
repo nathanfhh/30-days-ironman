@@ -1,0 +1,12 @@
+{
+  "slug": "sentry-greptile-3",
+  "tool": "cubic-v2",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 2, "confidence": 0.95,
+     "reasoning": "Both identify that a truthy check on client_sample_rate/sample_rate skips the valid value 0.0 because it's falsy."},
+    {"golden_index": 2, "candidate_index": 0, "confidence": 0.93,
+     "reasoning": "Both explain the eligibility check uses the outer dataset instead of scoped_dataset, causing upsampling to be skipped on paths like the dashboard split."}
+  ]
+}

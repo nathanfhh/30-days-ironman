@@ -1,0 +1,10 @@
+{
+  "slug": "keycloak-33832",
+  "tool": "claude-code",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 2, "confidence": 0.95,
+     "reasoning": "Both identify the same dead code: ASN1Encoder instances created and written to but discarded, with the actual encoding done by fresh encoders in the return statement."}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-80329",
+  "tool": "augment",
+  "n_golden": 1,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "Says cleanup paths log at Error level with no error present, flooding logs and creating false error signals — same issue as the golden."
+    }
+  ]
+}

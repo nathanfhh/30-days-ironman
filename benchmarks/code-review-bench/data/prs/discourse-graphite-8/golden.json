@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-8",
+  "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/8",
+  "pr_title": "FIX: proper handling of group memberships",
+  "language": "Ruby",
+  "comments": [
+    {
+      "comment": " The findMembers() call is now asynchronous and unhandled. The controller may not have member data immediately available, creating a race condition.",
+      "severity": "High"
+    },
+    {
+      "comment": "In the next action, capping the next offset at user_count can produce an empty page (e.g., total equal to limit results in offset == total, showing 2/2 with no members). This can cause confusing UX on the last page.",
+      "severity": "Medium"
+    },
+    {
+      "comment": "HTTP method mismatch in .remove_member - test uses PUT but remove_member action expects DELETE",
+      "severity": "Medium"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "slug": "discourse-graphite-2",
+  "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/2",
+  "pr_title": "FEATURE: per-topic unsubscribe option in emails",
+  "language": "Ruby",
+  "comments": [
+    {
+      "comment": "logic: Potential nil pointer exception - if no TopicUser record exists, tu will be nil and calling methods on it will crash",
+      "severity": "High"
+    },
+    {
+      "comment": "Typo in property name: 'stopNotificiationsText' should be 'stopNotificationsText' (missing 'n' in 'Notifications')",
+      "severity": "Low"
+    }
+  ]
+}

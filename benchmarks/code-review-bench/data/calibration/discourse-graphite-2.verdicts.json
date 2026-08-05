@@ -1,0 +1,221 @@
+{
+  "slug": "discourse-graphite-2",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "render-show-breaks-canonical",
+      "evidence": "app/controllers/topics_controller.rb:87,499; lib/canonical_url.rb:14; app/views/layouts/_head.html.erb:9",
+      "reason": "`show` calls `perform_show_response` and only afterwards calls `canonical_url(...)`, which merely assigns @canonical_url; with `render :show` now inside the format.html block the layout (and `canonical_link_tag`, which returns '' when @canonical_url is nil) is rendered before that assignment, so topics#show loses its canonical link."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "template-name-mismatch",
+      "evidence": "app/assets/javascripts/discourse/ember/resolver.js.es6:150-159; config/application.rb:147",
+      "reason": "Discourse's custom resolver's findTemplate tries `decamelized.replace(/\\_/, '/')`, so `template:topicUnsubscribe` -> `topic_unsubscribe` -> Ember.TEMPLATES['topic/unsubscribe'], which is exactly the key ember-rails registers for templates/topic/unsubscribe.hbs (templates_root 'discourse/templates'). The template resolves fine."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "unsubscribe-requires-login",
+      "evidence": "app/controllers/topics_controller.rb:28; app/controllers/application_controller.rb:97-106,408-410",
+      "reason": "`:unsubscribe` was added to the `ensure_logged_in` before_filter, and the NotLoggedIn rescue for a non-JSON GET does `redirect_to path(\"/\")` with no flash and no return URL, so an email recipient who is not signed in in that browser lands on the homepage and nothing is unsubscribed."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "dropdown-title-layout",
+      "evidence": "app/assets/javascripts/discourse/components/notifications-button.js.es6:5; components/pinned-button.js.es6:5; app/assets/stylesheets/desktop/discourse.scss:120-122; app/assets/stylesheets/vendor/bootstrap.scss:181-186",
+      "reason": "Both existing subclasses set `title: ''`, so previously an empty `<h4 class='title'></h4>` was emitted; headings are reset to `margin: 0` inside `body`, and an empty block box with no inline content generates no line box, so removing it changes nothing visually."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "duplicate-respond-instructions",
+      "evidence": "app/views/email/notification.html.erb:6,17; lib/email/message_builder.rb:62-66",
+      "reason": "The rewritten template keeps two `<div class='footer'>%{respond_instructions}</div>` blocks, and `html_override.gsub!` replaces every occurrence, so when context_posts are present the respond instructions are rendered twice (behaviour carried over rather than introduced, but the lines were rewritten here)."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "title-xss",
+      "evidence": "app/models/topic.rb:263-273; app/assets/javascripts/discourse/models/topic.js.es6:10-12; templates/topic.hbs:38",
+      "reason": "`fancy_title` is produced by `ERB::Util.html_escape(title)` on the server and `fancyTitle` only runs Emoji.unescape over it; triple-stash rendering of fancyTitle is the established pattern elsewhere (topic.hbs, header-extra-info.hbs), so no unescaped user input reaches the DOM."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "not_real",
+      "confidence": 0.9,
+      "severity": null,
+      "cluster": "trailing-comma",
+      "evidence": "app/controllers/topics_controller.rb:32; no .rubocop.yml in repo root",
+      "reason": "The `skip_before_filter` list it names is a single-line array `[:show, :unsubscribe, :feed]`, Ruby requires no trailing comma, the surrounding code never uses one, and the repo has no Ruby linter configured that could emit such a warning."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "redirect-not-reusing-helper",
+      "evidence": "app/controllers/topics_controller.rb:100-103,451-460; app/models/topic.rb:719-721",
+      "reason": "The new action hand-rolls `redirect_to @topic_view.topic.unsubscribe_url, status: 301` instead of going through `redirect_to_correct_topic`, so it skips that helper's `.json` suffixing and page handling; the 301 itself matches existing behaviour, but the duplicated redirect is a fair point."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "no-tests",
+      "evidence": "git show --stat HEAD; spec/components/email/message_builder_spec.rb:167-180",
+      "reason": "The only spec touched is message_builder_spec, which just adds `unsubscribe_url:` to an existing let block and asserts nothing new; there is no coverage of TopicsController#unsubscribe, Topic#unsubscribe_url, or the two new routes."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "first-click-only-regular",
+      "evidence": "app/controllers/topics_controller.rb:105-111; config/locales/server.en.yml:1851-1854; config/locales/client.en.yml:980-982",
+      "reason": "A watching/tracking user's first visit only drops the level to `regular` (still notified for replies to their posts and mentions), while the email says 'To stop receiving notifications about this particular topic' and the page says 'You will stop receiving notifications for <title>'."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "bypasses-topicuser-change",
+      "evidence": "app/controllers/topics_controller.rb:105-113; app/models/topic_user.rb:86-91,111-113,161-166; app/services/tracked_topics_updater.rb:9-15",
+      "reason": "`TopicUser.change` sets `notifications_reason_id` (and `notifications_changed_at`) and publishes to MessageBus; the direct `tu.save!` does neither, so the row can keep `notifications_reason_id IS NULL` — exactly the condition under which `update_last_read`'s SQL and TrackedTopicsUpdater silently push the level back to tracking/regular — and other open tabs are never notified."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "get-mutates-state",
+      "evidence": "config/routes.rb:440-441; app/controllers/topics_controller.rb:98-113,32",
+      "reason": "Both new routes are `get` and the action writes notification_level on every request; Rails does not CSRF-protect GET, and `skip_before_filter :check_xhr` makes plain HTML GETs valid, so a prefetcher or an `<img src>` in a post would fire it with the victim's cookies."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "template-name-mismatch",
+      "evidence": "app/assets/javascripts/discourse/ember/resolver.js.es6:150-159",
+      "reason": "Same as c002: the resolver's underscore-to-slash fallback maps `topicUnsubscribe` to Ember.TEMPLATES['topic/unsubscribe'], and customResolve dasherizes for the route/controller/view modules, so no rename is needed."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "previous-discussion-dot-class",
+      "evidence": "app/views/email/notification.html.erb:10",
+      "reason": "The rewritten line still reads `<h4 class='.previous-discussion'>`; a leading dot inside the class attribute makes the class literally `.previous-discussion`, which no ordinary `.previous-discussion` selector (e.g. in Email::Styles) can match."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "unsubscribe-requires-login",
+      "evidence": "app/controllers/topics_controller.rb:28; app/controllers/application_controller.rb:97-106; app/controllers/email_controller.rb:12-27; config/routes.rb:202",
+      "reason": "Both halves check out: logged-out visitors are redirected to '/' with no message or return URL, and the repo already has a keyed, login-free email unsubscribe path (`email/unsubscribe/:key` backed by DigestUnsubscribeKey) that this new link does not use."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "unsubscribe-url-interpolation-contract",
+      "evidence": "config/locales/server.en.yml:1851-1854; lib/email/message_builder.rb:20-27,67,88-90",
+      "reason": "The en `unsubscribe_link` string now interpolates `%{unsubscribe_url}`, but MessageBuilder's default template_args only seed site_name/base_url/user_preferences_url and no default is added; I18n raises MissingInterpolationArgument by default (no handler is configured anywhere in config/ or lib/), so any caller passing add_unsubscribe_link without unsubscribe_url now blows up in both `body` and `html_part`."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "list-unsubscribe-test-weak",
+      "evidence": "spec/components/email/message_builder_spec.rb:167-177; lib/email/message_builder.rb:105-108",
+      "reason": "The spec now passes `unsubscribe_url:` but the List-Unsubscribe example still only asserts `be_present`, so nothing pins down what the header contains; the header value is in fact still user_preferences_url, which the test would have surfaced."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "unsubscribe-url-interpolation-contract",
+      "evidence": "lib/email/message_builder.rb:20-27,67,88-90; app/mailers/user_notifications.rb:294-295",
+      "reason": "Correct as a statement about the new contract: `add_unsubscribe_link: true` now effectively requires `unsubscribe_url` because the en translation interpolates it, and nothing in MessageBuilder defaults or validates it — same underlying gap as c016."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "get-mutates-state",
+      "evidence": "config/routes.rb:440-441; app/controllers/topics_controller.rb:98-113",
+      "reason": "Accurate restatement of the same defect as c012: both routes are GET and the action unconditionally writes notification_level and saves on each visit, so scanners/prefetchers acting on the emailed link mutate state without user intent."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "nil-topic-user",
+      "evidence": "app/controllers/topics_controller.rb:105-107",
+      "reason": "`TopicUser.find_by(...)` returns nil when the signed-in user has no row for that topic (any logged-in user can hit the URL for a topic they never visited), and the very next line calls `tu.notification_level`, producing a NoMethodError/500; there is no guard or `TopicUser.change` fallback."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "client-transition-shows-stopped",
+      "evidence": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs:3; routes/topic-unsubscribe.js.es6:4-16; controllers/topic-unsubscribe.js.es6:5-7",
+      "reason": "The Ember route only loads the topic view; the template renders stopNotificiationsText unconditionally, so reaching the URL through an in-app link or back/forward transition shows 'You will stop receiving notifications' even though the server action (the only thing that writes) was never invoked."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "get-mutates-state",
+      "evidence": "config/routes.rb:440-441; app/controllers/topics_controller.rb:98-113",
+      "reason": "Same issue as c012/c019 with the concrete remedy named: topics#unsubscribe mutates TopicUser state behind a GET route with no token or confirmation step."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "list-unsubscribe-header-omits-topic-url",
+      "evidence": "lib/email/message_builder.rb:105-108",
+      "reason": "header_args is untouched by this change: List-Unsubscribe is still `<#{template_args[:user_preferences_url]}>`, so a mail client's unsubscribe button unsubscribes from all email rather than the new per-topic URL the body now advertises."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "typo-stop-notificiations",
+      "evidence": "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6:5; app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs:3",
+      "reason": "The property is spelled `stopNotificiationsText` in both the controller and the template, so it works, but the name is misspelled and will trip up anyone grepping for it."
+    }
+  ]
+}

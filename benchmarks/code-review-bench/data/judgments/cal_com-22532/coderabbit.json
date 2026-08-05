@@ -1,0 +1,14 @@
+{
+  "slug": "cal_com-22532",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 11,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 4,
+      "confidence": 0.98,
+      "reasoning": "Both say sed -i '' is BSD-only and breaks on Linux GNU sed."
+    }
+  ]
+}

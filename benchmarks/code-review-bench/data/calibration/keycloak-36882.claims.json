@@ -1,0 +1,81 @@
+{
+  "slug": "keycloak-36882",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Hardcoded --features=rolling-updates in the updatecompatibility macro will become stale when the feature is promoted to stable, needs a comment noting removal on graduation or a conditional based on preview status"
+    },
+    {
+      "claim_id": "c002",
+      "text": "The error message and the test constants hardcode the literal 'rolling-updates' instead of deriving it from Profile.Feature.ROLLING_UPDATES.getKey(), so a rename or a version suffix would silently desynchronise the message and the assertions."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The only externally visible contract this PR changes \u2014 exit codes 3 and 4 \u2014 has no test pinning it: testFeatureNotEnabled asserts only the stderr string and the class's sole exit-code assertion is assertEquals(0, ...) in testCompatible."
+    },
+    {
+      "claim_id": "c004",
+      "text": "Should adding a new Type.PREVIEW feature come with an entry in docs/documentation/release_notes/topics/26_2_0.adoc? The existing convention in this area is itself inconsistent, so the repo cannot settle whether this is an omission."
+    },
+    {
+      "claim_id": "c005",
+      "text": "Does running the documented `kc.sh update-compatibility metadata --file=... --features=rolling-updates` trigger re-augmentation, i.e. does a read-only compatibility check end up rewriting the server's persisted build configuration?"
+    },
+    {
+      "claim_id": "c006",
+      "text": "Breaking exit code change: RECREATE_UPGRADE_EXIT_CODE moved from 4 to 3, which could break existing scripts consuming these codes"
+    },
+    {
+      "claim_id": "c007",
+      "text": "The new constant is named FEATURE_DISABLED while the two neighbouring exit-code constants in the same interface are ROLLING_UPGRADE_EXIT_CODE and RECREATE_UPGRADE_EXIT_CODE, so at the call site picocli.exit(CompatibilityResult.FEATURE_DISABLED) reads like a status flag rather than an exit code."
+    },
+    {
+      "claim_id": "c008",
+      "text": "The five-line feature gate is duplicated verbatim in UpdateCompatibilityCheck.run() and UpdateCompatibilityMetadata.run() while the shared parent AbstractUpdatesCommand only holds the message helper, so a third subcommand added later defaults to being unguarded with nothing to catch it."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Line 46 calls Profile.isFeatureEnabled(...) which will throw NullPointerException if Profile.getInstance() is null. The CLI bootstrap sequence does not guarantee Profile is initialized before run() is invoked. Need to add Environment.getCurrentOrCreateFeatureProfile() before the feature check, or make Profile.isFeatureEnabled() null-safe."
+    },
+    {
+      "claim_id": "c010",
+      "text": "When updateStrategy is null, createInitialDeployment returns early before setting ROLLING_UPDATES on the FeatureSpec, but testCacheMaxCount(null) relies on rolling-update behavior - this will break if the operator adds a feature check"
+    },
+    {
+      "claim_id": "c011",
+      "text": "kc.adoc appends the build-time --features option to the runtime update-compatibility command, contradicting the same guide's WARNING that all configuration options must be included: a deployment that already passes --features ends up with two --features arguments and ConfigArgsConfigSource keeps only the last one, so the captured metadata does not reflect the real feature set."
+    },
+    {
+      "claim_id": "c012",
+      "text": "The new operator documentation states that the rolling-updates feature must be enabled or the Keycloak Operator will fail, but nothing in operator/src/main ever reads Profile.Feature.ROLLING_UPDATES; UpgradeLogicFactory and BaseUpgradeLogic only look at spec.update.strategy, and the PR's own UpgradeTest runs the upgrade flow with the feature disabled."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Incorrect method call for exit codes. The picocli.exit() method calls System.exit() directly, which is problematic:"
+    },
+    {
+      "claim_id": "c014",
+      "text": "The default-strategy test case returns before the new rolling-updates feature flag is enabled, so the `null` branch no longer covers the rolling-update path"
+    },
+    {
+      "claim_id": "c015",
+      "text": "Documentation inconsistency: The exit-code 4 row in the table says 'Rolling Upgrade is not possible...' but the actual CLI error message when the feature is disabled is 'Unable to use this command...'. The table wording should be aligned with the actual behavior/message to avoid confusion for script authors."
+    },
+    {
+      "claim_id": "c016",
+      "text": "Documentation warning is broader than the implementation: the default `<not set>` strategy still works without `rolling-updates`, so saying the operator will fail is misleading"
+    },
+    {
+      "claim_id": "c017",
+      "text": "testFeatureNotEnabled only runs the metadata subcommand, so the identical gate in UpdateCompatibilityCheck is never executed by any test \u2014 exactly the copy-pasted shape most likely to drift out of sync."
+    },
+    {
+      "claim_id": "c018",
+      "text": "The kc.adoc macro is the generic template for update-compatibility and must be reverted once the feature leaves preview, but nothing marks it as a temporary preview-stage measure."
+    },
+    {
+      "claim_id": "c019",
+      "text": "RECREATE_UPGRADE_EXIT_CODE is changed from 4 to 3 and 4 is reassigned to 'feature disabled'; this is a contract change for a preview command that the guide tells users to rely on, and it ships with no release note, no upgrading note and no explanation in the diff."
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "slug": "cal_com-14943",
+  "issues": [
+    {
+      "text": "After only two failed scheduling attempts (about 30 minutes) the reminder row is permanently deleted, even though the event may still be up to 7 days away and the delete branch has no scheduledDate condition; the failures that increment the counter are mostly transient or environmental (missing Twilio credentials, Twilio outage, SMS lock), and nothing ever recreates the deleted reminder.",
+      "zh": "排程失敗兩次（約 30 分鐘）就永久刪除 reminder，而事件可能還有 7 天才發生",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "retryCount is incremented as reminder.retryCount + 1, a read-modify-write based on the value read before the loop; with no concurrency guard on the GitHub Actions cron, overlapping runs overwrite each other's increment and the count comes out low — Prisma's { increment: 1 } would make this atomic.",
+      "zh": "retryCount 以 read-modify-write 遞增，兩輪重疊時會少算",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new delete branch has no method: WorkflowMethods.SMS filter, unlike the handler's other three queries, so it would silently delete EMAIL and WHATSAPP reminders as soon as another cron starts writing retryCount (scheduleWhatsappReminders is a near-line-by-line copy).",
+      "zh": "新的刪除分支沒有 method 限制",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Because the OR combines an indexed predicate with retryCount, for which there is no index, the whole deleteMany can no longer use the @@index([method, scheduled, scheduledDate]) and runs every 15 minutes without index support.",
+      "zh": "也讓整個 deleteMany 用不到 index",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The prisma.workflowReminder.update newly added inside the catch block is itself unprotected; if it throws (P2025 when the row was already deleted, or the DB being unavailable — the very reason the catch ran), the exception escapes the for loop and the whole cron run turns into a 500, escalating a single-reminder failure into a run-wide one.",
+      "zh": "catch 內新增的 update 本身沒有保護，丟出例外會讓整輪剩下的 reminder 全部跳過",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The newly added data-deleting branch has no tests at all — there are no test files under packages/features/ee/workflows — even though the repo already uses prismock to test SMS lock behaviour, so the tooling exists.",
+      "zh": "新增的刪除路徑沒有任何測試",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "`gt: 1` is an unnamed, uncommented threshold; it should be a named constant (e.g. MAX_SMS_SCHEDULE_ATTEMPTS) so the intended limit is explicit.",
+      "zh": "`gt: 1` 是沒有名字的門檻值",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "The field is named retryCount but becomes 1 after the first attempt, which is not a retry, so the name is off by one from the semantics (failureCount would be accurate) — an easy target for someone later 'fixing' it to gte: 1 or gt: 2.",
+      "zh": "而 retryCount 的名稱與語意差一",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "The deletion is silent: deleteMany's count is not even captured, no reminder id is logged, and the existing console.log does not include the reminder id or use the repo's logger, so afterwards there is no way to answer which reminders were abandoned or why.",
+      "zh": "刪除是靜默的，事後無法回答「哪些提醒被放棄了」",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Are the WhatsApp and Email crons deliberately out of scope, or were they missed? retryCount lives on the shared WorkflowReminder model but only the SMS cron uses it, and scheduleWhatsappReminders is nearly identical with the same unbounded retrying.",
+      "zh": "WhatsApp 與 Email 兩支 cron 是刻意不納入這次範圍，還是漏了？"
+    },
+    {
+      "text": "What does this deleteMany actually cost in production every 15 minutes? The retryCount branch has no usable index, and neither the DB nor production row counts are available here to tell whether this is negligible or a recurring full table scan.",
+      "zh": "這個每 15 分鐘一次的 deleteMany 在 production 的實際成本是多少？"
+    }
+  ]
+}

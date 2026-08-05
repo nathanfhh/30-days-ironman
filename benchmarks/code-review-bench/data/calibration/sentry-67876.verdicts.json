@@ -1,0 +1,257 @@
+{
+  "slug": "sentry-67876",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "customer-domain-round-trip",
+      "evidence": "src/sentry/integrations/github/integration.py:389-409; src/sentry/identity/oauth2.py:252-254; src/sentry/web/frontend/pipeline_advancer.py:54",
+      "reason": "OAuth2LoginView binds `subdomain` before redirecting out; the new OAuthLoginView does not, and grep shows no other bind_state(\"subdomain\") on the integration pipeline, so pipeline_advancer's subdomain-restore branch never fires for the GitHub flow. Pre-existing gap, but the new redirect-out view is exactly where OAuth2LoginView puts the bind."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "oauth-callback-no-exception-handling",
+      "evidence": "src/sentry/integrations/github/integration.py:423,434; src/sentry/http.py:65-118; src/sentry/identity/github/provider.py:7-17",
+      "reason": "safe_urlopen() sits outside the try block and can raise requests ConnectionError/Timeout/SSLError, and get_user_info() calls resp.raise_for_status(); neither is caught, so failures become a 500 rather than the error() page, unlike OAuth2CallbackView.exchange_token which catches these."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "test-positional-responses-index",
+      "evidence": "tests/sentry/integrations/github/test_integration.py:257",
+      "reason": "assert_setup_flow asserts on responses.calls[2].request.headers, an index that only happens to be the JWT-authenticated /access_tokens call because _stub_github now inserts the token and /user stubs first; any further stub reordering silently validates a different request."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "customer-domain-round-trip",
+      "evidence": "src/sentry/integrations/github/integration.py:404-406; src/sentry/web/frontend/base.py:230-235",
+      "reason": "redirect_uri is absolute_uri(reverse(...)) with no url_prefix, so the callback lands on the main domain while the user started on the org subdomain; whether the pipeline session cookie and activeorg fallback survive that depends on SESSION_COOKIE_DOMAIN and the real customer-domain deployment, which is not in the repo. Settled by the production cookie/domain config or an end-to-end run on a customer domain."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "token-exchange-missing-redirect-uri",
+      "evidence": "src/sentry/integrations/github/integration.py:404-420",
+      "reason": "The authorize URL (line 408) carries redirect_uri but the token-exchange payload (lines 416-420) has only code/client_id/client_secret; RFC 6749 4.1.3 requires the identical redirect_uri on the token request when it was sent to authorize. OAuth2CallbackView.get_token_params does include it."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "oauth-callback-no-exception-handling",
+      "evidence": "src/sentry/identity/github/provider.py:7-17; src/sentry/integrations/github/integration.py:434",
+      "reason": "get_user_info does call resp.raise_for_status(), and the call site at line 434 is outside any try block, so a 401/429/5xx from api.github.com raises HTTPError and 500s the install flow instead of rendering github-integration-failed.html."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "oauth-callback-no-exception-handling",
+      "evidence": "src/sentry/integrations/github/integration.py:423-436; src/sentry/identity/oauth2.py:292-314",
+      "reason": "Same finding as c002/c006 stated over both calls: neither safe_urlopen nor get_user_info is guarded, while the OAuth2CallbackView this code says it mirrors catches SSLError/ConnectionError/JSONDecodeError and returns a pipeline error."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "test-installation-not-found-wrong-state",
+      "evidence": "tests/sentry/integrations/github/test_integration.py:380-396; src/sentry/integrations/github/integration.py:412-413",
+      "reason": "test_installation_not_found now sends state=ddd023d8... while pipeline.signature is 9cae5e88... (the value every other test uses), so the request is rejected at the state comparison in OAuthLoginView and GitHubInstallation/build_integration's 404 handling is never reached; the assertion was changed to match the state-failure message."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "first-install-path-no-identity-check",
+      "evidence": "src/sentry/integrations/github/integration.py:483-486; src/sentry/integrations/github/webhook.py:199-211",
+      "reason": "The code shows the unchecked branch exists, but whether the window between GitHub's installation.created webhook and the browser redirect is wide enough to be reliably exploited is a timing/runtime question. Settled by measuring webhook delivery latency versus redirect completion in production, or by a design decision to close the branch regardless."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "installation-id-from-get-during-callback",
+      "evidence": "src/sentry/integrations/github/integration.py:396-398,494-505",
+      "reason": "The observation that installation_id is read from GET unconditionally is correct, but the consequence is not: the attacker only controls one side of the comparison. github_authenticated_user comes from the access token GitHub issued for whoever authorized, and metadata[\"sender\"][\"login\"] comes from the stored webhook payload; picking an arbitrary installation_id makes the check fail, it does not bypass it."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "first-install-path-no-identity-check",
+      "evidence": "src/sentry/integrations/github/integration.py:478-486; src/sentry/integrations/github/integration.py:351-378",
+      "reason": "In GitHubInstallation.dispatch, Integration.DoesNotExist returns pipeline.next_step() immediately, and build_integration only looks the installation up via the app-authenticated API — no comparison against github_authenticated_user anywhere on that path, so the new sender check only covers installations the webhook already created."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "test-installation-not-found-wrong-state",
+      "evidence": "tests/sentry/integrations/github/test_integration.py:388-396",
+      "reason": "Same as c008: the state literal in this test differs from pipeline.signature, so OAuthLoginView returns the error page at line 412-413 and the responses.replace(...status=404) stub the test sets up is never exercised."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "sender-metadata-keyerror",
+      "evidence": "src/sentry/integrations/github/integration.py:500-505; src/sentry/integrations/github/integration.py:376-377; src/sentry/integrations/github/installation.py:44-45",
+      "reason": "metadata[\"sender\"] is only set when build_integration receives a state with \"sender\", which only the webhook path supplies; integrations created through the install pipeline have no sender key, and installation.py already guards with `if \"sender\" not in integration.metadata`. The new comparison indexes it unguarded, so that reachable case 500s."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "hardcoded-state-literal-duplicated",
+      "evidence": "tests/sentry/integrations/github/test_integration.py:235,242,338,445,707,737",
+      "reason": "The md5 of the view list appears as a bare literal in five request URLs (plus once inside the expected query assertion); since pipeline.signature is derived from the pipeline view class names, changing the view composition breaks all of them with an opaque 'Invalid installation request.' assertion failure."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "static-oauth-state",
+      "evidence": "src/sentry/integrations/github/integration.py:402,412; src/sentry/pipeline/base.py:128-131; src/sentry/identity/oauth2.py:244-254",
+      "reason": "pipeline.signature is md5 of the pipeline view class names — a constant shared by every user and every install, and derivable from open-source code — whereas OAuth2LoginView uses secrets.token_hex() per request. The state check at line 412 therefore binds the callback to nothing."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "authorize-url-not-urlencoded",
+      "evidence": "src/sentry/integrations/github/integration.py:404-409",
+      "reason": "The redirect_uri returned by absolute_uri() is interpolated raw into the query string (the test pins 'redirect_uri=http://testserver/extensions/github/setup/'), so its ':' and '/' are never percent-encoded; urlencode/quote is the normal treatment here and is what OAuth2LoginView uses."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "signature-change-invalidates-inflight-pipelines",
+      "evidence": "src/sentry/pipeline/base.py:126-131,145-151; src/sentry/web/frontend/pipeline_advancer.py:50-52",
+      "reason": "signature is md5 of the serialized view list and is_valid() compares the stored signature to the recomputed one; adding OAuthLoginView to get_pipeline_views changes it, so any session stored before deploy fails is_valid() and pipeline_advancer redirects to '/' with 'Invalid request.'"
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "gettext-on-variable",
+      "evidence": "src/sentry/integrations/github/integration.py:128-146; Makefile:61; src/sentry/locale/*/LC_MESSAGES/django.po",
+      "reason": "The two short messages previously sat inside literal `_( )` calls and are present as msgids in the shipped .po catalogs; after the refactor only `_(error_short)` remains, which `sentry django makemessages` cannot extract, so the next extraction drops them (and the new default string never enters the catalog)."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "test-resp-overwritten",
+      "evidence": "tests/sentry/integrations/github/test_integration.py:341-342,385-395,731-745",
+      "reason": "In test_github_installed_on_another_org, test_installation_not_found and the customer-domain test, `resp = self.client.get(...)` is immediately reassigned by the next call with nothing read from the first response; the first call is only needed for its side effect on the pipeline, so the binding is dead."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "sender-login-vs-id",
+      "evidence": "src/sentry/integrations/github/integration.py:438,500-505; src/sentry/integrations/github/webhook.py:203-207; src/sentry/identity/github/provider.py:7-17",
+      "reason": "The webhook stores both sender.id and sender.login and /user returns id as well, but the pipeline binds and compares only the login, which GitHub lets users change and lets others re-register; comparing the numeric id would be stable."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "authorize-url-not-urlencoded",
+      "evidence": "src/sentry/integrations/github/integration.py:407-409",
+      "reason": "Same defect as c016/c025: the authorize URL is assembled with an f-string over client_id/state/redirect_uri with no escaping, where OAuth2LoginView builds the identical URL with urlencode(params)."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "duplicate-integration-query",
+      "evidence": "src/sentry/integrations/github/integration.py:478-497",
+      "reason": "Integration.objects.get(external_id=installation_id) runs inside the installations_exist filter and again a few lines later with an extra status=ACTIVE filter, with no write between them; one fetch plus a status check on the object would do."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "pipeline-advancer-e402",
+      "evidence": "src/sentry/web/frontend/pipeline_advancer.py:15-19; setup.cfg:87-96",
+      "reason": "This repo lints with flake8, not ruff, and E402 is explicitly in extend-ignore, so no lint error exists. The 'now trivial to fix' premise is also wrong: PIPELINE_CLASSES still sits above the rest_framework import, so removing FORWARD_INSTALL_FOR changed nothing about the import's position rule."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "test-installation-not-found-wrong-state",
+      "evidence": "tests/sentry/integrations/github/test_integration.py:388-396",
+      "reason": "Same finding as c008/c012 stated briefly: the state value in test_installation_not_found does not match pipeline.signature, so the request stops at the state check and the 404-installation path is not covered."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "authorize-url-not-urlencoded",
+      "evidence": "src/sentry/integrations/github/integration.py:407-409; tests/sentry/integrations/github/test_integration.py:233-236",
+      "reason": "Confirmed on both halves: the URL is f-string built rather than urlencoded, and assert_setup_flow pins the expected query with the raw, unencoded 'http://testserver/extensions/github/setup/', which would cement the behaviour."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "broad-except-token-parse",
+      "evidence": "src/sentry/integrations/github/integration.py:425-429; src/sentry/http.py:119-120",
+      "reason": "Both halves check out: `except Exception` swallows anything, and the guarded statements cannot really fail — safe_urlread just returns response.content and parse_qsl with default strict_parsing=False never raises — so the block is close to dead code while the calls that actually raise (safe_urlopen, get_user_info) sit outside it."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "missing-github-user-state",
+      "evidence": "src/sentry/integrations/github/integration.py:500-505",
+      "reason": "The only use of that state is `pipeline.fetch_state(\"github_authenticated_user\") != integration.metadata[...]`; fetch_state returns None when absent and None simply compares unequal, sending the user to the error page. There is no attribute or index access on it, so no null dereference is possible."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "missing-type-annotations",
+      "evidence": "src/sentry/integrations/github/integration.py:128-146,389; compare 124-126 and 445-447",
+      "reason": "error(request, org, ...) has no annotations at all, get_document_origin(org) leaves the parameter untyped, and OAuthLoginView.dispatch types request but not pipeline, whereas build_repository_query and GitHubInstallation.dispatch in the same file are fully annotated."
+    }
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "slug": "discourse-graphite-6",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "long-ternary-readability",
+      "evidence": "app/serializers/user_serializer.rb:144-146",
+      "reason": "Line 146 is a 147-column ternary (141 chars of code) sitting inside a two-part elsif condition that itself calls split('.') three times; the stated character count (133) and the word 'nested' are imprecise, but the readability complaint about that exact expression is accurate."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "include-method-missing-question-mark",
+      "evidence": "app/serializers/user_serializer.rb:153",
+      "reason": "AMS 0.8.3 (Gemfile.lock:22) auto-defines include_<attr>? => true from `attributes` unless one already exists, so `def include_website_name` (no ?) is dead code and website_name is serialized unconditionally, including as null when website is blank; every other guard in this file uses the ? form (97 occurrences under app/serializers)."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "spec-untrusted-list-not-updated",
+      "evidence": "spec/serializers/user_serializer_spec.rb:11",
+      "reason": "The spec's untrusted_attributes literal is still %i{bio_raw bio_cooked bio_excerpt location website profile_background card_background}; website_name was not added, so the 'doesn't serialize untrusted attributes' example passes despite the new field leaking."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "website-name-not-untrusted",
+      "evidence": "app/serializers/user_serializer.rb:25-33,105-111,153",
+      "reason": "untrusted_attributes generates include_<attr>? with `return false if scope.restrict_user_fields?(object)` (Guardian#restrict_user_fields? = TL0 && anonymous, lib/guardian/user_guardian.rb:58); the hand-written include_website_name has no such guard, so the derived label escapes the check that hides :website."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "website-name-not-untrusted",
+      "evidence": "app/serializers/user_serializer.rb:105-111",
+      "reason": "The untrusted_attributes list names :website but not :website_name, and website_name returns the URL host, so an anonymous viewer of a TL0 profile still receives the domain that :website was deliberately suppressed to hide."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "redundant-uri-and-split-reparse",
+      "evidence": "app/serializers/user_serializer.rb:138-149",
+      "reason": "URI(website.to_s) is written four times and evaluated twice on any single path (once for host, once for path); split('.') appears five times on the elsif path (three in the condition, two in the body) with nothing cached. The '.split six times' count is one high but the redundancy is real."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "no-test-website-name-absent",
+      "evidence": "spec/serializers/user_serializer_spec.rb:68-90",
+      "reason": "All three new examples live inside the 'with filled out website' context; nothing asserts json has no :website_name key when user_profile.website is blank, which is exactly the case the broken include_ guard would have covered."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "redundant-uri-and-split-reparse",
+      "evidence": "app/serializers/user_serializer.rb:138,143,146,149",
+      "reason": "Same redundancy as the URI half of c006: the string is re-parsed rather than parsed once and held. 'Up to three times per call' is an overcount (two evaluations on any path, four textual sites), but the fix it asks for is correct."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "subdomain-parent-check-asymmetric",
+      "evidence": "app/serializers/user_serializer.rb:149",
+      "reason": "Verified by running the method's logic: instance forums.example.com + website http://example.com/user yields 'example.com/user', but instance example.com + website http://www.example.com/user yields 'www.example.com' with the path dropped, because only discourse_host.ends_with?('.'+website_host) is tested and never the reverse."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "bare-rescue-nil-hides-website",
+      "evidence": "app/serializers/user_serializer.rb:138; app/assets/javascripts/discourse/templates/user/user.hbs:66",
+      "reason": "`rescue nil` as a modifier catches StandardError, and URI('http://exa mple.com') raises URI::InvalidURIError, so website_name becomes nil; the template now gates the whole globe/link block on {{#if model.website_name}}, whereas the removed JS websiteName did website.split('/')[2] and would have rendered 'exa mple.com'. user_profile.website has no format validation (app/models/user_profile.rb)."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "elsif-branch-untested",
+      "evidence": "spec/serializers/user_serializer_spec.rb:76-89",
+      "reason": "The three new examples stub current_hostname as discourse.org, example.com and forums.example.com against website example.com; the first hits the else branch, the second the equality branch, the third the else branch's ends_with? path. None satisfies equal label count with more than two labels, so the elsif is never executed."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "hostname-port-in-comparison",
+      "evidence": "lib/discourse.rb:178-208; config/database.yml:8",
+      "reason": "current_hostname is force_hostname or RailsMultisite host_names.first, and the port is a separate SiteSetting appended by base_url_no_prefix; database.yml states outright 'Don't include the port number here. Change the port site setting instead.' The premise the concern rests on does not hold."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "empty-host-not-guarded",
+      "evidence": "app/serializers/user_serializer.rb:138-140",
+      "reason": "Confirmed by running it: URI('file:///etc/passwd').host is '' (not nil), so the nil guard passes, ''.split('.') is [], the else branch runs and ends_with?('.') is false, yielding website_name == '' in the payload."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "website-name-not-untrusted",
+      "evidence": "app/serializers/user_serializer.rb:24-33,105-111",
+      "reason": "Same finding as c005 stated as the anti-spam consequence: the class comment on untrusted_attributes says these are 'hidden for TL0 users when seen by anonymous', and website_name reproduces the hidden website's domain outside that mechanism."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "subdomain-parent-check-asymmetric",
+      "evidence": "app/serializers/user_serializer.rb:144-149",
+      "reason": "Reproduced exactly: discourse_host 'example.com' (2 labels) vs website_host 'www.example.com' (3 labels) fails the elsif label-count test, falls to else, and 'example.com'.ends_with?('.www.example.com') is false, so the result is 'www.example.com' with the path stripped."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "public-suffix-misjudged",
+      "evidence": "app/serializers/user_serializer.rb:144-146",
+      "reason": "Reproduced: instance mysite.co.uk and website http://evil.co.uk/spam both have three labels, dropping the first leaves 'co.uk' == 'co.uk', so an unrelated domain is rendered as 'evil.co.uk/spam' with its full path; same for com.br."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "elsif-branch-untested",
+      "evidence": "spec/serializers/user_serializer_spec.rb:76-89",
+      "reason": "Same gap as c011 phrased as the sibling-subdomain case: no example stubs a hostname with three or more labels against a website host of matching length, so the elsif at line 144 has no coverage."
+    }
+  ]
+}

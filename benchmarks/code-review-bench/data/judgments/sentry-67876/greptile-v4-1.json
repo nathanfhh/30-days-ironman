@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-67876",
+  "tool": "greptile-v4-1",
+  "n_golden": 3,
+  "n_candidates": 2,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both flag the unguarded access to integration.metadata['sender']['login'] causing a KeyError when the sender key is missing."}
+  ]
+}

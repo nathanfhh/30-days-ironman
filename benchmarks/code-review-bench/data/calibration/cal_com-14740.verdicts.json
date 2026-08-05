@@ -1,0 +1,356 @@
+{
+  "slug": "cal_com-14740",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "client-schema-name-collision",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:19; packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3",
+      "reason": "The dialog defines `const ZAddGuestsInputSchema = z.array(z.string().email()).refine(...)` while the server file exports `ZAddGuestsInputSchema = z.object({bookingId, guests})`; same identifier, unrelated shapes, two places to keep in sync."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "email-error-swallowed",
+      "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168-170",
+      "reason": "`catch (err) { console.log(\"Error sending AddGuestsEmails\"); }` never references `err`, so nothing about the failure is logged (the same shape exists in editLocation.handler.ts, but the claim is still accurate about this code)."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "duplicate-attendee-race",
+      "evidence": "packages/prisma/schema.prisma:526-539; addGuests.handler.ts:24-45,90-104",
+      "reason": "The Attendee model has only @@index([email]) and @@index([bookingId]) — no unique constraint — and the read/filter/createMany sequence is not wrapped in a transaction, so two concurrent calls with the same address both pass the in-memory `uniqueGuests` filter."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "lazy-40kb-comment",
+      "evidence": "packages/ui/form/MultiEmailLazy.tsx:3; packages/ui/form/MultiEmail.tsx (96 lines)",
+      "reason": "The comment is copied verbatim from PhoneInputLazy/AddressInputLazy but MultiEmail.tsx is 96 lines and imports only @calcom/ui primitives, so the 40kb justification is untrue here."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "team-admin-and-owner",
+      "evidence": "packages/lib/server/queries/teams/index.ts:264-285; addGuests.handler.ts:57-59",
+      "reason": "isTeamAdmin already matches `OR: [{role: ADMIN}, {role: OWNER}]`, so `isTeamAdmin && isTeamOwner` collapses to owner-only and locks out team admins the check was meant to allow."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "dead-toast-fallback",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:35-38",
+      "reason": "`const message = \\`${err.data?.code}: ${t(err.message)}\\`` is a template literal, so it is never falsy; `message || t(\"unable_to_add_guests\")` can never fall through, and a missing code renders as the literal text `undefined:`."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "schema-built-in-render",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:18-22",
+      "reason": "The zod schema is constructed in the component body on every render although it closes over nothing; it belongs at module scope."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "no-tests",
+      "evidence": "diff.patch (no test file added); apps/web/playwright/bookings-list.e2e.ts",
+      "reason": "The change adds a tRPC handler, a dialog, a shared UI component and two email templates and contains no unit or e2e test of any kind."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "no-tests",
+      "evidence": "packages/ui/form/MultiEmail.tsx:59,79; apps/web/components/dialog/AddGuestsDialog.tsx:78; apps/web/playwright/bookings-list.e2e.ts",
+      "reason": "Verified each detail: the three data-testid values exist and grep finds no test referencing them, and bookings-list.e2e.ts exists as an obvious home for a test."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "email-disable-flags-ignored",
+      "evidence": "packages/emails/email-manager.ts:517-542 vs 494-516",
+      "reason": "sendAddGuestsEmails takes no eventTypeMetadata and calls neither eventTypeDisableHostEmail nor eventTypeDisableAttendeeEmail, unlike sendLocationChangeEmails directly above it and essentially every other sender in the file."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "empty-fragment",
+      "evidence": "packages/ui/form/MultiEmail.tsx:74-76",
+      "reason": "The ternary's else branch renders `<></>`; the two branches are `value.length` and `!value.length` and could be written as two guarded blocks with no empty fragment."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "multiemail-duplicated-from-form-builder",
+      "evidence": "packages/features/form-builder/Components.tsx:231-310",
+      "reason": "The form-builder `multiemail` factory is the same component down to the identical inputClassName string; it still carries `//TODO: Make it a ui component` and was not switched to the new packages/ui/form/MultiEmail, so two copies now exist."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "dialog-state-not-reset",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:26,45-51,71-77",
+      "reason": "Nothing clears isInvalidEmail on input change, so the red banner survives editing; the claim's aside that retrying clears it is if anything too generous — handleAdd never sets it back to false on success either."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "no-booking-status-check",
+      "evidence": "addGuests.handler.ts:20-45; packages/emails/templates/attendee-add-guests-email.ts:9-14",
+      "reason": "The findFirst filters on id only and no status guard follows, while the generated ICS is hardcoded `status: \"CONFIRMED\"` with `method: \"REQUEST\"`; the list UI hides the menu for cancelled bookings but the tRPC mutation is directly callable."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dialog-state-not-reset",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:24,53-54",
+      "reason": "`onOpenChange={setIsOpenDialog}` only flips the boolean; multiEmailValue is reset in onSuccess and in the Cancel handler but not on X/Esc/overlay dismissal, and the dialog's owner component stays mounted so the state persists."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "email-error-swallowed",
+      "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168-170",
+      "reason": "Same finding as the other error-handling claim: the caught error object is discarded and only a constant string reaches the log."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "duplicate-guests-within-input",
+      "evidence": "addGuests.handler.ts:74-79,90-104; addGuests.schema.ts:3-6",
+      "reason": "uniqueGuests only excludes existing attendees and blacklisted addresses; the server schema has no uniqueness refinement, so a repeated address in one request reaches createMany twice (the client-side Set check is not enforced server-side)."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "index-as-key",
+      "evidence": "packages/ui/form/MultiEmail.tsx:20-21,36-40",
+      "reason": "`<li key={index}>` combined with `updatedValue.splice(index, 1)` means React keeps the same DOM inputs and shifts values into them, so focus/caret/IME state stays on the row position rather than the row content."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dialog-state-not-reset",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:26,45-51,61-63,71-77",
+      "reason": "setIsInvalidEmail(false) appears only in the Cancel button handler; onSuccess and onOpenChange do not touch it, and AddGuestsDialog is rendered unconditionally from BookingListItem so it never unmounts."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "emails-use-unfiltered-guest-list",
+      "evidence": "addGuests.handler.ts:167; packages/emails/email-manager.ts:531-539",
+      "reason": "The handler passes `guests` (raw input) rather than `uniqueGuests`, and sendAddGuestsEmails branches on `newGuests.includes(attendee.email)`, so an already-existing attendee resubmitted in the request gets the 'event scheduled' mail instead of the 'guests added' mail."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "Low",
+      "cluster": "ui-self-barrel-import",
+      "evidence": "packages/ui/form/MultiEmail.tsx:2; packages/ui/index.tsx:153; packages/ui/form/AddressInput.tsx:3-4",
+      "reason": "Accurate that MultiEmail imports from its own package barrel while AddressInput uses relative paths; the 'only survives because of next/dynamic' explanation is doubtful, since ~25 other files inside packages/ui import \"@calcom/ui\" statically and work."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "Low",
+      "cluster": "ui-self-barrel-import",
+      "evidence": "packages/ui/form/MultiEmail.tsx:2; packages/ui/index.tsx:153",
+      "reason": "The file lives in packages/ui and imports Button/EmailField/Icon/Tooltip from @calcom/ui, which now also re-exports MultiEmail — a genuine cycle, though the same pattern is already widespread in this package."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dialog-state-not-reset",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:29-34",
+      "reason": "onSuccess calls setMultiEmailValue([\"\"]) but not setIsInvalidEmail(false), so a session that failed validation then succeeded reopens with the error banner still rendered."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "initial-empty-string-entry",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:25,45-51",
+      "reason": "Initial state [\"\"] never satisfies `multiEmailValue.length === 0`, so that early return is dead and pressing Add on an untouched dialog fails z.string().email() and shows the error banner instead of doing nothing."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "email-disable-flags-ignored",
+      "evidence": "packages/emails/email-manager.ts:82-86,517-542",
+      "reason": "eventTypeDisableHostEmail/eventTypeDisableAttendeeEmail read metadata.disableStandardEmails and are called by every comparable sender; sendAddGuestsEmails does not accept or consult the metadata at all."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "blacklist-case-sensitive",
+      "evidence": "addGuests.handler.ts:70-79; packages/features/bookings/lib/handleNewBooking.ts:736-746",
+      "reason": "The blacklist entries are lowercased but the submitted guest address is compared raw, so `Blocked@X.com` passes; the canonical implementation lowercases the guest email and also strips plus-aliases via extractBaseEmail."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "seats-events-unhandled",
+      "evidence": "addGuests.handler.ts:20-24,90-104; apps/web/components/booking/BookingListItem.tsx:134-138,173,222",
+      "reason": "Every other booking action in this list passes seatReferenceUid for seated bookings; addGuests takes only bookingId, and since the isAttendee branch admits seat holders, any seat holder can append an attendee to the booking shared by all seats."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "index-as-key",
+      "evidence": "packages/ui/form/MultiEmail.tsx:20-21,36-40",
+      "reason": "Same index-as-key/splice combination; correct, and the eslint preset has no rule that would have caught it."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "schema-built-in-render",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:18-22",
+      "reason": "Same finding: the schema is rebuilt per render and depends on no props or state."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "disable-guests-ignored",
+      "evidence": "addGuests.handler.ts (no disableGuests reference); packages/features/bookings/lib/getBookingFields.ts:235; apps/web/components/booking/BookingListItem.tsx:192-199",
+      "reason": "eventType.disableGuests exists and drives `hidden` on the guests booking field, but the handler never reads it and the menu entry is pushed unconditionally, so the setting can be circumvented after booking."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "teamid-zero-sentinel",
+      "evidence": "addGuests.handler.ts:57-59",
+      "reason": "`booking.eventType?.teamId ?? 0` appears twice and issues two membership queries against team id 0 for every personal booking; guarding on a present teamId would be clearer and cheaper."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "no-guest-count-limit",
+      "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6",
+      "reason": "`guests: z.array(z.string().email())` has no .max(), and every entry becomes an attendee that sendAddGuestsEmails mails with the organizer as From/replyTo."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "seats-events-unhandled",
+      "evidence": "addGuests.handler.ts:90-104; packages/features/bookings/lib/handleSeats/create/createNewSeat.ts:70-99; handleSeats/cancel/cancelAttendeeSeat.ts:35-62; get.handler.ts:399-402",
+      "reason": "Verified the premise: seat attendees are always created with a nested bookingSeat, capacity is counted as attendees.filter(a => !!a.bookingSeat).length, cancelAttendeeSeat resolves the attendee through seatsReferences, and get.handler filters attendees by the viewer's email when seatsShowAttendees is off — a bare Attendee row fits none of that."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "responses-guests-not-updated",
+      "evidence": "addGuests.handler.ts:90-104 (no responses update); packages/features/bookings/lib/get-booking.ts:97-111; getCalEventResponses.ts:37-52",
+      "reason": "Booking.responses is the source used to rehydrate a booking for reschedule/edit, and the handler writes only the attendees relation, so guests added this way are absent from responses.guests and would not survive that path."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "High",
+      "cluster": "auth-bypasses-bookingsprocedure",
+      "evidence": "packages/trpc/server/routers/viewer/bookings/_router.tsx:83; bookings/util.ts:19-63; addGuests.handler.ts:52-64",
+      "reason": "Confirmed: the route uses authedProcedure while the sibling mutations use bookingsProcedure (organizer or collective host only), and the hand-written `isAttendee` branch grants write access — DB write, calendar update via EventManager, mail sent as the organizer — to any logged-in user whose email appears in booking.attendees."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "client-uniqueness-case-sensitive",
+      "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:18-22",
+      "reason": "The refine builds `new Set(emails)` from the raw strings, so User@x.com and user@x.com are two distinct members and pass the uniqueness check."
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "not_real",
+      "confidence": 0.65,
+      "severity": null,
+      "cluster": "template-props-spread-order",
+      "evidence": "packages/emails/src/templates/AttendeeLocationChangeEmail.tsx; OrganizerLocationChangeEmail.tsx; AttendeeRescheduledEmail.tsx; OrganizerRequestEmail.tsx:19-24; BaseScheduledEmail.tsx:42-60",
+      "reason": "Spreading props last is the uniform, deliberate convention for every wrapper in this directory — BaseScheduledEmail is built around `props.title || default` and OrganizerRequestEmail relies on a caller-supplied title — and the two callers here pass only calEvent/attendee, so nothing can be overridden."
+    },
+    {
+      "claim_id": "c038",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "hidecalendarnotes-leak",
+      "evidence": "addGuests.handler.ts:113-136 (evt has no additionalNotes/hideCalendarNotes); packages/emails/email-manager.ts:119,267",
+      "reason": "hideCalendarNotes only ever gates `additionalNotes`, and the CalendarEvent this PR builds sets neither field (booking.description is mapped to evt.description), so there are no hidden notes for these emails to leak."
+    },
+    {
+      "claim_id": "c039",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "param-reassign",
+      "evidence": "packages/ui/form/MultiEmail.tsx:12",
+      "reason": "`value = value || []` reassigns the destructured prop; the eslint preset has no no-param-reassign rule so nothing flags it, but it is a real smell carried over from the form-builder copy."
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+[
+  "Use `scoped_dataset` instead of `dataset` for the upsampling check at organization_events_stats.py line 221. The dashboard split path calls `_get_event_stats` with follow-up `discover` queries, and checking the outer `dataset` can silently disable upsampled error counts there.",
+  "Mark `upsampled_count` as private in discover.py line 1042. Currently it is a public Discover function, so queries can bypass the allowlist/error-query checks and reference `sample_weight` where that column is unsupported.",
+  "`if client_sample_rate:` at factories.py line 353 skips the valid value `0.0` because `0.0` is falsy in Python. Use `if client_sample_rate is not None:` to allow zero sample rates to be stored."
+]

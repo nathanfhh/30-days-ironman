@@ -1,0 +1,10 @@
+[
+  "Cache key using hash() may cause collisions or inconsistent behavior because Python's hash() for tuples can vary between interpreter sessions (PYTHONHASHSEED) and different project ID combinations could hash to the same value",
+  "Cache invalidation uses same problematic hash pattern and requires the caller to know the exact set of project IDs that were cached, which may be difficult in practice when invalidating due to allowlist changes",
+  "Unused lambda parameter 'args' in SnQLFunction definition for 'upsampled_count' should use underscore '_' to follow file conventions for unused parameters",
+  "Truthiness check 'if client_sample_rate:' may skip valid sample_rate of 0 or 0.0, should use explicit None check 'if client_sample_rate is not None'",
+  "Unused 'organization' parameter in _are_all_projects_error_upsampled function",
+  "Allowlist lookup is O(n) per project, should convert to a set for O(1) lookups",
+  "Substring check 'event.type:error' in query may have edge cases with negated queries like '!event.type:error' incorrectly returning True, or queries with extra whitespace like 'event.type: error' returning False",
+  "Repeated transformation logic 'transform_query_columns_for_error_upsampling(query_columns)' in three separate branches could be consolidated"
+]

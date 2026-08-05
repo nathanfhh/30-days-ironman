@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-97529",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.85,
+      "reasoning": "Notes that with the narrowed lock, concurrent callers can build the same index twice and suggests per-key dedupe."
+    }
+  ]
+}

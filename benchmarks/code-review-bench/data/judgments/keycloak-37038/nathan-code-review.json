@@ -1,0 +1,26 @@
+{
+  "slug": "keycloak-37038",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 18,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 3,
+      "confidence": 0.92,
+      "reasoning": "The golden flags an incorrect permission check in canManage(); the candidate spells out that the no-arg GroupPermissionsV2.canManage() is identical to canView() and so passes for a caller holding only the all-groups VIEW scope."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both describe getGroupIdsWithViewPermission collecting the Resource UUID while its callers (UserModel.GROUPS, getUsersCount filters) expect real group ids."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.75,
+      "reasoning": "Same defect from the other side: the golden notes hasPermission is called with groupResource.getId() although it resolves resources by name, and the candidate states exactly that the UUID goes into findByName so evaluation falls back to the all-groups resource."
+    }
+  ]
+}

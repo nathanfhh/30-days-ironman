@@ -1,0 +1,5 @@
+[
+  "`findMembers()` is called without awaiting its result, introducing a race condition. The template may render before members are available. Either return the promise from `setupController` or move the async call back to `afterModel`/`beforeModel` where the router will wait for it.",
+  "Item-view template references `member`, but that alias is not available inside a separate `itemView` template. The row will render with missing member data, and clicking remove can throw when the controller calls `member.get(...)`.",
+  "`totalPages` is off by one when `user_count` is an exact multiple of `limit`, so the pager shows an extra page. Should use `Math.ceil(this.get(\"user_count\") / this.get(\"limit\"))` instead of `Math.floor(...) + 1`."
+]

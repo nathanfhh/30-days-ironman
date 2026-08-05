@@ -1,0 +1,187 @@
+{
+  "slug": "keycloak-33832",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 0,
+      "text": "Indefinite-length encoding (0x80) is not properly handled by callers - readLength() returns -1 for indefinite-length encoding, but readSequence() would skip the loop entirely and readInteger() would throw NegativeArraySizeException when calling read(-1)",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "The hand-rolled ASN.1 DER decoder has no guard against a negative length (readLength() can return -1 for indefinite-length encoding), which would throw an unchecked NegativeArraySizeException rather than the declared IOException if a future caller reached it with attacker-controlled bytes.",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 3,
+      "text": "Consider using context class loader for crypto init \u2014 AuthzClient.class.getClassLoader() is the module/app class loader, but in environments with custom or modular class loading (e.g. Jakarta EE, OSGi) the service-provider JAR may only be visible to Thread.currentThread().getContextClassLoader()",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "Whether any real-world deployment actually has both keycloak-crypto-default and keycloak-crypto-fips1402 visible to the same classloader simultaneously, which determines the actual blast radius of F-001.",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 2,
+      "text": "concatenatedRSToASN1DER() assumes signature.length == signLength without validation, which can throw ArrayIndexOutOfBoundsException instead of IOException for malformed/untrusted signatures",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "Unsafe format string in log \u2014 logger.debugf(builder.toString()) passes the built string as a format pattern, which would throw a MissingFormatArgumentException if any class name contained '%'",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "Trailing comma in log message \u2014 the loop always appends ', ' after the last provider name, leaving a trailing ', ' in the message",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 2,
+      "text": "Key pair curve may not match all tested algorithms - EC key pair is generated using default curve but each ECDSA algorithm expects a specific curve: ES256 uses P-256 (secp256r1), ES384 uses P-384 (secp384r1), and ES512 uses P-521 (secp521r1)",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 1,
+      "text": "The new abstract order() method added directly to the public CryptoProvider interface, with no default implementation, is a binary/source-incompatible change for any CryptoProvider implementation outside this repository.",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "ECDSAAlgorithmTest only asserts that its own encode/decode round-trips symmetrically; the produced DER-encoded signature is never fed back to a real JDK Signature.verify(), so encoder/decoder bugs that are symmetric to each other would still pass.",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "logger.debugf() is called with a plain runtime-built string as if it were a format template (should be logger.debug()), the message string is unconditionally constructed even when debug logging is disabled, and the built string has a trailing stray comma.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 0,
+      "text": "Using AuthzClient.class.getClassLoader() may miss CryptoProvider implementations visible via the thread context classloader, which could cause CryptoIntegration to not find the intended provider in modular/container setups",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 0,
+      "text": "Using the same `order()` as the existing built-in crypto providers makes provider selection nondeterministic when multiple implementations are on the classpath. Give Elytron a distinct lower priority so `CryptoIntegration` does not pick it based on service loading order.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 2,
+      "text": "Initialize crypto with the context class loader here. Passing `AuthzClient.class.getClassLoader()` can hide caller-provided `CryptoProvider` services, so the first `AuthzClient.create(...)` may permanently select the wrong provider for the JVM.",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "The newly added hamcrest test dependency in authz/client/pom.xml is never actually used by the only test class in that module.",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "All three ES256/ES384/ES512 test cases share the same default (256-bit) EC key pair, so the long-form DER length-encoding branch (content length > 127 bytes), which only real P-384/P-521 signatures would trigger, is never exercised.",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "Whether CryptoProvider implementations outside this repo (notably the separately-hosted keycloak-authz-client) have already been updated to implement the new order() method and will ship in the same release.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 1,
+      "text": "Test uses a single P-256 key pair for all three ECDSA algorithm tests (ES256, ES384, ES512), but P-256 keys produce ~32-byte r,s values so ES384 and ES512 tests only exercise zero-padding/unpadding rather than realistic signature sizes - should generate curve-appropriate keys (P-384 for ES384, P-521 for ES512)",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "getBouncyCastleProvider() indirectly determines 'this provider has no BouncyCastle' by instantiating a default KeyStore and asking for its provider, which is much harder to read than simply returning null the way the sibling WildFlyElytronProvider implementation does.",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 0,
+      "text": "Removing the 'more than one crypto provider on the classpath is a hard failure' startup guard and replacing it with order()-based selection leaves no tiebreak rule for providers with equal order \u2014 the three server-side providers (default, elytron, fips1402) all use order 200 \u2014 so what used to be a loud startup failure (e.g. accidentally shipping both crypto-default and crypto-fips1402) now silently picks one based on unstable classpath scan order.",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 0,
+      "text": "The new `order()` method on `CryptoProvider` interface is missing the `default` keyword, making it a breaking API change that will cause third-party implementations to fail to compile or throw AbstractMethodError at runtime - should be `default int order() { return 0; }`",
+      "claim_id": "c022"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "Returns wrong provider (default keystore instead of BouncyCastle)",
+      "claim_id": "c023"
+    }
+  ]
+}

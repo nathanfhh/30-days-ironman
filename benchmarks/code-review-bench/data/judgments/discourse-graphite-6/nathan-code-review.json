@@ -1,0 +1,10 @@
+{
+  "slug": "discourse-graphite-6",
+  "tool": "nathan-code-review",
+  "n_golden": 1,
+  "n_candidates": 11,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both identify include_website_name as missing the trailing ? that ActiveModel::Serializers requires for conditional inclusion; the candidate does not mention the golden's secondary '.' << website_host string-mutation point."}
+  ]
+}

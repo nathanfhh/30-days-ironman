@@ -1,0 +1,123 @@
+{
+  "slug": "cal_com-10600",
+  "issues": [
+    {
+      "text": "Password verification can be bypassed at login: authorize() skips the password check whenever totpCode is non-empty, and the new backup-code branch never validates totpCode, so an attacker with an email and one valid backup code plus any arbitrary totpCode logs in without knowing the password.",
+      "zh": "帶 backupCode 時密碼驗證會被跳過：只要 totpCode 非空即可，而該 totpCode 從頭到尾不會被檢查",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "Backup codes are stored with reversible symmetric encryption (AES-256 under the single site-wide CALENDSO_ENCRYPTION_KEY) instead of being hashed, even though they only ever need equality comparison; anyone with a DB dump plus the key can read every user's backup codes.",
+      "zh": "backup code 以可逆對稱加密儲存而非雜湊",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The backup code is compared with Array.prototype.indexOf, a short-circuiting non-constant-time comparison; hashing plus timingSafeEqual would remove the timing side channel at almost no cost.",
+      "zh": "比對也用線性 indexOf",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The backup-code verification paths have no test coverage at all: nothing tests that logging in with a backup code succeeds, that reusing the same code fails (single use), or that disabling 2FA with a backup code works; the new e2e test only checks the display/download/copy UI.",
+      "zh": "backup code 的驗證路徑完全沒有測試覆蓋",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The assertion expect(locator.isChecked()).toBeTruthy() always passes because isChecked() returns a Promise (always truthy); it was only annotated with a FIXME rather than fixed, even though the correct form already exists in the same file.",
+      "zh": "已知永遠會通過的斷言只被加上 FIXME 而沒有修，同一檔案裡就有正確寫法",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "There is no way to regenerate backup codes: they are only produced in setup.ts, which rejects users who already have 2FA enabled, and the settings UI shows neither a regenerate action nor how many codes remain.",
+      "zh": "backup code 沒有重新產生的入口",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Once all ten codes are consumed, user.backupCodes is still a non-empty ciphertext of [null,null,...], so the `if (!user.backupCodes)` MissingBackupCodes check never fires and the user is told the backup code is incorrect rather than that all codes have been used.",
+      "zh": "用完之後錯誤訊息還會誤導",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "onEnable() was moved behind the Close button of the final step, so closing the dialog with Esc or an outside click leaves 2FA enabled on the server while the client cache (and the Switch) still shows it disabled; the parent's onOpenChange never invalidates the query.",
+      "zh": "onEnable() 被移到最後一顆按鈕後面，用 Esc／點擊外部關閉對話框會讓畫面與伺服器狀態不一致",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "resetState() runs only from the Cancel and Close buttons, so dismissing the dialog with Esc leaves step stuck at DisplayBackupCodes without unmounting the component; reopening the modal shows the previous round's backup codes instead of starting over.",
+      "zh": "resetState() 只在 Cancel 與 Close 兩顆按鈕上呼叫，Esc 關閉不會觸發，因此 step 停在 DisplayBackupCodes，使用者接著再點 Switch 會直接看到上一輪的 backup codes",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "req.body.backupCode is used as a string without any type or schema validation, so a non-string value such as a number or array passes the truthy check and then throws a TypeError at .replaceAll(), returning a 500 instead of a 400 with an ErrorCode.",
+      "zh": "backupCode 未經型別驗證就當字串使用，非字串輸入會變成 500 而不是 400",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "BackupCode.tsx default-exports a function named TwoFactor (a leftover from copying TwoFactor.tsx), so React DevTools, error boundaries and stack traces all misidentify the component.",
+      "zh": "BackupCode.tsx 匯出的 function 名字叫 TwoFactor",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "useState([]) without a type argument infers backupCodes as never[], so the state carries no real type protection; it should be useState<string[]>([]).",
+      "zh": "useState([]) 讓 backupCodes 推導成 never[]，型別失去保護作用",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "The two new error codes (IncorrectBackupCode, MissingBackupCodes) are handled by ad-hoc else-if branches instead of being added to the file's existing errorMessages map, leaving two competing lookup mechanisms in one file.",
+      "zh": "新增的兩個錯誤碼繞過既有的 errorMessages map",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "The render was changed to an unparenthesised nested ternary (twoFactorRequired ? !twoFactorLostAccess ? <TwoFactor/> : <BackupCode/> : null), which is a level harder to read than the previous conditional.",
+      "zh": "讓渲染變成巢狀三元式",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "URL.createObjectURL is only revoked when a new one replaces it; the last blob URL, whose contents are the ten plaintext backup codes, is never revoked on unmount or in resetState and lives until the tab is closed.",
+      "zh": "createObjectURL 產生的 blob URL 只在重新產生時回收，元件卸載時會留下",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "JSON.parse(symmetricDecrypt(...)) is called with no try/catch and no check that the result is an array, unlike the TOTP branch in the same handler which validates the decrypted secret; after a key rotation the user gets an ErrorCode-less 500 with nothing in the logs.",
+      "zh": "JSON.parse(symmetricDecrypt(...)) 沒有防禦性檢查，比旁邊的 TOTP 分支寬鬆",
+      "finding_id": "F-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "The backup-code input constrains only minLength={10}/maxLength={11}, which admits 11 characters without a dash, 10 characters containing a dash, and any non-hex content; a pattern expressing the real format would give the user a specific error instead of a generic 'incorrect'.",
+      "zh": "backup code 輸入框的 minLength/maxLength 允許長度合法但格式錯誤的值",
+      "finding_id": "F-013",
+      "severity": "Nit"
+    },
+    {
+      "text": "The standalone <Label> has no htmlFor and the TextField is passed label=\"\", so the input has no correctly associated label and screen readers announce an empty string.",
+      "zh": "`<Label className=\"mt-4\">` 沒有 htmlFor，而 TextField 又傳了 `label=\"\"`，等於這個輸入框沒有被正確關聯的標籤，讀屏軟體只會唸到空字串。",
+      "finding_id": "F-013",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Is the duplicate 2FA modal set under apps/web/components/security/ dead code? If it is still reachable, why was it not updated alongside apps/web/components/settings/ — users going through it would enable 2FA and never receive backup codes.",
+      "zh": "apps/web/components/security/ 底下那份 2FA modal 副本是不是已經是死碼？如果不是，它為什麼不需要跟著這次一起改？"
+    },
+    {
+      "text": "Should a successful backup-code login notify the user by email or leave an audit record, and prompt them to regenerate? Currently the used code is just marked null, with no notification and no audit log, so a stolen backup code leaves the victim no way to notice.",
+      "zh": "使用 backup code 登入成功後，要不要主動通知使用者（email）或留下稽核紀錄，並提示重新產生？"
+    }
+  ]
+}

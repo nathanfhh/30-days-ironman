@@ -1,0 +1,3 @@
+[
+  "After acquiring the write lock, the code should re-check entryPointAssetsCache (and cfg.Env) before recomputing, since another goroutine may have populated the cache while this one waited; without that check, a later compute (or error) can overwrite a good cached value"
+]

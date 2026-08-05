@@ -1,0 +1,4 @@
+[
+  "enableSqlExpressions returns false regardless of FlagSqlExpressions value, and enabled is computed as the negation of the toggle, making the gating logic dead and easy to misread as a bug - should be simplified if permanent disable is intended",
+  "TablesList uses NewInMemoryDB() whose RunCommands is unimplemented, causing all calls to error and report 'invalid SQL' user errors even for valid queries - should return a clear 'disabled/not implemented' signal instead of parse/validation failure"
+]

@@ -1,0 +1,29 @@
+{
+  "slug": "grafana-90939",
+  "issues": [
+    {"text": "After acquiring the write lock, the cache is not rechecked: on cold start, every concurrent request rebuilds the assets manifest on its own.",
+      "zh": "取得寫鎖後沒有重新檢查快取：冷啟動時每個並行 request 都會各自重建一次 assets manifest",
+      "finding_id": "F-001",
+      "severity": "Suggestion"},
+    {"text": "This fixes a data race but ships no concurrency test; the fixed path currently has zero coverage.",
+      "zh": "修的是 data race，但沒有附上任何併發測試，被修的路徑目前零覆蓋",
+      "finding_id": "F-002",
+      "severity": "Suggestion"},
+    {"text": "In Dev mode, a read lock is acquired for nothing.",
+      "zh": "Dev 模式下白取一次讀鎖",
+      "finding_id": "F-003",
+      "severity": "Nit"},
+    {"text": "`return entryPointAssetsCache, err` could just return `result` directly.",
+      "zh": "return entryPointAssetsCache, err 可以直接回 result",
+      "finding_id": "F-004",
+      "severity": "Nit"}
+  ],
+  "open_questions": [
+    {"text": "In Dev mode every request holds the exclusive lock while opening a file and JSON-decoding it — is this serialization cost acceptable for the dev server?",
+      "zh": "Dev 模式下每個 request 都握著獨占鎖做一次開檔加 JSON decode，這個序列化成本對 dev server 可以接受嗎？"},
+    {"text": "Is there a plan to enable the hardcoded `cdn := \"\"` line? If so, is making an outbound HTTP request while holding the exclusive lock acceptable?",
+      "zh": "webassets.go:54 那行寫死的 cdn := \"\" 是否有啟用計畫？若有，在獨占鎖內對外做 HTTP 請求可以接受嗎？"},
+    {"text": "Might grafana-enterprise or other entry points outside this repo call GetWebAssets once to warm the cache before serving traffic begins?",
+      "zh": "grafana-enterprise 或其他不在本 repo 的進入點，會不會在開始服務流量前先呼叫一次 GetWebAssets 把快取暖起來？"}
+  ]
+}

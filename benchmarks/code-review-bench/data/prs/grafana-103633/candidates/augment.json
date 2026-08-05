@@ -1,0 +1,4 @@
+[
+  "userPermDenialCacheKey concatenates action, name, and parent using underscore delimiter, which can cause key collisions if any component contains underscore (e.g., name=\"a_b\", parent=\"c\" vs name=\"a\", parent=\"b_c\"), potentially applying cached denial to wrong resource pair",
+  "Test comment claims permissions cache is set to \"allow\" to prove denial cache short-circuits, but the inserted map value is false (equivalent to no grant), so it doesn't actually verify that a would-be allow from permCache gets overridden by the denial cache"
+]

@@ -1,0 +1,17 @@
+{
+  "slug": "keycloak-greptile-1",
+  "source_repo": "keycloak-greptile",
+  "language": "Java",
+  "golden_url": "https://github.com/ai-code-review-evaluation/keycloak-greptile/pull/1",
+  "pr_title": "Fixing Re-authentication with passkeys",
+  "original_url": "https://github.com/keycloak/keycloak/pull/41249",
+  "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak-greptile__augment__PR1__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/keycloak__keycloak-greptile__augment__PR1__20260122.git",
+  "base_sha": "30f804af450dec523909a52f2a4b97302d27f5cc",
+  "head_sha": "3214b188de808fdb0fff335556b686f1b0a63218",
+  "stat": " .../browser/AbstractUsernameFormAuthenticator.java |   8 +-\n .../authenticators/browser/UsernameForm.java       |   2 +-\n .../browser/UsernamePasswordForm.java              |  16 +-\n .../browser/WebAuthnAuthenticator.java             |  11 +-\n .../WebAuthnConditionalUIAuthenticator.java        |   9 +\n .../authenticators/util/AuthenticatorUtils.java    |  16 ++\n .../PasskeysOrganizationAuthenticationTest.java    |  62 +++++-\n .../passwordless/PasskeysUsernameFormTest.java     |  65 ++++++\n .../PasskeysUsernamePasswordFormTest.java          | 242 ++++++++++++++++++++-\n 9 files changed, 407 insertions(+), 24 deletions(-)\n",
+  "name_status": "M\tservices/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java\nM\tservices/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java\nM\tservices/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java\nM\tservices/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java\nM\tservices/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java\nM\tservices/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java\nM\ttestsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysOrganizationAuthenticationTest.java\nM\ttestsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernameFormTest.java\nM\ttestsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java\n",
+  "commits": "3214b18 Add user parameter requirement to isConditionalPasskeysEnabled method\nbba869b Fixing Re-authentication with passkeys closes #41242 closes #41008\n"
+}

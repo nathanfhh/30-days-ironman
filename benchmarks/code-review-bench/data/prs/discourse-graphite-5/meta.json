@@ -1,0 +1,17 @@
+{
+  "slug": "discourse-graphite-5",
+  "source_repo": "discourse-graphite",
+  "language": "Ruby",
+  "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/5",
+  "pr_title": "Optimize header layout performance with flexbox mixins",
+  "original_url": "https://github.com/discourse/discourse/commit/5b229316ee4c661836ed1161139692a3e8527444",
+  "fork_repo": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR5__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR5__20260122.git",
+  "base_sha": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "head_sha": "5b229316ee4c661836ed1161139692a3e8527444",
+  "stat": " app/assets/stylesheets/common/base/header.scss     |  9 +++---\n app/assets/stylesheets/common/base/topic-post.scss |  9 +++---\n app/assets/stylesheets/common/base/topic.scss      |  6 ++--\n .../stylesheets/common/components/badges.css.scss  |  6 ++--\n .../stylesheets/common/foundation/mixins.scss      | 37 ++++++++++++++++++++++\n 5 files changed, 54 insertions(+), 13 deletions(-)\n",
+  "name_status": "M\tapp/assets/stylesheets/common/base/header.scss\nM\tapp/assets/stylesheets/common/base/topic-post.scss\nM\tapp/assets/stylesheets/common/base/topic.scss\nM\tapp/assets/stylesheets/common/components/badges.css.scss\nM\tapp/assets/stylesheets/common/foundation/mixins.scss\n",
+  "commits": "5b22931 adding flexbox to header via mixins (all prefixes)\n"
+}

@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-10600",
+  "tool": "greptile-v4-1",
+  "n_golden": 4,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Both flag the exported function in BackupCode.tsx being named TwoFactor."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both say the indexOf lookup is case-sensitive so uppercase user input fails to match stored codes."
+    }
+  ]
+}

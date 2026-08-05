@@ -1,0 +1,3 @@
+[
+  "In desktop/topic-post.scss line 291, the primary-theme lightness was accidentally changed from 30% to 70%, breaking the light-theme appearance of .topic-meta-data h5 a links - the 70% value belongs in the $secondary (dark-theme) slot, and the primary slot should stay at 30%"
+]

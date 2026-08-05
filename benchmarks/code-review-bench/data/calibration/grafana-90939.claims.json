@@ -1,0 +1,41 @@
+{
+  "slug": "grafana-90939",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "This fixes a data race but ships no concurrency test; the fixed path currently has zero coverage."
+    },
+    {
+      "claim_id": "c002",
+      "text": "In Dev mode, a read lock is acquired for nothing."
+    },
+    {
+      "claim_id": "c003",
+      "text": "In addition to the missing double-check, the function has a critical flaw in its error handling: it unconditionally assigns the fetch result to the cache (line 69: entryPointAssetsCache = result) regardless of whether the fetch succeeded or failed. When an error occurs during asset fetching, result is nil, and this nil value overwrites any previously valid cache entry."
+    },
+    {
+      "claim_id": "c004",
+      "text": "Is there a plan to enable the hardcoded `cdn := \"\"` line? If so, is making an outbound HTTP request while holding the exclusive lock acceptable?"
+    },
+    {
+      "claim_id": "c005",
+      "text": "`return entryPointAssetsCache, err` could just return `result` directly."
+    },
+    {
+      "claim_id": "c006",
+      "text": "Docstring coverage is 0.00% which is insufficient - the required threshold is 80.00%, need to write docstrings for functions missing them"
+    },
+    {
+      "claim_id": "c007",
+      "text": "The GetWebAssets function implements an incomplete double-checked locking pattern for caching web assets. The function first checks if the cache is populated using a read lock (RLock), and if the cache is empty, it acquires a write lock to populate it. However, it fails to re-check whether the cache was populated by another goroutine while waiting to acquire the write lock."
+    },
+    {
+      "claim_id": "c008",
+      "text": "Might grafana-enterprise or other entry points outside this repo call GetWebAssets once to warm the cache before serving traffic begins?"
+    },
+    {
+      "claim_id": "c009",
+      "text": "In Dev mode every request holds the exclusive lock while opening a file and JSON-decoding it \u2014 is this serialization cost acceptable for the dev server?"
+    }
+  ]
+}

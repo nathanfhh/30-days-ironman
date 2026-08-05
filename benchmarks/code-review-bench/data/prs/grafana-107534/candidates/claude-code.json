@@ -1,0 +1,6 @@
+[
+  "The new applyTemplateVariables call in runSplitQuery (line 298) causes ad-hoc filters to be duplicated on every split query, because DataSourceWithBackend.query() also calls applyTemplateVariables downstream, and addAdHocFilters unconditionally appends filter clauses without deduplication",
+  "For shard-split queries, applyTemplateVariables is called three times (runShardSplitQuery + runSplitQuery + DataSourceWithBackend.query), tripling the ad-hoc filters",
+  "The fix should remove the applyTemplateVariables call from runSplitQuery and runShardSplitQuery, relying solely on the existing call in DataSourceWithBackend.query()",
+  "Tests don't catch this bug because they mock datasource.runQuery so super.query() and its applyTemplateVariables call never execute, and the mock applyTemplateVariables does an idempotent string replace that hides the duplication"
+]

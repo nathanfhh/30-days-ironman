@@ -1,0 +1,5 @@
+[
+  "Wrong identifier passed to `hasPermission` and `granted` - `groupResource.getId()` is the authorization resource's internal UUID, not the group ID. In V2, resources for groups are created with `name = group.getId()`, so `resourceStore.findByName(server, groupId)` inside `hasPermission` looks up resources by name. Passing the auth-resource UUID makes the name lookup return `null` every time, causing the method to always fall back to the all-groups resource \u2014 silently ignoring per-group `VIEW_MEMBERS`/`MANAGE_MEMBERS` policies. Additionally, adding the auth UUID to `granted` causes callers to receive wrong IDs. Fix: use `groupResource.getName()` in both places.",
+  "`canManage()` grants manage access to VIEW-only callers - `canManage()` is used to gate write operations (e.g. creating a new group in `GroupsResource`). Including `AdminPermissionsSchema.VIEW` in the scope check means any caller whose only authorization policy grants `view` on the all-groups resource type can also create/modify groups. Consider restricting `canManage()` to MANAGE only.",
+  "Spurious double semicolon at the end of the field declaration for `topGroup`"
+]

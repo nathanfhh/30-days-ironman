@@ -1,0 +1,44 @@
+{
+  "slug": "discourse-graphite-4",
+  "tool": "coderabbit",
+  "n_golden": 6,
+  "n_candidates": 25,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Same issue: SSRF via open() on a site-setting URL reaching internal services/file://."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 11,
+      "confidence": 0.6,
+      "reasoning": "Points at the same missing URL scheme validation before the import_remote fetch."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "Same issue: postMessage origin validation done by substring matching against discourseUrl."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 7,
+      "confidence": 0.85,
+      "reasoning": "Matches the XSS half: embed URL not escaped before interpolation into the raw HTML anchor."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 8,
+      "confidence": 0.9,
+      "reasoning": "Matches the nil half: `contents <<` raises when contents is nil."
+    },
+    {
+      "golden_index": 5,
+      "candidate_index": 12,
+      "confidence": 0.95,
+      "reasoning": "Same issue: `end if` is invalid in embed/best.html.erb."
+    }
+  ]
+}

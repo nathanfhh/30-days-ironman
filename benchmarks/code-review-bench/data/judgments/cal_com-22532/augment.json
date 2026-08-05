@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-22532",
+  "tool": "augment",
+  "n_golden": 2,
+  "n_candidates": 6,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both say updateManyByCredentialId is called with an empty data object so the updatedAt timestamp may not actually be refreshed."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 5,
+      "confidence": 0.98,
+      "reasoning": "Both say sed -i '' is BSD/macOS-specific and fails on GNU sed under Linux."
+    }
+  ]
+}

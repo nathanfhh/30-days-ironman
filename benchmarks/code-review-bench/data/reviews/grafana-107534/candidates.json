@@ -1,0 +1,27 @@
+{
+  "slug": "grafana-107534",
+  "issues": [
+    {"text": "The applyTemplateVariables added at the two entry points doesn't replace the downstream call, so the same query gets interpolated 2-3 times.",
+      "zh": "兩個入口補上的 applyTemplateVariables 沒有取代下游那一次，同一個 query 會被插值 2～3 次",
+      "finding_id": "F-001",
+      "severity": "Suggestion"},
+    {"text": "The two new tests mock out runQuery, which conveniently keeps the final query sent out of the assertions; the newly introduced request.filters behavior has no test coverage.",
+      "zh": "兩個新測試 mock 掉 runQuery，剛好把「最終送出的 query」擋在斷言之外；新引入的 request.filters 行為沒有測試",
+      "finding_id": "F-002",
+      "severity": "Suggestion"},
+    {"text": "toHaveBeenCalledTimes(5) doesn't explain how the number 5 was derived.",
+      "zh": "toHaveBeenCalledTimes(5) 沒有說明 5 是怎麼算出來的",
+      "finding_id": "F-003",
+      "severity": "Nit"},
+    {"text": "The two entry points now run the same three-step pipeline, but their filter order is reversed.",
+      "zh": "兩個入口現在跑同一組三步驟 pipeline，filter 順序卻是相反的",
+      "finding_id": "F-004",
+      "severity": "Nit"}
+  ],
+  "open_questions": [
+    {"text": "The two new tests mock templateSrv.replace to substitute $__auto with 5m and assert expr === 'count_over_time({a=\"b\"}[5m])'. Does the real applyTemplateVariables actually substitute $__auto in production?",
+      "zh": "兩個新測試把 templateSrv.replace mock 成會把 $__auto 換成 5m，並據此斷言 expr === 'count_over_time({a=\"b\"}[5m])'。真實的 applyTemplateVariables 在正式環境也會把 $__auto 換掉嗎？"},
+    {"text": "The split request now carries interpolated targets into trackGroupedQueries, where legendFormat is reported without obfuscation — does analytics expect the pre- or post-interpolation value?",
+      "zh": "分割後的 request 現在帶著插值過的 targets 進入 trackGroupedQueries，其中 legendFormat 是未經 obfuscate 就上報的欄位——analytics 這邊預期收到的是插值前還是插值後的值？"}
+  ]
+}

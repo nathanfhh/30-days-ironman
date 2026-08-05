@@ -1,0 +1,4 @@
+[
+  "The denial cache key (userPermDenialCacheKey) does not include the identity type, causing anonymous:0 and render:0 to both produce UserUID '0' and generate identical cache keys, which leads to cross-identity cache poisoning where an anonymous user denial can block the render service from accessing the same dashboard",
+  "The denial cache key uses raw checkReq.UserUID instead of the resolved userIdentifiers.UID (as getCachedIdentityPermissions does), which reduces cache effectiveness when users are identified by numeric ID vs string UID across requests"
+]

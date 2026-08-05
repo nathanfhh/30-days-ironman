@@ -1,0 +1,6 @@
+[
+  "Empty string website_host not guarded - URI.host can return empty string for file:/// or data: URIs, and the nil check won't catch this, causing unnecessary serialization of empty website_name",
+  "Using << (shovel) operator for string concatenation on string literal can cause FrozenError if frozen_string_literal is enabled - should use + or interpolation instead",
+  "URI parsed up to three times per call - URI(website.to_s) is called multiple times to get host and path, should parse once and cache the result",
+  "Sibling-subdomain case (Case 2 elsif branch) is untested - the branch handling hosts with same number of segments and more than two has no spec coverage"
+]

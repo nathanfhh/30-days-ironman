@@ -1,0 +1,20 @@
+{
+  "slug": "grafana-97529",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Removing the broad lock lets concurrent BuildIndex calls race building the same key."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "TotalDocs iterates b.cache without the read lock while BuildIndex writes, risking a concurrent map read/write panic."
+    }
+  ]
+}

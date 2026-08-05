@@ -1,0 +1,8 @@
+[
+  "The cleanup ticker interval was changed from 10 minutes to 1 minute (time.Minute * 1), causing all 8 cleanup jobs to run 10x more frequently - this appears to be a debugging/testing change accidentally included",
+  "The 9-minute timeout on line 89 was designed for the 10-minute interval; with a 1-minute ticker, overlapping cleanup cycles are nearly guaranteed",
+  "Six r.log.Error() calls (lines 534, 537, 554, 557, 576, 579) log routine cleanup operational info at ERROR level - these are debug statements that were not removed before submission",
+  "The ERROR-level log statements dump potentially thousands of annotation IDs into the log stream and will trigger monitoring alerts",
+  "The 'err' field is logged after the error has already been checked and returned, meaning err is guaranteed to be nil at those log points, showing misleading err=<nil> output",
+  "deleteByIDs at line 608 checks r.cfg.AnnotationCleanupJobBatchSize > sqliteParameterLimit but should check len(ids) > sqliteParameterLimit instead - when batchSize is configured above 999, the last partial batch with fewer than 999 IDs will unnecessarily use string-interpolation instead of safer parameterized queries"
+]

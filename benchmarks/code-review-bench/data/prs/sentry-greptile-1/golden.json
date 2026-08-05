@@ -1,0 +1,24 @@
+{
+  "slug": "sentry-greptile-1",
+  "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/1",
+  "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+  "language": "Python",
+  "comments": [
+    {
+      "comment": "Importing non-existent OptimizedCursorPaginator",
+      "severity": "Low"
+    },
+    {
+      "comment": "Django querysets do not support negative slicing",
+      "severity": "High"
+    },
+    {
+      "comment": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+      "severity": "High"
+    },
+    {
+      "comment": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+      "severity": "High"
+    }
+  ]
+}

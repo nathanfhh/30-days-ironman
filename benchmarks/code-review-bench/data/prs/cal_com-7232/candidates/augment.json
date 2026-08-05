@@ -1,0 +1,5 @@
+[
+  "deleteScheduledEmailReminder/deleteScheduledSMSReminder are async but calls aren't awaited/collected, so reminder cancellations/DB updates can be lost if the handler returns before the promises settle",
+  "Because cancellations are processed after the earlier delete-by-date logic, if this cron runs late a cancelled reminder could be removed from DB without ever sending the corresponding SendGrid cancellation request",
+  "The SendGrid call assumes reminder.referenceId is always a valid batch id; if it's null/empty (or for non-email rows), this will throw and the reminder won't be deleted, causing repeated failures on subsequent runs"
+]

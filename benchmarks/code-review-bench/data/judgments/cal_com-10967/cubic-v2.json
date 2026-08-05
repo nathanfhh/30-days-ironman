@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-10967",
+  "tool": "cubic-v2",
+  "n_golden": 5,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both say mainHostDestinationCalendar is undefined when evt.destinationCalendar is null/empty and dereferencing .integration throws."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 2,
+      "confidence": 0.7,
+      "reasoning": "Both flag the same broken fallback: the find comparing cal.externalId to externalCalendarId cannot select the intended destination calendar."
+    }
+  ]
+}

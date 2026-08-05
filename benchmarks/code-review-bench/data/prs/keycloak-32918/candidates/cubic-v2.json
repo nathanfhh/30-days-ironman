@@ -1,0 +1,3 @@
+[
+  "The cleanup hook removes `\"alias\"` instead of the IDP aliases created in this test, so the new providers are leaked into later tests"
+]

@@ -1,0 +1,17 @@
+{
+  "slug": "keycloak-36882",
+  "source_repo": "keycloak",
+  "language": "Java",
+  "golden_url": "https://github.com/keycloak/keycloak/pull/36882",
+  "pr_title": "Add rolling-updates feature flag and compatibility framework",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR36882__20260122.git",
+  "pr_number": 1,
+  "golden_count": 1,
+  "repo_url": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR36882__20260122.git",
+  "base_sha": "1b28ac610dc16e0de14199f9ca5d2acdf7f3cc16",
+  "head_sha": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "stat": " .../src/main/java/org/keycloak/common/Profile.java   |  4 +++-\n docs/guides/operator/advanced-configuration.adoc     | 15 ++++++++++++---\n docs/guides/server/update-compatibility.adoc         | 10 +++++++++-\n docs/guides/templates/kc.adoc                        |  2 +-\n operator/scripts/Dockerfile-custom-image             |  2 +-\n .../operator/testsuite/integration/UpgradeTest.java  | 11 +++++++----\n .../runtime/cli/command/AbstractUpdatesCommand.java  |  4 ++++\n .../cli/command/UpdateCompatibilityCheck.java        |  7 +++++++\n .../cli/command/UpdateCompatibilityMetadata.java     |  7 +++++++\n .../runtime/compatibility/CompatibilityResult.java   |  6 +++++-\n .../keycloak/it/cli/dist/UpdateCommandDistTest.java  | 20 ++++++++++++++------\n 11 files changed, 70 insertions(+), 18 deletions(-)\n",
+  "name_status": "M\tcommon/src/main/java/org/keycloak/common/Profile.java\nM\tdocs/guides/operator/advanced-configuration.adoc\nM\tdocs/guides/server/update-compatibility.adoc\nM\tdocs/guides/templates/kc.adoc\nM\toperator/scripts/Dockerfile-custom-image\nM\toperator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java\nM\tquarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java\nM\tquarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java\nM\tquarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java\nM\tquarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java\nM\tquarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java\n",
+  "commits": "62bf989 fix test failure\na44563d feedback\n5d2490d Enable feature in custom image\nb1965bb do not use custom image, it fails\nc698590 Feature flag: rolling-updates\n"
+}

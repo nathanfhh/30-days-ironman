@@ -1,0 +1,4 @@
+[
+  "Process leak when shutdown deadline is exceeded - when deadline expires mid-loop, the outer for loop breaks and process.terminate() is never reached for remaining processes, causing subprocesses to continue running after consumer shutdown, leaking resources and potentially producing duplicate segments",
+  "Dead method _create_process_for_shard is defined but never called - _ensure_processes_alive calls _create_process_for_shards directly with the process_index and its shard list, making this a refactoring leftover that should be removed"
+]

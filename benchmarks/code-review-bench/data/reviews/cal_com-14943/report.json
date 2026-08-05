@@ -1,0 +1,288 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T09:37:59+00:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "fix/add-retry-count-workflow-reminder (calcom/cal.com #14943)：git diff 917c7b0..c790227",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "不涉及 PHI。這次改動的資料路徑是行事曆 booking 的 SMS 提醒排程（packages/features/ee/workflows/api/scheduleSMSReminders.ts:48），碰到的是 booking、attendee 姓名與手機號碼等預約資料，沒有病歷號、身分證字號、診斷、檢驗或任何 HL7/FHIR/DICOM 內容。若審查者認為預約者手機號碼在你們的定義下屬於敏感個資，可以推翻這個判定，但不影響本次任何 finding 的 severity。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "diff、commit message（\"add retry count to workflow reminder\"、\"add logic to for retry count\"）與被修改檔案內的註解、字串都只描述行為，沒有任何一句在指示審查流程本身該略過什麼或該下什麼結論。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "「排程 SMS 失敗的 WorkflowReminder 不應該無止盡地每 15 分鐘重試」是真實存在的問題，加一個計數欄位來收斂是合理方向。但「達到上限後直接刪除 row」這個手段本身有疑慮，見 F-001——這是對做法的意見，不是對目標的意見。"
+    },
+    "right_mr": {
+      "verdict": "doubt",
+      "note": "retryCount 加在三種 method 共用的 WorkflowReminder model 上（packages/prisma/schema.prisma:1000），但只有 SMS 這條 cron 使用。scheduleWhatsappReminders.ts 幾乎是這支 handler 的逐行複製版、同樣沒有重試上限，卻沒有一起處理；diff 與 commit message 也沒說明這是刻意的分階段導入。這不必然要在本 MR 補齊，但值得在描述裡寫清楚，見 Q-001。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "schema 變更只是新增一個有 default 的欄位，不阻擋其他進行中的工作；migration timestamp 20240508134359 也晚於既有最後一筆 20240502213807，沒有順序衝突。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "ruff",
+      "status": "skipped",
+      "exit_code": 0,
+      "artifact": "ncr-artifacts/cal_com-14943.lint.json",
+      "counts": { "in_diff": 0, "outside_diff": 0 },
+      "skipped_reason": "ruff 0.15.8 有安裝、對整個 repo 執行成功（exit 0、0 筆診斷），但本次 diff 只含 .ts / .sql / .prisma，ruff 不檢查其中任何一個檔案。這個 0 代表「沒有覆蓋」而不是「乾淨」，因此不記為 ok。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": { "in_diff": 0, "outside_diff": 0 },
+      "skipped_reason": "未安裝（不在 PATH 上）。這是本次 diff 唯一適用的 JS/TS lint 工具，因此受審的 TypeScript 檔案沒有任何 lint 覆蓋。"
+    },
+    {
+      "tool": "tsc / prisma validate",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": { "in_diff": 0, "outside_diff": 0 },
+      "skipped_reason": "checkout 沒有 node_modules，執行環境也沒有網路，無法安裝依賴。因此 TypeScript 型別檢查與 prisma schema 驗證都沒有執行——包含 scheduleSMSReminders.ts:60 那個 `as (PartialWorkflowReminder & { retryCount: number })[]` 型別斷言，以及 schema.prisma 與 migration.sql 是否一致，本次都只以人工比對確認（兩者皆為 Int / INTEGER NOT NULL DEFAULT 0，一致），沒有工具背書。"
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": { "in_diff": 0, "outside_diff": 0 },
+      "skipped_reason": "未安裝（不在 PATH 上）。本次 diff 沒有 Python 檔，即使安裝也不適用。"
+    },
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "未安裝（不在 PATH 上），略過相依套件漏洞、misconfiguration 與 secret 掃描。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "未安裝（不在 PATH 上），且 NCR_OPENGREP_RULES 指向的規則目錄不存在。SAST 完全沒有執行。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "未安裝，無法建立 symbol index。Phase 3 的呼叫者列舉與影響範圍分析全部改用 grep 完成（例如以 grep 確認全 repo 只有一處寫入 retryCount）。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "fail",
+      "note": "`gt: 1` 是沒有名字也沒有註解的門檻值，而且 retryCount 的語意與名稱差一（第一次嘗試失敗就變成 1）；新增的刪除行為也完全沒有留下紀錄。見 F-006、F-007。"
+    },
+    "B": {
+      "verdict": "pass",
+      "note": "遞增 retryCount 的三行區塊出現兩次（:178-187 與 :189-198），依 Rule of Three 第二次不抽取，可接受。沒有新增死程式碼、沒有為不存在的需求造機制。"
+    },
+    "C": {
+      "verdict": "pass",
+      "note": "endpoint 的 CRON_API_KEY 檢查（:22-26）未被更動，仍在所有邏輯之前。retryCount 是伺服器端自行遞增的值，不接受任何請求輸入；新增的 where 條件全部走 Prisma query builder，沒有字串拼接 SQL；沒有新增憑證或外部輸入。"
+    },
+    "D": {
+      "verdict": "pass",
+      "note": "route、HTTP verb（POST，有副作用，符合 RFC 9110）、回應格式都沒有改變，也沒有把任何識別資料放進 URL。"
+    },
+    "E": {
+      "verdict": "pass",
+      "note": "沒有改變分層：這個 handler 原本就把全部商業邏輯寫在 endpoint 內（既有債，不歸這次改動），本次只是在原地加寫入。共用的 `select`（getWorkflowReminders.ts）是以 spread 擴充而非就地修改，所以 Email/WhatsApp 兩支 cron 的查詢形狀不受影響——這點已逐檔確認。"
+    },
+    "F": {
+      "verdict": "fail",
+      "note": "新增的刪除條件會在事件仍有最多 7 天緩衝時永久刪掉 reminder（F-001）；retryCount 以 read-modify-write 遞增而非原子操作（F-002）；刪除條件未以 method 收斂且無 index 可用（F-003）；catch 內新增的 update 本身沒有保護，會中斷整輪迴圈（F-004）。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "新增的是會刪資料的分支，但沒有任何測試。packages/features/ee/workflows 底下目前沒有測試檔，不過 repo 內已有以 prismock 驗證 SMS lock 行為的測試，工具鏈是現成的。見 F-005。"
+    },
+    "H": {
+      "verdict": "pass",
+      "note": "本次 diff 全部是非 Python 檔。migration 為 `ALTER TABLE \"WorkflowReminder\" ADD COLUMN \"retryCount\" INTEGER NOT NULL DEFAULT 0`，在 PostgreSQL 11+ 是常數時間、不觸發 table rewrite，安全；與 schema.prisma:1000 的 `Int @default(0)` 一致；本 repo 的 Prisma migration 一律沒有 down script，與慣例相符。既有的 workflowReminder.create 呼叫（emailReminderManager.ts、smsReminderManager.ts、whatsappReminderManager.ts）都沒有傳 retryCount，靠 default 補值，不會被這個 NOT NULL 欄位打斷。"
+    },
+    "I": {
+      "verdict": "pass",
+      "note": "被修改的 handler 沒有對外簽章，unscheduledReminders 是函式內的區域變數，沒有其他呼叫者。共用的 `select` 物件以 spread 擴充、未被就地變更，Email/WhatsApp cron 不受影響。:60 的型別斷言與實際 select 內容（多了 retryCount）相符，不是謊報——但這一點沒有 tsc 背書，見 scans。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "F",
+      "severity": "Critical",
+      "status": "new",
+      "title": "排程失敗兩次（約 30 分鐘）就永久刪除 reminder，而事件可能還有 7 天才發生",
+      "evidence": [
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42",
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-187",
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-198",
+        "packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:11-16",
+        "packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:88-94",
+        "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:228-240",
+        ".github/workflows/cron-scheduleSMSReminders.yml:8"
+      ],
+      "rationale": "這條 cron 每 15 分鐘執行一次（cron-scheduleSMSReminders.yml:8），而 `scheduled: false` 的 WorkflowReminder 只在「送出時間超過 7 天之後」時才會被建立（smsReminderManager.ts:228-240）。也就是說，被這支 handler 撿到的 row，距離真正要送出還有最多 7 天、約 670 次執行機會。新的機制把可用次數壓到 2 次：第一次失敗 retryCount=1、第二次失敗 retryCount=2，下一輪開頭的 deleteMany（:38-42）就把整筆刪掉，而且該分支沒有任何 scheduledDate 條件，所以刪除與「是否已到期」無關。\n\n問題在於會讓 retryCount 遞增的兩條路徑，絕大多數是暫時性或環境性的失敗，不是「這筆資料壞掉了」：(1) twilio.scheduleSMS 的第一行就是 createTwilioClient()（twilioProvider.ts:88），TWILIO_SID / TWILIO_TOKEN / TWILIO_MESSAGING_SID 少任何一個就直接 throw（:11-16），落進新的 catch → retryCount + 1。環境變數設定失誤或憑證輪替失敗的 30 分鐘內，7 天窗口內所有待排程 SMS reminder 會被清空。(2) Twilio API 短暫故障、或 DB 短暫不可用，同樣落在 catch。(3) 使用者或 team 被設為 SMSLockState.LOCKED 時 scheduleSMS 回傳 undefined（:90-94），走新增的 else → retryCount + 1；等 admin 透過 setSMSLockState 解鎖時，reminder 已經不存在了。\n\n反證檢查（是否有東西會把刪掉的 reminder 補回來）：以 grep 掃過全 repo，`workflowReminder.create` 只出現在 emailReminderManager.ts、smsReminderManager.ts、whatsappReminderManager.ts，全部由 booking 建立／變更或 workflow 編輯觸發，沒有任何 cron 或補償流程會重建。所以一旦刪除，除非該 booking 被重新排程或該 workflow 被重新編輯，這則提醒就永遠不會送出，使用者與 attendee 都不會收到任何通知，log 裡也沒有任何一行說明刪了什麼。",
+      "fix": "把「停止重試」和「刪除資料」拆開，不要用刪除當作退避手段：\n1. deleteMany 維持原本只刪 `method: SMS 且 scheduledDate <= now` 的語意（見 F-003 的拆法）；\n2. 在 findMany 的 where 加上 `retryCount: { lt: MAX_SMS_SCHEDULE_ATTEMPTS }`，讓超過次數的 row 不再被撿取，row 本身留到過期後由原本的條件清掉——這樣既停止重試，也保留可觀測與補救的機會；\n3. 更貼近實際的做法是讓重試預算跟「距離 scheduledDate 還剩多久」掛勾，而不是固定兩次（例如仍有 24 小時以上就繼續重試）；\n4. 無論採哪一種，放棄前至少要 log 出 reminder id 與最後一次的 error，否則遺失沒有任何痕跡。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-002",
+      "dimension": "F",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "retryCount 以 read-modify-write 遞增，兩輪重疊時會少算",
+      "evidence": [
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:48-60",
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:184",
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:195",
+        ".github/workflows/cron-scheduleSMSReminders.yml:1-23"
+      ],
+      "rationale": "`reminder.retryCount + 1` 用的是迴圈開始前那一次 findMany 讀出來的舊值。這支 handler 對每一筆 reminder 都要打 Twilio、查 profile、算 bookerUrl，一批資料多的時候單次執行超過 15 分鐘並非不可能；而觸發它的 GitHub Actions workflow 沒有設定 `concurrency`，上一輪還沒結束下一輪照樣送出請求。兩輪重疊時後寫入的那次會把另一次的 +1 蓋掉，計數偏低。Prisma 有原子操作可以讓這整段推理不必存在。",
+      "fix": "改成 `data: { retryCount: { increment: 1 } }`（兩處：:184 與 :195），由資料庫端做遞增。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-003",
+      "dimension": "F",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "新的刪除分支沒有 method 限制，也讓整個 deleteMany 用不到 index",
+      "evidence": [
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:29-45",
+        "packages/features/ee/workflows/api/scheduleWhatsappReminders.ts:22-31",
+        "packages/prisma/schema.prisma:1002-1006"
+      ],
+      "rationale": "這支 handler 的其他三個 query 都帶 `method: WorkflowMethods.SMS`，只有新增的 OR 分支沒有：它會刪掉「任何 method、任何 scheduled 狀態、任何 scheduledDate」只要 retryCount > 1 的 row。今天不會誤刪——以 grep 掃過全 repo，寫入 retryCount 的地方只有這個檔案（其餘出現位置是 schema、migration，以及 office365 CalendarService 內同名的區域變數），所以 EMAIL / WHATSAPP 的 row 恆為 0。但這個安全性來自「目前只有一個 writer」，不是來自 query 本身。scheduleWhatsappReminders.ts:22-31 幾乎是這支 handler 的逐行複製版，一旦它也採用同一個欄位，這支 SMS cron 就會開始靜默刪除 WHATSAPP 的 reminder。\n\n同時，OR 把兩個不相關的述詞放在一起：WorkflowReminder 有 @@index([method, scheduled, scheduledDate]) 但沒有 retryCount 的 index（schema.prisma:1002-1006），所以第二個分支沒有索引可走，整個 deleteMany 每 15 分鐘掃一次全表。實際成本取決於資料量，見 Q-002。",
+      "fix": "拆成兩個各自帶 `method: WorkflowMethods.SMS` 的 deleteMany（或在 OR 的第二個分支補上 method），讓每個條件都能對到既有的 composite index；若採 F-001 的建議改用「不再撿取」而非刪除，這個分支會直接消失。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-004",
+      "dimension": "F",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "catch 內新增的 update 本身沒有保護，丟出例外會讓整輪剩下的 reminder 全部跳過",
+      "evidence": [
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-198",
+        "packages/lib/server/defaultHandler.ts:17-22"
+      ],
+      "rationale": "改動之前 catch 裡只有 console.log，任何一筆 reminder 失敗都不會影響同一輪的其他筆。現在 catch 裡多了一個沒有保護的 `await prisma.workflowReminder.update`。這個 update 自己也可能 throw：最典型的是 row 已被其他流程（例如 booking 取消時的 deleteScheduledSMSReminder）刪掉造成的 P2025，或者 catch 本來就是資料庫不可用觸發的——那麼同一個資料庫上的 update 也一樣會失敗。例外會直接離開 for 迴圈，由 defaultHandler 轉成 500（defaultHandler.ts:17-22），這一輪剩下的 reminder 全部不處理。等於把「單筆失敗」升級成「整輪失敗」。",
+      "fix": "用 `updateMany`（找不到 row 時回傳 count 0 而不是 throw），或把這個 update 自己包一層 try/catch；另外把 `console.log(error)` 移到 update 之前，確保原始錯誤一定會被記錄下來。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-005",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "新增的刪除路徑沒有任何測試",
+      "evidence": [
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:29-45",
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-198",
+        "packages/features/bookings/lib/handleNewBooking/test/workflow-notifications.test.ts:177"
+      ],
+      "rationale": "這次新增的是會永久刪除資料的分支，而 packages/features/ee/workflows 底下目前沒有任何測試檔（以 find 確認）。門檻條件（`gt: 1` 對應「兩次嘗試」）正是最容易在後續重構中被改成 off-by-one 而沒人察覺的東西。repo 內已經有用 prismock 驗證 SMS lock 行為的測試（workflow-notifications.test.ts:177），代表工具鏈是現成的，不需要為此建立新的測試基礎設施。",
+      "fix": "補三個 case 就足以釘住語意：(1) retryCount 達到門檻的 row 會被停止處理／刪除；(2) 未達門檻的 row 不受影響；(3) method 不是 SMS 的 row 不會被這支 cron 動到（同時也把 F-003 的行為釘死）。斷言要看實際的資料庫狀態，不要只斷言 res.status === 200。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-006",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "`gt: 1` 是沒有名字的門檻值，而 retryCount 的名稱與語意差一",
+      "evidence": [
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42",
+        "packages/prisma/schema.prisma:1000"
+      ],
+      "rationale": "讀者要自己推導：第一次嘗試失敗時 retryCount 就變成 1，所以 `gt: 1` 實際代表「允許兩次嘗試」。欄位叫 retryCount，但第一次嘗試並不是 retry，語意上比較接近 failureCount，兩者差一——這正是之後有人「順手修正」成 `gte: 1` 或 `gt: 2` 而沒人發現的地方。",
+      "fix": "抽成具名常數並用相等語意表達，例如 `const MAX_SMS_SCHEDULE_ATTEMPTS = 2;` 搭配 `retryCount: { gte: MAX_SMS_SCHEDULE_ATTEMPTS }`，或至少加一行註解說明「retryCount 在第一次失敗後即為 1」。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": false,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-007",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "刪除是靜默的，事後無法回答「哪些提醒被放棄了」",
+      "evidence": [
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:29-45",
+        "packages/features/ee/workflows/api/scheduleSMSReminders.ts:198",
+        "packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:9"
+      ],
+      "rationale": "deleteMany 只回傳筆數而且這裡連筆數都沒接，所以「某位使用者的提醒為什麼沒送出」在事後完全無跡可循。唯一的線索是 :198 的 `console.log`（既有程式碼，不歸這次改動），但它不含 reminder id、也沒有走 repo 內其他地方使用的 logger（twilioProvider.ts:9 有 `logger.getSubLogger({ prefix: [\"[twilioProvider]\"] })` 的既有慣例）。",
+      "fix": "刪除前先以 findMany 取出要刪的 id 並記錄，或改用 F-001 建議的「不再撿取」做法並在跨過門檻的那一次寫一筆 warn；同時把 :198 的訊息補上 `reminder.id`。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": false,
+      "security": null,
+      "accepted_risk": ""
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "E",
+      "question": "WhatsApp 與 Email 兩支 cron 是刻意不納入這次範圍，還是漏了？",
+      "context": "retryCount 加在三種 method 共用的 WorkflowReminder model 上，但只有 SMS 使用。scheduleWhatsappReminders.ts:22-52 與這支 handler 幾乎逐行相同、同樣會無上限重試；scheduleEmailReminders.ts 走 getAllUnscheduledReminders 也沒有上限。diff、commit message 與分支名稱都沒有交代這是分階段導入還是遺漏，從程式碼本身無法判定。",
+      "what_would_settle_it": "PR 描述或對應 issue 說明是否為刻意的 SMS 先行；或作者確認是否已有 WhatsApp/Email 的 follow-up。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "F",
+      "question": "這個每 15 分鐘一次的 deleteMany 在 production 的實際成本是多少？",
+      "context": "OR 的第二個分支（retryCount > 1）沒有可用的 index（schema.prisma:1002-1006 只有 bookingUid、workflowStepId、seatReferenceId、[method, scheduled, scheduledDate]、[cancelled, scheduledDate]），因此整個 deleteMany 無法只靠既有 composite index 完成。這個環境沒有資料庫、也沒有 production 的資料量，無法判斷這是可忽略的成本還是每 15 分鐘一次的全表掃描。",
+      "what_would_settle_it": "在 production（或同等資料量的 staging）對這個 where 條件跑一次 EXPLAIN ANALYZE，或提供 WorkflowReminder 的 row count 量級。"
+    }
+  ],
+  "rereview": null,
+  "conclusion": "Request Changes",
+  "summary": "本次為第 1 輪、local_branch 模式的離線審查，沒有 GitLab MR 可對應。\n\n**流程揭露（影響本報告可信度的部分，請一併閱讀）**：\n1. 這個執行環境沒有可用的 subagent 派發工具，因此 `ncr-fresh-eyes`（Phase 3 步驟 1）與 `ncr-quality-check`（Phase 4 步驟 3）都沒有執行。依 skill 規定不得由主審查者自行模擬，故兩者皆為缺席，本報告少了一次「未被檢查表框定的第一眼」與一次獨立的品質稽核。\n2. 掃描覆蓋率實質為零：trivy、opengrep、ty、oxlint、codegraph 都未安裝；ruff 雖然執行成功，但 diff 內沒有 Python 檔，等同沒有覆蓋；checkout 沒有 node_modules 且環境無網路，tsc 與 prisma validate 都無法執行。因此本報告的每一條 finding 都來自人工閱讀原始碼與 grep，沒有任何工具背書。\n\n改動本身是在 WorkflowReminder 上新增 retryCount 欄位，讓 scheduleSMSReminders cron 對排程失敗的提醒累計次數，超過門檻後刪除。方向合理，但目前的實作把「停止重試」和「刪除資料」綁在一起：兩次失敗（約 30 分鐘）就永久刪掉一筆可能還有 7 天才要送出的提醒，而觸發條件多半是環境或暫時性故障（Twilio 憑證缺失、API 故障、SMS lock），刪掉後沒有任何流程會補回、也沒有留下 log——這是 F-001，也是本次結論為 Request Changes 的唯一原因。其餘四項 Suggestion 分別是原子遞增、刪除條件未收斂 method 且無 index、catch 內未保護的 update 會中斷整輪，以及缺少測試。"
+}

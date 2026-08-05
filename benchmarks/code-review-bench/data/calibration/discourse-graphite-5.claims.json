@@ -1,0 +1,97 @@
+{
+  "slug": "discourse-graphite-5",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Keep paragraph spacing inside `.custom-message`; zeroing `p` margins collapses multi-paragraph cooked messages into one block."
+    },
+    {
+      "claim_id": "c002",
+      "text": "This commit re-lands a previously reverted flexbox change but only replays four of the six originally-changed files, omitting the paired desktop/mobile header adjustments that the layout depends on."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The vendor-prefix ordering differs between the flexbox() and inline-flex() mixins even though they express the same mapping, making them harder to compare at a glance."
+    },
+    {
+      "claim_id": "c004",
+      "text": "order() maps its value directly onto the 1-based legacy *-box-ordinal-group property, so @include order(0) (the modern default) would produce an invalid, discarded declaration."
+    },
+    {
+      "claim_id": "c005",
+      "text": "`.contents` in header.hbs still has the `clearfix` class, whose `::before`/`::after` pseudo-elements become unnecessary flex items when the container is `display: flex` \u2014 the `clear: both` on `::after` is a no-op in flex context"
+    },
+    {
+      "claim_id": "c006",
+      "text": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align."
+    },
+    {
+      "claim_id": "c007",
+      "text": "The left padding on .small-action-desc was changed, but a mobile-only override (margin-left: -40px) that was calibrated against the old padding value was not updated, misaligning content on mobile."
+    },
+    {
+      "claim_id": "c008",
+      "text": "A new declaration is missing the space after the colon that other declarations in the same mixin have (align-items:$alignment; vs align-items: $alignment;)."
+    },
+    {
+      "claim_id": "c009",
+      "text": "A new line in the mixin file has trailing whitespace."
+    },
+    {
+      "claim_id": "c010",
+      "text": "Does IE10's -ms-flexbox implementation honor margin-left: auto for pushing .panel to the right, given IE10 implements an intermediate draft of the flexbox spec with known divergences?"
+    },
+    {
+      "claim_id": "c011",
+      "text": "Missing space after colon in align-items:$alignment; - inconsistent with every other property declaration in this file"
+    },
+    {
+      "claim_id": "c012",
+      "text": "The align-items() mixin is missing the -moz-box-align declaration even though the sibling flexbox() and order() mixins do output the -moz-box prefix, so Firefox versions relying on the -moz-box fallback get no vertical alignment at all."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Mobile layout regression: The padding on `.small-action-desc` changed from `0.5em 0 0.5em 4em` to `0 1.5%`, but `mobile/topic-post.scss:521` still has `margin-left: -40px` on `.custom-message`. That negative margin was designed to offset the old ~64px left padding; with only ~4.8px of padding on a 320px mobile viewport, the custom-message now overflows ~35px past the left edge of its container"
+    },
+    {
+      "claim_id": "c014",
+      "text": ".small-action-desc's horizontal padding was changed to a percentage value, which resolves relative to the container width and therefore varies unpredictably between desktop (fixed-width container) and mobile (no width limit), inconsistent with the fixed-unit spacing used elsewhere in the same file."
+    },
+    {
+      "claim_id": "c015",
+      "text": "@include order(2) is applied to .extra-info-wrapper, but that element is not a direct flex item of .contents (it's nested inside an Ember component wrapper div), so the order declaration has no effect; the visually-correct ordering currently happens to work only by source order."
+    },
+    {
+      "claim_id": "c016",
+      "text": "align-items() passes modern alignment keywords (flex-start/flex-end) straight through to legacy-syntax properties that only accept start/end, so those values silently produce invalid, ignored declarations."
+    },
+    {
+      "claim_id": "c017",
+      "text": "What was the actual reason the earlier commit (2ad2ab5) was reverted, and does adding vendor prefixes actually address that reason?"
+    },
+    {
+      "claim_id": "c018",
+      "text": "For legacy -webkit-box/-moz-box flexbox syntax, *-box-ordinal-group is 1-based (whereas modern order is 0-based), so using $val directly can shift ordering by 1 in older browsers - need to offset the *-box-ordinal-group value"
+    },
+    {
+      "claim_id": "c019",
+      "text": "The `order` mixin passes `$val` directly to `-webkit-box-ordinal-group` and `-moz-box-ordinal-group`, but these legacy properties use 1-based indexing while CSS `order` is 0-based \u2014 the mixin should pass `$val + 1` for correct behavior"
+    },
+    {
+      "claim_id": "c020",
+      "text": "Legacy flexbox order off-by-one error: -webkit-box-ordinal-group and -moz-box-ordinal-group use 1-based indexing while modern order uses 0-based indexing, causing mis-ordering in older WebKit and Firefox browsers when passing $val directly to legacy properties"
+    },
+    {
+      "claim_id": "c021",
+      "text": "The new align-items() mixin uses 4-space indentation while the rest of mixins.scss uses 2-space indentation."
+    },
+    {
+      "claim_id": "c022",
+      "text": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned."
+    },
+    {
+      "claim_id": "c023",
+      "text": "`@include order(2)` on `.extra-info-wrapper` (topic.scss:29) is dead CSS because `.extra-info-wrapper` is a grandchild of the flex container (Ember wraps `header-extra-info` in a `div.ember-view`), and `order` only applies to direct children"
+    }
+  ]
+}

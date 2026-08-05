@@ -1,0 +1,167 @@
+{
+  "slug": "sentry-77754",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "queued-default-evaluated-at-import",
+      "evidence": "src/sentry/integrations/services/assignment_source.py:3,18",
+      "reason": "`queued: datetime = timezone.now()` is a class-level default evaluated once at module import, so every instance shares the import-time timestamp; the standard fix is `field(default_factory=timezone.now)`, which requires adding `field` to the `dataclasses` import that currently only pulls in `asdict, dataclass`."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "assignment-source-module-placement",
+      "evidence": "src/sentry/integrations/services/assignment_source.py:1; src/sentry/integrations/services/",
+      "reason": "Every other entry under `src/sentry/integrations/services/` (and under every other `src/sentry/*/services/` directory I listed) is an RPC service package with the impl.py/model.py/serial.py/service.py layout; `assignment_source.py` is the only bare non-RPC module in any of them, so the placement question has a factual basis."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "ruff-unused-args",
+      "evidence": "setup.cfg:87-110; .pre-commit-config.yaml:20-50",
+      "reason": "This repo at this commit does not use ruff at all — no [tool.ruff] in pyproject.toml, no .ruff.toml, and pre-commit runs pyupgrade/black/isort/flake8/mypy. flake8's config enables only pycodestyle/bugbear plus the local `S` plugin, none of which flag unused function arguments, so no CI lint failure follows."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "sync-status-outbound-dead-assignment-source",
+      "evidence": "src/sentry/integrations/mixins/issues.py:411-418; src/sentry/integrations/tasks/sync_status_outbound.py:43-46; src/sentry/integrations/example/integration.py:161",
+      "reason": "Grepping `assignment_source` across src/ and tests/ shows the sync_status_outbound occurrence only at the abstract declaration — the task calls `installation.sync_status_outbound(external_issue, resolved, project_id)` and `should_sync(\"outbound_status\")` with no source — and ExampleIntegration's override is `(self, external_issue, is_resolved, project_id)` with no **kwargs."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "sync-status-outbound-dead-assignment-source",
+      "evidence": "src/sentry/integrations/example/integration.py:161-162; pyproject.toml:234",
+      "reason": "The signature really is `def sync_status_outbound(self, external_issue, is_resolved, project_id)` with no **kwargs, so passing assignment_source would TypeError — but nothing passes it today, and `sentry.integrations.example.integration` sits in the mypy override list that disables `override`, so this is latent rather than a break."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "test-name-empty-array-misnomer",
+      "evidence": "tests/sentry/integrations/services/test_assignment_source.py:6-9",
+      "reason": "`test_from_dict_empty_array` builds `data: dict[str, Any] = {}` — an empty dict, not an array — so the name misdescribes what is exercised."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "no-different-integration-sync-test",
+      "evidence": "tests/sentry/models/test_groupassignee.py:120-236",
+      "reason": "The two outbound-assign tests cover assignment_source=None and assignment_source=<same integration>; there is no case with a different integration as source. A guard mutated to `if sync_source: return False` passes both (None case still syncs, matching case still blocked), so the named mutation is genuinely uncaught."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "multi-integration-loop-not-guarded",
+      "evidence": "src/sentry/integrations/mixins/issues.py:51-64 (post-diff 380-393); src/sentry/integrations/utils/sync.py:88-120",
+      "reason": "The guard compares only against the originating integration_id, so an A -> Sentry -> B -> Sentry -> A ping-pong is not blocked by it (B's inbound webhook carries source=B, which does not match A). What stops it in practice is the unrelated `affected`/`created` no-op check in GroupAssignee.assign, not this change — a gap a maintainer would want to know about; the 'which loop motivated this' half needs the author."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "queued-json-serialization",
+      "evidence": "src/sentry/conf/server.py:739-741",
+      "reason": "Sentry sets CELERY_TASK_SERIALIZER = \"pickle\", CELERY_RESULT_SERIALIZER = \"pickle\" and CELERY_ACCEPT_CONTENT = {\"pickle\"}; a datetime in task kwargs pickles fine, and there is no JSON serializer or JSON-serializability lint on this path."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "queued-default-evaluated-at-import",
+      "evidence": "src/sentry/integrations/services/assignment_source.py:18",
+      "reason": "`timezone.now()` in the dataclass field default is called once at class-creation time, so every AssignmentSource shares the module-import timestamp instead of its own creation time. ('mutable' is loose wording for an immutable datetime, but the shared-default defect it names is real.)"
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "guard-not-tested-end-to-end",
+      "evidence": "tests/sentry/models/test_groupassignee.py:215-221 vs 289-347",
+      "reason": "The new test calls `GroupAssignee.objects.assign(..., assignment_source=AssignmentSource.from_integration(integration))` directly; the tests that do go through `sync_group_assignee_inbound` (test_assignee_sync_inbound_assign/deassign) neither use `self.tasks()` nor mock sync_assignee_outbound, so the webhook-in -> no-outbound-re-send path is not covered."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "from-dict-silent-failure",
+      "evidence": "src/sentry/integrations/services/assignment_source.py:30-35; src/sentry/integrations/tasks/sync_assignee_outbound.py:53-56; src/sentry/integrations/mixins/issues.py:385-388",
+      "reason": "`from_dict` swallows ValueError/TypeError and returns None with no log or metric; the task feeds that None straight into `should_sync`, whose guard is `if sync_source and ...`, so a malformed payload degrades silently to 'no loop protection' rather than surfacing."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "deassign-guard-untested",
+      "evidence": "tests/sentry/models/test_groupassignee.py:238-287",
+      "reason": "test_assignee_sync_outbound_unassign calls `deassign(self.group)` with no assignment_source and only asserts assignment_source=None reaches the integration; the PR adds a matching-source test for assign but none for deassign, even though deassign gained the same parameter."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "test-name-typo-inalid",
+      "evidence": "tests/sentry/integrations/services/test_assignment_source.py:11",
+      "reason": "The method is literally named `test_from_dict_inalid_data`; 'invalid' is misspelled."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "duplicated-test-setup",
+      "evidence": "tests/sentry/models/test_groupassignee.py:123-148, 184-209, 242-267, 294-319, 351+",
+      "reason": "The create_integration(5-key sync config) + ExternalIssue + GroupLink block is repeated verbatim in every sync test in the file and the PR adds another copy, so the drift risk is real — though the count is understated, it is the fifth copy in this file rather than the third."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "rolling-deploy-new-task-kwarg",
+      "evidence": "src/sentry/integrations/utils/sync.py:136-144; src/sentry/integrations/tasks/sync_assignee_outbound.py:15-35; src/sentry/tasks/base.py:161-176",
+      "reason": "`assignment_source_dict` is put in apply_async kwargs unconditionally (None when absent), so during a rolling deploy every message carries a kwarg old workers' signature rejects. `retry` wraps with `except on as exc: current_task.retry(...)`, and TypeError is not in the exclude tuple, so it retries — max_retries=5 at 5-minute delays gives ~25 minutes of cover, which usually but not certainly outlasts the rollout."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "weak-queued-assertion",
+      "evidence": "tests/sentry/integrations/services/test_assignment_source.py:26-33",
+      "reason": "test_to_dict asserts only `result.get(\"queued\") is not None`, which holds equally for the correct per-instance timestamp and for the shared import-time constant; it is the only test that touches `queued` at all."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "sync-status-outbound-dead-assignment-source",
+      "evidence": "src/sentry/integrations/mixins/issues.py:411-418; src/sentry/integrations/tasks/sync_status_outbound.py:43-46",
+      "reason": "The status task calls `should_sync(\"outbound_status\")` and `sync_status_outbound(external_issue, is_resolved, project_id)` with no source argument, and no other caller in the repo passes assignment_source, so the new parameter has no effect anywhere today."
+    }
+  ]
+}

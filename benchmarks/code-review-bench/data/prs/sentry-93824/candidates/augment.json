@@ -1,0 +1,7 @@
+[
+  "--flusher-processes accepts negative integers which can make SpanFlusher.num_processes invalid and crash shard-to-process mapping/modulo at startup - should enforce minimum of 1",
+  "Inconsistent metric tag key naming: timer uses 'shards' but produce timer/segment-size metric uses 'shard', which will split metric series and complicate dashboards",
+  "isinstance(process, multiprocessing.Process) guard may not match processes created via multiprocessing.get_context('spawn').Process, causing hung children to not be killed before replacement and leaking flusher workers",
+  "When timeout elapses in join(), the break exits the loop without terminating remaining flusher processes, leaving background workers running during shutdown/rebalance",
+  "time.sleep(0.1) is patched to a no-op at the top of the test, so it doesn't actually wait for the flusher to observe the drift change, making the test timing-dependent/flaky on slower CI"
+]

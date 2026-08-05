@@ -1,0 +1,4 @@
+[
+  "The retryCount > 1 delete condition in deleteMany is missing a method: WorkflowMethods.SMS filter, which could delete workflow reminders of any method whose retryCount exceeds 1, potentially causing silent data loss for non-SMS reminders if another code path increments retryCount",
+  "Unguarded DB write inside catch block - if prisma.workflowReminder.update throws (e.g. network issue, record already deleted), the error will propagate out of the catch and abort the entire for loop, leaving subsequent reminders unprocessed"
+]

@@ -1,0 +1,7 @@
+[
+  "mainHostDestinationCalendar can be undefined when evt.destinationCalendar is missing/empty, so mainHostDestinationCalendar.integration can throw at runtime - need to guard this check so Meet fallback doesn't crash for events without a destination calendar",
+  "If reference.credentialId points to a missing/removed credential and the DB lookup doesn't return an app slug, credential can remain falsy and updateEvent(credential, ...) will throw - need to handle the credential not found case before calling updateEvent",
+  "selectedCalendar can be undefined when no destination calendar matches credentialId, but later code uses it directly (e.g., calendar.events.patch({ calendarId: selectedCalendar, ... })) which can result in invalid Google API calls or missed patching when falling back to primary for the initial insert",
+  "When externalCalendarId is falsy, the fallback find((cal) => cal.externalId === externalCalendarId) compares against undefined, so selectedCalendar/calendarId will usually become undefined - this can cause updates to target an invalid calendarId and deletes to fall back to primary instead of the booking's actual destination calendar",
+  "The feature-flag conditional for setting slug/requestedSlug appears inverted vs the prior behavior: when IS_TEAM_BILLING_ENABLED is false, neither slug nor requestedSlug is set now - org creation could start producing records without a slug in the non-team-billing flow"
+]

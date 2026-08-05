@@ -1,0 +1,302 @@
+{
+  "slug": "discourse-graphite-8",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "duplicate-add-500",
+      "evidence": "app/controllers/admin/groups_controller.rb (add_members); app/models/group.rb#add; app/models/group_user.rb schema comment",
+      "reason": "add_members loops User.find_by_username then group.add(user), and Group#add is self.users.push(user), which inserts a group_users row immediately; group_users has a UNIQUE index on (group_id, user_id), so re-adding an existing member raises ActiveRecord::RecordNotUnique with no rescue, i.e. an unhandled 500."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "hardcoded-scss-colors",
+      "evidence": "app/assets/stylesheets/common/admin/admin_base.scss (.groups .next/.previous)",
+      "reason": "The new .groups block hardcodes color: #333 and color: #aaa (both with !important) while the rest of the file consistently uses $primary/$secondary/$danger and scale-color(); on a themed instance these will not track the palette."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "stray-div-members-template",
+      "evidence": "app/assets/javascripts/discourse/templates/group/members.hbs:19; git blame -> 02f3a2d1 (2014-12-10)",
+      "reason": "The stray </div> is genuinely in the file, but git blame shows it predates this change by two commits and the diff for this file only touches line 6 ({{#each m in model}} -> {{#each m in members}}); it is not something this change introduced or modified."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "pagination-params-unclamped",
+      "evidence": "app/controllers/groups_controller.rb#members",
+      "reason": "limit = (params[:limit] || 50).to_i and offset = params[:offset].to_i go straight into .limit(...).offset(...); Rails' sanitize_limit passes an Integer through unchanged, so limit=-1 or offset=-1 emits LIMIT/OFFSET with a negative value, which PostgreSQL rejects. Nothing clamps either value."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "input-not-cleared",
+      "evidence": "app/assets/javascripts/admin/controllers/admin-group.js.es6 (addMembers action)",
+      "reason": "addMembers reads this.get('usernames') and never resets it, and the author's own '// TODO: should clear the input' says so; the user-selector keeps the submitted names, so a second click re-submits them."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "members-response-shape-break",
+      "evidence": "app/controllers/groups_controller.rb#members; config/routes.rb:271 (public `resources :groups do get 'members' end`)",
+      "reason": "The endpoint changed from render_serialized(members.to_a, GroupUserSerializer) (a bare JSON array) to render json: {members: ..., meta: {...}}. This route is public and unauthenticated, and the change is made in place with no versioning or transition period."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "pagination-params-unclamped",
+      "evidence": "app/controllers/groups_controller.rb#members (offset = params[:offset].to_i)",
+      "reason": "offset is only .to_i'd, never floored at 0, and the value reaches ActiveRecord unchanged; PostgreSQL raises 'OFFSET must not be negative' for a negative value, so ?offset=-1 on a public endpoint is an unhandled 500."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "not_real",
+      "confidence": 0.9,
+      "severity": null,
+      "cluster": "route-param-mismatch",
+      "evidence": "config/routes.rb:45-51 and 271-275; app/controllers/groups_controller.rb#find_group(:group_id)",
+      "reason": "A bare `delete/put \"members\"` inside a `resources :groups do ... end` block is a nested route, not a member route, so Rails names the parent key :group_id and the path is /admin/groups/:group_id/members. The pre-existing public block uses exactly this shape and its controller has always read params.require(:group_id); the JS also calls /admin/groups/<id>/members.json. params[:group_id] is correct."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "public-members-truncated",
+      "evidence": "app/controllers/groups_controller.rb#members; app/assets/javascripts/discourse/templates/group/members.hbs; app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "reason": "The old code only applied limit/offset when group.automatic?, so non-automatic groups returned every member; now every group is limited to 50 by default. Only the admin template gained prev/next controls - group/members.hbs still just renders the rows, and there is no loadMore in any group members controller."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "itemview-keyword-scope",
+      "evidence": "vendor/assets/javascripts/development/ember.js:8217-8226 (EachView#createChildView); app/assets/javascripts/discourse/templates/share_link.hbs",
+      "reason": "EachView#createChildView does `if (keyword) { view._keywords[keyword] = content; }` on every child view, including one built from a custom itemView class, so `member` resolves inside group_member.hbs. The existing `{{each s in shareLinks itemView='share-link'}}` + share_link.hbs pair (which uses s.href, s.title) is the same construction and works."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "formatting-churn",
+      "evidence": "app/controllers/admin/groups_controller.rb; app/controllers/groups_controller.rb; app/assets/javascripts/discourse/templates/user-selector-autocomplete.raw.hbs; app/assets/javascripts/discourse/templates/components/admin-group-selector.hbs",
+      "reason": "The diff includes ilike->ILIKE plus added blank lines, a re-indent of the protected/private bodies in both controllers, a whole-file re-indent of user-selector-autocomplete.raw.hbs, and blank-line trimming in admin-group-selector.hbs, none of which relates to group membership handling."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "remove-member-skips-primary-group-cleanup",
+      "evidence": "app/models/group.rb:283-294 (destroy_deletions) and #usernames=; app/serializers/post_serializer.rb:96-102",
+      "reason": "The admin UI's old removal path went through update_put -> group.usernames= -> destroy_deletions, which runs `UPDATE users SET primary_group_id = NULL` for removed members. The new remove_member calls group.users.delete(user_id), which for a has_many :through issues delete_all on group_users and runs none of that, so a removed user keeps primary_group_id and post_serializer#primary_group_name still emits the group's flair name."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "add-members-no-transaction",
+      "evidence": "app/controllers/admin/groups_controller.rb#add_members; app/models/group.rb#add",
+      "reason": "Group#add is users.push(user), which commits each group_users row immediately, and the loop has no wrapping transaction. If the third username in a batch collides with the unique index, the first two are already persisted while the request 500s."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "findmembers-return-inconsistent",
+      "evidence": "app/assets/javascripts/discourse/models/group.js#findMembers",
+      "reason": "The guard changed from `return Ember.RSVP.resolve([])` to a bare `return ;` while the happy path still returns the Discourse.ajax promise. Grepping the callers (admin-group next/previous, removeMember/addMembers, both routes) confirms nobody chains .then on it today, so this is a latent inconsistency rather than a live break."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "semicolon-nits",
+      "evidence": "app/assets/javascripts/discourse/models/group.js (destroy: `if (!this.get('id')) { return };` and addMembers ending `})` with no semicolon)",
+      "reason": "Both are in the diff exactly as described: a lone semicolon after the `{ return }` block in destroy, and addMembers' promise chain terminated by `})` with the statement's semicolon supplied only by ASI."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "removed-nonexistent-username-test",
+      "evidence": "spec/controllers/admin/groups_controller_spec.rb (deleted 'succeeds silently when adding non-existent users'); app/controllers/admin/groups_controller.rb#add_members",
+      "reason": "The old spec asserted that a bogus username is skipped without error, and the new add_members still has `if user = User.find_by_username(username)` preserving that behaviour, but the new .add_members context only tests the automatic-group rejection and the two-user happy path."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "no-test-new-response-shape",
+      "evidence": "spec/controllers/groups_controller_spec.rb ('members' describe block)",
+      "reason": "The only enabled members test asserts response.should be_success (and in fact calls :posts, not :members); nothing asserts the new {members:, meta: {total, limit, offset}} envelope that Group#findMembers now depends on."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "scss-move-risk",
+      "evidence": "app/assets/stylesheets/common/admin/admin_base.scss:375 (.badges) and :400-408 after the change",
+      "reason": "The rules were not in a shared container - they lived inside `.badges { .form-horizontal { ... } }`. The new selector is `.groups, .badges`, so .badges still receives label/&>div/input/textarea/select/checkbox exactly as before, and no other page ever matched them."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "put-nonidempotent-add",
+      "evidence": "config/routes.rb:50 (`put \"members\" => \"groups#add_members\"`); app/controllers/admin/groups_controller.rb#add_members",
+      "reason": "add_members appends to the membership rather than replacing it, so the route is not idempotent as PUT promises: the identical request repeated succeeds the first time and hits the unique-index 500 the second."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "members-template-guard-mismatch",
+      "evidence": "app/assets/javascripts/discourse/templates/group/members.hbs:1 and :6; app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "reason": "The route now sets model to the group itself (always truthy) and kicks off findMembers() asynchronously, while the guard still tests `model` and the loop iterates `members`. Between render and the ajax response the <table> and its 'last seen' header render with zero rows."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "totalpages-offbyone-empty-page",
+      "evidence": "app/assets/javascripts/admin/controllers/admin-group.js.es6 (totalPages, currentPage, next)",
+      "reason": "totalPages is floor(user_count/limit)+1 with no ceil, so a group whose count is an exact multiple of limit reports one page too many; with user_count=50 and limit=50 showingLast is false at page 1, next sets offset to min(50,50)=50, and the refetch returns an empty members array while the header reads 2/2."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "stray-div-members-template",
+      "evidence": "app/assets/javascripts/discourse/templates/group/members.hbs:19; git blame -> 02f3a2d1 (2014-12-10)",
+      "reason": "Same pre-existing </div> as c003. It is invalid markup inside the <table>, but it is untouched by this diff and predates it; the only change to this file is the each-loop source."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "usernames-not-stripped",
+      "evidence": "app/controllers/admin/groups_controller.rb#add_members; app/models/user.rb:175-177",
+      "reason": "usernames.split(\",\") is fed straight to User.find_by_username, which is find_by(username_lower: username.downcase) - no strip. 'bob, alice' silently drops alice because ' alice'.downcase never matches username_lower, and the loop's `if user = ...` swallows the miss."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "public-members-limit-unbounded",
+      "evidence": "app/controllers/groups_controller.rb#members; config/routes.rb:271; lib/guardian.rb:120-122; app/serializers/group_user_serializer.rb",
+      "reason": "limit has a default but no ceiling, the route is outside any auth constraint, and can_see_group? only requires group.visible?, which the automatic trust_level_0 group satisfies; GroupUserSerializer exposes username/name/avatar_template/last_seen_at. Note the unbounded limit is inherited from the previous automatic-group branch rather than introduced here, but this change is the one that rewrote these lines and still ships without a cap."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "input-not-cleared",
+      "evidence": "app/assets/javascripts/admin/controllers/admin-group.js.es6 (addMembers: '// TODO: should clear the input')",
+      "reason": "The TODO is in the shipped diff and the action really does leave `usernames` populated, which makes the duplicate-add path from c001 easy to reach by clicking Add twice."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "spec-verb-mismatch",
+      "evidence": "spec/controllers/admin/groups_controller_spec.rb ('cannot remove members from automatic groups'); config/routes.rb:49",
+      "reason": "The first .remove_member example uses `xhr :put, :remove_member` while the action is only routed via `delete \"members\"` (the sibling example correctly uses xhr :delete). ActionController::TestCase invokes the action directly so the test still passes, which is exactly why the inconsistency is worth fixing."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "user-count-counter-cache-stale",
+      "evidence": "app/controllers/admin/groups_controller.rb#remove_member; app/models/group_user.rb (belongs_to :group, counter_cache: \"user_count\")",
+      "reason": "GroupUser maintains groups.user_count via counter_cache. group.users.delete(user_id) on a has_many :through with no :dependent option deletes the join rows with delete_all, running no destroy callbacks, and the through association only decrements a counter declared on the source reflection (GroupUser belongs_to :user), which has none. The subsequent group.save does not recount, so user_count drifts high - and the admin pagination header renders that number."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "itemview-automatic-scope",
+      "evidence": "vendor/assets/javascripts/development/ember.js:42606-42618 (_context) and :40466-40490 (CollectionView#arrayDidChange)",
+      "reason": "arrayDidChange only sets content/contentIndex on the item view; it never sets context. Ember.View#_context therefore falls back to `controller`, inherited from the parent view - the admin-group ObjectController - so `automatic` in group_member.hbs resolves against the group model exactly as it does in group.hbs. The keyword form of {{each}} does not switch context either."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "pagination-params-unclamped",
+      "evidence": "app/controllers/groups_controller.rb#members",
+      "reason": "Same unclamped limit/offset: neither is floored at 0 nor capped, so a negative value reaches PostgreSQL as an invalid LIMIT/OFFSET and a huge one produces an unbounded result set. The client-side Math.min/Math.max in Group#findMembers is no protection since the endpoint is directly reachable."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "findmembers-async-unhandled",
+      "evidence": "app/assets/javascripts/admin/routes/admin_group_route.js; app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "reason": "Both routes deleted afterModel (which returned the findMembers promise and so blocked the transition) and now call model.findMembers() from setupController, whose return value Ember ignores. The template renders before members exist and a rejected request is swallowed with no error state."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "user-count-counter-cache-stale",
+      "evidence": "app/models/group_user.rb; app/controllers/admin/groups_controller.rb#remove_member",
+      "reason": "Answering the question the claim asks: no. has_many :through #delete falls through to delete_all on the join rows, skipping the GroupUser destroy callback that decrements the counter_cache, so groups.user_count stays at its pre-removal value."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "pending-pagination-test",
+      "evidence": "spec/controllers/groups_controller_spec.rb ('# Pending until we fix group truncation' / pending \"ensures that membership can be paginated\")",
+      "reason": "The pending block is still pending after the change that fixes group truncation, and its body does JSON.parse(response.body) then members.map{...} - i.e. it assumes the old bare-array response, so it would not even pass if un-pended against the new {members:, meta:} envelope."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "not_real",
+      "confidence": 0.9,
+      "severity": null,
+      "cluster": "route-param-mismatch",
+      "evidence": "config/routes.rb:45-51; app/controllers/groups_controller.rb#find_group(:group_id)",
+      "reason": "Routes declared bare inside a `resources` block are nested, so Rails supplies :group_id, not :id. The identical pre-existing public block (`resources :groups do get 'members' end`) is consumed by find_group(:group_id) and its specs pass group_id:, which settles it."
+    }
+  ]
+}

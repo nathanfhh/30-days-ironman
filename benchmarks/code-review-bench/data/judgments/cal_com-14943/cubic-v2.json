@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-14943",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.98,
+      "reasoning": "Both say reminder.retryCount + 1 uses a stale in-memory value and should be Prisma's atomic increment."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both say the retryCount cleanup is not scoped to SMS so EMAIL/WHATSAPP rows can be deleted."
+    }
+  ]
+}

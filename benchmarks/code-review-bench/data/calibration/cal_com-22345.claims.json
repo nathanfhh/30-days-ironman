@@ -1,0 +1,97 @@
+{
+  "slug": "cal_com-22345",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "When safeParse fails the constructor just sets this.options to null and the authorization condition becomes 1=0, so malformed options are indistinguishable from a user who genuinely has no data; the failure should at least be logged."
+    },
+    {
+      "claim_id": "c002",
+      "text": "SQL operator precedence bug: buildOrgAuthorizationCondition and buildTeamAuthorizationCondition produce top-level OR expressions without outer parentheses. When getBaseConditions() returns these directly (line 75, no filters), callers composing with AND get incorrect precedence - AND binds tighter than OR, so team bookings bypass additional filters entirely. Fix: wrap the return at line 75 with parens around authConditions, or add outer parens in the reduce calls."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The only test that actually sends the generated SQL to Postgres uses scope: \"user\", which is the one branch with no array parameter; the newly introduced `= ANY(...)` in the org and team branches is only checked by toEqual structural comparison and has never been parsed or executed by the database."
+    },
+    {
+      "claim_id": "c004",
+      "text": "Now that the service returns a SQL fragment instead of running findMany, the injected readonlyPrisma (the INSIGHTS_DATABASE_URL read replica) no longer governs where the query runs \u2014 the caller picks the client, and the test in this very diff executes the query with the main @calcom/prisma client."
+    },
+    {
+      "claim_id": "c005",
+      "text": "Org-scope assertion is order-dependent even though the service fetches team/member IDs without orderBy, so the test can fail nondeterministically on valid SQL"
+    },
+    {
+      "claim_id": "c006",
+      "text": "Arrays used in ANY(...) (e.g. teamIds / uniqueUserIds) come from DB queries without explicit ordering, so the bound array order and resulting Prisma.sql shape may be non-deterministic, making SQL-fragment equality assertions brittle and causing inconsistent condition caching across identical inputs"
+    },
+    {
+      "claim_id": "c007",
+      "text": "Constructor parameter type was changed from InsightsBookingServiceOptions (discriminated union requiring teamId when scope: 'team') to InsightsBookingServicePublicOptions (flat type with teamId?: number), which loses compile-time enforcement that teamId is provided for team scope. While runtime zod validation catches this, the failure mode is silent empty results instead of a compile error. This is inconsistent with InsightsRoutingService which still uses the strict discriminated union type."
+    },
+    {
+      "claim_id": "c008",
+      "text": "Test fixtures created at lines 445-466 (userEventType and userBooking) are only cleaned up after assertions. If the query or expectation fails, those rows stay in the integration database and can contaminate later test cases. Should wrap in try/finally for cleanup."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Assertions now toEqual the Prisma.Sql instance's internal strings/values, pinning the tests to the exact generated SQL text, so a harmless reformat (an extra pair of parentheses, or switching the reduce to Prisma.join as recommended) turns them red while the real risk \u2014 whether the SQL runs in Postgres \u2014 stays untested."
+    },
+    {
+      "claim_id": "c010",
+      "text": "The new InsightsBookingServicePublicOptions type flattens scope to \"user\"|\"org\"|\"team\" with an optional teamId instead of the validated discriminated union, so { scope: \"org\", teamId } compiles but zod strips teamId and the caller silently gets authorization for the whole org \u2014 a fail-open widening the type system no longer prevents."
+    },
+    {
+      "claim_id": "c011",
+      "text": "The trailing `else { return NOTHING_CONDITION; }` in buildAuthorizationConditions is unreachable too, since this.options is a three-member discriminated union and TypeScript narrows to never there; an exhaustiveness check would be more useful."
+    },
+    {
+      "claim_id": "c012",
+      "text": "Behavioral change when team has no members: buildTeamAuthorizationCondition now omits the isTeamBooking = false branch when userIdsFromTeam is empty, which is a silent change from the old implementation that always included both OR arms, and this edge case has no test coverage"
+    },
+    {
+      "claim_id": "c013",
+      "text": "The two Caching tests (authorization conditions / filter conditions) were deleted wholesale while cachedAuthConditions, cachedFilterConditions and their undefined checks remain in the implementation; the sister service's test file still has the identical Caching describe, so this is a one-sided loss of coverage rather than a deliberate policy."
+    },
+    {
+      "claim_id": "c014",
+      "text": "Fetching userIdsFromOrg only when teamsFromOrg.length > 0 can exclude org-level members for orgs without child teams; consider deriving from teamIds (which includes orgId) or removing the guard so org-only orgs still include member user bookings."
+    },
+    {
+      "claim_id": "c015",
+      "text": "Is this migration to Prisma.sql scheduled in the same release as migrating the three places that actually query BookingTimeStatusDenormalized and the isomorphic InsightsRoutingService, or has the migration stopped halfway? The service currently has no production caller."
+    },
+    {
+      "claim_id": "c016",
+      "text": "InsightsBookingServicePublicOptions type at line 29 makes teamId optional for all scopes, but the schema correctly requires teamId only for scope: 'team'. This allows code like {scope: 'team', userId: 1, orgId: 1} to compile without teamId, then fails validation silently at runtime, setting this.options to null and returning no results instead of catching the error at compile time. Should use z.input<typeof insightsBookingServiceOptionsSchema> or a discriminated union type instead."
+    },
+    {
+      "claim_id": "c017",
+      "text": "Does binding a JavaScript integer array as a single parameter in `\"teamId\" = ANY(${teamIds})` resolve correctly to an integer array in Postgres via the Prisma query engine, or is an explicit ::int[] cast needed? The repo's only precedents bind string arrays."
+    },
+    {
+      "claim_id": "c018",
+      "text": "Column names that used to be typed identifiers on Prisma.BookingTimeStatusDenormalizedWhereInput are now string literals inside SQL templates, so a rename of the denormalized view (which has changed at least five times historically) will compile and pass CI and only fail at runtime."
+    },
+    {
+      "claim_id": "c019",
+      "text": "Integration tests for 'should build team scope conditions' and 'should build org scope conditions' (lines 295-343) only verify SQL structure with toEqual(Prisma.sql`...`) but never execute the queries against Postgres. The ANY(...) array binding syntax is never tested at runtime, so regressions in array binding or fragment generation would pass undetected."
+    },
+    {
+      "claim_id": "c020",
+      "text": "Non-deterministic ordering in org-scope test: findAllByParentId (teams) and findAllByTeamIds (memberships) are called without orderBy clause, so the order of team IDs and user IDs in the resulting Prisma.Sql object is undefined and may cause flaky test failures"
+    },
+    {
+      "claim_id": "c021",
+      "text": "The same reduce-based 'join Prisma.Sql parts with a separator' block is repeated verbatim in three places (AND for filters, OR for the org and team authorization conditions); Prisma.join already does this and the logic should be a single helper."
+    },
+    {
+      "claim_id": "c022",
+      "text": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated."
+    },
+    {
+      "claim_id": "c023",
+      "text": "All three copies contain a dead `if (index === 0) return condition;` branch: with no initialValue, reduce's callback is first invoked with index 1, so the check is never true and merely suggests a first-element special case that does not exist."
+    }
+  ]
+}

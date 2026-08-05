@@ -1,0 +1,17 @@
+{
+  "slug": "cal_com-22345",
+  "source_repo": "cal.com",
+  "language": "TypeScript",
+  "golden_url": "https://github.com/calcom/cal.com/pull/22345",
+  "pr_title": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR22345__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR22345__20260122.git",
+  "base_sha": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "head_sha": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "stat": " .../__tests__/insightsBooking.integration-test.ts  | 190 +++++----------------\n packages/lib/server/service/insightsBooking.ts     | 155 ++++++++---------\n 2 files changed, 114 insertions(+), 231 deletions(-)\n",
+  "name_status": "M\tpackages/lib/server/service/__tests__/insightsBooking.integration-test.ts\nM\tpackages/lib/server/service/insightsBooking.ts\n",
+  "commits": "da09bc0 Merge branch 'main' into devin/convert-insights-booking-service-1752054886\n95b426f address feedback\n4472efe clean up tests\nf626860 Revert \"fix: exclude intentionally skipped jobs from required CI check failure\"\na20bc94 Merge branch 'devin/convert-insights-booking-service-1752054886' of github.com:calcom/cal.com into devin/convert-insights-booking-service-1752054886\n14e0df2 fix tests\n6ff44fc fix: exclude intentionally skipped jobs from required CI check failure\n40cfa8d Merge branch 'fix/insights-booking-service' into devin/convert-insights-booking-service-1752054886\nd377369 fix: update InsightsBookingService integration tests for Prisma.sql format\n4585081 feat: convert InsightsBookingService to use Prisma.sql raw queries\nef96831 feat: convert InsightsBookingService to use Prisma.sql raw queries\n1cdce4c fix: use raw query at InsightsBookingService\n"
+}

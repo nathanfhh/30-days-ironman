@@ -1,0 +1,8 @@
+[
+  "Wrong metric recorder on Create storage failure - calls recordLegacyDuration instead of recordStorageDuration when d.Storage.Create fails, misattributing the failure metric",
+  "Wrong metric recorder on Update storage failure - calls recordLegacyDuration instead of recordStorageDuration when d.Storage.Update fails, misattributing the error metric",
+  "Wrong metric recorder for legacy DeleteCollection in goroutine - d.Legacy.DeleteCollection duration is recorded with recordStorageDuration instead of recordLegacyDuration, causing legacy metrics to appear as storage metrics",
+  "Goroutines inherit cancellable request context causing async writes to fail silently - all four async goroutines derive their timeout context from the incoming request ctx, which gets cancelled when HTTP response is sent, aborting legacy writes before the 10-second timeout has any effect. Should use context.Background() as the base",
+  "Enriched logger not stored in context - klog.NewContext is called with d.Log (base logger) instead of the enriched log that was constructed with name, kind, and method values, causing those fields to be absent from log lines",
+  "name passed instead of options.Kind to metric recorder in Delete - passes resource name instead of options.Kind as third argument to recordStorageDuration, producing high-cardinality metric label and preventing meaningful aggregation"
+]

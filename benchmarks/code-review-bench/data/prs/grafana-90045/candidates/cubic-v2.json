@@ -1,0 +1,7 @@
+[
+  "d.recordLegacyDuration is called when Storage create fails instead of d.recordStorageDuration, recording storage failure latency under the legacy metric and skewing both dashboards. The same bug exists in the Update error path.",
+  "Context is set with d.Log instead of the enriched log variable, discarding the name, kind, and method values added on the previous line, so downstream code extracting the logger from context will lack those fields.",
+  "The success path passes name (the object name) instead of options.Kind as the resource kind for the metric, creating a unique time series per deleted object and causing metric cardinality explosion.",
+  "recordStorageDuration is called for the legacy DeleteCollection operation instead of recordLegacyDuration, recording the wrong metric.",
+  "Use separate mocks for legacy and unified storage; a shared mock.Mock makes backend routing assertions indistinguishable."
+]

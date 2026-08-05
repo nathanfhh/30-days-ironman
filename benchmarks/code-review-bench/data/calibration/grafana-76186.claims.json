@@ -1,0 +1,69 @@
+{
+  "slug": "grafana-76186",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "The traceID is no longer logged for plugin requests. During a refactoring, the tracing import and the logic to extract and add traceID from the context to log parameters were removed from the LoggerMiddleware. The newly introduced ContextualLoggerMiddleware does not add this information, resulting in missing traceID in plugin request logs and impacting debugging and request tracing capabilities."
+    },
+    {
+      "claim_id": "c002",
+      "text": "Log fields now depend on the order middlewares are chained in, but the comment that documented and protected that ordering constraint was deleted when the logic was moved into the new middleware."
+    },
+    {
+      "claim_id": "c003",
+      "text": "Pre-existing (not introduced by this PR): MetricsMiddleware shares a single globally-created instance and overwrites its `next` field on every request, an unprotected concurrent write that is a data race under concurrent requests."
+    },
+    {
+      "claim_id": "c004",
+      "text": "TestLogger.FromContext returns a fresh logger instance, so call sites like m.logger.FromContext(ctx).Info(...) won't record logs on the original TestLogger value that tests typically assert against"
+    },
+    {
+      "claim_id": "c005",
+      "text": "TestLogger.FromContext returns a new instance with zero counters instead of returning the existing instance (f), which means log calls routed through FromContext will never appear on the original TestLogger, causing future tests that check log call counts to silently fail"
+    },
+    {
+      "claim_id": "c006",
+      "text": "The newly added ContextualLoggerMiddleware has no tests at all, even though it's now the sole source of plugin-identifying fields in request logs."
+    },
+    {
+      "claim_id": "c007",
+      "text": "The three stream endpoints (SubscribeStream/PublishStream/RunStream) in ContextualLoggerMiddleware are undocumented pure pass-throughs that don't attach any contextual logging fields, unlike TracingMiddleware which covers all seven endpoints."
+    },
+    {
+      "claim_id": "c008",
+      "text": "TestLogger.FromContext returns a brand-new TestLogger instance rather than itself, so any log call made through FromContext can never be asserted against the fake logger instance a test holds a reference to."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Returning a fresh `TestLogger` in `FromContext` drops all log writes made through `FromContext`, so tests can no longer observe logs emitted by code paths that use contextual logging - should return `f` instead"
+    },
+    {
+      "claim_id": "c010",
+      "text": "The test file was renamed to metrics_middleware_test.go, but the test function itself is still named TestInstrumentationMiddleware."
+    },
+    {
+      "claim_id": "c011",
+      "text": "TestLogger.FromContext returns a new disconnected TestLogger via NewTestLogger() instead of returning the receiver (f), causing any test using TestLogger to assert on LoggerMiddleware logging behavior to see zero calls since logs go to a throwaway instance - fix by changing 'return NewTestLogger()' to 'return f' on line 47"
+    },
+    {
+      "claim_id": "c012",
+      "text": "pkg/plugins/log.Logger is an exported interface that just gained a FromContext method \u2014 are there implementations outside this repo (e.g. Grafana Enterprise or other downstream consumers) that would now fail to compile?"
+    },
+    {
+      "claim_id": "c013",
+      "text": "Test function on line 21 is still named TestInstrumentationMiddleware but the struct was renamed to MetricsMiddleware - should be TestMetricsMiddleware for consistency with the rest of the rename"
+    },
+    {
+      "claim_id": "c014",
+      "text": "Is there any path where the same ctx passes through the plugin client decorator twice, which would cause the 'Plugin Request Completed' log line to show duplicated, stale endpoint/pluginId fields left over from the outer call?"
+    },
+    {
+      "claim_id": "c015",
+      "text": "The logger name passed to NewLoggerMiddleware is still \"plugin.instrumentation\" even though no type named Instrumentation exists anymore after the rename."
+    },
+    {
+      "claim_id": "c016",
+      "text": "The ContextualLoggerMiddleware methods (QueryData, CallResource, CheckHealth, CollectMetrics) panic when a nil request is received. This occurs because they directly access req.PluginContext (via the instrumentContext function) without first checking if req is nil. This is a regression, as previous middleware layers gracefully handled nil requests."
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "slug": "grafana-94942",
+  "golden_url": "https://github.com/grafana/grafana/pull/94942",
+  "pr_title": "Advanced SQL Analytics Framework",
+  "language": "Go",
+  "comments": [
+    {
+      "comment": "The enableSqlExpressions function has flawed logic that always returns false, effectively disabling SQL expressions unconditionally:",
+      "severity": "Critical"
+    },
+    {
+      "comment": "Several methods such as NewInMemoryDB().RunCommands and db.QueryFramesInto return 'not implemented'.",
+      "severity": "High"
+    }
+  ]
+}

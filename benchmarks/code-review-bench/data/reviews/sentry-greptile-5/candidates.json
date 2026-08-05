@@ -1,0 +1,201 @@
+{
+  "slug": "sentry-greptile-5",
+  "issues": [
+    {
+      "text": "replay breadcrumbs and errors are merged in chronological order by comparing timestamps that are in different units (errors in seconds, breadcrumbs in milliseconds), so the merge condition is always true for real data and all error messages get dumped before the first breadcrumb; the new tests pass because they feed a 'seconds' value into a field that is really milliseconds.",
+      "zh": "replay breadcrumb 與 error 以不同時間單位比較，時序合併永遠不會生效",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "fetch_error_details pairs error_ids with nodestore's get_multi results by position (zip), but get_multi does not guarantee that ordering; duplicate error_ids get deduplicated so events ends up shorter than error_ids and trailing errors silently disappear, and partial/full cache hits can reorder results, which would misattribute fields.",
+      "zh": "fetch_error_details 用位置配對 error_ids 與 get_multi 的結果，但回傳順序沒有保證",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "When deleting recording blobs, exceptions other than NotFound raised inside the ThreadPoolExecutor are never observed (pool.map's generator is never iterated), so deletion failures are silently discarded and the replay is still marked as deleted even though the blob was never removed from storage.",
+      "zh": "刪除 recording blob 的例外被靜靜吞掉，replay 仍然會被標記為已刪除",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "HIDDEN_ATTRIBUTES filtering only applies inside the search-query filter branch; the early return for the no-search-query case (the default view most users see) happens before that filter, so the fields meant to stay hidden are still shown by default.",
+      "zh": "HIDDEN_ATTRIBUTES 只在有搜尋字串時才生效，預設畫面仍然顯示這些欄位",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "When the new table-widget-visualization flag branch is taken, it renders a hardcoded empty table (empty columns and tableData) instead of wiring in the already-computed result, producing a table with no headers and no data.",
+      "zh": "flag 開啟時渲染的是硬寫死的空 columns 與空 tableData，同一個 map 迴圈裡的 result 被完全丟掉，畫面會是一張沒有標題也沒有資料的表",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The 'use-table-widget-visualization' feature flag referenced in the frontend has no corresponding registration anywhere in the backend feature registry, so it can never be enabled and the branch that depends on it can never be exercised or rolled out.",
+      "zh": "`use-table-widget-visualization` 這個字串在整個 repo 只出現這一次，後端沒有任何地方註冊它，所以 organization.features 永遠不會包含它：這條分支目前無法被觸發，也無法被 roll out",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The browser reporting collector rejects an entire batch with a 422 as soon as one report in it fails validation, discarding already-valid reports in the same batch, even though the endpoint's stated purpose is observing real-world browser data and the Reporting API will keep retrying the whole failing batch.",
+      "zh": "browser report 批次中只要有一筆不合法就整批 422，已驗證的報告一併丟棄",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The mutual-exclusion check between `age` and `timestamp` uses truthy checks instead of presence checks, so a report that has both `timestamp` and `age: 0` (a common case, since age 0 means 'sent immediately') incorrectly passes the exclusivity validation.",
+      "zh": "age: 0（報告產生後立刻送出，這是常見情況）或 timestamp: 0 都是 falsy，所以同時帶著 timestamp 與 age: 0 的報告會通過互斥檢查",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Because both `age` and `timestamp` are required=False and DRF's validate_<field> only runs for fields present in the input, a report containing neither field entirely skips validation and is accepted, even though the referenced spec requires exactly one of the two to be present.",
+      "zh": "DRF 的 validate_<field> 只有在該欄位出現在輸入裡才會被呼叫，而兩個欄位都是 required=False，所以「age 與 timestamp 都不存在」的報告完全不會觸發任何驗證、直接通過",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The updated test covering the max_segment_id=None null guard patches out delete_matched_rows entirely and only asserts on the mock's call arguments, so the actual guarded line of code is never executed by the test that is supposed to protect it.",
+      "zh": "max_segment_id: 0 → None 是為了保護 delete.py:88-90 新加的 null 防護，但那支測試把 delete_matched_rows 整個 @patch 掉，只斷言 mock 被呼叫時帶了哪個 dict——被修改的那行程式碼在測試裡一次都沒有執行",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The updated browser-reporting-collector tests (test_basic and test_handles_multiple_reports_both_specs) dropped the real content_type=\"application/reports+json\" and the logger.info assertion, so no test exercises the actual content type real browsers send, and the assertion that browser_report_received was logged is gone.",
+      "zh": "test_basic 取代了 test_logs_request_data_if_option_enabled，拿掉了 logger.info 斷言與 content_type=\"application/reports+json\"；test_handles_multiple_reports_both_specs 同樣改用預設 content type",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "fetch_error_details swallows all exceptions (nodestore failure, timeout, parse error) and returns an empty list, which is indistinguishable from the normal case of a replay simply having no errors, so failures silently produce a summary that looks complete but is missing all error context.",
+      "zh": "nodestore 掛掉、逾時、或 payload 解析失敗，都會回傳 []，而 [] 同時也是「這個 replay 本來就沒有 error」的正常結果",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "error_ids taken from the Snuba aggregation are passed to nodestore.get_multi with no upper bound, creating unbounded fan-out on a synchronous GET endpoint when a replay is associated with many errors.",
+      "zh": "error_ids 直接來自 Snuba 的 replay 聚合結果，一個長 session 可以關聯到大量 error，這裡沒有上限就整包丟進 nodestore.get_multi，對一個同步 GET endpoint 來說是不受控的扇出",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "analytics.record for the preprod artifact assemble endpoint is called before the feature-flag check, so requests from organizations without the feature enabled (which get a 404) are still counted as assemble events, skewing feature-adoption metrics in the direction opposite to what the data is meant to show.",
+      "zh": "preprod assemble 的 analytics 記在 feature gate 之前，會把 404 的請求也算進去",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "The variable disable_error_fetching is a negated rename of the enable_error_context query parameter, so reading `if disable_error_fetching:` requires mentally negating twice, and the variable name (fetching) doesn't even match the parameter name's concept (context).",
+      "zh": "query param 叫 enable_error_context，變數卻叫 disable_error_fetching，中間還隔著一次 == \"false\" 的反轉，讀到 if disable_error_fetching: 時要在腦中做兩次否定才知道發生什麼",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "get_request_data sorts the caller-supplied error_events list in place, an undocumented side effect that isn't implied by the function's name (which only promises to 'get request data').",
+      "zh": "get_request_data 對傳進來的 error_events 做就地 sort，函式名字只承諾「取得請求資料」，看不出它會改動參數",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "A commit titled as just 'adding environment info' also removed the culprit/subtitle field from merged-PR Suspect Issues comments, replacing it with `environment`, which is often an empty string when no recommended event is found — so for some issues the comment silently loses information with nothing filling the gap, and this user-visible regression isn't mentioned in the commit title.",
+      "zh": "把 culprit 從每一則 merged PR 留言裡拿掉了...而換上來的 environment 在 get_environment_info 取不到 recommended event...時就是空字串，所以對一部分 issue 來說是「culprit 沒了，也沒有東西補上」。這是使用者看得到的輸出退化，卻沒有出現在 commit 標題裡",
+      "finding_id": "F-012",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "format_comment_subtitle is now dead code in both the GitHub and GitLab integrations (no remaining callers), and it is not declared as an abstract method on the base class either, so there's no interface reason for it to still exist.",
+      "zh": "format_comment_subtitle 在 GitHub 與 GitLab 兩邊都成了死碼...而且基底類別沒有把它列為 abstractmethod，所以留著也不是為了滿足介面",
+      "finding_id": "F-012",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "After removing ParameterizationRegexExperiment, the nested function _handle_regex_match defined inside parametrize_w_experiments has no remaining caller and is now dead code; ruff doesn't catch this because it doesn't flag unused nested functions, and a same-named function used elsewhere in the file must not be confused with this dead one.",
+      "zh": "移除 ParameterizationRegexExperiment 後，parametrize_w_experiments 裡的 _handle_regex_match 成為死碼",
+      "finding_id": "F-013",
+      "severity": "Nit"
+    },
+    {
+      "text": "The PR comment template ends with its own trailing newline, and the code also joins entries with \"\\n\", producing an extra blank line between each issue and after the last one, turning a Markdown tight list into a loose list with unintended visual spacing.",
+      "zh": "PR comment 模板結尾多一個換行，和 join(\"\\n\") 疊出空行與尾端空白",
+      "finding_id": "F-014",
+      "severity": "Nit"
+    },
+    {
+      "text": "The rewrite of useTraceItemAttributeKeys widens its returned `attributes` type from always being a TagCollection to potentially `undefined` while loading or on error; the current caller happens to be safe against this, but a future caller that indexes attributes directly would break.",
+      "zh": "改寫前 attributes 一定是一個 TagCollection（至少是 {}），改寫後在尚未取得資料或發生錯誤時會是 undefined...型別契約確實變寬了",
+      "finding_id": "F-015",
+      "severity": "Nit"
+    },
+    {
+      "text": "Switching useTraceItemAttributeKeys from useApiQuery to useQuery drops the original retry: false option, which has no global default, so the query now retries three times on failure, unnecessarily delaying the UI's failure state for what is just autocomplete helper data.",
+      "zh": "retry: false 沒有全域預設，改寫後這支查詢失敗時會重試三次；attribute keys 是輸入框的輔助資料，重試三次沒有帶來什麼、只是延後了 UI 的失敗狀態",
+      "finding_id": "F-015",
+      "severity": "Nit"
+    },
+    {
+      "text": "sentry/preprod/analytics.py has no __all__ defined, so `from .analytics import *` in __init__.py pulls in every non-underscore name including the `analytics` module it itself imports, creating an ambiguous name that can refer to either the submodule or sentry.analytics depending on import order.",
+      "zh": "analytics.py 沒有定義 __all__，所以 import * 會把所有不以底線開頭的名字都拉進來，包含它自己 import 的 analytics 模組",
+      "finding_id": "F-016",
+      "severity": "Nit"
+    },
+    {
+      "text": "get_environment_info is called once per issue (up to 5) inside the list comprehension that builds the PR comment body, each call doing a Snuba query with a possible fallback second query, adding up to 5-10 extra remote calls to a path that previously made zero.",
+      "zh": "get_comment_body 是在一個最多 5 筆 issue 的 list comprehension 裡逐一呼叫它...這條路徑原本一次遠端查詢都沒有，現在每則 Suspect Issues 留言最多會多出 5 到 10 次",
+      "finding_id": "F-017",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "A blanket `except Exception` in get_environment_info turns any Snuba timeout, retention-boundary error, or serialization failure into an empty string, which is indistinguishable from an issue genuinely having no environment.",
+      "zh": "blanket `except Exception` 把任何 Snuba 逾時、retention 邊界、序列化錯誤都變成空字串，和「這個 issue 本來就沒有 environment」完全無法區分",
+      "finding_id": "F-017",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Removing the redundant Type row from the Grouping Information panel also removed each grouping variant's unique explanatory text (with no other place it's shown), and as a side effect the CUSTOM_FINGERPRINT and BUILT_IN_FINGERPRINT switch cases are now word-for-word identical, since the removed tooltip text was the only thing distinguishing them.",
+      "zh": "移除 Grouping Information 的 Type 列之後，五種 variant 的說明文字沒有去處，兩個 switch 分支變成完全相同",
+      "finding_id": "F-018",
+      "severity": "Nit"
+    },
+    {
+      "text": "The diff under review does not match the PR title 'Replays Self-Serve Bulk Delete System': the merge-base resolves to the feature's own squash commit rather than its parent, so the actual diff spans 32 unrelated already-merged PRs, and the bulk-delete feature itself is not present in the diff at all.",
+      "zh": "標題是「Replays Self-Serve Bulk Delete System」，但 `git merge-base 49a275847631 ea188e2d736f` 回傳 49a275847631 本身...這個範圍實際涵蓋 32 個已合併進 master 的獨立 PR...bulk delete 功能本身完全不在 diff 內",
+      "finding_id": null,
+      "severity": "Critical"
+    },
+    {
+      "text": "The submitted changeset isn't shaped like a mergeable MR: 106 files and 32 unrelated changes bundled together (a revert, two migrations turned into no-ops, dozens of unrelated frontend refactors), such that no single problem in it could be reverted independently.",
+      "zh": "106 個檔案、32 個彼此無關的變更（含一次 revert...兩支 migration 被改成 no-op、數十個前端元件的 Flex 重構）。任何一項出問題都無法單獨 revert",
+      "finding_id": null,
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Rewriting already-applied migration files (0917, 0920) into no-ops is irreversible for environments that already ran them, and this kind of change should be split out from the other 32 bundled changes and have its rollout timing evaluated on its own.",
+      "zh": "把 migration 內容改成直接 return...這類操作應該和其它 32 個變更分開、單獨評估上線時機",
+      "finding_id": null,
+      "severity": "Suggestion"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "If max_segment_id is NULL, no blobs get deleted at all — could this leave orphaned recording files in storage for replays whose in-window rows all have NULL segment_id but which have real segments outside that window?",
+      "zh": "當 max_segment_id 為 NULL 時直接不刪任何 blob，會不會在 storage 裡留下孤兒錄影檔？"
+    },
+    {
+      "text": "After traceWaterfall's outer container was changed from height: 100% to flex={1}, does the layout still render the same on the actual page across all drawer layouts?",
+      "zh": "traceWaterfall 的外層容器從 height: 100% 改成 flex={1} 之後，版面在實際頁面上還一樣嗎？"
+    },
+    {
+      "text": "With the added Snuba query and nodestore batch read, is the response time of project_replay_summarize_breadcrumbs (a GET endpoint) still acceptable given the 150ms target?",
+      "zh": "project_replay_summarize_breadcrumbs 這個 GET 多加一次 Snuba 查詢與一次 nodestore 批次讀取之後，回應時間還能接受嗎？"
+    },
+    {
+      "text": "Is turning migrations 0917 and 0920 into no-ops actually safe for every environment (SaaS and self-hosted) that may have already applied them?",
+      "zh": "把 0917 與 0920 兩支 migration 改成 no-op，對已經成功套用過它們的環境是否真的無害？"
+    },
+    {
+      "text": "Is the diff range submitted for review actually correct, given that the merge-base resolves to the feature's own squash commit rather than its parent?",
+      "zh": "送審的 diff 範圍是否正確？"
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "slug": "sentry-77754",
+  "issues": [
+    {
+      "text": "AssignmentSource.queued's default value (`timezone.now()`) is evaluated once at class-definition/module-import time, not per instance, so every AssignmentSource created without an explicit queued value shares the same frozen timestamp instead of the actual enqueue time.",
+      "zh": "AssignmentSource.queued 的預設值在 module import 時就算完了，之後每個實例拿到的都是同一個時間戳",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new assignment_source parameter added to IssueSyncIntegration.sync_status_outbound has no producer and no consumer anywhere in the repo, and its declared signature is incompatible with ExampleIntegration's implementation, which doesn't even accept **kwargs.",
+      "zh": "sync_status_outbound 新增的 assignment_source 參數沒有生產者也沒有消費者，且與 ExampleIntegration 的實作不相容",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "AssignmentSource.from_dict swallows parse failures and returns None; since the caller treats None as \"no source\" and the guard is `if sync_source and ...`, a parse failure silently disables the outbound-sync loop protection with no logging or metric to reveal it happened.",
+      "zh": "from_dict 解析失敗時回傳 None，等於無聲關閉迴圈保護，且沒有留下任何 log 或 metric",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "test_to_dict only asserts that queued `is not None`, an assertion too weak to catch the shared-default-timestamp bug described in F-001 even though this test is the only place that exercises the queued field.",
+      "zh": "test_to_dict 對 queued 只斷言 is not None，剛好放過了 F-001 的預設值缺陷",
+      "finding_id": "F-004",
+      "severity": "Nit"
+    },
+    {
+      "text": "Test method name test_from_dict_inalid_data has a typo — missing the 'v' — and should be test_from_dict_invalid_data.",
+      "zh": "第 13 行的 test_from_dict_inalid_data 少了一個 v，應為 invalid",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "Test method name test_from_dict_empty_array is misleading: the input it actually tests is an empty dict, not an array.",
+      "zh": "第 8 行的 test_from_dict_empty_array 測的輸入是第 9 行的 data: dict[str, Any] = {}，是空 dict 不是 array",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "The ~30-45 line integration + ExternalIssue + GroupLink test setup is now duplicated verbatim for the third time by this PR's new test, triggering the Rule of Three, and risks silent drift since the 5-key sync config dict must stay consistent across every copy.",
+      "zh": "測試前置設定出現第三份逐字複本，觸發 Rule of Three",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "No test verifies that a different integration still propagates changes outward — only the same-integration blocking case is tested — so an inverted guard condition (blocking everything instead of only the matching source) would still pass all existing tests.",
+      "zh": "issues.py:387-389 的註解明說 guard「should still allow other integrations to propagate changes outward」，但沒有任何測試涵蓋這一半",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new test exercises the guard by calling GroupAssignee.objects.assign(assignment_source=...) directly rather than through the real entry point sync_group_assignee_inbound, so the actual end-to-end behavior (\"webhook comes in → no outbound re-send to the same integration\") remains untested.",
+      "zh": "新測試是在 GroupAssignee.objects.assign(assignment_source=...) 這一層驗證的，但真正會產生 assignment_source 的入口是 sync_group_assignee_inbound，目前沒有任何測試守著",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The deassign-direction loop guard (matching source) has no corresponding test.",
+      "zh": "deassign 方向的 guard（groupassignee.py:238-240）同樣沒有對應的 matching-source 測試",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does the same-integration loop guard actually stop a multi-integration back-and-forth (A → Sentry → B → Sentry → A) when two or more issue-sync integrations are linked to the same group, and which loop originally motivated this fix?",
+      "zh": "這個 guard 只擋得住「同一個 integration 的單跳回彈」。當一個 organization 有兩個以上的 issue-sync integration 同時 link 到同一個 group 時，A → Sentry → B → Sentry → A 的來回是否也會被擋下？如果不會，實際觸發這次修復的那個迴圈屬於哪一種？"
+    },
+    {
+      "text": "During a rolling deploy, will the retry configuration on sync_assignee_outbound tolerate the window where new code enqueues an assignment_source_dict kwarg that old workers' function signature can't accept (causing a TypeError)?",
+      "zh": "在 rolling deploy 期間，新版程式送出的 sync_assignee_outbound 任務多帶了 assignment_source_dict 這個 kwarg，被尚未更新的 worker 取走時會直接 TypeError；現有的 retry 設定是否足以撐過部署窗口？"
+    },
+    {
+      "text": "Is src/sentry/integrations/services/ the right home for AssignmentSource, given the rest of that directory is hybrid-cloud RPC service layer and AssignmentSource is a plain non-RPC frozen dataclass?",
+      "zh": "AssignmentSource 放在 src/sentry/integrations/services/ 是否是它該在的位置？"
+    }
+  ]
+}

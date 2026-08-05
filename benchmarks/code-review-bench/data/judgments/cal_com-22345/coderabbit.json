@@ -1,0 +1,14 @@
+{
+  "slug": "cal_com-22345",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "Both say returning early when teamsFromOrg.length === 0 drops the membership user lookup for orgs with only direct org memberships, and both suggest deriving from teamIds."
+    }
+  ]
+}

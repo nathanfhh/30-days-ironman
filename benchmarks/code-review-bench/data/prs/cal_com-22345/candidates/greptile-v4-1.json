@@ -1,0 +1,4 @@
+[
+  "Non-deterministic ordering in org-scope test: findAllByParentId (teams) and findAllByTeamIds (memberships) are called without orderBy clause, so the order of team IDs and user IDs in the resulting Prisma.Sql object is undefined and may cause flaky test failures",
+  "Behavioral change when team has no members: buildTeamAuthorizationCondition now omits the isTeamBooking = false branch when userIdsFromTeam is empty, which is a silent change from the old implementation that always included both OR arms, and this edge case has no test coverage"
+]

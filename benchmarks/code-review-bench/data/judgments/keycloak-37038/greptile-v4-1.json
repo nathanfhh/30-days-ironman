@@ -1,0 +1,20 @@
+{
+  "slug": "keycloak-37038",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "Both say canManage() grants manage rights to callers holding only VIEW, i.e. the wrong scope is checked."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both describe getId() vs getName() in getGroupIdsWithViewPermission causing the name lookup to fail, fallback to all-groups, and wrong ids returned to callers."
+    }
+  ]
+}

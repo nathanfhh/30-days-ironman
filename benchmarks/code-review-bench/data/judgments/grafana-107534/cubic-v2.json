@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-107534",
+  "tool": "cubic-v2",
+  "n_golden": 1,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "request.filters passed to applyTemplateVariables but never populated by the test setup — the golden comment exactly."
+    }
+  ]
+}

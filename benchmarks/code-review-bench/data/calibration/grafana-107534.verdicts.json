@@ -1,0 +1,149 @@
+{
+  "slug": "grafana-107534",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "filter-before-interpolate-empty-expr",
+      "evidence": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:49-53, public/app/plugins/datasource/loki/querySplitting.ts:294-299, public/app/plugins/datasource/loki/querySplitting.ts:87-91",
+      "reason": "Both entry points now filter on the raw `query.expr` and interpolate afterwards (the shard path previously filtered after `interpolateVariablesInQueries`). A target whose expr is only `$var` survives the filter, becomes `''` after interpolation, is routed to the no-shard group (`requestSupportsSharding` filters empty expr), and is handed to `runSplitQuery`, which drops it again — leaving `requests === []` so `runSplitGroupedQueries` throws on `requests.filter(...)[0].partition`."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "duplicate-interpolation",
+      "evidence": "public/app/plugins/datasource/loki/querySplitting.ts:299, public/app/plugins/datasource/loki/shardQuerySplitting.ts:52, public/app/plugins/datasource/loki/datasource.ts:350-357, packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:185",
+      "reason": "Traced the whole path: `runSplitQuery` interpolates, then `runSplitGroupedQueries` calls `datasource.runQuery` -> `super.query()` -> `DataSourceWithBackend.query` which unconditionally applies `applyTemplateVariables` again (2x). The shard path adds a third: `runShardSplitQuery` -> `splitQueriesByStreamShard` -> `runSplitQuery` -> `runQuery` (3x). Nothing in the diff removes or guards the downstream call."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "auto-var-test-fidelity",
+      "evidence": "public/app/plugins/datasource/loki/datasource.ts:1110-1113, pkg/tsdb/loki/parse_query.go:22",
+      "reason": "The real `applyTemplateVariables` deliberately destructures `__auto` out of `scopedVars` so it is NOT interpolated in the frontend — `$__auto` is resolved by the backend (`pkg/tsdb/loki/parse_query.go`). The tests' stub `replace` turns `$__auto` into `5m`, so the asserted `count_over_time({a=\"b\"}[5m])` cannot happen in production; the test models behaviour the code intentionally avoids."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "unexplained-call-count",
+      "evidence": "public/app/plugins/datasource/loki/shardQuerySplitting.test.ts:112",
+      "reason": "The bumped `toHaveBeenCalledTimes(5)` carries no comment, unlike every other magic count in the same file (e.g. '// 5 shards, 3 groups + empty shard group, 4 requests'). The 5 is 1 entry-point call + 4 re-interpolations inside `runSplitQuery`, which is not discoverable from the test."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "unexplained-call-count",
+      "evidence": "public/app/plugins/datasource/loki/shardQuerySplitting.test.ts:112",
+      "reason": "Correct: 5 is exactly the redundant-call count (1 + one per sub-request from `runSplitQuery`), so the assertion pins the duplication in place — collapsing interpolation to a single pass would fail this test even though the behaviour improves. Asserting the resulting expr/step would be the behaviour-oriented assertion."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "not_real",
+      "confidence": 0.65,
+      "severity": null,
+      "cluster": "remove-both-entry-interpolations",
+      "evidence": "public/app/plugins/datasource/loki/querySplitting.ts:299-370, public/app/plugins/datasource/loki/shardQuerySplitting.ts:49-53, public/app/plugins/datasource/loki/queryUtils.ts:421",
+      "reason": "The premise (DataSourceWithBackend.query already interpolates) is true, but the prescribed fix is wrong: the splitting logic itself consumes the interpolated values before any request is sent — `calculateStep` parses `query.step`, and the shard path feeds `getSelectorForShardValues(query.expr)` to `fetchLabelValues`. Removing both calls and relying only on the downstream one reverts exactly what the PR fixes."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "duplicate-interpolation",
+      "evidence": "packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:185, public/app/plugins/datasource/loki/datasource.ts:1127-1130, public/app/plugins/datasource/loki/modifyQuery.ts:511-541",
+      "reason": "Verified each link: `applyTemplateVariables` -> `addAdHocFilters` -> `addLabelToQuery`; for a query with a parser it lands in `addFilterAsLabelFilter`, which splices ` | key=`value`` unconditionally with no dedup (only `addFilterToStreamSelector` has a `labelExists` guard, line 494). So a second pass over `{a=\"b\"} | logfmt | env=`prod`` appends the filter again."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "filters-arg-untested",
+      "evidence": "public/app/plugins/datasource/loki/querySplitting.test.ts (no occurrence of 'filters'), public/app/plugins/datasource/loki/shardQuerySplitting.test.ts:81-84",
+      "reason": "Grepped both test files: `filters` never appears, `createRequest` never sets it, and the shard-path stub `applyTemplateVariables` takes only `(query)` and ignores the 2nd/3rd arguments. The newly passed `request.filters` argument is entirely uncovered — which is why the ad-hoc-filter duplication is invisible to the suite."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "call-count-should-be-one",
+      "evidence": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:160-163, public/app/plugins/datasource/loki/querySplitting.ts:299",
+      "reason": "The premise is false. The spy is on `datasource.applyTemplateVariables`, and `splitQueriesByStreamShard` delegates each sub-request to `runSplitQuery`, which interpolates again. 1 entry-point call + 4 sub-requests (the file's own comment: '5 shards, 3 groups + empty shard group, 4 requests') = 5. Changing the expectation to 1 would make the test fail."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "duplicate-interpolation",
+      "evidence": "public/app/plugins/datasource/loki/querySplitting.ts:299, public/app/plugins/datasource/loki/modifyQuery.ts:511-541",
+      "reason": "Correct about the mechanism and the line (299). One nuance: `addAdHocFilters` does dedup when the filter goes into the stream selector (`labelExists`, modifyQuery.ts:494); the non-deduplicating path is `addFilterAsLabelFilter`, taken for queries with a parser — which is the common ad-hoc-filter case, so the duplication is real."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "call-count-should-be-one",
+      "evidence": "public/app/plugins/datasource/loki/shardQuerySplitting.test.ts:112, public/app/plugins/datasource/loki/shardQuerySplitting.ts:160-163",
+      "reason": "Same false premise as c009: the counter is not scoped to `runShardSplitQuery`. `runSplitQuery`, invoked once per shard group sub-request, calls the same spied method, so the true count is 1 + 4 = 5. Asserting 1 would break the test."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "interpolated-legend-telemetry",
+      "evidence": "public/app/plugins/datasource/loki/querySplitting.ts:311-345, public/app/plugins/datasource/loki/tracking.ts:173-193",
+      "reason": "Factually accurate: the `requests` handed to `trackGroupedQueries` are built from the now-interpolated `queries`, and `trackQuery` reports `legend: query.legendFormat` verbatim (only `expr` goes through `obfuscate`). `applyTemplateVariables` also interpolates `legendFormat`, so resolved variable values now reach analytics where template text used to. Whether that is desired is a product call, but the change is real and undiscussed."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "duplicate-interpolation",
+      "evidence": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:52, public/app/plugins/datasource/loki/querySplitting.ts:299, packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:185",
+      "reason": "The count of three is right for the shard path. Note the shard path is strictly worse than before: the old `interpolateVariablesInQueries(request.targets, request.scopedVars)` passed no ad-hoc filters at all, so filters were applied once; now they are applied at all three layers."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "duplicate-interpolation",
+      "evidence": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:52 and 160-163, public/app/plugins/datasource/loki/querySplitting.ts:299 and 176, public/app/plugins/datasource/loki/datasource.ts:350",
+      "reason": "Each hop in the described chain checks out: `runShardSplitQuery` maps `applyTemplateVariables`, `splitQueriesByStreamShard` calls `runSplitQuery(datasource, subRequest, ...)`, which maps it again, and `runSplitGroupedQueries` calls `datasource.runQuery` -> `super.query()` -> `DataSourceWithBackend.query`, which applies it a third time per sub-request."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "entry-point-filter-order",
+      "evidence": "public/app/plugins/datasource/loki/querySplitting.ts:295-299 vs public/app/plugins/datasource/loki/shardQuerySplitting.ts:50-52",
+      "reason": "Literally true: `runSplitQuery` is `.filter(!hide).filter(expr).map(...)` while `runShardSplitQuery` is `.filter(expr).filter(!hide).map(...)`. Behaviourally equivalent (both predicates are pure), so this is a consistency nit on two blocks the diff deliberately made parallel."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "test-mocks-hide-duplication",
+      "evidence": "public/app/plugins/datasource/loki/querySplitting.test.ts:63 and 82-88, public/app/plugins/datasource/loki/shardQuerySplitting.test.ts:81-84",
+      "reason": "Both halves verified. `jest.spyOn(datasource, 'runQuery').mockReturnValue(...)` short-circuits `super.query()`, so `DataSourceWithBackend`'s own `applyTemplateVariables` never runs in any of these tests; and the stubs (`expr.replace('$SELECTOR', ...)`, `replace('$__auto','5m')`) are idempotent string replaces with no ad-hoc filters, so repeated application is indistinguishable from a single one."
+    }
+  ]
+}

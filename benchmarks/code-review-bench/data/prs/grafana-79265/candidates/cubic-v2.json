@@ -1,0 +1,7 @@
+[
+  "Propagating this error makes device-limit enforcement bypassable after the first rejected request because the device is cached before the store write runs",
+  "When the device limit is reached and a new (untracked) device tries to authenticate, updateDevice returns ErrDeviceLimitReached which propagates to client.go's Authenticate, returning nil and blocking anonymous access entirely. This means the device limit acts as a hard cap on anonymous authentication rather than just on device tracking",
+  "The count-then-insert pattern has a TOCTOU race condition. Under concurrent load, multiple goroutines can read count < deviceLimit at the same moment and all proceed to insert, exceeding the limit",
+  "rowsAffected == 0 does not necessarily indicate the device limit was reached \u2014 the device may simply not exist in the DB, or its updated_at may be outside the BETWEEN window. Need to distinguish between 'device not found' and an actual limit-related condition",
+  "Add device_limit to the shipped [auth.anonymous] config files; otherwise the new setting cannot be overridden via GF_AUTH_ANONYMOUS_DEVICE_LIMIT and silently falls back to 0"
+]

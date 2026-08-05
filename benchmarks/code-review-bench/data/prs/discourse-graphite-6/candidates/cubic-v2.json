@@ -1,0 +1,4 @@
+[
+  "Method `include_website_name` is missing the `?` suffix - the serializer uses `include_<attribute>?` as its predicate convention, so without the trailing `?` this method is never called and `website_name` will be included unconditionally",
+  "The `include_website_name` method needs to apply the same `restrict_user_fields?` guard as `website`, otherwise the derived URL label can bypass the existing hidden-profile-field check"
+]

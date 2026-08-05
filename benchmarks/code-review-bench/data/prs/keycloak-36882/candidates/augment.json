@@ -1,0 +1,3 @@
+[
+  "Documentation inconsistency: The exit-code 4 row in the table says 'Rolling Upgrade is not possible...' but the actual CLI error message when the feature is disabled is 'Unable to use this command...'. The table wording should be aligned with the actual behavior/message to avoid confusion for script authors."
+]

@@ -1,0 +1,91 @@
+{
+  "slug": "sentry-greptile-2",
+  "issues": [
+    {
+      "text": "organization_context.member can be None, and the audit log endpoint dereferences it unconditionally on every request, so the existing org-auth-token call path (which has no membership) returns 500 for every request — a regression on an already-shipped path, not something limited to the new feature.",
+      "zh": "organization_context.member 可為 None，audit log endpoint 的既有 token 呼叫路徑全數 500",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "The audit log endpoint gained a query-parameter-toggled pagination path that deliberately removes the offset lower bound; the gate meant to restrict it to administrators is in practice equivalent to \"any org member\", because has_global_access defaults to True and the superuser check reads the wrong (raw DB) flag instead of is_active_superuser(request).",
+      "zh": "audit log endpoint 新增一條可由 query parameter 開啟、且刻意移除 offset 下界的分頁路徑，其授權判斷實際上等同「任何 org 成員」",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "The span-buf:s:* Redis keys are changed from SET to ZSET, but the key name is unchanged and there is no migration path, so at deploy time every pre-existing key will raise WRONGTYPE against the new z* commands.",
+      "zh": "span-buf:s:* 由 Redis SET 改為 ZSET，但 key 名稱未變也沒有遷移路徑，部署當下既有 key 會全面 WRONGTYPE",
+      "finding_id": "F-003",
+      "severity": "Critical"
+    },
+    {
+      "text": "zunionstore keeps the default AGGREGATE SUM, which adds together end-timestamp scores for any span present in both source keys — pushing that span to the tail of the zset so eviction never removes it, while genuinely newer spans get evicted instead.",
+      "zh": "zunionstore 沿用預設的 AGGREGATE SUM，會把當成分數用的 end timestamp 相加",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The old overflow behavior (drop the whole segment, log an error, increment a metric) was replaced with silent truncation via zpopmin: no eviction count is logged or reported as a metric, and the truncation ignores parent/child span structure, so the resulting segment can be missing its parent while looking otherwise intact.",
+      "zh": "「整段丟棄並發出告警」被換成「靜默截斷」：淘汰沒有 metric、沒有 log，且截斷不看樹狀結構",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The per-segment span cap (1000) is hardcoded in the Lua script, while the Python-side SpansBuffer.max_segment_spans (1001) has no remaining reader and is now dead code — and the two values already disagree with each other.",
+      "zh": "1000 這個上限寫死在 Lua，Python 端的 max_segment_spans 變成 dead code，兩處數值還不一致",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The redirect-loop cap was lowered from 10000 to 1000, and the comment explaining the consequence of that limit was deleted along with it, leaving no indication of whether the lower cap was intentional.",
+      "zh": "redirect 迴圈上限由 10000 降為 1000，說明後果的註解被一併刪掉",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Neither this PR's main topic (eviction during insert) nor the new audit log branch has any test coverage.",
+      "zh": "PR 的主題（insert 時淘汰）與新增的 audit log 分支都沒有任何測試",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "OptimizedCursorPaginator.get_result duplicates nearly all of BasePaginator.get_result, and the copied get_item_key/value_from_cursor use the integer-key version instead of the DateTimePaginator version this endpoint actually needs, guaranteeing failure whenever the query returns any results.",
+      "zh": "OptimizedCursorPaginator 幾乎整段複製 BasePaginator.get_result，抄錯的 get_item_key 讓這條路徑必定失敗",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "optimized_pagination is a user-controlled query parameter that bypasses the endpoint's existing AuditLogQueryParamSerializer and is compared case-sensitively, so variant/invalid values silently fail to enable the feature instead of surfacing a validation error.",
+      "zh": "optimized_pagination 是使用者可控參數，卻繞過了這個 endpoint 既有的 AuditLogQueryParamSerializer",
+      "finding_id": "F-010",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The added code has trailing whitespace and extra blank lines that will fail ruff format.",
+      "zh": "新增的程式碼帶有 trailing whitespace 與多餘空行，ruff format 會失敗",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "The change to negative-offset handling in BasePaginator.get_result affects essentially every cursor-paginated endpoint site-wide, not just audit logs: a corrupted or tampered cursor that used to fail explicitly with 500 will now silently return page one, with no way for the caller to distinguish that from a genuine first page, and this ships untested inside a commit titled feat(audit-logs).",
+      "zh": "BasePaginator.get_result 對負數 offset 的處理被改動，影響的是全站每一個 cursor 分頁的 endpoint，而不只是 audit log",
+      "finding_id": "F-012",
+      "severity": "Suggestion"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does zpopmin-by-end-timestamp eviction actually guarantee the root/segment span is never evicted? If it is evicted, the span-buf:hrs: flag isn't cleared, so the segment would still be treated as having a root span and flushed using the shorter root timeout even though it no longer has one.",
+      "zh": "zpopmin 依 end_timestamp_precise 淘汰最舊的 span，是否真的能保證 root span（segment span）不會被淘汰掉？"
+    },
+    {
+      "text": "Is end_timestamp_precise Required or NotRequired in sentry_kafka_schemas' ingest_spans_v1.SpanEvent? If NotRequired, the direct-index access added in factory.py could raise KeyError and stall the consumer when the field is missing.",
+      "zh": "end_timestamp_precise 在 sentry_kafka_schemas 的 ingest_spans_v1.SpanEvent 裡是 Required 還是 NotRequired？"
+    },
+    {
+      "text": "After removing the spans.buffer.flush_segments.segment_span_count_exceeded metric, are any dashboards or alerts still referencing it? Nothing in this repo references it, but dashboard/alert definitions live outside this repo.",
+      "zh": "spans.buffer.flush_segments.segment_span_count_exceeded 這個 metric 被移除後，是否還有 dashboard 或 alert 在引用它？"
+    }
+  ]
+}

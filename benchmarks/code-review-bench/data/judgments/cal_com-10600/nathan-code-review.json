@@ -1,0 +1,14 @@
+{
+  "slug": "cal_com-10600",
+  "tool": "nathan-code-review",
+  "n_golden": 4,
+  "n_candidates": 20,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 10,
+      "confidence": 0.95,
+      "reasoning": "Both say BackupCode.tsx exports a component named TwoFactor, i.e. the same naming inconsistency left over from the copied file."
+    }
+  ]
+}

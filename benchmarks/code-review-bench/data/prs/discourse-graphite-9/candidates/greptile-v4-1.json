@@ -1,0 +1,4 @@
+[
+  "ensure_loaded! is only invoked via set_locale (a controller before_filter), so background jobs, mailers, and rake tasks that set I18n.locale and call I18n.t won't have fallback locales loaded, causing the fallback to silently find nothing",
+  "FallbackLocaleList inherits from Hash and overrides [] to always recompute dynamically, completely ignoring anything stored in the underlying hash, so any plugin or library that tries to register per-locale custom fallbacks via I18n.fallbacks[:fr] = [:fr, :en] would have those writes silently ignored"
+]

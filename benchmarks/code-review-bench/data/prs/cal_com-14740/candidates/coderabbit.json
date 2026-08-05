@@ -1,0 +1,13 @@
+[
+  "Invalid email banner remains visible even after user edits the email input to valid values - banner only clears when clicking Cancel or attempting to add again",
+  "sendAddGuestsEmails ignores disableStandardEmails flags and forwards calendarEvent unchanged, which can send emails when they're disabled",
+  "sendAddGuestsEmails can leak hidden notes to attendees by not respecting hideCalendarNotes setting",
+  "Authorization check uses && requiring both admin AND owner roles, which blocks legitimate admins or owners who only have one role - should use || instead",
+  "Guest email comparisons are case-sensitive, allowing blacklisted/existing guests to slip through with different casing",
+  "Duplicate guest emails are not removed from the input list",
+  "Notifications use the unfiltered guests input instead of the filtered uniqueGuests list",
+  "Reassigning function parameter 'value' in MultiEmail component is a code smell",
+  "Using array index as key in MultiEmail can cause issues when items are removed from the middle of the list",
+  "Empty fragment <></> in MultiEmail can be simplified by restructuring the conditional",
+  "Email uniqueness check in ZAddGuestsInputSchema is case-sensitive, so User@x.com and user@x.com pass as unique"
+]

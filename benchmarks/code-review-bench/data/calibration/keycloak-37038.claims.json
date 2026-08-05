@@ -1,0 +1,121 @@
+{
+  "slug": "keycloak-37038",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Is it intentional that once a group has its own per-group resource, all-groups permissions stop being evaluated for it at all (override rather than union semantics), since hasPermission only falls back to the all-groups resource when findByName returns null?"
+    },
+    {
+      "claim_id": "c002",
+      "text": "In getGroupIdsWithViewPermission, hasPermission is called with groupResource.getId() and the same groupResource.getId() is added to granted, but hasPermission resolves resources by name (treating the argument as a group id) and the GroupPermissionEvaluator contract says this method returns group IDs that are later used as UserModel.GROUPS and in getUsersCount group filters. This mismatch means per-group VIEW_MEMBERS/MANAGE_MEMBERS permissions may not yield the expected group IDs for filtering and counts, and evaluation may effectively only look at the type-level 'all-groups' resource; consider revisiting whether this should operate on the underlying group ids (resource names) instead so it aligns with the JPA queries and the interface contract."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The @return tag of getGroupIdsWithViewPermission says 'Stream of IDs' while the method returns Set<String>."
+    },
+    {
+      "claim_id": "c004",
+      "text": "Moving the ADMIN_FINE_GRAINED_AUTHZ check from inside onEvent to the manager.register(...) call freezes whether the listener exists at session-factory creation time, so tests using @EnableFeature(skipRestart = true) that flip the flag at runtime never get the listener registered and lose the authz cleanup when a role, client or group is deleted."
+    },
+    {
+      "claim_id": "c005",
+      "text": "After getOrCreateResource switched to switch (resourceType), a null resourceType now throws NPE instead of the previous IllegalStateException with a message \u2014 is that path actually reachable?"
+    },
+    {
+      "claim_id": "c006",
+      "text": "requireManageMembers() Javadoc points at canManage() but should point at canManageMembership(GroupModel)"
+    },
+    {
+      "claim_id": "c007",
+      "text": "testManageGroupMembership has no assertion after joinGroup(topGroup.getId()); it relies on no exception being thrown and cannot distinguish a successful join from a call that succeeded without taking effect."
+    },
+    {
+      "claim_id": "c008",
+      "text": "response.getLocation() can be null even with 201 status, causing NPE - should add explicit null assertion before parsing the path"
+    },
+    {
+      "claim_id": "c009",
+      "text": "GroupPermissionsV2.hasPermission lacks the if (permission.getResourceId().equals(resource.getId())) layer that the otherwise line-for-line identical UserPermissionsV2.hasPermission has; it is not exploitable today, but the unexplained difference between twin implementations is where they start to drift."
+    },
+    {
+      "claim_id": "c010",
+      "text": "The Javadoc on requireManageMembers says it throws ForbiddenException if canManageMembership(GroupModel) returns false, but the implementation delegates to canManageMembers(group); manage-members and manage-membership are two different scopes, so the new documentation is wrong on the two names most easily confused."
+    },
+    {
+      "claim_id": "c011",
+      "text": "In hasPermission, when no group-specific resource exists you call getResourceTypeResource(...) and then immediately policyStore.findByResource(server, resource); if resource is null (schema not initialized / missing resource), this will NPE. Consider handling a missing resource-type resource by returning false."
+    },
+    {
+      "claim_id": "c012",
+      "text": "That same Javadoc omits the other sources of an empty set (not same-realm, no resource server) and does not state that an empty set means 'apply no group restriction' at the call site, which is the opposite of 'can see no groups'."
+    },
+    {
+      "claim_id": "c013",
+      "text": "canMapRole() checks root.hasOneAdminRole(AdminRoles.MANAGE_USERS) then calls checkAdminRoles(role), removing the schema-level users-manage shortcut - should return true immediately when MANAGE_USERS is detected"
+    },
+    {
+      "claim_id": "c014",
+      "text": "AdminPermissions listener for cleanup on role/client/group removal is only registered when ADMIN_FINE_GRAINED_AUTHZ is enabled, leaving orphaned authorization state in V2-only deployments"
+    },
+    {
+      "claim_id": "c015",
+      "text": "This drops support for V2's global group-view permission. `canView(group)` does not include the realm-wide `canView()` check, so flat group listings can become empty for admins who have global Groups VIEW/MANAGE but no per-group grants."
+    },
+    {
+      "claim_id": "c016",
+      "text": "Will existing realms that already had FGAP V2 enabled before this MR break because they lack the Groups resource and the three new scopes, given that AdminPermissionsSchema.init returns early once the admin-permissions client exists?"
+    },
+    {
+      "claim_id": "c017",
+      "text": "Incorrect permission check in canManage() method"
+    },
+    {
+      "claim_id": "c018",
+      "text": "GroupResourceTypeEvaluationTest.java:68 ends with a double semicolon: new GroupRepresentation();;"
+    },
+    {
+      "claim_id": "c019",
+      "text": "Spurious double semicolon at the end of the field declaration for `topGroup`"
+    },
+    {
+      "claim_id": "c020",
+      "text": "Three test methods assert the CREATED status with assertThat(response.getStatus(), equalTo(CREATED)) and then call ApiUtil.handleCreatedResponse(response), which asserts the same 201 internally \u2014 the status code is asserted twice."
+    },
+    {
+      "claim_id": "c021",
+      "text": "AdminPermissionsSchema.getOrCreateResource() never calls resource.setType(resourceType) on individual group resources, so findByType(server, GROUPS_RESOURCE_TYPE, ...) cannot find them"
+    },
+    {
+      "claim_id": "c022",
+      "text": "No test attempts a write after granting only the all-groups VIEW permission: testViewGroups creates that permission but afterwards only reads groups, whereas one groups().add(...) asserting 403 would have caught the canManage() defect."
+    },
+    {
+      "claim_id": "c023",
+      "text": "No test exercises all-groups combined with VIEW_MEMBERS / MANAGE_MEMBERS: testCanViewUserByViewGroupMembers and testCanViewUserByManageGroupMembers grant the permission on topGroup, so getGroupIdsWithViewPermission returns an empty set and the wrong-id bug is never observed."
+    },
+    {
+      "claim_id": "c024",
+      "text": "The feature guard only checks the V1 flag (`ADMIN_FINE_GRAINED_AUTHZ`), but this cleanup listener is also needed when V2 (`ADMIN_FINE_GRAINED_AUTHZ_V2`) is enabled. When a deployment runs V2 without V1, this listener is never registered, so removed roles, clients, and groups will leave orphaned permission resources."
+    },
+    {
+      "claim_id": "c025",
+      "text": "A whitespace-only line at GroupResourceTypeEvaluationTest.java:300 and trailing whitespace at RealmAdminPermissionsConfig.java:34 and GroupPermissionEvaluator.java:86."
+    },
+    {
+      "claim_id": "c026",
+      "text": "resourceStore.findByType(server, GROUPS_RESOURCE_TYPE, ...) cannot see per-group resources at all, because AdminPermissionsSchema.getOrCreateResource() creates them without ever calling setType \u2014 only the all-resource created during init has a type, unlike V1 which explicitly calls setType(\"Group\") before using findByType."
+    },
+    {
+      "claim_id": "c027",
+      "text": "UserPermissionsV2 dropped the AdminRoles.ADMIN fast-path shortcut - users granted only the umbrella admin role will fail canView/canManage/canMapRoles/canManageGroupMembership checks"
+    },
+    {
+      "claim_id": "c028",
+      "text": "RealmAdminPermissionsConfig adds AdminRoles.QUERY_GROUPS to shared fixture, which may hide regressions in Groups resource-type permission path for tests that shouldn't satisfy the group list gate"
+    },
+    {
+      "claim_id": "c029",
+      "text": "@return tags say Stream but the method returns Set<String>"
+    }
+  ]
+}

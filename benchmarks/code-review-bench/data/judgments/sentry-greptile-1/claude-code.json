@@ -1,0 +1,20 @@
+{
+  "slug": "sentry-greptile-1",
+  "tool": "claude-code",
+  "n_golden": 4,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both identify that a negative cursor.offset is passed directly into Django queryset slicing, which Django does not support and which errors out."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 1,
+      "confidence": 0.92,
+      "reasoning": "Both flag get_item_key calling math.floor/ceil on a datetime key, which raises TypeError since datetime doesn't support those operations."
+    }
+  ]
+}

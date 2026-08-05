@@ -1,0 +1,6 @@
+[
+  "match_count is double-incremented per blocked registration attempt when SiteSetting.call_discourse_hub? is true, because user.valid? and user.save both trigger EmailValidator#validate_each which calls BlockedEmail.should_block?, inflating statistics by 2\u00d7",
+  "Em.A([]) defined directly on the class body creates a shared mutable array across all instances of CreateAccountController, causing rejected emails from one instance to bleed into every other instance - should be initialized in init hook instead",
+  "Rejected email cached with server-normalised casing causes case-sensitivity mismatch - server stores downcased email but client checks rejectedEmails.contains(email) against raw input, allowing users to bypass client-side guard by retyping with different casing",
+  "Missing newline at end of file which will cause noisy diffs and may trigger linter warnings"
+]

@@ -1,0 +1,20 @@
+{
+  "slug": "grafana-106778",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 17,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 4,
+      "confidence": 0.95,
+      "reasoning": "Both identify the missing React key prop on the rendered GrafanaRuleListItem in the list branch."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both identify that 'Silence notifications' appears in the menu for these Grafana rules but clicking it produces no visible effect because the drawer never renders."
+    }
+  ]
+}

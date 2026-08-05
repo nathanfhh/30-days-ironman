@@ -1,0 +1,5 @@
+[
+  "TypeError when `destinationCalendar` is empty or null - `mainHostDestinationCalendar` is `undefined` whenever `evt.destinationCalendar` is `null`, `undefined`, or an empty array, and accessing `.integration` on `undefined` throws TypeError",
+  "Dead else-branch always returns `undefined`, dropping `\"primary\"` fallback - in the ternary for `selectedCalendar`, when `externalCalendarId` is falsy, the `find` will never match anything and `selectedCalendar` becomes `undefined`, causing Google API call to fail",
+  "Silent no-op drops team-member calendars when organizer has no destination calendar - `evt.destinationCalendar` is set to `null` when neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` is set, so the optional-chaining `?.push()` is a no-op and `teamDestinationCalendars` is silently discarded"
+]

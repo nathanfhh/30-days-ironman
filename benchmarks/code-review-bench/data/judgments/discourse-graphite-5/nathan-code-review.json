@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-5",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 16,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 1, "confidence": 0.65,
+     "reasoning": "Both are about .panel losing its float-based right alignment and relying on a flex-only technique (margin-left: auto) that will not hold where flexbox does not apply, so the panel stops sitting to the right."},
+    {"golden_index": 0, "candidate_index": 13, "confidence": 0.5,
+     "reasoning": "Covers the golden's float-plus-flexbox mixing concern on .contents, noting floats/clearfix no longer behave as intended once the container is a flex container, though it calls the result a no-op plus stray flex items rather than broken layout."},
+    {"golden_index": 1, "candidate_index": 6, "confidence": 0.95,
+     "reasoning": "Both state that -ms-align-items is not a property any IE ever implemented, making the declaration in align-items() dead."}
+  ]
+}

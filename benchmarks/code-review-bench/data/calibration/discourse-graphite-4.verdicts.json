@@ -1,0 +1,491 @@
+{
+  "slug": "discourse-graphite-4",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "disqus-date-parse",
+      "evidence": "lib/tasks/disqus.thor:163",
+      "reason": "The only surviving Date.parse (created_at: Date.parse(p[:created_at]) for replies) is untouched context outside the diff hunks; the Date.parse this PR touched was deleted along with the old PostCreator call, so the claim is not about this change."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "rspec-be-true-deprecated",
+      "evidence": "Gemfile.lock:364",
+      "reason": "This repo pins rspec-core 2.14.7 / rspec-rails 2.14.0, where be_true is the current, non-deprecated matcher (be true arrived with RSpec 3); be_true is already used 268 times across spec/."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "poll-feed-no-error-handling",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:29",
+      "reason": "open(SiteSetting.feed_polling_url) and SimpleRSS.parse are unguarded, and the class declares sidekiq_options retry: false, so any transient network error or malformed feed silently drops the entire hourly poll with no retry."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "disqus-remote-fetch-unrescued",
+      "evidence": "lib/tasks/disqus.thor:147",
+      "reason": "The importer now calls TopicEmbed.import_remote(user, t[:link], ...) which does open(url).read (app/models/topic_embed.rb:48) with no rescue, inside a bare parser.threads.each loop, so one dead permalink aborts the whole import run."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "feed-item-content-nil",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:35",
+      "reason": "i.content is nil for SimpleRSS items whose feed carries only <description>; CGI.unescapeHTML(i.content.scrub) then raises NoMethodError, and sidekiq_options retry: false on line 12 means the poll is lost outright."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "migration-force-true",
+      "evidence": "db/migrate/20131217174004_create_topic_embeds.rb:3",
+      "reason": "create_table :topic_embeds, force: true is genuinely present and unnecessary for a brand-new table; the data-loss framing overstates it (nothing exists to drop on first run) but the destructive flag should not ship."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "require-dependency-on-gem",
+      "evidence": "app/models/topic_embed.rb:1",
+      "reason": "require_dependency 'nokogiri' is used on a rubygem; require_dependency is Rails' reload-aware loader for autoloadable app code, and the two other gem loads in this same PR (poll_feed.rb:28, topic_embed.rb:45) correctly use plain require."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "import-mutates-contents-arg",
+      "evidence": "app/models/topic_embed.rb:13",
+      "reason": "contents << \"\\n<hr>...\" mutates the caller's String in place; calling import twice with the same object appends the footer twice, and a frozen literal would raise."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "raw-html-bypasses-sanitize",
+      "evidence": "app/models/post.rb:130",
+      "reason": "cook returns raw verbatim for cook_methods[:raw_html], skipping PrettyText.cook's sanitize step (lib/pretty_text.rb:134,169); the poll_feed path feeds it third-party RSS HTML with no whitelist, and cooked is emitted with html_safe/raw in the topic and embed views."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "feed-item-content-nil",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:35",
+      "reason": "Same defect: i.content is nil whenever the feed item has no content/content:encoded element, so .scrub raises NoMethodError."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "feed-item-content-nil",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:35",
+      "reason": "Same defect, with the correct remedy: nothing falls back to description before i.content.scrub is called."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "assets-not-precompiled",
+      "evidence": "config/application.rb:61",
+      "reason": "The precompile whitelist lists vendor.js/common.css/.../browser-update.js and neither 'embed' nor 'embed.js' is added; production.rb sets config.assets.compile = false with digests on, so stylesheet_link_tag 'embed' and the third-party /assets/embed.js both fail in production."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "embed-js-missing-container-guard",
+      "evidence": "app/assets/javascripts/embed.js:12",
+      "reason": "comments is the raw result of getElementById('discourse-comments') and is used at comments.appendChild(iframe) with no null check, so a host page without that div throws a TypeError before the message listener is registered."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "embed-js-trailing-slash",
+      "evidence": "app/assets/javascripts/embed.js:7",
+      "reason": "discourseUrl + \"embed/best?...\" concatenates without a separator, so the global must end in '/'; nothing in the file or the PR documents or enforces that."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "raw-html-bypasses-sanitize",
+      "evidence": "app/models/post.rb:130",
+      "reason": "Same issue as c009: the raw_html early return in Post#cook stores the imported HTML uncooked and unsanitized, which is a stored-XSS surface once it is rendered."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "spec-assertions-in-after-hook",
+      "evidence": "spec/controllers/embed_controller_spec.rb:36",
+      "reason": "The 'success' context puts response.should be_success and the X-Frame-Options assertion inside an after block, which runs even when the example body already failed and reports the failure against the hook rather than the example."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "get-with-side-effects",
+      "evidence": "app/controllers/embed_controller.rb:15",
+      "reason": "get 'embed/best' (config/routes.rb:240) enqueues RetrieveTopic, which runs TopicRetriever#fetch_http -> TopicEmbed.import -> PostCreator, so a GET creates a Topic and Post; only the 60s redis throttle in topic_retriever.rb:27 limits repeats."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "unused-require-email-sender",
+      "evidence": "app/jobs/regular/retrieve_topic.rb:1",
+      "reason": "The file references only Discourse, User and TopicRetriever; nothing from email/sender is used, so the require_dependency on line 1 is dead."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "not_real",
+      "confidence": 0.55,
+      "severity": null,
+      "cluster": "layout-referer-in-js",
+      "evidence": "app/views/layouts/embed.html.erb:11",
+      "reason": "<%= %> in a Rails 3.2 ERB template auto-escapes non-html_safe strings, and ERB::Util.html_escape maps ' to &#39; and < to &lt;; inside a <script> raw-text element those entities are not decoded, so a crafted Referer cannot terminate the single-quoted JS string or close the tag. Interpolating a header into JS is still poor practice, but the asserted 'without any escaping / arbitrary JavaScript' mechanism does not hold."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "migration-force-true",
+      "evidence": "db/migrate/20131223171005_create_top_topics.rb:3",
+      "reason": "Verified with git: 20131223171005 was added by unrelated commit 567d2bd ('add top page') and this PR adds force: true to it, while 20131217174004 gets force: true on a brand-new table; both are debug leftovers that make a re-run drop and recreate the table."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "migration-force-true",
+      "evidence": "db/migrate/20131223171005_create_top_topics.rb:3",
+      "reason": "Same edit: an already-shipped migration for top_topics gains force: true, so any re-run (db:migrate:redo, reset schema_migrations) silently drops the table and its rows."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "missing-trailing-newline",
+      "evidence": "lib/topic_retriever.rb:55",
+      "reason": "The diff shows '\\ No newline at end of file' for exactly four new files - embed.css.scss, app/views/embed/loading.html.erb, app/views/layouts/embed.html.erb and lib/topic_retriever.rb (the fifth occurrence is the pre-existing migrate_word_counts.rb)."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "unused-feed-key",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:20",
+      "reason": "grep for feed_key across the repo returns only its own definition and body; nothing calls it, and the 'feed-modified:' key name points at a conditional-GET cache that this PR does not implement."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "absolutize-port-scheme",
+      "evidence": "app/models/topic_embed.rb:59",
+      "reason": "prefix << \":#{uri.port}\" if uri.port != 80 && uri.port != 443 ignores the scheme, so http://host:443/... and https://host:80/... both lose their explicit port and produce a prefix pointing at the wrong endpoint."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "unrelated-whitespace-diff",
+      "evidence": "db/migrate/20131210181901_migrate_word_counts.rb:3",
+      "reason": "The only changes to that file are stripping trailing whitespace on line 3 and removing the final newline; it has nothing to do with embedding and adds noise (and a no-trailing-newline regression) to the diff."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "embed-login-required",
+      "evidence": "app/controllers/application_controller.rb:37",
+      "reason": "EmbedController skips only check_xhr and preload_json; redirect_to_login_if_required (application_controller.rb:280) still runs and redirects when SiteSetting.login_required? and there is no current_user, so anonymous embeds break on such forums. Worth an explicit decision."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "import-race-unique-index",
+      "evidence": "app/models/topic_embed.rb:15",
+      "reason": "where(embed_url: url).first then TopicEmbed.create! inside Topic.transaction, against the unique index added in 20131217174004; two concurrent RetrieveTopic jobs (or a job racing PollFeed) can raise RecordNotUnique, which is not rescued and unwinds the poll loop."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "Low",
+      "cluster": "postmessage-height-unvalidated",
+      "evidence": "app/assets/javascripts/embed.js:21",
+      "reason": "e.data.height is taken straight from a postMessage payload and concatenated into iframe.height with no numeric parse or bound; given the weak origin test on line 17, coercing it with parseInt and a sanity range is a reasonable defensive ask, though the blast radius is only the frame height."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "poll-feed-body-untested",
+      "evidence": "spec/jobs/poll_feed_spec.rb:12",
+      "reason": "Every example in the file stubs poller.expects(:poll_feed), so the SimpleRSS parse, the i.content.scrub call and TopicEmbed.import are never exercised; the nil-content crash and the missing sanitization would both pass CI."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "feed-item-content-nil",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:35",
+      "reason": "Same nil-content NoMethodError on i.content.scrub."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "disqus-raw-equals-cooked",
+      "evidence": "lib/tasks/disqus.thor:160",
+      "reason": "raw: p[:cooked], cooked: p[:cooked] is pre-existing code; git diff 62db063..HEAD for disqus.thor shows only the removal of the :category option, the category lookup block, and the swap of the topic-creating PostCreator call for TopicEmbed.import_remote. That attrs hash is untouched."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "poll-feed-spec-vacuous-guards",
+      "evidence": "spec/jobs/poll_feed_spec.rb:17",
+      "reason": "'requires feed_polling_url' and 'requires embed_by_username' stub only their own setting; feed_polling_enabled defaults to false (config/site_settings.yml:355), so execute short-circuits on the first condition and the examples pass even if the guard they name is deleted. (The same is true of the first example, which the claim undercounts.)"
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "Medium",
+      "cluster": "open-uri-ssrf",
+      "evidence": "app/models/topic_embed.rb:48",
+      "reason": "open(url).read is reached from an unauthenticated GET; TopicRetriever#invalid_host? does restrict the host to SiteSetting.embeddable_host, so 'without validation' overstates it, but scheme, port and redirect targets are unchecked and Kernel#open is used rather than a fixed HTTP client - a maintainer would want this tightened."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "topic-retriever-runs-full-poll",
+      "evidence": "lib/topic_retriever.rb:41",
+      "reason": "perform_retrieve calls Jobs::PollFeed.new.execute({}) inline whenever feed_polling_enabled?, so each distinct new embed URL (throttled only per-URL, 60s) triggers a full feed fetch and import pass; N new URLs means N full polls. Worth confirming as intentional."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "lockfiles-out-of-sync",
+      "evidence": "Gemfile:214",
+      "reason": "grep for ruby-readability/simple-rss/guess_html_encoding hits only Gemfile_rails4.lock; Gemfile.lock (the default Rails 3.2 lockfile selected by Gemfile:23-26) and Gemfile_rails_master.lock still lack them, so the default bundle is out of sync with the Gemfile."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "erb-end-if",
+      "evidence": "app/views/embed/best.html.erb:6",
+      "reason": "<%- end if %> has a stray modifier if with no condition and should be plain end (compare line 22/29). Under stdlib ERB with trim mode this is a hard SyntaxError (verified with ruby); under Rails 3.2's Erubis handler it instead parses as 'end if <next safe_concat>' and swallows the following text chunk as its condition, so 'will raise at render' likely overstates the symptom - but the typo is real and should be fixed."
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Medium",
+      "cluster": "import-url-unescaped",
+      "evidence": "app/models/topic_embed.rb:13",
+      "reason": "url is interpolated unescaped into \"<a href='#{url}'>#{url}</a>\" via I18n.t (which does not escape) and the result is stored as raw_html, so a crafted path on the embeddable host injects markup; the nil-contents half is weaker but contents is never checked before <<."
+    },
+    {
+      "claim_id": "c038",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "disqus-category-option-removed",
+      "evidence": "lib/tasks/disqus.thor:117",
+      "reason": "method_option :category, aliases: '-c' and the Category lookup it fed are both deleted, so the importer silently loses the ability to place imported topics in a category. (The class does not call check_unknown_options!, so the exact failure mode for a stale -c invocation is less certain than the claim states.)"
+    },
+    {
+      "claim_id": "c039",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "embed-by-username-blank-guard",
+      "evidence": "lib/topic_retriever.rb:49",
+      "reason": "embed_by_username is declared with a '' default (config/site_settings.yml:357) and the string provider never yields nil, so ''.downcase is harmless and the very next line is return if user.blank?. There is no missing guard that can produce the implied NoMethodError."
+    },
+    {
+      "claim_id": "c040",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "import-remote-no-timeout",
+      "evidence": "app/models/topic_embed.rb:48",
+      "reason": "open(url).read passes no :open_timeout/:read_timeout, so the fetch relies entirely on Net::HTTP's implicit 60s defaults while occupying a sidekiq worker; 'indefinitely' overstates it slightly but the missing explicit timeout is real."
+    },
+    {
+      "claim_id": "c041",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "embed-js-origin-indexof",
+      "evidence": "app/assets/javascripts/embed.js:17",
+      "reason": "discourseUrl.indexOf(e.origin) === -1 is a substring test, not origin equality: any origin that happens to be a prefix-substring of discourseUrl (e.g. http://forum.example.co against http://forum.example.com/) passes. The claim's specific example is inverted, but the check is genuinely not origin validation."
+    },
+    {
+      "claim_id": "c042",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "add-column-default-lock",
+      "evidence": "db/migrate/20131219203905_add_cook_method_to_posts.rb:3",
+      "reason": "add_column :posts, :cook_method, :integer, default: 1, null: false on the era's PostgreSQL rewrites the whole table under ACCESS EXCLUSIVE; posts is the largest table in a Discourse instance, so this is a real downtime concern."
+    },
+    {
+      "claim_id": "c043",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "raw-html-bypasses-sanitize",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:36",
+      "reason": "Accurate on both halves: import_remote constrains markup through Readability's tags/attributes whitelist (topic_embed.rb:49-50) while poll_feed hands the feed's HTML straight to TopicEmbed.import, and Post#cook's raw_html branch skips PrettyText's sanitize before it is rendered with raw (app/views/embed/best.html.erb:19)."
+    },
+    {
+      "claim_id": "c044",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "embed-xframe-referer-auth",
+      "evidence": "app/controllers/embed_controller.rb:26",
+      "reason": "X-Frame-Options: ALLOWALL is set unconditionally on this endpoint and the only gate is a Referer host comparison, which any non-browser client can set freely. The 'fallback to empty string masks failures' part is wrong - URI('').host is nil, which fails the comparison and raises InvalidAccess - but the weak-authentication point stands."
+    },
+    {
+      "claim_id": "c045",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "Low",
+      "cluster": "avatar-image-tag",
+      "evidence": "app/views/embed/best.html.erb:16",
+      "reason": "Hand-rolled <img src='<%= post.user.small_avatar_url %>'> instead of image_tag is inconsistent with the rest of the same template (lines 8 and 26 use image_tag). The 'safer' rationale is thin since Rails already escapes the interpolation, but the convention nit is valid."
+    },
+    {
+      "claim_id": "c046",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "embed-js-missing-container-guard",
+      "evidence": "app/assets/javascripts/embed.js:12",
+      "reason": "Same missing null check on the #discourse-comments lookup before appendChild."
+    },
+    {
+      "claim_id": "c047",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "redis-setnx-expire-nonatomic",
+      "evidence": "lib/topic_retriever.rb:27",
+      "reason": "$redis.setnx then a separate $redis.expire is not atomic; a crash or connection drop between the two leaves 'retrieved:<url>' with no TTL, permanently making retrieved_recently? true for that URL. SET with NX/EX (or setex) would be atomic."
+    },
+    {
+      "claim_id": "c048",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "embed-url-varchar-255",
+      "evidence": "db/migrate/20131217174004_create_topic_embeds.rb:6",
+      "reason": "t.string :embed_url with no :limit is varchar(255) on PostgreSQL and nothing truncates the URL before TopicEmbed.create! inside Topic.transaction (topic_embed.rb:21-30), so an over-long feed link raises StringDataRightTruncation and rolls back the topic. A fair question to raise."
+    },
+    {
+      "claim_id": "c049",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "content-sha1-updated-unconditionally",
+      "evidence": "app/models/topic_embed.rb:36",
+      "reason": "revise!'s return value is discarded and update_column(:content_sha1, ...) runs regardless; PostRevisor#revise! returns false whenever should_revise? (@post.raw != @new_raw) is false, which can happen because the sha1 is taken over contents while raw is absolutize_urls(contents) - the stored hash then claims the post is current when it was not updated."
+    },
+    {
+      "claim_id": "c050",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "unused-feed-key",
+      "evidence": "app/jobs/scheduled/poll_feed.rb:20",
+      "reason": "Same dead method: feed_key has no callers anywhere in the repo."
+    },
+    {
+      "claim_id": "c051",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "disqus-created-at-lost",
+      "evidence": "lib/tasks/disqus.thor:147",
+      "reason": "The removed call passed created_at: Date.parse(t[:created_at]); TopicEmbed.import_remote takes only (user, url, opts) with opts[:title] and never sets created_at (topic_embed.rb:44-53), so every imported topic's first post is stamped with import time."
+    },
+    {
+      "claim_id": "c052",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "postmessage-targetorigin-full-url",
+      "evidence": "app/views/layouts/embed.html.erb:11",
+      "reason": "postMessage parses a non-'*'/'/' targetOrigin as a URL and uses only the resulting origin for the comparison, so passing a full referrer URL matches fine and the message is not dropped. Passing the origin is tidier, but the asserted breakage does not occur."
+    },
+    {
+      "claim_id": "c053",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "raw-html-bypasses-sanitize",
+      "evidence": "app/models/post.rb:130",
+      "reason": "Same fix as c009/c015/c043: the 'return raw if cook_method == raw_html' early return is what turns imported HTML into stored, unsanitized cooked output."
+    },
+    {
+      "claim_id": "c054",
+      "verdict": "not_real",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "cook-method-unvalidated",
+      "evidence": "lib/post_creator.rb:216",
+      "reason": "post.cook_method = @opts[:cook_method] follows exactly the pattern of the adjacent pass-through loop for :post_type, :no_bump, :cooking_options etc., and the only caller (topic_embed.rb:22) passes Post.cook_methods[:raw_html]; no path exists by which an invalid enum value can arrive, so the asserted risk is speculative."
+    }
+  ]
+}

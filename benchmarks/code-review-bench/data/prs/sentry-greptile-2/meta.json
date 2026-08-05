@@ -1,0 +1,17 @@
+{
+  "slug": "sentry-greptile-2",
+  "source_repo": "sentry-greptile",
+  "language": "Python",
+  "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/2",
+  "pr_title": "Optimize spans buffer insertion with eviction during insert",
+  "original_url": "https://github.com/getsentry/sentry/pull/92393",
+  "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR2__20260122.git",
+  "pr_number": 1,
+  "golden_count": 3,
+  "repo_url": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR2__20260122.git",
+  "base_sha": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head_sha": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "stat": " src/sentry/api/endpoints/organization_auditlogs.py |  33 +++++--\n src/sentry/api/paginator.py                        | 103 ++++++++++++++++++++-\n src/sentry/scripts/spans/add-buffer.lua            |  20 +++-\n src/sentry/spans/buffer.py                         |  21 ++---\n src/sentry/spans/consumers/process/factory.py      |   5 +-\n src/sentry/utils/cursors.py                        |   2 +\n .../spans/consumers/process/test_consumer.py       |   2 +\n .../sentry/spans/consumers/process/test_flusher.py |   4 +\n tests/sentry/spans/test_buffer.py                  |  22 +++++\n 9 files changed, 183 insertions(+), 29 deletions(-)\n",
+  "name_status": "M\tsrc/sentry/api/endpoints/organization_auditlogs.py\nM\tsrc/sentry/api/paginator.py\nM\tsrc/sentry/scripts/spans/add-buffer.lua\nM\tsrc/sentry/spans/buffer.py\nM\tsrc/sentry/spans/consumers/process/factory.py\nM\tsrc/sentry/utils/cursors.py\nM\ttests/sentry/spans/consumers/process/test_consumer.py\nM\ttests/sentry/spans/consumers/process/test_flusher.py\nM\ttests/sentry/spans/test_buffer.py\n",
+  "commits": "8ab88145 feat(audit-logs): Enhanced pagination performance for high-volume deployments\n74618671 feat(spans): Evict spans during insert (#92393)\n"
+}

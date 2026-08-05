@@ -1,0 +1,6 @@
+[
+  "`attempts` should allow `0`; the Reporting API sends first-delivery reports with `attempts: 0`, so this validation rejects valid browser reports",
+  "This feature-flagged path drops the real table results and always renders an empty table for flagged organizations",
+  "Truthiness check on `.get(\"age\")` will miss `age=0` (a valid value meaning \"just generated\"), allowing both `timestamp` and `age` to coexist. Use `\"age\" in self.initial_data` to test for key presence instead of relying on the value being truthy",
+  "The error response for invalid reports now includes a JSON body (`{\"error\": ..., \"details\": ...}`) where the old code returned an empty-body `HttpResponse(status=422)`. This is a breaking change in the API contract \u2014 the non-list branch still returns a body-less `Response(status=422)`, creating inconsistent error formats within the same endpoint"
+]

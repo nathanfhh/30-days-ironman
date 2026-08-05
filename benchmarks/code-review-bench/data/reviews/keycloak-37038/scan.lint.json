@@ -1,0 +1,145 @@
+{
+  "ruff": {
+    "status": "ok",
+    "exit_code": 1,
+    "skipped_reason": "",
+    "output": [
+      {
+        "cell": null,
+        "code": "F821",
+        "end_location": {
+          "column": 17,
+          "row": 78
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/keycloak-37038/docs/guides/high-availability/examples/generated/fencing_lambda.py",
+        "fix": null,
+        "location": {
+          "column": 12,
+          "row": 78
+        },
+        "message": "Undefined name `false`",
+        "noqa_row": 78,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+      },
+      {
+        "cell": null,
+        "code": "F541",
+        "end_location": {
+          "column": 88,
+          "row": 94
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/keycloak-37038/docs/guides/high-availability/examples/generated/fencing_lambda.py",
+        "fix": {
+          "applicability": "safe",
+          "edits": [
+            {
+              "content": "\"Unexpected response status '%d' when taking site offline\"",
+              "end_location": {
+                "column": 88,
+                "row": 94
+              },
+              "location": {
+                "column": 29,
+                "row": 94
+              }
+            }
+          ],
+          "message": "Remove extraneous `f` prefix"
+        },
+        "location": {
+          "column": 29,
+          "row": 94
+        },
+        "message": "f-string without any placeholders",
+        "noqa_row": 94,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+      },
+      {
+        "cell": null,
+        "code": "E722",
+        "end_location": {
+          "column": 19,
+          "row": 115
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/keycloak-37038/docs/guides/high-availability/examples/generated/fencing_lambda.py",
+        "fix": null,
+        "location": {
+          "column": 13,
+          "row": 115
+        },
+        "message": "Do not use bare `except`",
+        "noqa_row": 115,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/bare-except"
+      },
+      {
+        "cell": null,
+        "code": "F821",
+        "end_location": {
+          "column": 34,
+          "row": 116
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/keycloak-37038/docs/guides/high-availability/examples/generated/fencing_lambda.py",
+        "fix": null,
+        "location": {
+          "column": 23,
+          "row": 116
+        },
+        "message": "Undefined name `DecodeError`",
+        "noqa_row": 116,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+      },
+      {
+        "cell": null,
+        "code": "F821",
+        "end_location": {
+          "column": 30,
+          "row": 118
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/keycloak-37038/docs/guides/high-availability/examples/generated/fencing_lambda.py",
+        "fix": null,
+        "location": {
+          "column": 19,
+          "row": 118
+        },
+        "message": "Undefined name `DecodeError`",
+        "noqa_row": 118,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+      },
+      {
+        "cell": null,
+        "code": "F821",
+        "end_location": {
+          "column": 26,
+          "row": 120
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/keycloak-37038/docs/guides/high-availability/examples/generated/fencing_lambda.py",
+        "fix": null,
+        "location": {
+          "column": 15,
+          "row": 120
+        },
+        "message": "Undefined name `DecodeError`",
+        "noqa_row": 120,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+      }
+    ]
+  },
+  "ty": {
+    "status": "skipped",
+    "exit_code": null,
+    "skipped_reason": "ty 未安裝（不在 PATH 上）",
+    "output": null
+  },
+  "oxlint": {
+    "status": "skipped",
+    "exit_code": null,
+    "skipped_reason": "oxlint 未安裝（不在 PATH 上）",
+    "output": null
+  }
+}

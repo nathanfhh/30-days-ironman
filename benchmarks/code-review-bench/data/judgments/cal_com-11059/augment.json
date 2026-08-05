@@ -1,0 +1,44 @@
+{
+  "slug": "cal_com-11059",
+  "tool": "augment",
+  "n_golden": 5,
+  "n_candidates": 11,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.9,
+      "reasoning": "Both say setting a missing refresh_token to the literal 'refresh_token' can overwrite a valid stored token and break later refreshes."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both say minimumTokenResponseSchema's computed [z.string().toString()] keys are invalid and produce bogus literal keys."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 5,
+      "confidence": 0.95,
+      "reasoning": "Both say parseRefreshTokenResponse returns the safeParse wrapper so persisting it as key stores { success, data, ... } instead of the payload."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 3,
+      "confidence": 0.85,
+      "reasoning": "Both say refreshOAuthTokens returns a fetch Response when syncing is enabled but the provider-specific object otherwise, so callers break depending on env."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 6,
+      "confidence": 0.8,
+      "reasoning": "The Hubspot instance the golden names explicitly: a Response is treated as a HubspotToken and throws."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 4,
+      "confidence": 0.95,
+      "reasoning": "Both say res?.data is undefined on a fetch Response so token.access_token/expiry_date fail."
+    }
+  ]
+}

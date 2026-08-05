@@ -1,0 +1,32 @@
+{
+  "slug": "sentry-93824",
+  "tool": "augment",
+  "n_golden": 5,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.93,
+      "reasoning": "Both point to inconsistent metric tag naming between 'shard' and 'shards' across related metrics."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 2,
+      "confidence": 0.92,
+      "reasoning": "Both say the isinstance(process, multiprocessing.Process) check fails for spawn-context processes, so hung flusher processes aren't killed."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 4,
+      "confidence": 0.88,
+      "reasoning": "Both say time.sleep is patched to a no-op in the test, so the intended wait for the flusher never actually happens, making the test not truly wait/verify."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 3,
+      "confidence": 0.9,
+      "reasoning": "Both say breaking out of the loop when the join/timeout deadline elapses skips terminating the remaining flusher processes, leaving them running."
+    }
+  ]
+}

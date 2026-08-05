@@ -1,0 +1,7 @@
+[
+  "The origin check `discourseUrl.indexOf(e.origin)` can be bypassed by attacker-controlled origins that contain the Discourse URL as a substring (e.g., `https://discourse.example.com.evil.com`). Need stricter origin validation before trusting resize messages.",
+  "`postMessage`'s `targetOrigin` is set to `request.referer`, but browsers expect an origin (`scheme://host[:port]`), not a full URL with path/query. Passing the full referer can throw and break the iframe resize handshake.",
+  "Some feeds don't provide `content` for items; `i.content.scrub` will raise if `i.content` is `nil`, which would break polling. Need to guard/fallback to another field (e.g., description) before scrubbing/unescaping.",
+  "`url` is interpolated directly into an `<a href='...'>` inside a raw HTML string, so quotes or unexpected characters in the URL can break markup and potentially create an injection/XSS vector. Need to escape/sanitize the URL before embedding it into HTML.",
+  "When `cook_method` is `:raw_html`, `cook` returns `raw` and bypasses the normal cooking/sanitization pipeline. If any imported content isn't strictly sanitized upstream (RSS or remote fetch), this can become an XSS vector on Discourse-rendered pages."
+]

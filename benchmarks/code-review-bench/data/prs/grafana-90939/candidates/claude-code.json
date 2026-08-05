@@ -1,0 +1,3 @@
+[
+  "Double-checked locking pattern is missing the second check after upgrading from RLock to Lock - after releasing RLock and acquiring Lock, another goroutine may have already populated the cache, but the code proceeds to reload assets from disk without checking. Add `if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }` after acquiring the write lock to avoid redundant file reads on concurrent cold-start requests."
+]

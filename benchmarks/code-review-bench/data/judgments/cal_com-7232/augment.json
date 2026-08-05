@@ -1,0 +1,10 @@
+{
+  "slug": "cal_com-7232",
+  "tool": "augment",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both identify unawaited async deleteScheduledEmailReminder/deleteScheduledSMSReminder calls causing lost reminder cancellations."}
+  ]
+}

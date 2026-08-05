@@ -1,0 +1,32 @@
+{
+  "slug": "grafana-90045",
+  "tool": "claude-code",
+  "n_golden": 3,
+  "n_candidates": 6,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 4,
+      "confidence": 0.97,
+      "reasoning": "Logger context bug: klog.NewContext(ctx, d.Log) uses base logger instead of the enriched log."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Create error path calls recordLegacyDuration when storage fails."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.75,
+      "reasoning": "Same wrong-recorder-on-storage-failure issue in the Update error path; golden text is not path-specific."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Delete success path passes name instead of options.Kind."
+    }
+  ]
+}

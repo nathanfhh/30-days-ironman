@@ -1,0 +1,5 @@
+[
+  "In mobile/modal.scss line 102: The light/dark scale-color percentages are reversed - should keep 70% for light-theme and 30% for dark-theme to match desktop .custom-message-length styling",
+  "In desktop/topic-post.scss line 291: The dark-light-choose conversion swaps the light and dark lightness values, regressing the existing light-theme color instead of preserving it",
+  "In mobile/topic-post.scss line 49: The light-theme $lightness for .topic-map h3 was changed from 20% to 50%, altering light-theme appearance - should preserve original 20% for light variant and use complementary 80% for dark variant to match desktop stylesheet"
+]

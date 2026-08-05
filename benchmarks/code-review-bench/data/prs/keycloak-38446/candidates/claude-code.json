@@ -1,0 +1,8 @@
+[
+  "Recovery codes in BackwardsCompatibilityUserStorage.isValid() are never consumed after use, allowing infinite reuse of the same recovery code",
+  "Recovery codes validation in BackwardsCompatibilityUserStorage.isValid() accepts any matching code rather than only the next sequential one, violating the security contract",
+  "RecoveryAuthnCodesFormAuthenticator.isRecoveryAuthnCodeInputValid() calls removeStoredCredentialById() which targets local storage, not federated storage, so cleanup would fail for federated credentials",
+  "In getCredentials(), recovery codes credential is reconstructed via createFromValues() which does not set an ID on the model, so the original ID is lost making federated recovery codes undeletable via admin/account API",
+  "disableCredentialType() does not handle recovery codes credential type, preventing credential deletion for federated users",
+  "getDisableableCredentialTypesStream() does not handle recovery codes credential type, preventing credential disabling for federated users"
+]

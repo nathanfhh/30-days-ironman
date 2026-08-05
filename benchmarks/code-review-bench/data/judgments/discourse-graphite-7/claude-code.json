@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-7",
+  "tool": "claude-code",
+  "n_golden": 3,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Same issue: desktop/topic-post.scss .topic-meta-data h5 a light-theme value changed from $primary 30% to 70%."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 3,
+      "confidence": 0.9,
+      "reasoning": "Same issue: .group-member-info .name in user.scss changed from $primary 30% to 50% for the light theme."
+    }
+  ]
+}

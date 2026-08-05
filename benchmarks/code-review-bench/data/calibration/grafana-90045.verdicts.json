@@ -1,0 +1,257 @@
+{
+  "slug": "grafana-90045",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "legacy-update-raw-objinfo",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:139; base version wrapped with updateWrapper{upstream: objInfo, updated: obj}",
+      "reason": "The old Update computed the object once, then passed &updateWrapper{updated: obj} to Legacy.Update so both stores wrote identical content; the new code hands the raw objInfo to both Storage.Update and Legacy.Update. pkg/registry/apis/playlist/legacy_storage.go:141 calls objInfo.UpdatedObject(ctx, old) again against the *legacy* old object, so the two stores can end up with different content."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Medium",
+      "cluster": "deletecollection-legacy-wrong-recorder",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:166",
+      "reason": "Inside the DeleteCollection goroutine the duration of d.Legacy.DeleteCollection is fed to d.recordStorageDuration, which writes to DualWriterStorageDuration (metrics.go:59); every other legacy call in the file uses recordLegacyDuration."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "delete-log-ctx-uses-dlog",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:96-97",
+      "reason": "Delete builds `log` with name/kind/method on line 96 but then does klog.NewContext(ctx, d.Log) on line 97, so downstream code reading the logger from ctx loses those values. Every other method in the file passes `log`."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "async-inherits-request-ctx",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:51,110,135,163",
+      "reason": "All four goroutines do context.WithTimeoutCause(ctx, ...) on the incoming request context. net/http cancels the request context as soon as ServeHTTP returns (and the apiserver's timeout filter cancels earlier), and the handler returns immediately after `go func()`, so the legacy write runs on an already-cancelled context; pkg/registry/apis/playlist/legacy_storage.go passes that ctx straight to the SQL service."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "goroutine-no-logging-no-recover",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:50-57,108-114,134-141,161-167",
+      "reason": "Each goroutine assigns the legacy error to a variable used only as the is_error metric label — no log.Error call anywhere, unlike the synchronous paths. There is also no defer/recover, so a panic in a legacy store implementation takes down the whole process instead of failing one request."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Medium",
+      "cluster": "deletecollection-legacy-wrong-recorder",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:166",
+      "reason": "Same finding as c002: the DeleteCollection goroutine records the legacy call with recordStorageDuration. The cited line number is off (166 in the file, 165-166 of the added hunk) but the identifier and function are exactly right."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "mode3-readability-nits",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:33,37,59",
+      "reason": "All four sub-points check out: `var method = \"create\"` etc. should be const; line 59 returns `err` which is provably nil after the line-43 guard; `const mode3Str` sits between Mode() and Create() whereas mode2Str is at the top of dualwriter_mode2.go:25; and the Create comment still says it writes to LegacyStorage first while dualwriter.go:59-61's DualWriter doc claims a legacy-first, skip-storage-on-error contract that mode 3 no longer follows."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "async-inherits-request-ctx",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:51,110,135,163",
+      "reason": "Same defect as c004 stated more narrowly: the background contexts are children of the request ctx, so request completion cancels them. The 10-second timeout can only shorten, never extend, the parent's lifetime."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "not_real",
+      "confidence": 0.9,
+      "severity": null,
+      "cluster": "mode3-create-test-missing-storage-stub",
+      "evidence": "pkg/apiserver/rest/storage_mocks_test.go:14-22,96-107; dualwriter_mode3_test.go:459-463",
+      "reason": "legacyStoreMock and storageMock embed the *same* *mock.Mock instance (created as `m := &mock.Mock{}` and shared), so the `m.On(\"Create\", mock.Anything, failingObj, ...)` expectation matches the Storage.Create call too. storageMock.Create sees name==\"object-fail\" and returns args.Error(1); nothing panics and the storage error path is exercised. The test is confusingly written but the stated consequence is false."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "legacy-update-raw-objinfo",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:126,139; pkg/registry/apis/playlist/legacy_storage.go:141",
+      "reason": "objInfo is passed to Storage.Update and then, unchanged, to Legacy.Update in the goroutine. legacyStorage.Update calls objInfo.UpdatedObject a second time against the legacy `old` object, so patch/apply transformations are re-applied from a different base — exactly what the removed updateWrapper existed to prevent."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "legacy-create-uses-obj-not-created",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:42,55; contrast dualwriter_mode2.go:53-58 (enrichLegacyObject)",
+      "reason": "The goroutine passes the request object `obj` to Legacy.Create while `created` (with the fields unified storage assigned) is what gets returned to the client. Mode 2 deliberately runs enrichLegacyObject to reconcile the two before the second write; mode 3 has no equivalent, so anything the unified store assigns is not reflected in the legacy row."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "goroutine-shared-pointer-race",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:55,112,139,165; contrast dualwriter_mode1.go:50-53 (createdCopy := created.DeepCopyObject())",
+      "reason": "Mode 3 hands the caller's obj/options pointers to the goroutine with no copy, whereas mode 1 in the same package deep-copies before spawning — so the concern is not idle. But the object the handler serializes is `created`, a different pointer, and I cannot check whether k8s.io/apiserver's handlers touch obj/options after the storage call returns: there is no module cache and no network in this environment. Reading k8s.io/apiserver/pkg/endpoints/handlers/create.go, or a `go test -race` run, would settle it."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "mode3-unreachable-integration-tests",
+      "evidence": "pkg/apiserver/rest/dualwriter.go:181-222; pkg/services/apiserver/builder/helper.go:169-184; pkg/tests/apis/playlist/playlist_test.go:126,199,278",
+      "reason": "SetDualWritingMode defaults currentMode to Mode1 when the KV store has no entry, and the only transitions it implements are 1<->2; desiredMode==Mode3 falls straight through and returns Mode1. So the three new DualWriterDesiredModes: Mode3 subtests construct a DualWriterMode1, and the new mode-3 production code is never entered by them (the etcd one is t.Skip'd on top of that)."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "delete-early-return-skips-legacy",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:101-105; removed apierrors.IsNotFound branch in the diff",
+      "reason": "The base version explicitly swallowed apierrors.IsNotFound from Storage.Delete and still called Legacy.Delete; the new code returns on any error before reaching the goroutine, and the apierrors import was dropped. An object present only in legacy can now never be cleaned up."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "test-registry-declaration-inconsistent",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode1_test.go:27; dualwriter_mode3_test.go:119; dualwriter_test.go:52",
+      "reason": "Three different conventions in one package: a package-level `var p = prometheus.NewRegistry()` in mode1_test, a local `p := ...` in dualwriter_test, and — added by this change — a local `p :=` in exactly one of the six new TestMode3_* functions that shadows the package-level p, while the other five use it."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "integration-tests-race-async-legacy",
+      "evidence": "pkg/tests/apis/playlist/playlist_test.go:522-531 (GET /api/playlists right after client.Resource.Create) and getFromBothAPIs calls",
+      "reason": "doPlaylistTests asserts the legacy /api/playlists response matches the UIDs immediately after the k8s creates, and checks both APIs after each update — under mode 3 those legacy writes are fire-and-forget goroutines with no synchronisation, so the assertions race. Latent today only because of c013 (the subtests actually run mode 1); it becomes a flake the moment mode 3 selection works."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "shared-mock-obscures-routing",
+      "evidence": "pkg/apiserver/rest/storage_mocks_test.go:14-22; dualwriter_mode3_test.go:470-473",
+      "reason": "legacyStoreMock and storageMock both embed the same *mock.Mock, so an `On(\"Create\", ...)` expectation cannot distinguish which backend was called — which is precisely what mode 3 tests need to assert. It is also what makes the TestMode3_Create failure case pass by accident (see c009)."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "goroutine-boilerplate-duplication",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:50-57,108-114,134-141,161-167",
+      "reason": "Create, Delete, Update and DeleteCollection each repeat the same go func / WithTimeoutCause(ctx, time.Second*10, errors.New(...)) / defer cancel / record-duration block with only the store call differing. The copy-paste is also how the c002 and c025 mistakes got in."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "goworksum-dup-and-unrelated",
+      "evidence": "go.work.sum:404 and go.work.sum:408 (identical lines); diff.patch lines 14-19,37-54,72",
+      "reason": "The change adds a byte-identical duplicate of the github.com/grafana/grafana/pkg/apimachinery .../go.mod line (grep shows it at both 404 and 408), plus grafana-azure-sdk-go, prometheus-alertmanager, otel and genproto entries that have nothing to do with the dual writer."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "async-inherits-request-ctx",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:51,110,135,163",
+      "reason": "Correct on both the mechanism and the fix: all four goroutines derive from the request ctx, which the HTTP server cancels once the handler returns, so the 10s timeout never gets to matter; a detached base (context.Background/WithoutCancel carrying the request values) is what is needed."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "storage-error-records-legacy-duration",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:45 and :129",
+      "reason": "In Create and Update, the failure branch of the *storage* call records d.recordLegacyDuration(true, ...). The success branches two lines below correctly use recordStorageDuration, so error latencies land in the wrong histogram and the storage is_error=\"true\" series is always empty."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "metrics-kind-label-empty",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:38,45,48 etc.; metrics.go:23,31 (label set includes \"kind\")",
+      "reason": "options.Kind is the TypeMeta of the *options* struct (metav1.CreateOptions/UpdateOptions/DeleteOptions, metainternalversion.ListOptions), not of the resource. The apiserver builds those from query parameters via the parameter codec, which never populates TypeMeta, so the kind label collapses to \"\" for real traffic — only the unit tests set it, by hand-constructing options with TypeMeta{Kind: \"foo\"}. I could not open k8s.io/apiserver to quote the decode path (no module cache), hence the reduced confidence, but the label is the options object's kind either way."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "High",
+      "cluster": "async-inherits-request-ctx",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:51,110,135,163",
+      "reason": "Same defect as c004/c020. \"Systematically only completes half\" overstates it — whether the legacy call gets far enough before cancellation is a race, not a certainty — but the underlying claim about reusing the request context and losing legacy writes is correct."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "async-inherits-request-ctx",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:51,110,135,163",
+      "reason": "Same defect as c004, stated conditionally. The apiserver does cancel the request context on completion, so the conditional resolves true."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "delete-metric-uses-name-not-kind",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:106 vs :103,:113",
+      "reason": "The success branch of Delete passes `name` where every other recorder call in the file passes options.Kind, including the error branch three lines above and the legacy recorder in the goroutine. Beyond the inconsistency this puts a per-object identifier into a Prometheus label, so the histogram's cardinality grows with the number of deleted objects."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Medium",
+      "cluster": "deletecollection-legacy-wrong-recorder",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:166",
+      "reason": "Same finding as c002/c006, stated plainly: the legacy DeleteCollection duration goes to recordStorageDuration."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "unit-tests-dont-verify-legacy-write",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3_test.go — TestMode3_Create/Delete/Update/DeleteCollection assert only on the returned object",
+      "reason": "None of the new tests assert that Legacy.* was called, and none wait for the goroutine, so the async legacy write — the entire behavioural change in this PR — is untested. With the shared mock (c017) such an assertion could not be written as the tests currently stand."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "delete-early-return-skips-legacy",
+      "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:101-105,154-158; removed apierrors.IsNotFound handling in the diff",
+      "reason": "Both Delete and DeleteCollection now `return` inside the storage-error branch before reaching the legacy goroutine. The base Delete deliberately tolerated NotFound from the unified store, and the base DeleteCollection logged the storage error and still called Legacy.DeleteCollection."
+    }
+  ]
+}

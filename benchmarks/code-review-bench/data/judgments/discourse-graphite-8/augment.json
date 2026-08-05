@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-8",
+  "tool": "augment",
+  "n_golden": 3,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Same issue: over-counted totalPages lets next set offset to user_count, producing an empty last page."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Same issue: remove_member spec uses xhr :put while the route is DELETE."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-79265",
+  "tool": "greptile-v4-1",
+  "n_golden": 5,
+  "n_candidates": 6,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both describe the count-then-insert race: concurrent requests can pass the device-count check and both insert, exceeding the limit."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.55,
+     "reasoning": "Both flag that TagDevice/tagDeviceUI returning ErrDeviceLimitReached blocks anonymous authentication on the affected request, matching the golden's core concern that auth now fails when the device limit is hit."},
+    {"golden_index": 3, "candidate_index": 3, "confidence": 0.85,
+     "reasoning": "Both point out that returning ErrDeviceLimitReached when rowsAffected/no rows were updated is misleading since it also covers unknown/expired devices, not just an actual limit-reached case."}
+  ]
+}

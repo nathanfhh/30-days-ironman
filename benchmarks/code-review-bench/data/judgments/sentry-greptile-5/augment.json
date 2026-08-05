@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-greptile-5",
+  "tool": "augment",
+  "n_golden": 3,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 2,
+      "candidate_index": 1,
+      "confidence": 0.92,
+      "reasoning": "Both say zip(error_ids, events.values()) can misalign IDs to event data because get_multi()'s dict value order isn't guaranteed to match error_ids, especially with missing entries."
+    }
+  ]
+}

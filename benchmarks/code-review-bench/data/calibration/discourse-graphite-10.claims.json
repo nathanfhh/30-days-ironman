@@ -1,0 +1,217 @@
+{
+  "slug": "discourse-graphite-10",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Extra blank lines in spec files violate RuboCop layout rules (Layout/EmptyLinesAroundBlockBody)"
+    },
+    {
+      "claim_id": "c002",
+      "text": "The new plural-hydration branch handles lookup failures differently from the existing singular branch: it unconditionally assigns the hydrated array (which can contain undefined entries for records not found in the sideload) and deletes the original *_ids field, with no way to recover if hydration was incomplete."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The host-format validation regex limits the TLD to 2-5 characters, rejecting valid modern TLDs like .software or multi-level ones like .museum, with no explanation to the admin of why the format is rejected."
+    },
+    {
+      "claim_id": "c004",
+      "text": "Typo in spec context description: 'emeddable' should be 'embeddable'"
+    },
+    {
+      "claim_id": "c005",
+      "text": "record_for_host compares against uri.host (no port), but the model allows saving host values with :port, so a stored example.com:3000 would never match and will be treated as disallowed"
+    },
+    {
+      "claim_id": "c006",
+      "text": "The two new controller specs only assert the class's inheritance relationship and exercise none of the actual create/update/destroy behavior, so none of the real bugs in those controllers (like the 500-on-missing-record and nil-host issues) are caught by tests."
+    },
+    {
+      "claim_id": "c007",
+      "text": "Two new fabricator files have their contents swapped: category_fabricator.rb now contains the embeddable_host fabricator and embeddable_host_fabricator.rb contains all the category fabricators, though tests still pass because fabricators are loaded from the whole directory regardless of filename."
+    },
+    {
+      "claim_id": "c008",
+      "text": "Fabricator(:private_category) after_build uses update! which persists even for Fabricate.build, and transients[:group].id raises if group not passed - should set attribute directly and guard group usage"
+    },
+    {
+      "claim_id": "c009",
+      "text": "embed: :ids without include: true in EmbeddingSerializer omits sideloaded embeddable_hosts array from response, breaking client-side _hydrateEmbedded hydration and leaving admin UI empty"
+    },
+    {
+      "claim_id": "c010",
+      "text": "Guard the `embed_category` lookup before indexing it. As written, missing data raises before the uncategorized fallback can run."
+    },
+    {
+      "claim_id": "c011",
+      "text": "edit() reads host.category.id, which can be undefined if the sideloaded category wasn't hydrated correctly, causing a save to silently default the category to Uncategorized with no visible indication to the admin that the category changed."
+    },
+    {
+      "claim_id": "c012",
+      "text": "The component's delete action has no error handling on its promise chain, unlike the save action in the same file which uses popupAjaxError, so a failed delete (e.g. record already gone) leaves the row silently still on screen with no feedback to the user."
+    },
+    {
+      "claim_id": "c013",
+      "text": "expandable_first_post? dropped a condition (embeddable_hosts presence) with no accompanying explanation of whether that's intentional, and the corresponding spec that claims to test 'is false if embeddable_host is blank' had its setup line deleted, so it now passes for an unrelated reason (embed_truncate defaulting to false) and doesn't actually verify the behavior its name describes."
+    },
+    {
+      "claim_id": "c014",
+      "text": "record_for_host compares lower(host) = ? but does not normalize the parameter\u2019s case, so mixed\u2011case referer hosts may fail to match even though comparison intends to be case\u2011insensitive."
+    },
+    {
+      "claim_id": "c015",
+      "text": "Icon-only d-button elements (save, cancel, edit, delete) lack accessible labels for screen readers - need title attributes with i18n keys that don't currently exist in locale files"
+    },
+    {
+      "claim_id": "c016",
+      "text": "The migration's INSERT statement interpolates the host string directly without quoting/escaping, so a value containing a single quote would break the SQL statement and abort the migration."
+    },
+    {
+      "claim_id": "c017",
+      "text": "type.replace('_', '-') only replaces the first underscore in a string, which currently works only because no existing model name has two underscores; it will silently break routing for any future model name with multiple underscores."
+    },
+    {
+      "claim_id": "c018",
+      "text": "Two new serializers redundantly define reader methods (id, host, category_id) that duplicate what the attributes declaration already auto-generates."
+    },
+    {
+      "claim_id": "c019",
+      "text": "Migration execute(...)[0] will raise IndexError if embed_category or uncategorized_category_id queries return no rows - needs presence checks"
+    },
+    {
+      "claim_id": "c020",
+      "text": "A store test requests id 2 but asserts on data belonging to id 1, and this passes only because the test pretender's mock endpoint ignores the id parameter and always returns the first fixture record, so the test doesn't actually verify id-based lookup or per-record hydration."
+    },
+    {
+      "claim_id": "c021",
+      "text": "The same migration deletes the source site_settings rows it just read, in the same irreversible migration, so if the broken/unnormalized insert happens, there is no way to recover the original configuration afterward."
+    },
+    {
+      "claim_id": "c022",
+      "text": "Migration at db/migrate/20150818190757_create_embeddable_hosts.rb uses string interpolation in raw SQL: VALUES ('#{h}', ...) which is unparameterized and a SQL injection risk"
+    },
+    {
+      "claim_id": "c023",
+      "text": "Host validation regex caps TLDs at 5 characters, rejecting valid domains like .museum or .community - should allow up to 63 characters"
+    },
+    {
+      "claim_id": "c024",
+      "text": "Migration backfill interpolates host strings directly into SQL without escaping and doesn't filter blank lines - needs connection.quote and blank check"
+    },
+    {
+      "claim_id": "c025",
+      "text": "Migration uses force: true which will drop the table if it already exists, potentially causing data loss on re-run"
+    },
+    {
+      "claim_id": "c026",
+      "text": "A newly-added i18n key (admin.embedding.edit) is never referenced by any template or JS file."
+    },
+    {
+      "claim_id": "c027",
+      "text": "The update and destroy methods in Admin::EmbeddableHostsController do not validate the existence of the EmbeddableHost record retrieved by ID. If EmbeddableHost.where(id: params[:id]).first returns nil (i.e., the host does not exist), attempting to call methods on the nil object (e.g., save_host or destroy) will result in a NoMethodError."
+    },
+    {
+      "claim_id": "c028",
+      "text": "resources :embeddable_hosts is declared without an only: restriction, generating four routes (index/show/new/edit) with no corresponding controller actions, so rake routes reports endpoints that don't actually exist."
+    },
+    {
+      "claim_id": "c029",
+      "text": "The regex uses \\Z (allows a trailing newline) instead of \\z (strict end of string)."
+    },
+    {
+      "claim_id": "c030",
+      "text": "SQL injection vulnerability: host value from embeddable_hosts site setting is interpolated directly into raw SQL string in migration without escaping, allowing potential SQL injection if admin set malicious value"
+    },
+    {
+      "claim_id": "c031",
+      "text": "Does the new admin/customize/embedding screen actually work end-to-end, given every layer checks out statically but none of it has been run (no gems, no node_modules, no acceptance test)?"
+    },
+    {
+      "claim_id": "c032",
+      "text": "A spec `let` block is left over with no remaining reference after the related SiteSetting usages were removed from the same file in this diff."
+    },
+    {
+      "claim_id": "c033",
+      "text": "The migration's raw SQL queries against site_settings/categories assume at least one row is always returned and index into [0] unguarded, so on the vast majority of existing sites (which never customized embed_category), the join returns zero rows and rake db:migrate aborts."
+    },
+    {
+      "claim_id": "c034",
+      "text": "Fetch the singleton embedding record by id instead of calling `store.find` without an id, which resolves to a collection."
+    },
+    {
+      "claim_id": "c035",
+      "text": "TopicEmbed.import's category now comes from the matched EmbeddableHost record, but Jobs::PollFeed (the RSS/Atom feed-import path) never goes through EmbeddableHost matching, so feed-imported topics silently fall into Uncategorized with no replacement for what the old embed_category setting used to provide."
+    },
+    {
+      "claim_id": "c036",
+      "text": "Test requests fruit id 2 but mock always returns fruit id 1 - test passes accidentally due to matching color_ids"
+    },
+    {
+      "claim_id": "c037",
+      "text": "The embeddable_hosts table has no unique constraint on host, so the admin UI can silently add the same domain twice, and record_for_host's .first makes it nondeterministic which category actually applies."
+    },
+    {
+      "claim_id": "c038",
+      "text": "Tests for the new controller are minimal - only checks inheritance with no integration tests for CRUD actions"
+    },
+    {
+      "claim_id": "c039",
+      "text": "The plural-hydration branch calls .map directly on the ids field, which throws an exception if the backend ever sends a null value for that field (e.g. \"color_ids\": null)."
+    },
+    {
+      "claim_id": "c040",
+      "text": "NoMethodError before_validation in EmbeddableHost"
+    },
+    {
+      "claim_id": "c041",
+      "text": "Fabricator files appear swapped: category_fabricator.rb contains the embeddable_host fabricator and embeddable_host_fabricator.rb contains category fabricators"
+    },
+    {
+      "claim_id": "c042",
+      "text": "Because this migration inserts embeddable_hosts rows with raw SQL, any existing embeddable_hosts values that include http:// or /https:// or path segments won\u2019t go through the EmbeddableHost model\u2019s normalization, so the new host lookup (which compares only the bare host) may fail for migrated data. Consider ensuring that migrated hosts are normalized to the same format as newly created EmbeddableHost records so existing embedding configurations keep working."
+    },
+    {
+      "claim_id": "c043",
+      "text": "The regex still permits an optional path segment and an optional port, but both are meaningless: before_validation already strips any path before validation runs, and record_for_host's comparison against URI(...).host never includes a port, so a saved host with a port can never actually match."
+    },
+    {
+      "claim_id": "c044",
+      "text": "The same regex rejects the bare hostname 'localhost', blocking admins from registering a local development host for embedding."
+    },
+    {
+      "claim_id": "c045",
+      "text": "Two new controllers each redundantly redeclare before_filter :ensure_logged_in, :ensure_staff even though their parent Admin::AdminController already declares the same filters, so every request runs them twice."
+    },
+    {
+      "claim_id": "c046",
+      "text": "The `hydrated || []` fallback in the new plural-hydration branch is unreachable dead code since Array#map always returns an array, which misleadingly suggests map might return a falsy value."
+    },
+    {
+      "claim_id": "c047",
+      "text": "String#replace only replaces first underscore: using non-regex form of replace on type like 'my_embedded_host' results in 'my-embedded_host', missing ADMIN_MODELS lookup"
+    },
+    {
+      "claim_id": "c048",
+      "text": "Server-side save_host defaults blank category_id to uncategorized, but the client sets host.category from categoryId rather than the saved record's returned category_id, causing UI to show no category even though the server persisted one"
+    },
+    {
+      "claim_id": "c049",
+      "text": "Does the existing embed_category site setting on real sites store a category name or a category id, since the migration's join assumes it's a name but the consumer code supports both?"
+    },
+    {
+      "claim_id": "c050",
+      "text": "An entire 'save' code path (frontend saveChanges action, backend EmbeddingController#update, and its route) is dead code with no UI element that ever triggers it, since actual saving is done per-row by a different component."
+    },
+    {
+      "claim_id": "c051",
+      "text": "embedding_controller.rb update action is a no-op - it re-renders without saving anything"
+    },
+    {
+      "claim_id": "c052",
+      "text": "rest.js.es6 type.replace('_', '-') only replaces the first underscore, not all occurrences, which could be fragile for other types"
+    },
+    {
+      "claim_id": "c053",
+      "text": "obj[k].map in store.js.es6 will throw if API returns null or non-array for *_ids fields - needs Array.isArray guard before calling map"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+[
+  "get_item_key crashes on datetime values - math.floor() and math.ceil() raise TypeError when passed a datetime object instead of converting to float timestamp first",
+  "Django ORM does not support negative slicing - queryset[negative_int:stop] raises AssertionError, making reverse pagination with negative offset crash",
+  "value_from_cursor returns a raw integer instead of a datetime - causes SQL WHERE datetime comparison to fail with type mismatch",
+  "organization_context.member may be None - causes AttributeError when accessing has_global_access for non-superuser requests where member is unexpectedly None",
+  "Date-range filtering silently removed - statsPeriod, start, and end query parameters were removed without replacement, breaking existing callers that rely on date-scoped audit log queries"
+]

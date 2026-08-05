@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-10967",
+  "tool": "greptile-v4-1",
+  "n_golden": 5,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both say mainHostDestinationCalendar is undefined for null/empty destinationCalendar and .integration throws a TypeError."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 1,
+      "confidence": 0.7,
+      "reasoning": "Both flag the same self-referential find on externalId that can never match, yielding undefined instead of a usable calendar."
+    }
+  ]
+}

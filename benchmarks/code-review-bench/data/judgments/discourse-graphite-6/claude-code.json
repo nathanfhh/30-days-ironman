@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-6",
+  "tool": "claude-code",
+  "n_golden": 1,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Matches the primary half: include_website_name needs the trailing `?` for conditional inclusion."
+    }
+  ]
+}

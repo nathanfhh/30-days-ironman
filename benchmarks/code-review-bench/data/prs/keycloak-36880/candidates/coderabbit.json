@@ -1,0 +1,9 @@
+[
+  "Feature flag guard at line 77 only checks ADMIN_FINE_GRAINED_AUTHZ (V1), but when only ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled, the entire cleanup block is skipped and permission cleanup won't occur for role, client, and group removal events",
+  "Javadoc for requireView() incorrectly states 'Returns {@code true}' but requireView() is a void method that throws ForbiddenException - this is a copy-paste error",
+  "Potential IndexOutOfBoundsException when accessing clientResource.getDefaultClientScopes().get(1) assuming at least two default client scopes exist",
+  "Same IndexOutOfBoundsException risk with defaultClientScopes.get(1) access without verifying the list size",
+  "Prefer List.of() over Arrays.asList() for single-element immutable lists in ClientPermissionsV2",
+  "Remove unused getEvaluationContext private method in ClientPermissionsV2 - it is defined but never called",
+  "Add CLIENTS branch to getResourceName method in AdminPermissionsSchema for display name consistency with USERS pattern"
+]

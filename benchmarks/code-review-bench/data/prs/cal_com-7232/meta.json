@@ -1,0 +1,17 @@
+{
+  "slug": "cal_com-7232",
+  "source_repo": "cal.com",
+  "language": "TypeScript",
+  "golden_url": "https://github.com/calcom/cal.com/pull/7232",
+  "pr_title": "Comprehensive workflow reminder management for booking lifecycle events",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR7232__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR7232__20260122.git",
+  "base_sha": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "head_sha": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "stat": " .../features/bookings/lib/handleCancelBooking.ts   |  25 +---\n packages/features/bookings/lib/handleNewBooking.ts |  28 +++-\n .../ee/workflows/api/scheduleEmailReminders.ts     |  37 ++++++\n .../workflows/components/WorkflowStepContainer.tsx | 126 +++++++++---------\n .../lib/reminders/emailReminderManager.ts          |  45 +++++--\n .../workflows/lib/reminders/smsReminderManager.ts  |  11 +-\n .../migration.sql                                  |   2 +\n packages/prisma/schema.prisma                      |   1 +\n packages/trpc/server/routers/viewer/bookings.tsx   |  25 +---\n packages/trpc/server/routers/viewer/workflows.tsx  | 144 +++++++++------------\n 10 files changed, 241 insertions(+), 203 deletions(-)\n",
+  "name_status": "M\tpackages/features/bookings/lib/handleCancelBooking.ts\nM\tpackages/features/bookings/lib/handleNewBooking.ts\nM\tpackages/features/ee/workflows/api/scheduleEmailReminders.ts\nM\tpackages/features/ee/workflows/components/WorkflowStepContainer.tsx\nM\tpackages/features/ee/workflows/lib/reminders/emailReminderManager.ts\nM\tpackages/features/ee/workflows/lib/reminders/smsReminderManager.ts\nA\tpackages/prisma/migrations/20230217230604_add_cancelled_to_workflow_reminder/migration.sql\nM\tpackages/prisma/schema.prisma\nM\tpackages/trpc/server/routers/viewer/bookings.tsx\nM\tpackages/trpc/server/routers/viewer/workflows.tsx\n",
+  "commits": "6048e2a remove immediate delete for request reschedule\nad9a0a8 Merge branch 'main' into fix/cancelled-rescheduled-workflow-emails\n2fdb95b cancel rescheduled bookings immediately\nc416294 add migration file\nb3c107f delete reminders for rescheduled bookings\nde55c8f improve comments\nb62459d fix cancelling scheduled emails\n8daa5c4 small UI fix\n"
+}

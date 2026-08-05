@@ -1,0 +1,7 @@
+[
+  "Mobile layout regression: The padding on `.small-action-desc` changed from `0.5em 0 0.5em 4em` to `0 1.5%`, but `mobile/topic-post.scss:521` still has `margin-left: -40px` on `.custom-message`. That negative margin was designed to offset the old ~64px left padding; with only ~4.8px of padding on a 320px mobile viewport, the custom-message now overflows ~35px past the left edge of its container",
+  "`.contents` in header.hbs still has the `clearfix` class, whose `::before`/`::after` pseudo-elements become unnecessary flex items when the container is `display: flex` \u2014 the `clear: both` on `::after` is a no-op in flex context",
+  "`@include order(2)` on `.extra-info-wrapper` (topic.scss:29) is dead CSS because `.extra-info-wrapper` is a grandchild of the flex container (Ember wraps `header-extra-info` in a `div.ember-view`), and `order` only applies to direct children",
+  "`-ms-align-items` on line 121 is not a valid CSS property (the correct `-ms-flex-align` is already on line 120, making this dead code)",
+  "The `order` mixin passes `$val` directly to `-webkit-box-ordinal-group` and `-moz-box-ordinal-group`, but these legacy properties use 1-based indexing while CSS `order` is 0-based \u2014 the mixin should pass `$val + 1` for correct behavior"
+]

@@ -1,0 +1,20 @@
+{
+  "slug": "keycloak-37038",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.9,
+      "reasoning": "Both say canManage() performs the wrong permission check by accepting the VIEW scope as sufficient for manage."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both say getGroupIdsWithViewPermission passes/collects groupResource.getId() while hasPermission resolves by resource name (the group id), so per-group permissions never resolve and wrong ids are returned."
+    }
+  ]
+}

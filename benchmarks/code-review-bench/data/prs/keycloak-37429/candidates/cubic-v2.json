@@ -1,0 +1,5 @@
+[
+  "Lithuanian translation file messages_lt.properties contains Italian text instead of Lithuanian - line 101 has 'Installa una delle seguenti applicazioni sul tuo cellulare' which is Italian, not Lithuanian",
+  "Admin UI message uses Java MessageFormat syntax ({0}, {2,choice,...}) but the Admin UI uses i18next which won't resolve these placeholders, causing raw placeholder text to appear in validation error messages",
+  "Theme verifier anchor check only rejects extra/different anchor tags but doesn't fail when a translation drops a required source anchor, allowing translations to lose clickable links while still passing verification"
+]

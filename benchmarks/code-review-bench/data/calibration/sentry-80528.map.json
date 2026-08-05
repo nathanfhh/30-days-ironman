@@ -1,0 +1,131 @@
+{
+  "slug": "sentry-80528",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "Docstring contains typos: \"humam readible\" should be \"human readable\"",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 2,
+      "text": "If there are fewer than `failure_issue_threshold` check-ins available, `previous_checkins[:failure_issue_threshold]` will still return a shorter list and the code proceeds to open an incident. This seems at odds with the \"N consecutive missed or failed check-ins in a row\" threshold semantics (it could create an incident on the first failure for a brand-new monitor).",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "get_failure_reason's docstring contains typos: \"humam readible\" instead of \"human readable\".",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "try_incident_threshold and create_incident_occurrence have no docstrings, and their names don't reveal that they have significant side effects (writing MonitorEnvironment.status, creating a MonitorIncident, emitting issue occurrences to Kafka, firing a signal) \u2014 a description that existed for this behavior in the old mark_failed.py docstring wasn't carried over to the new modules.",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "get_failure_reason's docstring example output (\"A failed check-in was detected\") doesn't correspond to any actual output the function can produce, since SINGULAR_HUMAN_FAILURE_MAP only has error/missed/timeout entries and no \"failed\" case.",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "Outside this repo, is there any code that still imports the old symbol paths mark_failed_threshold, create_issue_platform_occurrence, or SimpleCheckIn (e.g. from getsentry or other private dependents)?",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "Does the test suite in tests/sentry/monitors/logic/test_mark_failed.py actually pass end-to-end after this move, given the reviewer's environment lacked the postgres/kafka/redis services needed to run it?",
+      "claim_id": "c007"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "The code fetches MonitorCheckIn objects by ID when the required data already exists in previous_checkins. This creates an unnecessary database query.",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 3,
+      "text": "Typo in comment: 'commits' should be 'check-ins' on line 51",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 1,
+      "text": "Require at least `failure_issue_threshold` check-ins before opening the incident.",
+      "claim_id": "c010"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "The function modifies the config variable to include display values but then returns the original monitor.config instead of the modified version.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 0,
+      "text": "If `failed_checkins` contains only statuses not in `HUMAN_FAILURE_STATUS_MAP`, `status_counts` will be empty and this can yield a user-visible message like `\" check-ins detected\"` despite the docstring mentioning a generic fallback. Consider explicitly handling the empty-count case to avoid confusing evidence text.",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 0,
+      "text": "Both new modules (incidents.py and incident_occurrence.py) each create a `logger = logging.getLogger(__name__)` that is never actually used anywhere in the file \u2014 a leftover from mark_failed.py, where the same unused logger already existed before the split.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "After splitting the logic into three modules (mark_failed.py, incidents.py, incident_occurrence.py), the tests for all of them remain in a single test_mark_failed.py with no corresponding test_incidents.py or test_incident_occurrence.py, so the test file and its filename no longer match what it actually covers.",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "Non-idiomatic iteration: should use next(iter(status_counts.keys())) instead of list(status_counts.keys())[0] on line 146",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 0,
+      "text": "Typo in docstring: 'humam' should be 'human' on line 132",
+      "claim_id": "c016"
+    }
+  ]
+}

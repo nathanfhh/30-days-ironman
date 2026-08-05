@@ -1,0 +1,17 @@
+{
+  "slug": "keycloak-40940",
+  "source_repo": "keycloak",
+  "language": "Java",
+  "golden_url": "https://github.com/keycloak/keycloak/pull/40940",
+  "pr_title": "Fix concurrent group access to prevent NullPointerException",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR40940__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR40940__20260122.git",
+  "base_sha": "7fd37690c44c7068cb19ecee3aa6ff99c46a821d",
+  "head_sha": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "stat": " .../models/cache/infinispan/GroupAdapter.java      |  3 +-\n .../cache/infinispan/entities/CachedGroup.java     |  1 +\n .../main/java/org/keycloak/utils/GroupUtils.java   | 10 -----\n .../org/keycloak/tests/admin/group/GroupTest.java  | 48 ++++++++++++++++++++++\n 4 files changed, 51 insertions(+), 11 deletions(-)\n",
+  "name_status": "M\tmodel/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java\nM\tmodel/infinispan/src/main/java/org/keycloak/models/cache/infinispan/entities/CachedGroup.java\nM\tservices/src/main/java/org/keycloak/utils/GroupUtils.java\nM\ttests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java\n",
+  "commits": "4def149 Fix NPE when accessing group concurrently\n"
+}

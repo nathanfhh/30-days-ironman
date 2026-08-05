@@ -1,0 +1,213 @@
+[
+  {
+    "slug": "cal_com-7232",
+    "source_repo": "cal.com",
+    "language": "TypeScript",
+    "golden_url": "https://github.com/calcom/cal.com/pull/7232",
+    "pr_title": "Comprehensive workflow reminder management for booking lifecycle events",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR7232__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "cal_com-8087",
+    "source_repo": "cal.com",
+    "language": "TypeScript",
+    "golden_url": "https://github.com/calcom/cal.com/pull/8087",
+    "pr_title": "Async import of the appStore packages",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR8087__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "discourse-graphite-1",
+    "source_repo": "discourse-graphite",
+    "language": "Ruby",
+    "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/1",
+    "pr_title": "FEATURE: automatically downsize large images",
+    "original_url": "https://github.com/discourse/discourse/commit/ffbaf8c54269df2ce510de91245760fddce09896",
+    "fork_repo": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR1__20260122.git",
+    "pr_number": 1,
+    "golden_count": 3
+  },
+  {
+    "slug": "discourse-graphite-2",
+    "source_repo": "discourse-graphite",
+    "language": "Ruby",
+    "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/2",
+    "pr_title": "FEATURE: per-topic unsubscribe option in emails",
+    "original_url": "https://github.com/discourse/discourse/commit/6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+    "fork_repo": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR2__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "grafana-76186",
+    "source_repo": "grafana",
+    "language": "Go",
+    "golden_url": "https://github.com/grafana/grafana/pull/76186",
+    "pr_title": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR76186__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "grafana-79265",
+    "source_repo": "grafana",
+    "language": "Go",
+    "golden_url": "https://github.com/grafana/grafana/pull/79265",
+    "pr_title": "Anonymous: Add configurable device limit",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR79265__20260122.git",
+    "pr_number": 1,
+    "golden_count": 5
+  },
+  {
+    "slug": "keycloak-32918",
+    "source_repo": "keycloak",
+    "language": "Java",
+    "golden_url": "https://github.com/keycloak/keycloak/pull/32918",
+    "pr_title": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR32918__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "keycloak-33832",
+    "source_repo": "keycloak",
+    "language": "Java",
+    "golden_url": "https://github.com/keycloak/keycloak/pull/33832",
+    "pr_title": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR33832__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "keycloak-greptile-1",
+    "source_repo": "keycloak-greptile",
+    "language": "Java",
+    "golden_url": "https://github.com/ai-code-review-evaluation/keycloak-greptile/pull/1",
+    "pr_title": "Fixing Re-authentication with passkeys",
+    "original_url": "https://github.com/keycloak/keycloak/pull/41249",
+    "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak-greptile__augment__PR1__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "sentry-67876",
+    "source_repo": "sentry",
+    "language": "Python",
+    "golden_url": "https://github.com/getsentry/sentry/pull/67876",
+    "pr_title": "GitHub OAuth Security Enhancement",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR67876__20260122.git",
+    "pr_number": 1,
+    "golden_count": 3
+  },
+  {
+    "slug": "sentry-77754",
+    "source_repo": "sentry",
+    "language": "Python",
+    "golden_url": "https://github.com/getsentry/sentry/pull/77754",
+    "pr_title": "feat(ecosystem): Implement cross-system issue synchronization",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR77754__20260122.git",
+    "pr_number": 1,
+    "golden_count": 4
+  },
+  {
+    "slug": "sentry-80168",
+    "source_repo": "sentry",
+    "language": "Python",
+    "golden_url": "https://github.com/getsentry/sentry/pull/80168",
+    "pr_title": "feat(workflow_engine): Add in hook for producing occurrences from the stateful detector",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR80168__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "sentry-80528",
+    "source_repo": "sentry",
+    "language": "Python",
+    "golden_url": "https://github.com/getsentry/sentry/pull/80528",
+    "pr_title": "ref(crons): Reorganize incident creation / issue occurrence logic",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR80528__20260122.git",
+    "pr_number": 1,
+    "golden_count": 2
+  },
+  {
+    "slug": "sentry-93824",
+    "source_repo": "sentry",
+    "language": "Python",
+    "golden_url": "https://github.com/getsentry/sentry/pull/93824",
+    "pr_title": "Span Buffer Multiprocess Enhancement with Health Monitoring",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR93824__20260122.git",
+    "pr_number": 1,
+    "golden_count": 5
+  },
+  {
+    "slug": "sentry-95633",
+    "source_repo": "sentry",
+    "language": "Python",
+    "golden_url": "https://github.com/getsentry/sentry/pull/95633",
+    "pr_title": "feat(uptime): Add ability to use queues to manage parallelism",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR95633__20260122.git",
+    "pr_number": 1,
+    "golden_count": 3
+  },
+  {
+    "slug": "sentry-greptile-1",
+    "source_repo": "sentry-greptile",
+    "language": "Python",
+    "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/1",
+    "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR1__20260122.git",
+    "pr_number": 1,
+    "golden_count": 4,
+    "base_rev": "refs/ncr/pr~1"
+  },
+  {
+    "slug": "sentry-greptile-2",
+    "source_repo": "sentry-greptile",
+    "language": "Python",
+    "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/2",
+    "pr_title": "Optimize spans buffer insertion with eviction during insert",
+    "original_url": "https://github.com/getsentry/sentry/pull/92393",
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR2__20260122.git",
+    "pr_number": 1,
+    "golden_count": 3
+  },
+  {
+    "slug": "sentry-greptile-3",
+    "source_repo": "sentry-greptile",
+    "language": "Python",
+    "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/3",
+    "pr_title": "feat(upsampling) - Support upsampled error count with performance optimizations",
+    "original_url": "https://github.com/getsentry/sentry/pull/94376",
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR3__20260122.git",
+    "pr_number": 1,
+    "golden_count": 3,
+    "base_rev": "refs/ncr/pr~1"
+  },
+  {
+    "slug": "sentry-greptile-5",
+    "source_repo": "sentry-greptile",
+    "language": "Python",
+    "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/5",
+    "pr_title": "Replays Self-Serve Bulk Delete System",
+    "original_url": null,
+    "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR5__20260122.git",
+    "pr_number": 1,
+    "golden_count": 3
+  }
+]

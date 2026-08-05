@@ -1,0 +1,332 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T10:20:00+08:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "devin/convert-insights-booking-service-1752054886 (cal.com PR #22345，head da09bc0，merge base c9a47dd)",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "不涉及 PHI。本次改動的資料路徑是 BookingTimeStatusDenormalized view（packages/prisma/schema.prisma:1682），欄位為預約時間、狀態、event type、team/user 關聯與 userEmail / userName，屬於排程與帳號資料，沒有病歷號、身分證字號、診斷、檢驗或任何 HL7 / FHIR / DICOM 內容。userEmail / userName 是 PII 但不是 PHI，因此不觸發 C 與 D 的 PHI 加重規則。若有人認為 insights 產品線的資料分類另有規定，這個判斷可以被推翻。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "已檢視 diff 全文、兩個 commit message（4585081 / 95b426f「address feedback」）與變更檔案中的所有註解與字串常值，沒有任何指向審查流程本身的文字。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "把 InsightsBookingService 的條件組裝從 Prisma WhereInput 換成 Prisma.sql fragment，是為了讓 insights 之後能寫 Prisma client API 表達不了的聚合查詢（GROUP BY、window function、unnest），方向合理。既有的 packages/features/insights/server/routing-events.ts:830 已經在用 $queryRaw + Prisma.join 做同類事情，這次改動與該慣例一致。所有內插值都走 Prisma.sql 參數化，欄位名硬寫在模板裡，沒有引入 SQL injection。"
+    },
+    "right_mr": {
+      "verdict": "doubt",
+      "note": "InsightsBookingService 目前沒有任何 production 呼叫端——在 merge base c9a47dd 與 head da09bc0 都 git grep 過，除了 packages/lib/server/service/__tests__/insightsBooking.integration-test.ts 之外沒有第二處引用。真正在查 BookingTimeStatusDenormalized 的三個地方（packages/features/insights/server/trpc-router.ts、packages/features/insights/server/events.ts、apps/web/app/api/cron/monthlyDigestEmail/route.ts）都還直接用 Prisma client，沒有在這個 MR 一起搬過來；同構的姊妹服務 packages/lib/server/service/insightsRouting.ts:62 也還留在 findMany + WhereInput 的舊寫法。這代表本 MR 合併後 production 行為不會有任何改變（風險低），但也代表整個遷移只完成了第一段。這是刻意的分段落地、還是漏掉了後續，需要作者說明——判斷權在人不在我。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "改動範圍侷限在一個沒有 production 呼叫端的內部 service 與其整合測試，不牽動 migration、不改 schema、不影響線上查詢，任何時機落地都不會擴大風險。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/ncr-artifacts/cal_com-22345.trivy.json",
+      "counts": {},
+      "skipped_reason": "trivy 未安裝（不在 PATH 上）。本次沒有執行相依套件弱點、設定錯誤與憑證外洩掃描；供應鏈與 secret 面向本輪等同無覆蓋。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/ncr-artifacts/cal_com-22345.opengrep.json",
+      "counts": {},
+      "skipped_reason": "opengrep 未安裝（不在 PATH 上），且環境沒有 semgrep rules 目錄。本次沒有執行 SAST 掃描——這正是最可能自動抓到 raw SQL 拼接問題的工具，本輪的 SQL injection 判斷完全來自人工閱讀。"
+    },
+    {
+      "tool": "ruff",
+      "status": "ok",
+      "exit_code": 0,
+      "artifact": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/ncr-artifacts/cal_com-22345.lint.json",
+      "counts": {
+        "in_diff": 0,
+        "outside_diff": 0
+      },
+      "skipped_reason": "執行成功但對本 MR 沒有意義：ruff 只檢查 Python，而本次 diff 兩個檔案都是 TypeScript，等於掃了零個相關檔案。零 finding 不代表這份 TypeScript 通過了任何靜態檢查。"
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "ty 未安裝（不在 PATH 上）。無論如何 ty 只做 Python 型別檢查，對 TypeScript diff 不適用。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "oxlint 未安裝（不在 PATH 上）。這是本輪最痛的缺口：diff 全部是 TypeScript，卻沒有任何 JS/TS linter 執行過。"
+    },
+    {
+      "tool": "tsc",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "checkout 沒有 node_modules 且環境無網路，無法 install 也無法執行 tsc / vitest。因此本輪沒有任何型別檢查或測試執行的證據——所有「會不會編譯過」「測試會不會通過」的判斷都只能靠閱讀原始碼與 git grep 推導，不是驗證過的結果。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "codegraph 未安裝，Phase 3 的呼叫端列舉與回溯分析改用 git grep 在 merge base 與 head 兩個 commit 上各做一次全 repo 搜尋。"
+    },
+    {
+      "tool": "ncr-fresh-eyes (subagent)",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本次執行環境沒有可派送 subagent 的工具（沒有 Agent / Task 工具），無法派出 ncr-fresh-eyes。依 SKILL.md Phase 3 的規定，不得由主 agent 自行模擬——因為到那一行為止主 agent 已經讀完整份 skill，模擬出來的「新鮮眼睛」正好缺少它唯一的價值。因此本報告的所有 finding 都來自 dimension checklist，沒有經過一次未被 checklist 塑形的獨立閱讀；checklist 沒有點名的問題，本輪的攔截率會低於正常。"
+    },
+    {
+      "tool": "ncr-quality-check (subagent)",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "同上，無法派送 subagent，Phase 4 step 3 的報告品質複檢沒有執行。這份報告的措辭、severity 校準與 report-format 四項規則只經過作者自檢，沒有第二雙眼睛複核。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "pass",
+      "note": "命名與行為相符：getBaseConditions 確實只回傳條件、不再執行查詢，改名比留著 findMany 誠實。NOTHING_CONDITION 這個常數名稱把 1=0 這個 idiom 解釋清楚了。函式長度都在合理範圍，型別標註完整。packages/lib/server/service/insightsBooking.ts:118 的 `// Join all conditions with AND` 屬於複述程式碼的註解，但它同時提示了 reduce 的用途，不值得單獨開一條。"
+    },
+    "B": {
+      "verdict": "fail",
+      "note": "同一段「用分隔符把 Prisma.Sql 陣列 join 起來」的 reduce 在三個地方逐字重複，而且三處都帶著一段永遠不會執行的分支；getBaseConditions 的四路 if/else 也有兩路是死路。見 F-006、F-007。"
+    },
+    "C": {
+      "verdict": "fail",
+      "note": "SQL injection 面向是乾淨的：所有值都用 Prisma.sql 內插成 bind parameter（insightsBooking.ts:135、164、168、197、201），欄位名與 ANY() 都是硬寫在模板裡的常值，沒有任何字串拼接、沒有 $queryRawUnsafe、沒有硬編憑證。扣分在授權面：新的 InsightsBookingServicePublicOptions 讓 scope 與 teamId 不再互相約束，配上 zod object 的 strip 行為，可以組出一個編譯得過、執行時卻靜默放大授權範圍的呼叫。見 F-001。此判斷純由人工閱讀得出——本輪 opengrep 與 oxlint 都沒跑。"
+    },
+    "D": {
+      "verdict": "na",
+      "note": "本次 diff 沒有觸及任何 HTTP endpoint、route、URL 或 API schema，兩個檔案都是 server 端的內部 service 與其整合測試，D 的 URL 命名、HTTP verb、validation schema、response time、batch atomicity 等規則都沒有對應的檢查對象。"
+    },
+    "E": {
+      "verdict": "fail",
+      "note": "service 從「回傳資料」退成「回傳 SQL 片段」之後，執行查詢的責任轉移給呼叫端，readonlyPrisma（INSIGHTS_DATABASE_URL 讀取副本）就不再由 service 保證；同時同構的 insightsRouting.ts 沒有一起遷移，兩個平行服務現在是兩種寫法。見 F-005。"
+    },
+    "F": {
+      "verdict": "fail",
+      "note": "欄位名從 Prisma 型別檢查的識別字變成 raw SQL 裡的字串常值，schema 改名的失敗時機從編譯期挪到執行期（見 F-004）；而唯一真的把產生的 SQL 丟進 Postgres 執行的測試只覆蓋 user scope（見 F-003）。正面的部分：teamIds 恆非空（insightsBooking.ts:154），uniqueUserIds 與 userIdsFromTeam 都有 length > 0 守門（:166、:200），所以不存在 ANY(空陣列) 的路徑；NOTHING_CONDITION 用 1=0 與舊的 {id:-1} 語意等價，都是 fail-closed。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "Caching 兩支測試被整段刪除但 cache 實作還在；org / team 授權條件的 SQL 從來沒有被真的執行過；斷言方式改成對 Prisma.Sql 物件做結構比對，把測試綁死在括號寫法上。見 F-002、F-003、F-008。"
+    },
+    "H": {
+      "verdict": "pass",
+      "note": "diff 確實包含非 Python 檔（兩個 .ts），所以本維度成立而非 na。但 H 列出的具體檢查項——多分支 UI 元件、render state、Vue、Dockerfile、nginx.conf、docker-compose、Alembic migration——在本次改動裡一個都沒有對應物：兩個檔案都是 server 端 TypeScript，沒有 UI、沒有基礎設施設定、沒有 migration。TypeScript 本身的型別契約、死碼與測試問題已分別記在 B、C、E、F、G、I。附帶說明：因為環境沒有 node_modules 也沒有 oxlint，這兩個 .ts 檔本輪沒有經過任何自動化檢查。"
+    },
+    "I": {
+      "verdict": "pass",
+      "note": "本次刪掉了 public method findMany 並放寬了 constructor 的 options 型別，兩者都是破壞性簽章改動，因此逐一驗證過：在 merge base c9a47dd 與 head da09bc0 兩個 commit 上分別 git grep 過 InsightsBookingService 與 insightsBooking，全 repo（packages/ 與 apps/）除了 packages/lib/server/service/insightsBooking.ts 自身與 packages/lib/server/service/__tests__/insightsBooking.integration-test.ts 之外沒有任何引用，而該測試檔已在同一個 diff 內同步更新。所以刪除 findMany 不會打斷任何呼叫端。名稱相近的 getAuthorizationConditions / getFilterConditions 在 insightsRouting.integration-test.ts 也有出現，但那是另一個類別 InsightsRoutingService 的方法，未受影響。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "C",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "新的 InsightsBookingServicePublicOptions 解除了 scope 與 teamId 的關聯，可能靜默放大授權範圍",
+      "evidence": [
+        "packages/lib/server/service/insightsBooking.ts:29",
+        "packages/lib/server/service/insightsBooking.ts:58",
+        "packages/lib/server/service/insightsBooking.ts:62",
+        "packages/lib/server/service/insightsBooking.ts:10"
+      ],
+      "rationale": "改動前 constructor 的 options 型別是 InsightsBookingServiceOptions，也就是 insightsBookingServiceOptionsSchema 的 discriminated union（insightsBooking.ts:10-27）：scope 是 \"team\" 就一定要有 teamId，scope 是 \"org\" 就不該有 teamId，這些都在編譯期擋。改動後換成 InsightsBookingServicePublicOptions（:29-34），scope 變成扁平的 \"user\" | \"org\" | \"team\"，teamId 變成可選，兩者不再互相約束。配上 zod 3.x 的 z.object 預設 strip 行為（packages/prisma/package.json:35 鎖 zod ^3.22.4），會出現兩種編譯得過但執行時靜默失敗的組合：（一）傳 { scope: \"team\", userId, orgId } 而漏掉 teamId，safeParse 失敗，:63 把 this.options 設成 null，buildAuthorizationConditions 回 1=0，呼叫端拿到空結果而不是錯誤；（二）更棘手的是傳 { scope: \"org\", userId, orgId, teamId }——呼叫端心裡想的是「限縮到這個 team」，但 discriminated union 選中 org 分支後 teamId 被 strip 掉，實際回傳的是整個 org 的授權條件，也就是比預期更寬的資料。這是 fail-open 方向。反證我查過了：schema 用的是純 z.object，沒有 .strict()，所以多餘欄位確實是 strip 而非 reject；而且目前全 repo 沒有任何 production 呼叫端（見維度 I），所以今天沒有實際外洩——本條的問題是這個新公開型別把上述誤用變成一個型別系統不再阻擋的自然寫法，而它是專為未來呼叫端而加的。",
+      "fix": "讓公開型別跟驗證 schema 講同一件事，二選一或並用：(1) 直接把 constructor 的 options 型別改回 InsightsBookingServiceOptions（也就是 z.infer 出來的 discriminated union），如果加這個型別的原因是某個未來呼叫端手上只有鬆散物件，那就讓那個呼叫端自己先做 narrowing；(2) 若一定要保留公開型別，把它寫成同樣的 discriminated union，例如 `type InsightsBookingServicePublicOptions = { scope: \"user\" | \"org\"; userId: number; orgId: number } | { scope: \"team\"; userId: number; orgId: number; teamId: number }`；(3) 不論選哪個，把 schema 的三個 z.object 都加上 .strict()，讓 { scope: \"org\", teamId } 這種組合在 safeParse 就失敗而不是被默默 strip。另外建議 :62-63 的驗證失敗不要只吞掉——至少 log 一行，讓「授權條件變成 1=0」在觀測上可分辨於「這個人真的沒有資料」。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-002",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "Caching 測試整段被刪除，但 cache 實作還在",
+      "evidence": [
+        "packages/lib/server/service/insightsBooking.ts:49",
+        "packages/lib/server/service/insightsBooking.ts:83",
+        "packages/lib/server/service/insightsBooking.ts:90",
+        "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:437",
+        "packages/lib/server/service/__tests__/insightsRouting.integration-test.ts:444"
+      ],
+      "rationale": "diff 把測試檔裡的 describe(\"Caching\") 兩支測試（should cache authorization conditions / should cache filter conditions）整段刪掉了，但被測的實作一行都沒少：cachedAuthConditions / cachedFilterConditions 兩個欄位（:49-50）與 getAuthorizationConditions / getFilterConditions 的 undefined 判斷（:83-95）都原封不動保留。反證我查過了：這兩支測試沒有搬到 diff 的其他地方，也沒有換個名字留下——在 head 的 insightsBooking.integration-test.ts 全檔 grep 不到任何 cach 字樣；而同構的姊妹服務測試 insightsRouting.integration-test.ts:444 到現在還留著一模一樣的 Caching describe。所以這不是「這類測試整體被淘汰」的一致決定，而是這一個檔案單方面掉了覆蓋。改成 Prisma.Sql 之後這兩支測試也沒有技術障礙：其他測試（例如 :406）已經證明 toEqual 對 Prisma.Sql 可用，而第二段斷言原本就是 conditions2 對 conditions1 比對，跟型別無關。順帶一提，cache 的語意在改動後其實更值得測：cachedFilterConditions 用 undefined / null 兩種空值區分「還沒算」與「算過但沒有 filter」，這個區分很容易在後續重構被抹掉。",
+      "fix": "把 describe(\"Caching\") 兩支測試加回來，斷言改用 Prisma.Sql。最好再強化一點：與其只比 toEqual，用 `expect(conditions2).toBe(conditions1)` 斷言回傳的是同一個物件實例——這樣才真的證明第二次呼叫走的是 cache 而不是重算出結構相同的結果，是原本那兩支測試就有的漏洞。若刪除是刻意的（例如整個 cache 機制打算在下一個 PR 拿掉），請在 PR 描述說明，並在同一個 PR 把 cachedAuthConditions / cachedFilterConditions 一起移除，不要讓沒有測試守著的實作留在 main。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-003",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "唯一真的執行產生出來的 SQL 的測試用的是 user scope，而 user scope 正好是唯一沒有 ANY(...) 的分支",
+      "evidence": [
+        "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:468",
+        "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:480",
+        "packages/lib/server/service/insightsBooking.ts:164",
+        "packages/lib/server/service/insightsBooking.ts:168",
+        "packages/lib/server/service/insightsBooking.ts:201"
+      ],
+      "rationale": "這次改動的核心風險是「組出來的字串是不是合法且語意正確的 SQL」——這種錯誤只有真的送進 Postgres 才會浮現，型別系統與結構比對都攔不到。測試檔裡只有一個地方會真的執行：:480 的 prisma.$queryRaw`SELECT id FROM \"BookingTimeStatusDenormalized\" WHERE ${baseConditions}`，而它建立 service 時用的是 scope: \"user\"（:468 起）。user scope 的授權條件是 insightsBooking.ts:135 的 `(\"userId\" = $1) AND (\"teamId\" IS NULL)`，是三個分支裡唯一完全沒有陣列參數的一支。org（:164、:168）與 team（:201）分支才是新引入 `= ANY(${陣列})` 的地方，而這兩支在測試裡只被 :294 與 :330 用 toEqual 做物件結構比對——那只證明「程式碼組出了我預期的那個模板」，完全沒有經過 Postgres 的 parser 與型別推導。反證我查過了：全 repo 只有 insightsBooking.integration-test.ts 與 insightsRouting.integration-test.ts 引用這個 service，後者測的是另一個類別；沒有第二處測試會執行到 org / team 的 SQL。這個缺口同時放大 F-004 與 Q-001：schema 欄位改名、或整數陣列在 ANY() 的 binding 有問題，都會從這個洞漏過去。",
+      "fix": "把 :437 的 describe(\"getBaseConditions\") 補成三個 scope 各一支會真的執行的測試。org 與 team 那兩支照著既有的 createTestData({ teamRole: OWNER, orgRole: OWNER, moreTeamsAndUsers: [...] }) 建資料，取得 baseConditions 之後同樣用 prisma.$queryRaw 撈回 id 陣列，斷言拿到的是預期的那幾筆 booking。這樣一次補上三件事：ANY(整數陣列) 的實際 binding、欄位名與 view 定義的一致性、以及 org / team 授權範圍真的沒有多撈到別的 team 的資料。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-004",
+      "dimension": "F",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "欄位名變成 raw SQL 字串常值，schema 改名的失敗時機從編譯期挪到執行期",
+      "evidence": [
+        "packages/lib/server/service/insightsBooking.ts:106",
+        "packages/lib/server/service/insightsBooking.ts:111",
+        "packages/lib/server/service/insightsBooking.ts:135",
+        "packages/lib/server/service/insightsBooking.ts:164",
+        "packages/prisma/schema.prisma:1682"
+      ],
+      "rationale": "改動前的條件是 Prisma.BookingTimeStatusDenormalizedWhereInput，userId / teamId / isTeamBooking / eventTypeId / eventParentId 都是 generated client 上的識別字，view 定義一改、prisma generate 一跑，這個檔案就編譯不過。改動後它們變成模板字串裡的 \"userId\"、\"teamId\"、\"isTeamBooking\"、\"eventTypeId\"、\"eventParentId\"，型別系統完全看不到。我逐一比對過 packages/prisma/schema.prisma:1682 的 view 定義，這五個欄位目前都存在且沒有 @map，所以現在是對的——本條不是說它現在錯，是說它從此失去了守門員。這在 cal.com 的 insights 情境特別值得提：BookingTimeStatusDenormalized 是一個 view，歷史上已經被改過至少五次（packages/prisma/migrations 下 booking_time_status 系列，最近一次是 20250505135207_create_booking_time_status_denormalized），而下一次改名會安靜地通過編譯與 CI，只在執行 org / team 查詢時炸——而依 F-003，那兩條路徑目前沒有任何測試會執行。",
+      "fix": "最低成本的補救就是 F-003：只要 org / team / user 三個 scope 各有一支真的下 SQL 的整合測試，欄位改名會在 CI 立刻變成紅燈，而不是等到 production。若想更進一步，把欄位名集中成一個常數表（例如 `const C = { userId: Prisma.raw('\"userId\"'), ... }`）並在單元測試裡用 Object.keys(C) 對照 Prisma.dmmf 的 view 欄位清單，讓漂移在編譯或測試期就被抓到。另外建議在 insightsBooking.ts 檔頭加一行註解，指明這些欄位名對應 packages/prisma/schema.prisma 的 BookingTimeStatusDenormalized view，讓下一個改 view 的人有機會 grep 到這裡。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-005",
+      "dimension": "E",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "service 不再負責執行查詢，readonlyPrisma（insights 讀取副本）就沒有東西保證了",
+      "evidence": [
+        "packages/lib/server/service/insightsBooking.ts:46",
+        "packages/lib/server/service/insightsBooking.ts:68",
+        "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:480",
+        "packages/prisma/index.ts:71"
+      ],
+      "rationale": "this.prisma 的型別是 typeof readonlyPrisma（:46），而 readonlyPrisma 在 packages/prisma/index.ts:71 是「有設 INSIGHTS_DATABASE_URL 就接讀取副本，沒設就退回主庫」的 client——insights 的查詢打副本而不是主庫，是這個注入存在的全部理由。改動前 findMany 是在 service 內部用 this.prisma.bookingTimeStatusDenormalized.findMany 執行的，注入什麼就打到哪裡。改動後 getBaseConditions（:68）只回傳一段 Prisma.Sql，真正執行 $queryRaw 的是呼叫端，用的是呼叫端手上的 client——service 對此毫無約束力。同一個 diff 裡的測試就示範了這個失衡：:480 用 `import prisma from \"@calcom/prisma\"` 的主 client 執行查詢，而不是注入進 service 的那個。測試裡無所謂，但這正是未來呼叫端會照抄的形狀。附帶一提，改動後 this.prisma 只剩下 :149 與 :180 建 TeamRepository 時會用到（MembershipRepository 的兩個方法是 static，本來就沒吃注入的 client，見 packages/lib/server/repository/membership.ts:266、:402），注入的 client 在資料查詢這條主線上已經完全不參與了。",
+      "fix": "在 service 上保留一個負責執行的入口，讓 client 的選擇留在 service 內部，例如 `async query<T>(sql: (base: Prisma.Sql) => Prisma.Sql): Promise<T[]> { return this.prisma.$queryRaw<T[]>(sql(await this.getBaseConditions())); }`，或至少提供一個 `findMany` 等價物包住常見的 SELECT。若刻意要讓呼叫端自己執行（例如聚合查詢的形狀太多包不起來），請在 getBaseConditions 上加 doc comment 明確寫出兩件事：回傳值只能放進 $queryRaw 的 tagged template（放進 $queryRawUnsafe 或字串拼接會壞掉，因為 Prisma.Sql 的 text 是帶 $1/$2 佔位符的），以及呼叫端必須使用 readonlyPrisma。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-006",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "同一段 reduce join 重複三次，而且三處都帶著永遠執行不到的 index === 0 分支",
+      "evidence": [
+        "packages/lib/server/service/insightsBooking.ts:119",
+        "packages/lib/server/service/insightsBooking.ts:171",
+        "packages/lib/server/service/insightsBooking.ts:204"
+      ],
+      "rationale": "三個地方（buildFilterConditions 用 AND、buildOrgAuthorizationCondition 與 buildTeamAuthorizationCondition 用 OR）逐字重複同一段 `conditions.reduce((acc, condition, index) => { if (index === 0) return condition; return Prisma.sql\\`(${acc}) SEP (${condition})\\`; })`。剛好三次，符合 Rule of Three 的抽取時機。而且三處的 `if (index === 0) return condition;` 都是死碼：reduce 不帶 initialValue 時，accumulator 直接取 arr[0]，callback 第一次被呼叫時 index 就已經是 1，所以這個判斷永遠為 false。留著它會讓下一個讀的人以為有某種第一項特例，實際上沒有。",
+      "fix": "Prisma 本來就有現成的：`Prisma.join(conditions.map((c) => Prisma.sql\\`(${c})\\`), \" AND \")`（OR 就換分隔符）。抽成一個檔案層級的小 helper，例如 `const joinSql = (parts: Prisma.Sql[], sep: string) => Prisma.join(parts.map((p) => Prisma.sql\\`(${p})\\`), ` ${sep} `);`，三處都改用它。注意 Prisma.join 對空陣列會丟錯，但三處在呼叫前都已經確保非空（:114 的 early return、:164 與 :196 的陣列都至少有一個元素），所以直接換是安全的。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-007",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "getBaseConditions 的四路分支有兩路不可能走到，buildAuthorizationConditions 的尾端 else 也是",
+      "evidence": [
+        "packages/lib/server/service/insightsBooking.ts:72",
+        "packages/lib/server/service/insightsBooking.ts:76",
+        "packages/lib/server/service/insightsBooking.ts:79",
+        "packages/lib/server/service/insightsBooking.ts:140"
+      ],
+      "rationale": "getAuthorizationConditions 的回傳型別是 Promise<Prisma.Sql>，沒有 null 也沒有 undefined——找不到條件時回的是 NOTHING_CONDITION 這個 Prisma.Sql 物件，物件永遠 truthy。所以 :72 的 `if (authConditions && filterConditions)` 裡 authConditions 那半永遠成立，:76 的 `else if (filterConditions)` 與 :79 的 NOTHING_CONDITION fallback 兩條路都到不了。實際行為是對的（fail-closed 已經由 buildAuthorizationConditions 內部保證了），但這四路寫法會讓讀者以為 authConditions 可能是 null，而那正是它不可能的事。同樣地 :140 的 `else { return NOTHING_CONDITION; }` 接在 user / org / team 三個 scope 判斷之後，而 this.options 的型別是 discriminated union 的三個成員，TypeScript 在這裡推導出的是 never。",
+      "fix": "把 getBaseConditions 收斂成兩路：`const auth = await this.getAuthorizationConditions(); const filters = await this.getFilterConditions(); return filters ? Prisma.sql\\`(${auth}) AND (${filters})\\` : auth;`。buildAuthorizationConditions 的尾端 else 可以刪掉，或改成 switch 加 exhaustiveness check（`default: { const _never: never = this.options; return NOTHING_CONDITION; }`），讓它變成「未來新增 scope 時編譯期會提醒」的守門，而不是一段裝飾。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-008",
+      "dimension": "G",
+      "severity": "Nit",
+      "status": "new",
+      "title": "斷言改成對 Prisma.Sql 做結構比對，把測試綁死在括號寫法上",
+      "evidence": [
+        "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:294",
+        "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:330",
+        "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:406"
+      ],
+      "rationale": "改動前斷言的是 Prisma WhereInput 這種宣告式物件，語意相同的寫法通常結構也相同。改動後 toEqual 比的是 Prisma.Sql 實例的 strings 與 values 兩個內部欄位，等於把測試釘在產生出來的 SQL 字面上——多一層括號、把 `AND (\"teamId\" IS NULL)` 換成語意相同的 `AND \"teamId\" IS NULL`、或把 reduce 換成 Prisma.join（正是 F-006 建議的重構），行為完全不變但這幾支測試會全紅。也就是說，這些測試現在會擋住無害的重構，卻擋不住真正的風險（SQL 在 Postgres 上跑不跑得起來，見 F-003）。",
+      "fix": "把斷言換成對意圖敏感、對排版不敏感的形式：比對 `conditions.values` 確認參數綁對，另外對 `conditions.sql` 做正規化後（把連續空白收斂成一個空格）的字串比對，或直接改用 expect(...).toMatchInlineSnapshot() 讓重構時可以一次更新。最有價值的方向仍是 F-003——把斷言從「組出了什麼模板」升級成「這段 SQL 在 Postgres 上撈回了哪幾筆」。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "F",
+      "question": "`\"teamId\" = ANY(${teamIds})` 這種把 JavaScript 整數陣列當單一參數綁進 ANY() 的寫法，經過 Prisma query engine 之後在 Postgres 上會正確解析成整數陣列嗎？還是需要顯式 cast（`= ANY(${ids}::int[]`)？",
+      "context": "本 repo 唯一的 `= ANY(${...})` 前例是 packages/features/pbac/infrastructure/repositories/PermissionRepository.ts:133、:139、:145，三處綁的都是字串或字串 tuple 陣列，沒有整數陣列的前例。整數欄位比對整數陣列在 Postgres 端理論上沒問題（int4 = int8 有對應 operator），而且陣列絕不會是空的——teamIds 恆含 orgId（insightsBooking.ts:154），uniqueUserIds 與 userIdsFromTeam 都有 length > 0 守門（:166、:200），所以避開了空陣列推不出元素型別的已知地雷。但這件事終究取決於 Prisma query engine 的參數型別推導，不是讀原始碼能定案的，而依 F-003 目前也沒有任何測試會真的執行到這兩條路徑。因為無法證實，不給 severity。",
+      "what_would_settle_it": "在有 Postgres 的環境跑 `packages/lib/server/service/__tests__/insightsBooking.integration-test.ts`，並且先照 F-003 補上 org 與 team scope 的 $queryRaw 測試——只要那兩支能撈回預期的 booking，這個問題就結案；若 Postgres 回 `operator does not exist` 或 `malformed array literal`，就改成 `= ANY(${ids}::int[])` 或換成 `IN (${Prisma.join(ids)})`（後者是 packages/trpc/server/routers/viewer/availability/team/listTeamAvailability.handler.ts:174 已在用的寫法）。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "E",
+      "question": "把 InsightsBookingService 遷到 Prisma.sql，是否已經和後續遷移三個實際查 BookingTimeStatusDenormalized 的地方、以及同構的 InsightsRoutingService，排在同一個 release 裡？",
+      "context": "這個 service 目前沒有 production 呼叫端（merge base 與 head 都 git grep 驗證過），而真正在查這個 view 的是 packages/features/insights/server/trpc-router.ts、packages/features/insights/server/events.ts 與 apps/web/app/api/cron/monthlyDigestEmail/route.ts，三處都還直接用 Prisma client；packages/lib/server/service/insightsRouting.ts:62 也還維持 findMany + WhereInput 的舊寫法，連 NOTHING = { id: -1 } 都還在（:34）。所以本 MR 落地後，repo 裡會同時存在兩套風格的 insights service，而新的那套沒有人用。這可能是完全合理的分段落地，也可能是遷移中途停住——差別在有沒有後續 PR，而那個資訊不在 diff 或 commit message 裡（僅有的兩個 commit 是「feat: convert InsightsBookingService to use Prisma.sql raw queries」與「address feedback」）。這是規劃問題不是程式碼缺陷，所以不給 severity。",
+      "what_would_settle_it": "作者在 PR 描述裡指出後續 PR 或 issue 編號，說明 trpc-router.ts / events.ts / monthlyDigestEmail 與 insightsRouting.ts 的遷移計畫與時程；若沒有後續計畫，則需要說明為什麼要在沒有消費者的情況下先落地這一段。"
+    }
+  ],
+  "rereview": null,
+  "conclusion": "Approved with Comments",
+  "summary": "本次改動把 InsightsBookingService 的條件組裝從 Prisma 的 WhereInput 換成 Prisma.sql fragment，並用 getBaseConditions() 取代 findMany()，讓呼叫端自己執行 raw query。方向是合理的——這是讓 insights 之後能寫 Prisma client API 表達不了的聚合查詢的前置作業，而且 SQL 的參數化做得很乾淨：所有值都是 bind parameter，欄位名與 ANY() 都硬寫在模板裡，沒有任何字串拼接，也沒有 $queryRawUnsafe。空陣列的邊界（ANY(空陣列)）三處都有守門，NOTHING_CONDITION 用 1=0 取代舊的 { id: -1 } 語意等價且同樣 fail-closed。回溯分析也是乾淨的：刪掉 public method findMany 與放寬 constructor 型別都是破壞性改動，但在 merge base 與 head 兩個 commit 上全 repo git grep 過，除了同一個 diff 內已同步更新的整合測試之外沒有任何呼叫端。\n\n沒有 Critical。五條 Suggestion 集中在三個主題。第一個是型別契約：新增的 InsightsBookingServicePublicOptions 把 scope 與 teamId 解耦，配上 zod 的 strip 行為，可以組出「編譯得過、執行時卻靜默拿到比預期更寬的 org 範圍」的呼叫（F-001）——今天沒有呼叫端所以沒有實際外洩，但這個型別正是為未來呼叫端而加的。第二個是測試：Caching 兩支測試被整段刪掉而 cache 實作原封不動保留（F-002），而唯一真的把產生的 SQL 送進 Postgres 的測試用的是 user scope，也就是三個分支裡唯一沒有 `= ANY(...)` 的那一支（F-003）——新引入的陣列參數從頭到尾沒有被真的執行過。這個缺口同時放大了 F-004（欄位名變成字串常值後，schema 改名的失敗時機從編譯期挪到執行期）與 Q-001（整數陣列在 ANY() 的 binding）。F-005 則指出 service 不再執行查詢之後，readonlyPrisma 這個讀取副本的注入就失去了保證對象。三條 Nit 是重複的 reduce join 與其中的死碼、getBaseConditions 走不到的分支，以及把測試綁死在 SQL 括號寫法上的結構比對斷言。\n\n本輪的掃描覆蓋請務必納入判讀：diff 全部是 TypeScript，但環境沒有 node_modules 也沒有網路，trivy、opengrep、oxlint、ty 都不存在，tsc 與 vitest 都無法執行。唯一跑起來的 ruff 只看 Python，等於掃了零個相關檔案。因此上面每一條結論都來自人工閱讀原始碼與 git grep，沒有任何一條經過型別檢查或測試驗證。另外，本環境沒有可派送 subagent 的工具，ncr-fresh-eyes（未被 checklist 塑形的獨立閱讀）與 ncr-quality-check（報告品質複檢）兩個步驟都沒有執行，兩者的缺席與其代價已列在掃描執行狀況裡。"
+}

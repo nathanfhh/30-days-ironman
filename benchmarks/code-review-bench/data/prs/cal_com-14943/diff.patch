@@ -1,0 +1,124 @@
+diff --git a/packages/features/ee/workflows/api/scheduleSMSReminders.ts b/packages/features/ee/workflows/api/scheduleSMSReminders.ts
+index 299d9ba..a6d7f46 100644
+--- a/packages/features/ee/workflows/api/scheduleSMSReminders.ts
++++ b/packages/features/ee/workflows/api/scheduleSMSReminders.ts
+@@ -23,34 +23,46 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
+   if (process.env.CRON_API_KEY !== apiKey) {
+     res.status(401).json({ message: "Not authenticated" });
+     return;
+   }
+ 
+   //delete all scheduled sms reminders where scheduled date is past current date
+   await prisma.workflowReminder.deleteMany({
+     where: {
+-      method: WorkflowMethods.SMS,
+-      scheduledDate: {
+-        lte: dayjs().toISOString(),
+-      },
++      OR: [
++        {
++          method: WorkflowMethods.SMS,
++          scheduledDate: {
++            lte: dayjs().toISOString(),
++          },
++        },
++        {
++          retryCount: {
++            gt: 1,
++          },
++        },
++      ],
+     },
+   });
+ 
+   //find all unscheduled SMS reminders
+   const unscheduledReminders = (await prisma.workflowReminder.findMany({
+     where: {
+       method: WorkflowMethods.SMS,
+       scheduled: false,
+       scheduledDate: {
+         lte: dayjs().add(7, "day").toISOString(),
+       },
+     },
+-    select,
+-  })) as PartialWorkflowReminder[];
++    select: {
++      ...select,
++      retryCount: true,
++    },
++  })) as (PartialWorkflowReminder & { retryCount: number })[];
+ 
+   if (!unscheduledReminders.length) {
+     res.json({ ok: true });
+     return;
+   }
+ 
+   for (const reminder of unscheduledReminders) {
+     if (!reminder.workflowStep || !reminder.booking) {
+@@ -158,19 +170,36 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
+             where: {
+               id: reminder.id,
+             },
+             data: {
+               scheduled: true,
+               referenceId: scheduledSMS.sid,
+             },
+           });
++        } else {
++          await prisma.workflowReminder.update({
++            where: {
++              id: reminder.id,
++            },
++            data: {
++              retryCount: reminder.retryCount + 1,
++            },
++          });
+         }
+       }
+     } catch (error) {
++      await prisma.workflowReminder.update({
++        where: {
++          id: reminder.id,
++        },
++        data: {
++          retryCount: reminder.retryCount + 1,
++        },
++      });
+       console.log(`Error scheduling SMS with error ${error}`);
+     }
+   }
+   res.status(200).json({ message: "SMS scheduled" });
+ }
+ 
+ export default defaultHandler({
+   POST: Promise.resolve({ default: handler }),
+diff --git a/packages/prisma/migrations/20240508134359_add_retry_count_to_workflow_reminder/migration.sql b/packages/prisma/migrations/20240508134359_add_retry_count_to_workflow_reminder/migration.sql
+new file mode 100644
+index 0000000..58e4124
+--- /dev/null
++++ b/packages/prisma/migrations/20240508134359_add_retry_count_to_workflow_reminder/migration.sql
+@@ -0,0 +1,2 @@
++-- AlterTable
++ALTER TABLE "WorkflowReminder" ADD COLUMN     "retryCount" INTEGER NOT NULL DEFAULT 0;
+diff --git a/packages/prisma/schema.prisma b/packages/prisma/schema.prisma
+index e2ab075..1085d72 100644
+--- a/packages/prisma/schema.prisma
++++ b/packages/prisma/schema.prisma
+@@ -992,16 +992,17 @@ model WorkflowReminder {
+   scheduledDate       DateTime
+   referenceId         String?         @unique
+   scheduled           Boolean
+   workflowStepId      Int?
+   workflowStep        WorkflowStep?   @relation(fields: [workflowStepId], references: [id])
+   cancelled           Boolean?
+   seatReferenceId     String?
+   isMandatoryReminder Boolean?        @default(false)
++  retryCount          Int             @default(0)
+ 
+   @@index([bookingUid])
+   @@index([workflowStepId])
+   @@index([seatReferenceId])
+   @@index([method, scheduled, scheduledDate])
+   @@index([cancelled, scheduledDate])
+ }
+ 

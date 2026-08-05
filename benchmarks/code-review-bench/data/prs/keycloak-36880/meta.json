@@ -1,0 +1,17 @@
+{
+  "slug": "keycloak-36880",
+  "source_repo": "keycloak",
+  "language": "Java",
+  "golden_url": "https://github.com/keycloak/keycloak/pull/36880",
+  "pr_title": "Add Client resource type and scopes to authorization schema",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR36880__20260122.git",
+  "pr_number": 1,
+  "golden_count": 3,
+  "repo_url": "https://github.com/code-review-benchmark/keycloak__keycloak__augment__PR36880__20260122.git",
+  "base_sha": "b7b84d75d16e91d3f56ec527a260c53c5dd4396c",
+  "head_sha": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "stat": " .../authorization/AdminPermissionsSchema.java      |  22 +-\n .../admin/permissions/AdminPermissions.java        |  32 +--\n .../permissions/ClientPermissionEvaluator.java     | 108 ++++++++\n .../admin/permissions/ClientPermissionsV2.java     | 287 +++++++++++++++++++++\n .../admin/permissions/MgmtPermissionsV2.java       |   9 +\n .../admin/authz/fgap/AbstractPermissionTest.java   |  87 ++++++-\n .../admin/authz/fgap/PermissionClientTest.java     | 285 +++++++++++++++++++-\n .../tests/admin/authz/fgap/PermissionRESTTest.java |   8 +-\n .../authz/fgap/UserResourceTypeEvaluationTest.java | 132 +++-------\n .../authz/fgap/UserResourceTypePermissionTest.java |  34 +--\n 10 files changed, 866 insertions(+), 138 deletions(-)\n",
+  "name_status": "M\tserver-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java\nM\tservices/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java\nM\tservices/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java\nA\tservices/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java\nM\tservices/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java\nM\ttests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/AbstractPermissionTest.java\nM\ttests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java\nM\ttests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionRESTTest.java\nM\ttests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/UserResourceTypeEvaluationTest.java\nM\ttests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/UserResourceTypePermissionTest.java\n",
+  "commits": "1950a51 Add Client resource type and its scopes to authorization schema and evaluation implementation for ClientsPermissionsV2\n"
+}

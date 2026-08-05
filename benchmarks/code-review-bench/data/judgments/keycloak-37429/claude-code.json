@@ -1,0 +1,14 @@
+{
+  "slug": "keycloak-37429",
+  "tool": "claude-code",
+  "n_golden": 4,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 3,
+      "candidate_index": 1,
+      "confidence": 0.98,
+      "reasoning": "Identical typo report: santizeAnchors should be sanitizeAnchors."
+    }
+  ]
+}

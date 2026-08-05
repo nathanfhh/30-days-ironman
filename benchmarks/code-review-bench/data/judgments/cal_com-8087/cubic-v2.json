@@ -1,0 +1,16 @@
+{
+  "slug": "cal_com-8087",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 12,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 0, "confidence": 0.85,
+     "reasoning": "forEach(async ...) not awaited for calendar deletions, matching golden's fire-and-forget forEach critique with the same fix (for...of / Promise.all)."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.85,
+     "reasoning": "Same unawaited forEach async-callback issue for cancellation/deletion work, matching golden's general pattern description."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.8,
+     "reasoning": "forEach not awaiting calendar/video deletions, another instance of the exact pattern the golden comment describes generically (calendar/video deletions e.g.)."},
+    {"golden_index": 1, "candidate_index": 5, "confidence": 0.8,
+     "reasoning": "Same unawaited-forEach pattern for calendar/video deletion calls, matching golden's description."}
+  ]
+}

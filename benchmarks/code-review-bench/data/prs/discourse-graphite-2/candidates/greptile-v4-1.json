@@ -1,0 +1,6 @@
+[
+  "Nil dereference when no TopicUser record exists - TopicUser.find_by returns nil for a user who has never interacted with the topic, and calling tu.notification_level on nil raises NoMethodError, crashing the request with a 500 error",
+  "GET request performs a state-mutating action - Both unsubscribe routes are GET but the controller action immediately writes to the database on every visit, allowing email security scanners and link-prefetching services to silently change notification levels without user intent",
+  "Typo in property name - stopNotificiationsText has an extra 'i' (Notificiations instead of Notifications)",
+  "List-Unsubscribe header omits the new per-topic URL - The header still only advertises user_preferences_url instead of including the new per-topic unsubscribe URL"
+]

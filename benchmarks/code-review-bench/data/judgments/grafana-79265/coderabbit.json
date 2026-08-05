@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-79265",
+  "tool": "coderabbit",
+  "n_golden": 5,
+  "n_candidates": 7,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Directly matches golden's race condition between the device count check and device creation/update allowing the limit to be exceeded."},
+    {"golden_index": 3, "candidate_index": 2, "confidence": 0.9,
+     "reasoning": "Directly matches golden: returning ErrDeviceLimitReached on zero rows affected is misleading since it may just mean the device wasn't found."},
+    {"golden_index": 4, "candidate_index": 4, "confidence": 0.8,
+     "reasoning": "Matches golden's time-window inconsistency: comparing time.Now().UTC() in the count check against device.UpdatedAt in the upsert."}
+  ]
+}

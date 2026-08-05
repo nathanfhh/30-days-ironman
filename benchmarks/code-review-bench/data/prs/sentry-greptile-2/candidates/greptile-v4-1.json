@@ -1,0 +1,6 @@
+[
+  "Django ORM does not support negative queryset slicing - queryset[start_offset:stop] with a negative start_offset raises AssertionError: Negative indexing is not supported, causing 500 error for any superuser or global-access member who passes a cursor with a negative offset",
+  "Potential AttributeError when member is None - organization_context.member is typed as RpcOrganizationMember | None, so organization_context.member.has_global_access raises AttributeError for superusers who are not explicit members of the organization",
+  "Stale ARGS documentation in add-buffer.lua - header comment still lists payload as the first ARGV parameter, but the script body maps ARGV[1] to is_root_span since payload is now inserted by Python caller via zadd",
+  "max_segment_spans parameter is never used - SpansBuffer accepts max_segment_spans (default 1001), but the eviction threshold is hardcoded as 1000 in add-buffer.lua, making this parameter dead code with a confusing off-by-one difference"
+]

@@ -1,0 +1,91 @@
+{
+  "slug": "grafana-94942",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "After the backend is disabled, the frontend and query type schema still advertise the 'sql' expression type \u2014 is that acceptable?",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "Docstring coverage is 25.00% which is insufficient - the required threshold is 80.00%. Functions are missing docstrings.",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "(*DB).TablesList has no call sites and shares its name with the package-level sql.TablesList.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "Several methods such as NewInMemoryDB().RunCommands and db.QueryFramesInto return 'not implemented'.",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "DuckDB has been removed from the tree, but comments, the feature toggle description, and frontend copy still mention DuckDB.",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "enableSqlExpressions: the name promises something the function doesn't do, and it uses an inverted boolean name.",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "No test pins down the new 'SQL expressions are disabled' behavior.",
+      "claim_id": "c007"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "The enableSqlExpressions function has flawed logic that always returns false, effectively disabling SQL expressions unconditionally:",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "Is this disablement permanent, or will it be re-enabled via the sqlExpressions toggle once a replacement SQL engine lands?",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "Is the trimming of go.mod / go.sum / go.work.sum actually clean when a real build is run?",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 0,
+      "text": "The enableSqlExpressions security check only guards the ReadQuery code path used when FlagExpressionParser is enabled, but in default configuration buildCMDNode calls UnmarshalSQLCommand directly for TypeSQL, completely bypassing this check - the security gate should be added to the TypeSQL case in buildCMDNode or within UnmarshalSQLCommand",
+      "claim_id": "c011"
+    }
+  ]
+}

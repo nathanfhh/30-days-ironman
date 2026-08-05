@@ -1,0 +1,212 @@
+{
+  "slug": "cal_com-22345",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "silent-options-validation-failure",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:62-63,126-128,43",
+      "reason": "The constructor does `this.options = validation.success ? validation.data : null` and discards validation.error, and buildAuthorizationConditions turns that null into NOTHING_CONDITION (`1=0`), so a malformed-options bug is indistinguishable from an empty result set; the widened public options type in this same diff makes that path newly easy to hit."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "unparenthesized-or-precedence",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:75,171-174,204-207; packages/features/insights/server/events.ts:40-46,120",
+      "reason": "buildOrg/buildTeamAuthorizationCondition reduce to a top-level `A OR B` with no outer parens, and getBaseConditions line 75 returns that fragment verbatim when there are no filters, so any caller writing `WHERE ${base} AND ...` gets `A OR (B AND ...)` and the team-booking arm escapes the extra predicate; the repo's existing raw-SQL helper buildSqlCondition wraps OR groups in parens precisely for this reason, and events.ts:120 shows the `AND ${fragment}` composition style in use."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "any-untested-against-db",
+      "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:468-484,294-343",
+      "reason": "The only test that runs $queryRaw with the fragment (the getBaseConditions test) uses scope \"user\", whose SQL is `(\"userId\" = $1) AND (\"teamId\" IS NULL)` with no array parameter; the org and team tests that produce `= ANY(...)` stop at toEqual on the Prisma.Sql object and never reach Postgres."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "readonly-replica-no-longer-enforced",
+      "evidence": "packages/prisma/index.ts:70-73; packages/lib/server/service/insightsBooking.ts:68-81; packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:481-484",
+      "reason": "readonlyPrisma is a distinct client bound to INSIGHTS_DATABASE_URL; with findMany replaced by getBaseConditions the service no longer executes anything, so the injected client no longer decides which database serves the query, and the new test indeed runs `prisma.$queryRaw` on the default @calcom/prisma client."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "unordered-ids-order-dependent-assertions",
+      "evidence": "packages/lib/server/repository/team.ts:185-198; packages/lib/server/repository/membership.ts:402-420; insightsBooking.integration-test.ts:332-343",
+      "reason": "findAllByParentId and findAllByTeamIds are findMany calls with no orderBy, so team/member id order is whatever Postgres returns, yet the org-scope assertion compares against a Prisma.sql whose bound arrays are in a fixed literal order."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "unordered-ids-order-dependent-assertions",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:150-168; packages/lib/server/repository/membership.ts:409-419",
+      "reason": "Same root cause: teamIds and uniqueUserIds are built from unordered findMany results and land in Prisma.Sql.values, which toEqual compares element by element. The trailing remark about caching is the weak part (the cache is per-instance, so it is self-consistent), but the brittleness assertion is correct."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "public-options-type-widening",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:29-34,58; packages/lib/server/service/insightsRouting.ts:29,52",
+      "reason": "The constructor parameter went from the zod-derived discriminated union to a flat type with `teamId?: number`, so `{scope:\"team\"}` without teamId now type-checks and only fails at runtime into this.options = null; insightsRouting.ts:52 still types its constructor with InsightsRoutingServiceOptions, confirming the stated inconsistency."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "test-cleanup-not-in-finally",
+      "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:445-466,487-500",
+      "reason": "userEventType and userBooking are created at exactly those lines and deleted only after the expect at line 487, with no try/finally, so a failed assertion leaves rows in the shared integration database."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "sql-text-equality-assertions",
+      "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:273,295-299,384-386,429-431",
+      "reason": "Prisma.Sql's own enumerable fields are `strings` and `values`, so toEqual against a hand-written Prisma.sql pins the exact template text and parenthesisation; switching the reduce to Prisma.join (as c021 suggests) or adding a paren would break these tests without changing what Postgres computes."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "public-options-type-widening",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:29-34,62-63,16-20",
+      "reason": "`{scope:\"org\", userId, orgId, teamId}` satisfies InsightsBookingServicePublicOptions, and zod 3 z.object strips unknown keys, so the org member of the discriminated union silently drops teamId and the caller gets whole-org authorization instead of a narrowed scope — a widening the previous union type made impossible to express."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "unreachable-else-build-auth",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:126-142,10-27",
+      "reason": "this.options is the three-member discriminated union (or null, already returned above), so after the user/org/team chain the final else is narrowed to never and can never execute; a `satisfies never` style exhaustiveness check would carry actual information."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "team-empty-members-arm-omitted",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:196-207; diff.patch:629-642 (old implementation)",
+      "reason": "The headline claim of a behavioral change is wrong: the old code emitted `{ userId: { in: [] }, isTeamBooking: false }` as the second OR arm, and an empty Prisma `in` matches no rows, so omitting the arm entirely is logically identical. Only the generated SQL shape changed, not the result set."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "caching-tests-deleted",
+      "evidence": "diff.patch:254-316 (deleted Caching describe); packages/lib/server/service/insightsBooking.ts:49-50,83-95; packages/lib/server/service/__tests__/insightsRouting.integration-test.ts:444",
+      "reason": "Both Caching tests were removed while cachedAuthConditions/cachedFilterConditions and their `=== undefined` guards remain in the implementation, and the sister file insightsRouting.integration-test.ts still has its own `describe(\"Caching\")` at line 444 — so this is dropped coverage, not a policy change."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "org-members-guard-excludes-teamless-orgs",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:154-169",
+      "reason": "teamIds already contains options.orgId, but the `teamsFromOrg.length > 0` guard short-circuits the membership lookup, so an org with no child teams gets only the `\"teamId\" = ANY(...) AND \"isTeamBooking\" = true` arm and its members' personal bookings are invisible. The guard is unchanged context in this diff rather than newly introduced, but it is live in the rewritten function."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "no-production-caller-migration-incomplete",
+      "evidence": "grep for InsightsBookingService across the repo; packages/features/insights/server/trpc-router.ts, packages/features/insights/server/events.ts, apps/web/app/api/cron/monthlyDigestEmail/route.ts; packages/lib/server/service/insightsRouting.ts",
+      "reason": "The embedded factual assertion checks out: the only references to InsightsBookingService outside its own file are in its integration test, the three places that actually query BookingTimeStatusDenormalized still use the Prisma client API, and InsightsRoutingService is untouched — so the fragment-based API has no consumer yet."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "public-options-type-widening",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:29-34,21-26,62-63,126-128",
+      "reason": "Line 29's type does make teamId optional for every scope while the schema requires it for scope \"team\"; the omission then fails safeParse silently, sets this.options to null, and yields `1=0` — empty results rather than a compile error."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "any-int-array-binding-cast",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:164,168,201; packages/features/pbac/infrastructure/repositories/PermissionRepository.ts:133-145",
+      "reason": "The sub-assertion is accurate — the repo's only `= ANY(${...})` precedents bind string/string-pair arrays. Whether the query engine infers int[] for a bare `\"teamId\" = ANY($1)` or errors without a `::int[]` cast is a runtime property of Prisma against Postgres; nothing in the checkout settles it (no node_modules, and this path is never executed by a test). Running the org/team scope through $queryRaw against a real database would settle it."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "raw-sql-column-names-untyped",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:106,111,135,164,168,197,201; packages/prisma/migrations/",
+      "reason": "Identifiers that were keys on Prisma.BookingTimeStatusDenormalizedWhereInput are now bare strings inside Prisma.sql templates, which the compiler cannot check; the migrations directory does show this denormalized view being created and reshaped repeatedly (booking_time_status, ..._denormalized), so the rename risk is not hypothetical."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "any-untested-against-db",
+      "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:278-346",
+      "reason": "Both the team-scope and org-scope tests end at toEqual(Prisma.sql`...`) with no $queryRaw, so the `= ANY(...)` binding they introduce is only compared as an object and never parsed or executed by Postgres."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "unordered-ids-order-dependent-assertions",
+      "evidence": "packages/lib/server/repository/team.ts:192-197; packages/lib/server/repository/membership.ts:409-419; insightsBooking.integration-test.ts:332-343",
+      "reason": "Confirmed by reading both repository methods: neither findAllByParentId nor findAllByTeamIds passes orderBy, so the id order baked into Prisma.Sql.values is unspecified while the org-scope assertion hardcodes one order."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "duplicated-reduce-use-prisma-join",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:119-122,171-174,204-207",
+      "reason": "The identical three-line reduce appears verbatim three times (AND for filters, OR for org and team auth), and Prisma.join exists for exactly this; one helper would also be the natural place to add the missing outer parens."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "unreachable-branches-getbaseconditions",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:68-81,83-88,125-143",
+      "reason": "getAuthorizationConditions is typed Promise<Prisma.Sql> and every path of buildAuthorizationConditions returns a Prisma.Sql instance (NOTHING_CONDITION at worst), which is always truthy, so the `else if (filterConditions)` and final `else` branches can never run."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "reduce-index-zero-dead-branch",
+      "evidence": "packages/lib/server/service/insightsBooking.ts:119-122,171-174,204-207",
+      "reason": "All three reduces are called without an initialValue, so the accumulator starts as element 0 and the callback is first invoked with index 1 (and not at all for a one-element array); `if (index === 0)` is dead in every copy."
+    }
+  ]
+}

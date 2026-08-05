@@ -1,0 +1,16 @@
+{
+  "slug": "sentry-greptile-1",
+  "tool": "coderabbit",
+  "n_golden": 4,
+  "n_candidates": 6,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 0, "confidence": 0.92,
+     "reasoning": "Both describe organization_context.member being None (API key/org token auth) causing an AttributeError on has_global_access."},
+    {"golden_index": 3, "candidate_index": 1, "confidence": 0.92,
+     "reasoning": "Both describe get_item_key/math.floor being called on a datetime with order_by=-datetime, raising TypeError."},
+    {"golden_index": 1, "candidate_index": 3, "confidence": 0.7,
+     "reasoning": "Both describe negative offsets reaching Django QuerySet slicing/indexing, which is unsupported and crashes."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.9,
+     "reasoning": "Both state directly that Django QuerySets do not support negative slicing/indexing, crashing when a negative offset is used."}
+  ]
+}

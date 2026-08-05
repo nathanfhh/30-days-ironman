@@ -1,0 +1,5 @@
+[
+  "Unguarded `Optional.get()` will throw `NoSuchElementException` - `credentialModelOpt.get()` is called without checking whether the Optional is present, which will throw NoSuchElementException and surface as a 500 error instead of a graceful redirect or error page",
+  "Typo in config alias: \"suthenticator\" should be \"authenticator\" in \"delayed-suthenticator-config\"",
+  "`getCredentials` loses the stored credential ID, causing silent removal failure - `RecoveryAuthnCodesCredentialModel.createFromValues(...)` generates a fresh, random ID for the returned model instead of using the original ID, so when `removeStoredCredentialById` is called it will not match any stored credential and the removal silently no-ops"
+]

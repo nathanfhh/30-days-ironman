@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-3",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.75,
+      "reasoning": "Greptile describes the same side-effecting should_block? during validation, framed as statistics inflated by repeated invocation."
+    }
+  ]
+}

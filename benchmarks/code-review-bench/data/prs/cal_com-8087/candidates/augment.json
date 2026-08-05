@@ -1,0 +1,8 @@
+[
+  "bookingRefsFiltered.forEach(async ...) doesn't get awaited, and the surrounding try/catch won't catch async rejections from deleteEvent/deleteMeeting, so integration cleanup can fail silently",
+  "Race condition where the function proceeds (e.g., sending reschedule emails) before external events are actually removed due to unawaited forEach",
+  "forEach(async ...) isn't awaited in wipemycalother/lib/reschedule.ts, so calendar/video deletions can run after the function continues and failures won't be caught by the outer try/catch, potentially leaving orphaned external events/meetings",
+  "bookingRefsFiltered.forEach(async ...) isn't awaited in bookings.tsx, so calendar/video deletions may still be in-flight or fail while the router continues to send reschedule email, leading to inconsistent external calendar/video state",
+  "await getCalendar(...) is inside an un-awaited forEach(async ...) in handleCancelBooking.ts, so Promise.all(prismaPromises.concat(apiDeletes)) can run before recurring-series deletes have been enqueued",
+  "apiDeletes.push(deletedEvent) pushes the resolved value (not a promise), so it won't actually be awaited downstream in the Promise.all"
+]

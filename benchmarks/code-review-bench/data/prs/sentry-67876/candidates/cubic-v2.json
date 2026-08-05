@@ -1,0 +1,7 @@
+[
+  "`integration.metadata[\"sender\"]` raises `KeyError` when the integration was built without a `sender` in state (the key is set conditionally in `build_integration`). Use `.get()` with a safe default, e.g., `integration.metadata.get(\"sender\", {}).get(\"login\")`.",
+  "The OAuth `state` parameter is set to `pipeline.signature`, which is a deterministic MD5 hash of pipeline identifiers \u2014 not a per-request random value. OAuth 2.0 requires `state` to be an unpredictable, per-request nonce to prevent CSRF. Consider generating a cryptographically random token and storing it in the pipeline state for verification on callback.",
+  "`pipeline.fetch_state(\"github_authenticated_user\")` can return `None` if the OAuth step was skipped or state was lost. Add an explicit `None` check before the comparison so the code fails clearly rather than relying on `None != <string>` semantics.",
+  "Test uses an invalid OAuth state, so the test never reaches the installation 404 path it is meant to cover.",
+  "The `redirect_uri` should be URL-encoded before being included in the query string. Use `urllib.parse.quote()` to properly encode the URL."
+]

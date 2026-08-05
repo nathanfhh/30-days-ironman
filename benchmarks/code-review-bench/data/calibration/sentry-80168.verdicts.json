@@ -1,0 +1,194 @@
+{
+  "slug": "sentry-80168",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "no-op-setup-override",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:124-127",
+      "reason": "TestProcessDetectors.setUp's entire body is `super().setUp()`, which is exactly what Python would do without the override; it is dead code left behind when StatefulDetectorHandlerTestMixin's setUp was folded into BaseDetectorHandlerTest."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "metric-alert-handler-missing-abstract-methods",
+      "evidence": "src/sentry/incidents/grouptype.py:11-12",
+      "reason": "MetricAlertDetectorHandler previously implemented evaluate() and was instantiable; after reparenting to StatefulDetectorHandler it is `pass` with four inherited abstractmethods unimplemented, so the question about intent points at a genuine regression rather than a neutral placeholder."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "stale-evaluate-docstring",
+      "evidence": "src/sentry/workflow_engine/processors/detector.py:229-233",
+      "reason": "The docstring still reads \"returns a list of `DetectorEvaluationResult`\" while the signature on line 226-228 now returns dict[DetectorGroupKey, DetectorEvaluationResult]."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "unused-detector-type-param",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:101-106",
+      "reason": "BaseDetectorHandlerTest.build_handler takes detector_type, but every one of the ten calls in subclasses (lines 329, 338, 350, 381, 425, 442, 487, 507, 534, 582) is a bare self.build_handler(); the calls at 285-298 belong to TestKeyBuilders' own build_handler."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.55,
+      "severity": "Low",
+      "cluster": "counter-names-classvar",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:28",
+      "reason": "counter_names = [\"test1\", \"test2\"] is a mutable class attribute with no ClassVar annotation (the RUF012 pattern), though the base declares counter_names as an abstract property, so a literal ClassVar annotation may itself trip mypy's class-vs-instance override check; the observation stands, the proposed fix is arguable."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "type-param-shadows-builtin",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:86-92",
+      "reason": "create_detector_and_conditions(self, type: str | None = None) shadows the builtin inside the function body; the same collision is what forced the `import builtins` workaround in models/detector.py, so the naming hazard is demonstrably live in this codebase."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "occurrence-eq-id-only-vacuous-assertions",
+      "evidence": "src/sentry/issues/issue_occurrence.py:181-183; tests/sentry/workflow_engine/processors/test_detector.py:252",
+      "reason": "IssueOccurrence defines an explicit __eq__ returning self.id == other.id, and build_mock_occurrence_and_event hardcodes id=\"eb4b0acffadb4d098d48cb14165ab578\", so every occurrence the helper builds compares equal regardless of fingerprint, priority or group_key."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "wrong-group-key-in-expected-occurrence",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:536-560",
+      "reason": "In TestEvaluateGroupKeyValue.test_dedupe the expected occurrence is built with group_key \"val1\" and value 6 while evaluate_group_key_value is called with \"group_key\" and 10; the assertion still passes only because IssueOccurrence.__eq__ ignores fingerprint, so the new hook's inputs go unvalidated."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "removed-duplicate-group-key-check",
+      "evidence": "src/sentry/workflow_engine/processors/detector.py:58-65 (diff lines 127-145)",
+      "reason": "The duplicate-group-key branch and its logger.error were deleted along with test_state_results_multi_group_dupe, and nothing in the new dict-returning evaluate() docstring or DetectorHandler contract states that keys must be unique and match result.group_key — evaluate() silently keys on result.group_key, so a mismatched handler now overwrites instead of logging."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "multi-group-wrong-value-arg",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:177,190-192",
+      "reason": "The packet sets group_2 to 10 but build_mock_occurrence_and_event is called with value=6; it passes because the helper never references its `value` parameter, so the argument mismatch is invisible."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "kafka-produce-before-state-commit",
+      "evidence": "src/sentry/workflow_engine/processors/detector.py:58-68",
+      "reason": "process_detectors calls create_issue_occurrence_from_result (which produces to Kafka) for every result before handler.commit_state_updates(); if the commit raises, neither the dedupe value nor DetectorState is persisted, so the next packet re-evaluates the same transition and produces the occurrence again — previously that could only re-emit a StatusChangeMessage."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "builtins-type-no-comment",
+      "evidence": "src/sentry/workflow_engine/models/detector.py:3,58-60",
+      "reason": "`import builtins` and the `builtins.type[GroupType] | None` return annotation carry no comment, and the reason given is correct: Detector declares `type = models.CharField(...)` at line 42, which shadows the builtin for annotations resolved in class scope."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "multi-group-wrong-value-arg",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:177,190-192",
+      "reason": "Same mismatch as stated: data packet has {\"group_1\": 6, \"group_2\": 10} while the group_2 expected occurrence is built with value=6."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "metric-alert-handler-missing-abstract-methods",
+      "evidence": "src/sentry/incidents/grouptype.py:11-12,27; src/sentry/workflow_engine/processors/detector.py:142-170",
+      "reason": "StatefulDetectorHandler declares exactly those four abstractmethods (counter_names property, get_dedupe_value, get_group_key_values, build_occurrence_and_event_data) and derives from abc.ABC, so MetricAlertDetectorHandler with only `pass` is not instantiable; Detector.detector_handler instantiates it via group_type.detector_handler(self), meaning any metric_alert_fire detector would raise TypeError. It is latent today only because nothing calls process_detectors in production yet."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "unused-value-param-in-helper",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:244-275",
+      "reason": "`value` appears in the signature but is referenced nowhere in the body — only handler, group_key and new_status are used — which is precisely why the wrong-value call sites go undetected."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "occurrence-eq-id-only-vacuous-assertions",
+      "evidence": "src/sentry/issues/issue_occurrence.py:181-187; tests/sentry/workflow_engine/processors/test_detector.py:252,536-560",
+      "reason": "Every element of the chain checks out: __eq__/__hash__ are overridden to use id alone, the helper hardcodes one id, and @freeze_time(tick=False) makes the event_data timestamps identical too — so the PR's new occurrence assertions constrain nothing, as the value and group-key mismatches that still pass demonstrate."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "hardcoded-project-id-1",
+      "evidence": "src/sentry/workflow_engine/models/detector.py:53-56; src/sentry/workflow_engine/processors/detector.py:73-87",
+      "reason": "project_id is still the XXX-marked property returning 1, and it now flows into the IssueOccurrence path that reaches produce_occurrence_to_kafka; the only thing currently preventing writes against project 1 is that process_detectors has no production caller (grep finds only the __init__ re-export), which is not a mechanism anyone declared."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "multi-group-wrong-value-arg",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:177,190-192",
+      "reason": "Confirms the same call: in test_state_results_multi_group the second occurrence uses value=6 against a packet value of 10, so nothing in the suite pins how `value` reaches build_occurrence_and_event_data."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "assert-has-calls-allows-extras",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:206-222",
+      "reason": "mock.assert_has_calls only requires the listed calls to be present and never bounds the total, so an extra produce_occurrence_to_kafka would pass — weaker than the assert_called_once_with used in test_state_results, and this is the test that replaced the deleted duplicate-group-key test."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "stale-todo-stateful-detector",
+      "evidence": "src/sentry/incidents/grouptype.py:10-11",
+      "reason": "The comment \"TODO: This will be a stateful detector when we build that abstraction\" sits directly above the line that now reads `class MetricAlertDetectorHandler(StatefulDetectorHandler[...])` — the abstraction exists and is in use, so the TODO is stale."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "wrong-group-key-in-expected-occurrence",
+      "evidence": "tests/sentry/workflow_engine/processors/test_detector.py:536-560",
+      "reason": "The wrong group key is real — 'val1' yields fingerprint [f\"{id}:val1\"] while evaluate_group_key_value builds [f\"{id}:group_key\"] — but the stated consequence is wrong: the assertion does not break, because IssueOccurrence.__eq__ compares id only and both ids are the hardcoded constant."
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "slug": "discourse-graphite-1",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments."
+    },
+    {
+      "claim_id": "c002",
+      "text": "Inline rescue nil swallows all exceptions silently including network errors that might be worth logging"
+    },
+    {
+      "claim_id": "c003",
+      "text": "\"80%\" and `attempt = 5` are undocumented magic numbers that together determine the smallest oversized image the feature can actually recover."
+    },
+    {
+      "claim_id": "c004",
+      "text": "Line 72 passes wrong size to Upload.create_for because tempfile.size reflects original file size, not downsized size - should use File.size(tempfile.path)"
+    },
+    {
+      "claim_id": "c005",
+      "text": "The downsize retry loop discards the boolean return value of `OptimizedImage.downsize` and doesn't handle the case where the file is still oversized after all 5 attempts are exhausted; the upload proceeds regardless of success."
+    },
+    {
+      "claim_id": "c006",
+      "text": "Stale `tempfile.size` after in-place ImageMagick conversion - the Ruby Tempfile object holds an open file descriptor to the original inode, so after the external process replaces the file, tempfile.size still reads the old size, causing the loop to iterate all 5 times regardless of whether target size was reached"
+    },
+    {
+      "claim_id": "c007",
+      "text": "Does the exit-code failure check in `convert_with` actually work correctly under the shell used in the real deployment (bash vs. dash), given it relies on `&>` redirection?"
+    },
+    {
+      "claim_id": "c008",
+      "text": "Is the resource amplification from repeatedly invoking convert/ImageOptim in this loop acceptable on deployments that don't enforce a 10MB request-body cap?"
+    },
+    {
+      "claim_id": "c009",
+      "text": "Using the same path for input and output in image processing is risky - if the operation fails mid-write, the original file is lost"
+    },
+    {
+      "claim_id": "c010",
+      "text": "The auto-downsize logic lives inside the controller instead of the Upload model, so the other 9 production call sites of Upload.create_for (e.g. email attachment receiving, hotlinked image fetching, avatar downloads) don't benefit from it and can still reject oversized images."
+    },
+    {
+      "claim_id": "c011",
+      "text": "No early exit when downsize fails to reduce size - if OptimizedImage.downsize fails it returns false and the file size stays the same, but the loop will still run all 5 remaining iterations without making progress"
+    },
+    {
+      "claim_id": "c012",
+      "text": "tempfile.size in Ruby won't reflect updated size after OptimizedImage.downsize because Ruby caches the file size - need to reopen or stat the file to get actual new size"
+    },
+    {
+      "claim_id": "c013",
+      "text": "The \"10MB\" decision is hardcoded independently in four separate places with no comment linking them together, so adjusting the limit requires editing all four in sync and any one being missed causes hard-to-diagnose mismatches."
+    },
+    {
+      "claim_id": "c014",
+      "text": "If OptimizedImage.downsize fails and returns false, the loop keeps retrying and the oversized file continues"
+    },
+    {
+      "claim_id": "c015",
+      "text": "The `allow_animated_thumbnails` site setting (intended only for derived thumbnails) is repurposed to decide whether the user's original uploaded file keeps its animation; when the setting is disabled, an oversized animated GIF gets silently squashed down to its first frame and the original file is overwritten in place with no warning."
+    },
+    {
+      "claim_id": "c016",
+      "text": "The downsize loop only shrinks to ~33% of the original after 5 iterations (0.8^5), so a 10MB image may still exceed max_image_size_kb and proceed to Upload.create_for despite the comment promising automatic reduction"
+    },
+    {
+      "claim_id": "c017",
+      "text": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail."
+    },
+    {
+      "claim_id": "c018",
+      "text": "Can `tempfile.size` actually observe the new (smaller) file size after `convert`/`ImageOptim` rewrite the file in place, or does it read stale fd metadata if the rewrite uses rename-over-write?"
+    },
+    {
+      "claim_id": "c019",
+      "text": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below)."
+    },
+    {
+      "claim_id": "c020",
+      "text": "For regular browser uploads, Rack tempfile paths lack .gif extension, so the GIF detection regex in optimize() never matches and convert with [0] strips animation from GIFs"
+    },
+    {
+      "claim_id": "c021",
+      "text": "The allow_animation option is effectively dead code since animated GIF downsizing fails through both upload paths"
+    },
+    {
+      "claim_id": "c022",
+      "text": "The loop checking tempfile.size may never terminate correctly due to stale cached size"
+    },
+    {
+      "claim_id": "c023",
+      "text": "Switch case declaration in case 413 declares variable maxSizeKB without a block, allowing other cases to erroneously access the declaration - needs to be wrapped in a block for scope safety"
+    },
+    {
+      "claim_id": "c024",
+      "text": "An existing JavaScript test asserts the old hardcoded-per-type size limit and will fail because of this change, and the new server-side downsizing behavior has no test coverage at all."
+    },
+    {
+      "claim_id": "c025",
+      "text": "Using a fixed 10.megabytes download cap ignores SiteSetting.max_image_size_kb and can cause instance configuration to be bypassed or prevent larger configured limits"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-77754",
+  "tool": "greptile-v4-1",
+  "n_golden": 4,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both flag the dataclass's timestamp field being evaluated once at class-definition time so all instances share the same timestamp."
+    }
+  ]
+}

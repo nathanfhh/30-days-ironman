@@ -1,0 +1,3311 @@
+[
+  {
+    "slug": "cal_com-7232",
+    "language": "TypeScript",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 13,
+    "unclear": {
+      "golden": 0,
+      "candidate": 3
+    },
+    "discovered_detail": {
+      "send-code-no-loading-guard": [
+        "coderabbit"
+      ],
+      "cancel-query-missing-filters": [
+        "coderabbit",
+        "cubic-v2",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "unrelated-ui-refactor": [
+        "nathan-code-review"
+      ],
+      "cron-cancel-loop-no-error-isolation": [
+        "claude-code",
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "cancel-window-vs-cron-ordering": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "dead-trycatch-handlenewbooking": [
+        "nathan-code-review"
+      ],
+      "immediate-delete-reschedule-handlenewbooking": [
+        "cubic-v2"
+      ],
+      "missing-index-workflowreminder": [
+        "coderabbit"
+      ],
+      "nullable-cancelled-no-default": [
+        "nathan-code-review"
+      ],
+      "verify-empty-input": [
+        "coderabbit"
+      ],
+      "hardcoded-strings-i18n": [
+        "coderabbit"
+      ],
+      "no-tests": [
+        "nathan-code-review"
+      ],
+      "type-only-imports-reverted": [
+        "coderabbit",
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-8087",
+    "language": "TypeScript",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 14,
+    "unclear": {
+      "golden": 0,
+      "candidate": 3
+    },
+    "discovered_detail": {
+      "import-error-handling-bookings-refund": [
+        "cubic-v2"
+      ],
+      "handlecancel-refund-outside-try": [
+        "coderabbit",
+        "cubic-v2"
+      ],
+      "appstore-list-no-sync-test": [
+        "nathan-code-review"
+      ],
+      "import-error-handling-handlepayment": [
+        "cubic-v2"
+      ],
+      "apideletes-push-resolved-value": [
+        "augment",
+        "claude-code"
+      ],
+      "import-error-handling-deletepayment": [
+        "cubic-v2"
+      ],
+      "calendar-field-is-promise": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "foreach-async-wipemycal-reschedule": [
+        "cubic-v2",
+        "greptile-v4-1"
+      ],
+      "eager-dynamic-imports": [
+        "coderabbit",
+        "greptile-v4-1"
+      ],
+      "import-error-handling-createevent": [
+        "cubic-v2"
+      ],
+      "commented-example-path": [
+        "nathan-code-review"
+      ],
+      "await-in-loop-getvideoadapters": [
+        "nathan-code-review"
+      ],
+      "import-error-handling-getcalendar": [
+        "cubic-v2"
+      ],
+      "foreach-async-vital-reschedule": [
+        "cubic-v2",
+        "greptile-v4-1"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-8330",
+    "language": "TypeScript",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 16,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "override-bypasses-busy-check": [
+        "augment",
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "override-day-compare-local-vs-utc": [
+        "nathan-code-review"
+      ],
+      "override-end-boundary-strict-isafter": [
+        "claude-code"
+      ],
+      "working-hours-any-instead-of-some": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "optional-override-timezone": [
+        "augment",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "third-callsite-missing-filters": [
+        "nathan-code-review"
+      ],
+      "find-instead-of-some": [
+        "nathan-code-review"
+      ],
+      "blank-line-noise": [
+        "nathan-code-review"
+      ],
+      "implicit-undefined-callback-return": [
+        "nathan-code-review"
+      ],
+      "no-tests-for-new-branches": [
+        "nathan-code-review"
+      ],
+      "date-override-find-first-mismatch-rejects": [
+        "coderabbit"
+      ],
+      "find-predicate-side-effect": [
+        "nathan-code-review"
+      ],
+      "organizer-timezone-precedence-mismatch": [
+        "nathan-code-review"
+      ],
+      "repeated-dayjs-conversion": [
+        "nathan-code-review"
+      ],
+      "override-crosses-invitee-midnight": [
+        "nathan-code-review"
+      ],
+      "date-tostring-parsing": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-10600",
+    "language": "TypeScript",
+    "golden_total": 4,
+    "valid_golden": 4,
+    "invalid_golden": 0,
+    "discovered_clusters": 27,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "backup-codes-object-url-leak": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "password-toggle-tabindex": [
+        "coderabbit"
+      ],
+      "password-bypass-backupcode-totp": [
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "login-error-map-bypassed": [
+        "nathan-code-review"
+      ],
+      "missing-backup-code-tests": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "migration-timestamp-out-of-order": [
+        "coderabbit"
+      ],
+      "nested-ternary-render": [
+        "nathan-code-review"
+      ],
+      "backup-codes-json-parse-unguarded": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "dismiss-skips-onenable": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "dismiss-leaves-stale-step": [
+        "nathan-code-review"
+      ],
+      "exhausted-backup-codes-wrong-error": [
+        "nathan-code-review"
+      ],
+      "backup-codes-state-untyped": [
+        "nathan-code-review"
+      ],
+      "backup-codes-stored-reversible": [
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "password-field-type-override": [
+        "claude-code"
+      ],
+      "first-e2e-skips-backup-screen": [
+        "claude-code"
+      ],
+      "anchor-wrapping-button": [
+        "augment"
+      ],
+      "backup-code-input-validation": [
+        "nathan-code-review"
+      ],
+      "backup-code-timing-comparison": [
+        "nathan-code-review"
+      ],
+      "clipboard-write-unawaited": [
+        "augment"
+      ],
+      "sso-users-cannot-use-backup-codes": [
+        "coderabbit"
+      ],
+      "external-totp-footer-no-lost-access": [
+        "coderabbit"
+      ],
+      "ischecked-promise-assertion": [
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "backup-code-body-type-unvalidated": [
+        "nathan-code-review"
+      ],
+      "duplicate-security-modal-not-updated": [
+        "nathan-code-review"
+      ],
+      "backup-code-label-a11y": [
+        "nathan-code-review"
+      ],
+      "backup-code-case-sensitivity-disable": [
+        "greptile-v4-1"
+      ],
+      "no-backup-code-regeneration": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-10967",
+    "language": "TypeScript",
+    "golden_total": 5,
+    "valid_golden": 4,
+    "invalid_golden": 1,
+    "discovered_clusters": 26,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "self-matching-find-external-id": [
+        "nathan-code-review"
+      ],
+      "webhook-payload-breaking-change": [
+        "nathan-code-review"
+      ],
+      "no-tests-for-refactor": [
+        "nathan-code-review"
+      ],
+      "redundant-optional-chain-request-reschedule": [
+        "coderabbit"
+      ],
+      "schedulingtype-literal-vs-enum": [
+        "nathan-code-review"
+      ],
+      "google-create-credentialid-match-fails": [
+        "nathan-code-review"
+      ],
+      "null-destinationcalendar-push-noop": [
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "recurring-cancel-block-nested-in-loop": [
+        "nathan-code-review"
+      ],
+      "dropped-organization-select": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "webhook-payload-shape-inconsistent": [
+        "nathan-code-review"
+      ],
+      "legacy-branch-omits-externalid": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "credential-lookup-n-plus-1": [
+        "nathan-code-review"
+      ],
+      "loadusers-error-flattening": [
+        "nathan-code-review"
+      ],
+      "recurring-cancel-uses-first-reference-only": [
+        "coderabbit"
+      ],
+      "unscoped-credential-fetch": [
+        "nathan-code-review"
+      ],
+      "duplicated-credential-lookup-block": [
+        "nathan-code-review"
+      ],
+      "destination-not-forwarded-to-provider": [
+        "coderabbit",
+        "cubic-v2"
+      ],
+      "updateevent-called-with-undefined-credential": [
+        "augment",
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "singular-names-for-arrays": [
+        "nathan-code-review"
+      ],
+      "google-patch-undefined-calendarid": [
+        "augment"
+      ],
+      "loadusers-scope-creep": [
+        "nathan-code-review"
+      ],
+      "restating-comment-google-service": [
+        "nathan-code-review"
+      ],
+      "duplicate-destinations-not-deduped": [
+        "nathan-code-review"
+      ],
+      "hoist-destructure-out-of-reduce": [
+        "nathan-code-review"
+      ],
+      "misleading-mainhost-name": [
+        "nathan-code-review"
+      ],
+      "eventmanager-unguarded-destructure": [
+        "claude-code"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-11059",
+    "language": "TypeScript",
+    "golden_total": 5,
+    "valid_golden": 5,
+    "invalid_golden": 0,
+    "discovered_clusters": 29,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "zoho-bigin-useless-template-literal": [
+        "nathan-code-review"
+      ],
+      "no-tests": [
+        "nathan-code-review"
+      ],
+      "webhook-appstoremetadata-slug-vs-dirname": [
+        "nathan-code-review"
+      ],
+      "salesforce-stale-token-in-connection": [
+        "augment",
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "app-credential-sharing-not-boolean": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "webhook-header-name-case": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "refresh-oauth-tokens-no-error-handling": [
+        "coderabbit"
+      ],
+      "salesforce-missing-prisma-import": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "parse-schema-switch-ignores-sync-path": [
+        "augment"
+      ],
+      "zoho-bigin-credential-id-as-userid": [
+        "augment",
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "webhook-credential-race-duplicate": [
+        "coderabbit"
+      ],
+      "office365-dead-success-guard": [
+        "nathan-code-review"
+      ],
+      "webhook-empty-jsdoc": [
+        "nathan-code-review"
+      ],
+      "webhook-no-method-check": [
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "refresh-oauth-tokens-no-timeout": [
+        "coderabbit"
+      ],
+      "salesforce-bypasses-refresh-oauth-tokens": [
+        "greptile-v4-1"
+      ],
+      "webhook-parse-throws-500": [
+        "augment",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "sync-endpoint-outbound-unauthenticated": [
+        "nathan-code-review"
+      ],
+      "office365-lost-parse-diagnostics": [
+        "nathan-code-review"
+      ],
+      "webhook-decrypt-json-throws-500": [
+        "coderabbit",
+        "greptile-v4-1"
+      ],
+      "salesforce-constructor-unhandled-rejection": [
+        "nathan-code-review"
+      ],
+      "refresh-function-any-type": [
+        "coderabbit"
+      ],
+      "refresh-oauth-tokens-no-status-check": [
+        "coderabbit"
+      ],
+      "webhook-decrypted-keys-unvalidated": [
+        "nathan-code-review"
+      ],
+      "salesforce-refresh-write-race": [
+        "nathan-code-review"
+      ],
+      "salesforce-refresh-every-construction": [
+        "nathan-code-review"
+      ],
+      "salesforce-statustext-check": [
+        "nathan-code-review"
+      ],
+      "turbo-env-ordering": [
+        "nathan-code-review"
+      ],
+      "zoho-bigin-hardcoded-slug": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-14740",
+    "language": "TypeScript",
+    "golden_total": 5,
+    "valid_golden": 5,
+    "invalid_golden": 0,
+    "discovered_clusters": 22,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "client-schema-name-collision": [
+        "nathan-code-review"
+      ],
+      "email-error-swallowed": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "duplicate-attendee-race": [
+        "nathan-code-review"
+      ],
+      "lazy-40kb-comment": [
+        "nathan-code-review"
+      ],
+      "dead-toast-fallback": [
+        "augment"
+      ],
+      "schema-built-in-render": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "no-tests": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "email-disable-flags-ignored": [
+        "claude-code",
+        "coderabbit"
+      ],
+      "empty-fragment": [
+        "coderabbit"
+      ],
+      "multiemail-duplicated-from-form-builder": [
+        "nathan-code-review"
+      ],
+      "dialog-state-not-reset": [
+        "augment",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "no-booking-status-check": [
+        "nathan-code-review"
+      ],
+      "index-as-key": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "ui-self-barrel-import": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "seats-events-unhandled": [
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "disable-guests-ignored": [
+        "nathan-code-review"
+      ],
+      "teamid-zero-sentinel": [
+        "nathan-code-review"
+      ],
+      "no-guest-count-limit": [
+        "nathan-code-review"
+      ],
+      "responses-guests-not-updated": [
+        "nathan-code-review"
+      ],
+      "auth-bypasses-bookingsprocedure": [
+        "nathan-code-review"
+      ],
+      "client-uniqueness-case-sensitive": [
+        "coderabbit"
+      ],
+      "param-reassign": [
+        "coderabbit"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-14943",
+    "language": "TypeScript",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 10,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "unguarded-update-in-catch": [
+        "augment",
+        "claude-code",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "no-observability-on-delete": [
+        "nathan-code-review"
+      ],
+      "no-tests-for-delete-branch": [
+        "nathan-code-review"
+      ],
+      "magic-retry-threshold": [
+        "nathan-code-review"
+      ],
+      "twilio-db-not-atomic-duplicate-sms": [
+        "coderabbit"
+      ],
+      "orphaned-twilio-jobs-after-delete": [
+        "coderabbit"
+      ],
+      "deletemany-unindexed-retrycount": [
+        "nathan-code-review"
+      ],
+      "delete-pending-reminder-after-two-failures": [
+        "nathan-code-review"
+      ],
+      "sms-only-scope-of-retrycount": [
+        "nathan-code-review"
+      ],
+      "retrycount-naming-off-by-one": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-22345",
+    "language": "TypeScript",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 14,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "silent-options-validation-failure": [
+        "nathan-code-review"
+      ],
+      "unparenthesized-or-precedence": [
+        "claude-code"
+      ],
+      "any-untested-against-db": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "readonly-replica-no-longer-enforced": [
+        "nathan-code-review"
+      ],
+      "unordered-ids-order-dependent-assertions": [
+        "augment",
+        "cubic-v2",
+        "greptile-v4-1"
+      ],
+      "public-options-type-widening": [
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "test-cleanup-not-in-finally": [
+        "coderabbit"
+      ],
+      "sql-text-equality-assertions": [
+        "nathan-code-review"
+      ],
+      "unreachable-else-build-auth": [
+        "nathan-code-review"
+      ],
+      "caching-tests-deleted": [
+        "nathan-code-review"
+      ],
+      "no-production-caller-migration-incomplete": [
+        "nathan-code-review"
+      ],
+      "raw-sql-column-names-untyped": [
+        "nathan-code-review"
+      ],
+      "duplicated-reduce-use-prisma-join": [
+        "nathan-code-review"
+      ],
+      "reduce-index-zero-dead-branch": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "cal_com-22532",
+    "language": "TypeScript",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 27,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "dropdown-raw-tailwind-colors": [
+        "nathan-code-review"
+      ],
+      "cache-status-credentialids-guard": [
+        "coderabbit"
+      ],
+      "env-file-relative-path": [
+        "augment",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "tsx-undeclared": [
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "hardcoded-en-us-locale": [
+        "augment",
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "calendarcache-factory-bypass": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "shell-unused-loop-var": [
+        "coderabbit"
+      ],
+      "unrelated-changes-bundled": [
+        "nathan-code-review"
+      ],
+      "tmole-log-assumption": [
+        "coderabbit"
+      ],
+      "always-rendered-w32-actions-div": [
+        "nathan-code-review"
+      ],
+      "migration-default-now-backfill": [
+        "nathan-code-review"
+      ],
+      "deletecache-no-query-invalidation": [
+        "coderabbit",
+        "greptile-v4-1"
+      ],
+      "selectedcalendar-updatedat-deadcode": [
+        "nathan-code-review"
+      ],
+      "plain-error-not-trpcerror": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "sed-bsd-vs-gnu": [
+        "nathan-code-review"
+      ],
+      "credentialid-zod-int-positive": [
+        "coderabbit"
+      ],
+      "bare-hr-instead-of-separator": [
+        "nathan-code-review"
+      ],
+      "migration-timestamp-out-of-order": [
+        "nathan-code-review"
+      ],
+      "delegation-guard-lost-remove-app": [
+        "nathan-code-review"
+      ],
+      "deletecache-router-conventions": [
+        "nathan-code-review"
+      ],
+      "platform-constants-undeclared-dep": [
+        "nathan-code-review"
+      ],
+      "empty-data-updatemany-noop": [
+        "nathan-code-review"
+      ],
+      "dropdownmenuitem-for-static-label": [
+        "nathan-code-review"
+      ],
+      "no-tests-added": [
+        "claude-code"
+      ],
+      "delete-cache-not-gated-by-disableconnectionmodification": [
+        "nathan-code-review"
+      ],
+      "delete-cache-no-refetch": [
+        "nathan-code-review"
+      ],
+      "features-imports-platform-constants-layering": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-1",
+    "language": "Ruby",
+    "golden_total": 3,
+    "valid_golden": 3,
+    "invalid_golden": 0,
+    "discovered_clusters": 12,
+    "unclear": {
+      "golden": 0,
+      "candidate": 6
+    },
+    "discovered_detail": {
+      "download-rescue-nil-silent": [
+        "coderabbit"
+      ],
+      "downsize-magic-numbers": [
+        "nathan-code-review"
+      ],
+      "downsize-return-ignored": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "in-place-overwrite": [
+        "coderabbit"
+      ],
+      "downsize-in-controller-not-model": [
+        "nathan-code-review"
+      ],
+      "hardcoded-10mb-duplicated": [
+        "nathan-code-review"
+      ],
+      "allow-animated-thumbnails-misused": [
+        "nathan-code-review"
+      ],
+      "downsize-budget-insufficient": [
+        "augment"
+      ],
+      "allow-animation-ineffective-on-upload-path": [
+        "claude-code"
+      ],
+      "js-case-var-scope": [
+        "coderabbit"
+      ],
+      "tests-broken-and-missing": [
+        "nathan-code-review"
+      ],
+      "hardcoded-download-cap": [
+        "augment"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-2",
+    "language": "Ruby",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 13,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "render-show-breaks-canonical": [
+        "nathan-code-review"
+      ],
+      "unsubscribe-requires-login": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "duplicate-respond-instructions": [
+        "coderabbit"
+      ],
+      "redirect-not-reusing-helper": [
+        "nathan-code-review"
+      ],
+      "no-tests": [
+        "nathan-code-review"
+      ],
+      "first-click-only-regular": [
+        "nathan-code-review"
+      ],
+      "bypasses-topicuser-change": [
+        "nathan-code-review"
+      ],
+      "get-mutates-state": [
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "previous-discussion-dot-class": [
+        "coderabbit"
+      ],
+      "unsubscribe-url-interpolation-contract": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "list-unsubscribe-test-weak": [
+        "coderabbit"
+      ],
+      "client-transition-shows-stopped": [
+        "nathan-code-review"
+      ],
+      "list-unsubscribe-header-omits-topic-url": [
+        "greptile-v4-1"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-3",
+    "language": "Ruby",
+    "golden_total": 2,
+    "valid_golden": 1,
+    "invalid_golden": 1,
+    "discovered_clusters": 16,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "errors-response-shape": [
+        "nathan-code-review"
+      ],
+      "users-controller-create-specs": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "email-validator-shortcircuit-untested": [
+        "nathan-code-review"
+      ],
+      "blocked-email-case-normalization": [
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "blocked-email-enumeration-disclosure": [
+        "nathan-code-review"
+      ],
+      "email-validator-missing-newline": [
+        "claude-code",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "rejected-email-blank-value": [
+        "augment"
+      ],
+      "blocked-email-client-message": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "should-block-nil-return": [
+        "nathan-code-review"
+      ],
+      "rejected-emails-on-prototype": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "and-keyword-instead-of-operator": [
+        "nathan-code-review"
+      ],
+      "blocked-email-no-population-path": [
+        "nathan-code-review"
+      ],
+      "set-defaults-public": [
+        "nathan-code-review"
+      ],
+      "blocked-email-naming-collision": [
+        "nathan-code-review"
+      ],
+      "save-return-ignored": [
+        "nathan-code-review"
+      ],
+      "user-model-specs-not-updated": [
+        "claude-code"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-4",
+    "language": "Ruby",
+    "golden_total": 6,
+    "valid_golden": 5,
+    "invalid_golden": 1,
+    "discovered_clusters": 32,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "poll-feed-no-error-handling": [
+        "coderabbit"
+      ],
+      "disqus-remote-fetch-unrescued": [
+        "nathan-code-review"
+      ],
+      "feed-item-content-nil": [
+        "augment",
+        "claude-code",
+        "coderabbit",
+        "greptile-v4-1"
+      ],
+      "migration-force-true": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "require-dependency-on-gem": [
+        "nathan-code-review"
+      ],
+      "import-mutates-contents-arg": [
+        "nathan-code-review"
+      ],
+      "raw-html-bypasses-sanitize": [
+        "augment",
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "assets-not-precompiled": [
+        "nathan-code-review"
+      ],
+      "embed-js-missing-container-guard": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "embed-js-trailing-slash": [
+        "nathan-code-review"
+      ],
+      "spec-assertions-in-after-hook": [
+        "coderabbit"
+      ],
+      "get-with-side-effects": [
+        "nathan-code-review"
+      ],
+      "unused-require-email-sender": [
+        "nathan-code-review"
+      ],
+      "missing-trailing-newline": [
+        "nathan-code-review"
+      ],
+      "unused-feed-key": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "absolutize-port-scheme": [
+        "greptile-v4-1"
+      ],
+      "unrelated-whitespace-diff": [
+        "nathan-code-review"
+      ],
+      "embed-login-required": [
+        "nathan-code-review"
+      ],
+      "import-race-unique-index": [
+        "nathan-code-review"
+      ],
+      "postmessage-height-unvalidated": [
+        "coderabbit"
+      ],
+      "poll-feed-body-untested": [
+        "nathan-code-review"
+      ],
+      "poll-feed-spec-vacuous-guards": [
+        "nathan-code-review"
+      ],
+      "topic-retriever-runs-full-poll": [
+        "nathan-code-review"
+      ],
+      "lockfiles-out-of-sync": [
+        "nathan-code-review"
+      ],
+      "disqus-category-option-removed": [
+        "nathan-code-review"
+      ],
+      "import-remote-no-timeout": [
+        "coderabbit"
+      ],
+      "add-column-default-lock": [
+        "coderabbit"
+      ],
+      "avatar-image-tag": [
+        "coderabbit"
+      ],
+      "redis-setnx-expire-nonatomic": [
+        "coderabbit"
+      ],
+      "embed-url-varchar-255": [
+        "nathan-code-review"
+      ],
+      "content-sha1-updated-unconditionally": [
+        "coderabbit"
+      ],
+      "disqus-created-at-lost": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-5",
+    "language": "SCSS/CSS",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 13,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "custom-message-p-margin": [
+        "cubic-v2"
+      ],
+      "incomplete-relanded-file-set": [
+        "nathan-code-review"
+      ],
+      "mixin-prefix-order-inconsistency": [
+        "nathan-code-review"
+      ],
+      "order-mixin-legacy-ordinal-base": [
+        "augment",
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "contents-clearfix-in-flex": [
+        "claude-code"
+      ],
+      "mobile-custom-message-negative-margin": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "align-items-colon-space": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "mixin-trailing-whitespace": [
+        "nathan-code-review"
+      ],
+      "align-items-missing-moz-box-align": [
+        "nathan-code-review"
+      ],
+      "percentage-padding-small-action-desc": [
+        "nathan-code-review"
+      ],
+      "extra-info-order-not-flex-item": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "align-items-keyword-passthrough": [
+        "nathan-code-review"
+      ],
+      "align-items-indentation": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-6",
+    "language": "TypeScript",
+    "golden_total": 1,
+    "valid_golden": 1,
+    "invalid_golden": 0,
+    "discovered_clusters": 10,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "long-ternary-readability": [
+        "nathan-code-review"
+      ],
+      "spec-untrusted-list-not-updated": [
+        "nathan-code-review"
+      ],
+      "website-name-not-untrusted": [
+        "claude-code",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "redundant-uri-and-split-reparse": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "no-test-website-name-absent": [
+        "nathan-code-review"
+      ],
+      "subdomain-parent-check-asymmetric": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "bare-rescue-nil-hides-website": [
+        "nathan-code-review"
+      ],
+      "elsif-branch-untested": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "empty-host-not-guarded": [
+        "greptile-v4-1"
+      ],
+      "public-suffix-misjudged": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-7",
+    "language": "SCSS/CSS",
+    "golden_total": 3,
+    "valid_golden": 2,
+    "invalid_golden": 1,
+    "discovered_clusters": 10,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "mobile-topic-map-h3-lightness": [
+        "augment",
+        "claude-code",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "wmd-input-disabled-contrast": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "stale-comment-topic-list-default": [
+        "nathan-code-review"
+      ],
+      "whitespace-reformat-noise": [
+        "nathan-code-review"
+      ],
+      "mobile-custom-message-length-swapped": [
+        "augment",
+        "claude-code",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "no-shared-mixin-duplication": [
+        "nathan-code-review"
+      ],
+      "secondary-tertiary-out-of-scope": [
+        "nathan-code-review"
+      ],
+      "badge-notification-dark-contrast": [
+        "nathan-code-review"
+      ],
+      "file-uploading-unconverted": [
+        "coderabbit"
+      ],
+      "missed-badge-notification-conversion": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-8",
+    "language": "TypeScript",
+    "golden_total": 3,
+    "valid_golden": 3,
+    "invalid_golden": 0,
+    "discovered_clusters": 19,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "duplicate-add-500": [
+        "nathan-code-review"
+      ],
+      "hardcoded-scss-colors": [
+        "coderabbit"
+      ],
+      "pagination-params-unclamped": [
+        "augment",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "input-not-cleared": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "members-response-shape-break": [
+        "nathan-code-review"
+      ],
+      "public-members-truncated": [
+        "nathan-code-review"
+      ],
+      "formatting-churn": [
+        "nathan-code-review"
+      ],
+      "remove-member-skips-primary-group-cleanup": [
+        "nathan-code-review"
+      ],
+      "add-members-no-transaction": [
+        "nathan-code-review"
+      ],
+      "findmembers-return-inconsistent": [
+        "nathan-code-review"
+      ],
+      "semicolon-nits": [
+        "nathan-code-review"
+      ],
+      "removed-nonexistent-username-test": [
+        "nathan-code-review"
+      ],
+      "no-test-new-response-shape": [
+        "nathan-code-review"
+      ],
+      "put-nonidempotent-add": [
+        "nathan-code-review"
+      ],
+      "members-template-guard-mismatch": [
+        "coderabbit"
+      ],
+      "usernames-not-stripped": [
+        "coderabbit"
+      ],
+      "public-members-limit-unbounded": [
+        "nathan-code-review"
+      ],
+      "user-count-counter-cache-stale": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "pending-pagination-test": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-9",
+    "language": "Ruby",
+    "golden_total": 2,
+    "valid_golden": 1,
+    "invalid_golden": 1,
+    "discovered_clusters": 9,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "translate-cache-key-ignores-fallback-chain": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "duplicated-fallback-order": [
+        "nathan-code-review"
+      ],
+      "loaded-locales-nil-guard-inconsistent": [
+        "nathan-code-review"
+      ],
+      "no-tests": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "ensure-loaded-per-request-cost": [
+        "claude-code"
+      ],
+      "fallbacks-not-loaded-outside-requests": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "loaded-locales-thread-safety": [
+        "claude-code"
+      ],
+      "initializer-order-comment": [
+        "nathan-code-review"
+      ],
+      "hash-subclass-contract": [
+        "claude-code",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "discourse-graphite-10",
+    "language": "Ruby",
+    "golden_total": 4,
+    "valid_golden": 4,
+    "invalid_golden": 0,
+    "discovered_clusters": 30,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "spec-stray-blank-lines": [
+        "coderabbit"
+      ],
+      "plural-hydration-unconditional-assign": [
+        "nathan-code-review"
+      ],
+      "host-regex-tld-length": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "spec-typo-emeddable": [
+        "coderabbit"
+      ],
+      "host-port-never-matches": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "controller-specs-inheritance-only": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "fabricator-files-swapped": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "migration-unguarded-row-index": [
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "edit-seeds-categoryid-from-hydrated-category": [
+        "nathan-code-review"
+      ],
+      "delete-action-no-error-handling": [
+        "nathan-code-review"
+      ],
+      "expandable-first-post-spec-vacuous": [
+        "nathan-code-review"
+      ],
+      "icon-only-buttons-no-title": [
+        "coderabbit"
+      ],
+      "migration-raw-sql-interpolation": [
+        "claude-code",
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "replace-first-underscore-only": [
+        "claude-code",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "serializer-redundant-readers": [
+        "nathan-code-review"
+      ],
+      "store-test-wrong-fixture-id": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "migration-deletes-source-settings": [
+        "nathan-code-review"
+      ],
+      "unused-i18n-edit-key": [
+        "nathan-code-review"
+      ],
+      "resources-without-only": [
+        "nathan-code-review"
+      ],
+      "host-regex-uppercase-Z-anchor": [
+        "nathan-code-review"
+      ],
+      "unused-let-host": [
+        "nathan-code-review"
+      ],
+      "feed-poll-loses-embed-category": [
+        "nathan-code-review"
+      ],
+      "no-unique-index-on-host": [
+        "nathan-code-review"
+      ],
+      "plural-hydration-null-ids": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "host-regex-rejects-localhost": [
+        "nathan-code-review"
+      ],
+      "duplicate-before-filters": [
+        "nathan-code-review"
+      ],
+      "dead-map-fallback": [
+        "nathan-code-review"
+      ],
+      "client-category-from-local-state": [
+        "augment"
+      ],
+      "embed-category-name-vs-id": [
+        "nathan-code-review"
+      ],
+      "dead-embedding-save-path": [
+        "claude-code",
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-76186",
+    "language": "Go",
+    "golden_total": 2,
+    "valid_golden": 0,
+    "invalid_golden": 2,
+    "discovered_clusters": 7,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "middleware-ordering-comment-lost": [
+        "nathan-code-review"
+      ],
+      "metrics-middleware-shared-next-race": [
+        "nathan-code-review"
+      ],
+      "testlogger-fromcontext-new-instance": [
+        "augment",
+        "claude-code",
+        "cubic-v2",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "contextual-logger-middleware-untested": [
+        "nathan-code-review"
+      ],
+      "contextual-logger-stream-passthrough": [
+        "nathan-code-review"
+      ],
+      "test-func-name-not-renamed": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "logger-name-plugin-instrumentation": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-79265",
+    "language": "Go",
+    "golden_total": 5,
+    "valid_golden": 3,
+    "invalid_golden": 2,
+    "discovered_clusters": 13,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "device-limit-test-missing-update-path": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "stale-wire-registration": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "bootconfig-undefined-type": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "missing-config-defaults-and-docs": [
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "cache-set-before-db-write": [
+        "augment",
+        "claude-code",
+        "cubic-v2",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "duplicated-30day-window-const": [
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "no-device-id-header-bypass": [
+        "nathan-code-review"
+      ],
+      "not-errutil-error": [
+        "nathan-code-review"
+      ],
+      "sync-write-on-auth-path": [
+        "nathan-code-review"
+      ],
+      "missing-client-authenticate-test": [
+        "nathan-code-review"
+      ],
+      "interface-slice-style": [
+        "nathan-code-review"
+      ],
+      "int64-zero-vs-undefined-serialization": [
+        "greptile-v4-1"
+      ],
+      "request-context-cancellation": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-80329",
+    "language": "Go",
+    "golden_total": 1,
+    "valid_golden": 1,
+    "invalid_golden": 0,
+    "discovered_clusters": 12,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "cleanup-ticker-10m-to-1m": [
+        "augment",
+        "claude-code",
+        "cubic-v2",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "import-grouping": [
+        "nathan-code-review"
+      ],
+      "debug-error-logs": [
+        "claude-code",
+        "greptile-v4-1"
+      ],
+      "test-cleanup-registered-late": [
+        "nathan-code-review"
+      ],
+      "nil-err-logged": [
+        "claude-code",
+        "coderabbit",
+        "greptile-v4-1"
+      ],
+      "deadlock-premise-unsubstantiated": [
+        "nathan-code-review"
+      ],
+      "fetchids-builds-sql-before-validation": [
+        "nathan-code-review"
+      ],
+      "zero-affected-early-exit": [
+        "nathan-code-review"
+      ],
+      "large-batch-test-misses-annotation-path": [
+        "nathan-code-review"
+      ],
+      "sqlite-inline-branch-uses-cfg-not-len": [
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "sqlite-inline-quadratic-concat": [
+        "nathan-code-review"
+      ],
+      "skip-message-casing": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-90045",
+    "language": "Go",
+    "golden_total": 3,
+    "valid_golden": 3,
+    "invalid_golden": 0,
+    "discovered_clusters": 15,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "legacy-update-raw-objinfo": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "deletecollection-legacy-wrong-recorder": [
+        "claude-code",
+        "cubic-v2",
+        "greptile-v4-1"
+      ],
+      "async-inherits-request-ctx": [
+        "augment",
+        "claude-code",
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "goroutine-no-logging-no-recover": [
+        "nathan-code-review"
+      ],
+      "mode3-readability-nits": [
+        "nathan-code-review"
+      ],
+      "legacy-create-uses-obj-not-created": [
+        "augment"
+      ],
+      "mode3-unreachable-integration-tests": [
+        "nathan-code-review"
+      ],
+      "delete-early-return-skips-legacy": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "test-registry-declaration-inconsistent": [
+        "nathan-code-review"
+      ],
+      "integration-tests-race-async-legacy": [
+        "coderabbit"
+      ],
+      "shared-mock-obscures-routing": [
+        "cubic-v2"
+      ],
+      "goroutine-boilerplate-duplication": [
+        "nathan-code-review"
+      ],
+      "goworksum-dup-and-unrelated": [
+        "nathan-code-review"
+      ],
+      "metrics-kind-label-empty": [
+        "nathan-code-review"
+      ],
+      "unit-tests-dont-verify-legacy-write": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-90939",
+    "language": "Go",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 4,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "no-test-for-race-fix": [
+        "nathan-code-review"
+      ],
+      "dev-mode-wasted-rlock": [
+        "nathan-code-review"
+      ],
+      "lock-held-during-io": [
+        "nathan-code-review"
+      ],
+      "return-result-not-global": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-94942",
+    "language": "Go",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 5,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "sql-type-still-advertised": [
+        "nathan-code-review"
+      ],
+      "db-tableslist-unused-shadow": [
+        "nathan-code-review"
+      ],
+      "duckdb-references-remain": [
+        "nathan-code-review"
+      ],
+      "enable-sql-expressions-dead-logic": [
+        "nathan-code-review"
+      ],
+      "no-test-for-disabled-sql": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-97529",
+    "language": "Go",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 13,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "initwatcher-reorder-missed-events": [
+        "nathan-code-review"
+      ],
+      "duplicate-init-error-log": [
+        "augment",
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "stop-no-longer-guards-rpcs": [
+        "cubic-v2"
+      ],
+      "postgres-test-skipped": [
+        "coderabbit",
+        "cubic-v2",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "init-counter-race": [
+        "claude-code"
+      ],
+      "init-shared-err-race": [
+        "claude-code"
+      ],
+      "newresourceserver-error-path-no-cancel": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "postgres-failure-root-cause": [
+        "nathan-code-review"
+      ],
+      "newresourceserver-no-ctx-param": [
+        "nathan-code-review"
+      ],
+      "eager-init-startup-latency": [
+        "nathan-code-review"
+      ],
+      "stale-healthcheck-init-comment": [
+        "nathan-code-review"
+      ],
+      "rv-shortcircuit-todo": [
+        "coderabbit"
+      ],
+      "buildindex-span-ctx-not-propagated": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-103633",
+    "language": "Go",
+    "golden_total": 2,
+    "valid_golden": 1,
+    "invalid_golden": 1,
+    "discovered_clusters": 10,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "denial-key-underscore-collision": [
+        "augment",
+        "coderabbit",
+        "cubic-v2",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "denial-key-raw-uid": [
+        "claude-code"
+      ],
+      "noop-cache-style": [
+        "nathan-code-review"
+      ],
+      "cached-identity-perms-duplication": [
+        "nathan-code-review"
+      ],
+      "denial-cache-unbounded-memory": [
+        "nathan-code-review"
+      ],
+      "deny-test-vacuous": [
+        "nathan-code-review"
+      ],
+      "denial-key-missing-identity-type": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "stale-denial-no-invalidation": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "dead-cachehit-testcase": [
+        "nathan-code-review"
+      ],
+      "perm-cache-metric-mislabel": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-106778",
+    "language": "TypeScript",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 16,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "actions-array-identity": [
+        "nathan-code-review"
+      ],
+      "requireatleastone-false-guarantee": [
+        "nathan-code-review"
+      ],
+      "grafana-string-literal": [
+        "nathan-code-review"
+      ],
+      "federated-immutability-lost": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "leftover-duplicate-comment": [
+        "nathan-code-review"
+      ],
+      "list-view-pause-delete-gated": [
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "missing-returnto": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "stale-ruler-comments": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "new-file-dead-code": [
+        "nathan-code-review"
+      ],
+      "grafana-prom-abilities-alerting-only": [
+        "nathan-code-review"
+      ],
+      "transitional-states-removed": [
+        "nathan-code-review"
+      ],
+      "skiptoken-not-neutral": [
+        "nathan-code-review"
+      ],
+      "no-empty-state-empty-groups": [
+        "nathan-code-review"
+      ],
+      "getgrafanarulekey-stray-brace": [
+        "greptile-v4-1"
+      ],
+      "test-locks-missing-pause-delete": [
+        "nathan-code-review"
+      ],
+      "ruledetails-test-descriptions": [
+        "greptile-v4-1"
+      ]
+    }
+  },
+  {
+    "slug": "grafana-107534",
+    "language": "TypeScript",
+    "golden_total": 1,
+    "valid_golden": 1,
+    "invalid_golden": 0,
+    "discovered_clusters": 7,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "filter-before-interpolate-empty-expr": [
+        "cubic-v2"
+      ],
+      "duplicate-interpolation": [
+        "claude-code",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "auto-var-test-fidelity": [
+        "nathan-code-review"
+      ],
+      "unexplained-call-count": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "interpolated-legend-telemetry": [
+        "nathan-code-review"
+      ],
+      "entry-point-filter-order": [
+        "nathan-code-review"
+      ],
+      "test-mocks-hide-duplication": [
+        "claude-code"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-32918",
+    "language": "Java",
+    "golden_total": 2,
+    "valid_golden": 1,
+    "invalid_golden": 1,
+    "discovered_clusters": 13,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "remove-null-storedidp-npe": [
+        "coderabbit",
+        "greptile-v4-1"
+      ],
+      "no-test-for-login-invalidation-branch": [
+        "nathan-code-review"
+      ],
+      "login-predicate-rebuilt-per-call": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "update-wrapped-vs-raw-predicate-asymmetry": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "remove-always-queries-delegate": [
+        "nathan-code-review"
+      ],
+      "cache-key-naming-convention": [
+        "nathan-code-review"
+      ],
+      "cached-path-loses-alias-ordering": [
+        "nathan-code-review"
+      ],
+      "login-predicate-leaks-into-federated-predicate": [
+        "nathan-code-review"
+      ],
+      "loginfilter-predicate-searchoptions-asymmetry": [
+        "nathan-code-review"
+      ],
+      "cleanup-wrong-alias-byorg": [
+        "claude-code"
+      ],
+      "fallback-path-no-dedup": [
+        "nathan-code-review"
+      ],
+      "single-cache-entry-per-mode-scalability": [
+        "nathan-code-review"
+      ],
+      "getforlogin-contract-pushed-to-callers": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-33832",
+    "language": "Java",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 11,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "asn1-indefinite-length-unhandled": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "crypto-init-classloader": [
+        "augment",
+        "cubic-v2",
+        "greptile-v4-1"
+      ],
+      "concatrs-no-length-validation": [
+        "augment"
+      ],
+      "debugf-format-misuse": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "log-trailing-comma": [
+        "greptile-v4-1"
+      ],
+      "test-shared-default-ec-key": [
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "order-abstract-no-default": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "test-no-real-verify": [
+        "nathan-code-review"
+      ],
+      "equal-order-no-tiebreak": [
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "unused-hamcrest-dep": [
+        "nathan-code-review"
+      ],
+      "bouncycastle-provider-indirection": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-36880",
+    "language": "Java",
+    "golden_total": 3,
+    "valid_golden": 1,
+    "invalid_golden": 2,
+    "discovered_clusters": 15,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "v2-unsupported-token-exchange": [
+        "nathan-code-review"
+      ],
+      "null-all-clients-resource-npe": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "inconsistent-all-clients-lookup": [
+        "nathan-code-review"
+      ],
+      "clientpermissionsv2-public-visibility": [
+        "nathan-code-review"
+      ],
+      "no-upgrade-path-new-resource-type": [
+        "nathan-code-review"
+      ],
+      "default-client-scopes-index": [
+        "augment",
+        "coderabbit"
+      ],
+      "dead-code-clientpermissionsv2": [
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "missing-resourceid-filter": [
+        "nathan-code-review"
+      ],
+      "getresourcename-missing-clients": [
+        "coderabbit",
+        "cubic-v2",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "single-scope-list-lookup": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "test-shared-realm-state": [
+        "nathan-code-review"
+      ],
+      "registerlistener-diff-noise": [
+        "nathan-code-review"
+      ],
+      "require-javadoc-says-returns": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "trailing-whitespace-schema": [
+        "nathan-code-review"
+      ],
+      "duplicated-scope-loop": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-36882",
+    "language": "Java",
+    "golden_total": 1,
+    "valid_golden": 0,
+    "invalid_golden": 1,
+    "discovered_clusters": 12,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "kc-adoc-preview-flag-stale": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "hardcoded-feature-key-string": [
+        "nathan-code-review"
+      ],
+      "exit-codes-untested": [
+        "nathan-code-review"
+      ],
+      "update-compatibility-triggers-reaugmentation": [
+        "nathan-code-review"
+      ],
+      "recreate-exit-code-renumbered": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "feature-disabled-constant-naming": [
+        "nathan-code-review"
+      ],
+      "duplicated-feature-gate": [
+        "nathan-code-review"
+      ],
+      "upgradetest-null-strategy-no-feature": [
+        "cubic-v2",
+        "greptile-v4-1"
+      ],
+      "kc-adoc-duplicate-features-arg": [
+        "nathan-code-review"
+      ],
+      "operator-doc-unimplemented-gate": [
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "exit-code-4-doc-wording": [
+        "augment"
+      ],
+      "check-subcommand-gate-untested": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-37038",
+    "language": "Java",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 19,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "per-group-resource-overrides-all-groups": [
+        "nathan-code-review"
+      ],
+      "javadoc-return-says-stream": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "listener-registration-frozen-at-factory-init": [
+        "nathan-code-review"
+      ],
+      "switch-on-null-resource-type": [
+        "nathan-code-review"
+      ],
+      "test-joingroup-missing-assertion": [
+        "nathan-code-review"
+      ],
+      "apiutil-location-null": [
+        "coderabbit"
+      ],
+      "groupsv2-haspermission-missing-resourceid-guard": [
+        "nathan-code-review"
+      ],
+      "requiremanagemembers-javadoc-wrong-target": [
+        "nathan-code-review"
+      ],
+      "haspermission-null-type-resource-npe": [
+        "augment"
+      ],
+      "getgroupids-empty-set-contract-underspecified": [
+        "nathan-code-review"
+      ],
+      "cleanup-listener-guarded-on-v1-only": [
+        "coderabbit",
+        "cubic-v2"
+      ],
+      "no-migration-for-existing-v2-realms": [
+        "nathan-code-review"
+      ],
+      "double-semicolon-topgroup-field": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "duplicate-201-assertion": [
+        "nathan-code-review"
+      ],
+      "per-group-resources-created-without-type": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "test-gap-allgroups-view-then-write": [
+        "nathan-code-review"
+      ],
+      "test-gap-allgroups-view-members": [
+        "nathan-code-review"
+      ],
+      "trailing-whitespace": [
+        "nathan-code-review"
+      ],
+      "shared-fixture-gains-query-groups": [
+        "coderabbit"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-37429",
+    "language": "i18n/config",
+    "golden_total": 4,
+    "valid_golden": 3,
+    "invalid_golden": 1,
+    "discovered_clusters": 15,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "anchor-error-message-lacks-context": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "multivalued-i18next-placeholders": [
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "diff-substring-bounds": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "runtimeexception-vs-mojoexecutionexception": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "anchor-loop-breaks-early": [
+        "nathan-code-review"
+      ],
+      "hardcoded-dependency-versions": [
+        "claude-code"
+      ],
+      "english-path-derivation": [
+        "nathan-code-review"
+      ],
+      "ka-br-spacing": [
+        "coderabbit"
+      ],
+      "policy-fields-not-static-final": [
+        "claude-code",
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "byte-identical-sanitizer-comparison": [
+        "nathan-code-review"
+      ],
+      "normalizevalue-per-key-exemptions": [
+        "claude-code"
+      ],
+      "no-clean-file-test": [
+        "nathan-code-review"
+      ],
+      "anchor-check-misses-dropped-links": [
+        "cubic-v2"
+      ],
+      "test-assertion-relaxed": [
+        "nathan-code-review"
+      ],
+      "italian-in-lithuanian": [
+        "coderabbit"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-37634",
+    "language": "Java",
+    "golden_total": 4,
+    "valid_golden": 4,
+    "invalid_golden": 0,
+    "discovered_clusters": 12,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "lazy-map-refresh-bypasses-duplicate-check": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "getshortcut-abstract-breaks-third-party-factories": [
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "isaccesstokenid-short-prefix-throws": [
+        "augment"
+      ],
+      "decode-path-has-no-production-caller": [
+        "nathan-code-review"
+      ],
+      "granttype-cached-stale-after-setformparams": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "shortcut-collision-fails-startup": [
+        "nathan-code-review"
+      ],
+      "no-validation-that-shortcut-is-two-chars": [
+        "coderabbit"
+      ],
+      "test-unused-local-ctx": [
+        "nathan-code-review"
+      ],
+      "granttype-never-set-clientcredentials-uma": [
+        "nathan-code-review"
+      ],
+      "granttype-never-set-legacy-tokenexchange-paths": [
+        "nathan-code-review"
+      ],
+      "jti-format-change-external-compat": [
+        "nathan-code-review"
+      ],
+      "missing-release-notes-upgrade-guide": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-38446",
+    "language": "Java",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 24,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "junit-assert-fully-qualified": [
+        "nathan-code-review"
+      ],
+      "no-removal-test-for-recovery-codes": [
+        "nathan-code-review"
+      ],
+      "userstorage-codes-never-consumed": [
+        "augment",
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "remove-stored-credential-not-federated": [
+        "claude-code",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "stale-local-credential-not-removed": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "getcredentials-npe-no-null-check": [
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "disable-credential-type-recovery-missing": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "federated-credential-format-contract": [
+        "augment"
+      ],
+      "provider-lookup-eager": [
+        "nathan-code-review"
+      ],
+      "delayed-authenticator-alias-typo": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "logout-without-completelogin": [
+        "augment"
+      ],
+      "redundant-model-and-raw-codes-params": [
+        "nathan-code-review"
+      ],
+      "test-no-code-reuse-assertion": [
+        "nathan-code-review"
+      ],
+      "log-error-drops-exception": [
+        "nathan-code-review"
+      ],
+      "disableable-types-stream-recovery-missing": [
+        "claude-code"
+      ],
+      "copied-flow-helper-vestigial-delay": [
+        "nathan-code-review"
+      ],
+      "create-recovery-codes-returns-void": [
+        "nathan-code-review"
+      ],
+      "challenge-response-format-undocumented": [
+        "nathan-code-review"
+      ],
+      "federated-consumption-contract-unspecified": [
+        "cubic-v2"
+      ],
+      "test-no-invalid-code-assertion": [
+        "nathan-code-review"
+      ],
+      "log-message-wrong-type-name": [
+        "nathan-code-review"
+      ],
+      "vestigial-test-helper-params": [
+        "nathan-code-review"
+      ],
+      "stray-double-spaces": [
+        "nathan-code-review"
+      ],
+      "test-no-event-assertion": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-40940",
+    "language": "Java",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 9,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "test-typo-groupUuuids": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "test-stop-flag-no-finally": [
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "test-polls-all-groups": [
+        "nathan-code-review"
+      ],
+      "grouputils-parentmodel-npe": [
+        "nathan-code-review"
+      ],
+      "trailing-whitespace": [
+        "nathan-code-review"
+      ],
+      "test-group-leakage": [
+        "nathan-code-review"
+      ],
+      "groupadapter-subgroupsstream-overloads-npe": [
+        "claude-code",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "test-weak-assertion": [
+        "nathan-code-review"
+      ],
+      "unrelated-changes-bundled": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "keycloak-greptile-1",
+    "language": "Java",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 12,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "passkeys-guard-requires-nonnull-user": [
+        "greptile-v4-1"
+      ],
+      "missing-override-annotation": [
+        "nathan-code-review"
+      ],
+      "unused-import-passwordcredentialmodel": [
+        "nathan-code-review"
+      ],
+      "unused-import-nosuchelementexception": [
+        "nathan-code-review"
+      ],
+      "util-browser-package-cycle": [
+        "nathan-code-review"
+      ],
+      "misnamed-without-passkey-test": [
+        "nathan-code-review"
+      ],
+      "authnote-interpretation-duplicated": [
+        "nathan-code-review"
+      ],
+      "test-element-absence-try-catch": [
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "reauth-triggers-untested": [
+        "nathan-code-review"
+      ],
+      "typo-succesful": [
+        "coderabbit"
+      ],
+      "passkey-ui-shown-without-user-credential": [
+        "nathan-code-review"
+      ],
+      "shouldshow-override-npe-precondition": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-67876",
+    "language": "Python",
+    "golden_total": 3,
+    "valid_golden": 2,
+    "invalid_golden": 1,
+    "discovered_clusters": 15,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "customer-domain-round-trip": [
+        "nathan-code-review"
+      ],
+      "oauth-callback-no-exception-handling": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "test-positional-responses-index": [
+        "nathan-code-review"
+      ],
+      "token-exchange-missing-redirect-uri": [
+        "claude-code"
+      ],
+      "test-installation-not-found-wrong-state": [
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "first-install-path-no-identity-check": [
+        "nathan-code-review"
+      ],
+      "hardcoded-state-literal-duplicated": [
+        "nathan-code-review"
+      ],
+      "authorize-url-not-urlencoded": [
+        "augment",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "signature-change-invalidates-inflight-pipelines": [
+        "nathan-code-review"
+      ],
+      "gettext-on-variable": [
+        "nathan-code-review"
+      ],
+      "test-resp-overwritten": [
+        "nathan-code-review"
+      ],
+      "sender-login-vs-id": [
+        "nathan-code-review"
+      ],
+      "duplicate-integration-query": [
+        "nathan-code-review"
+      ],
+      "broad-except-token-parse": [
+        "coderabbit"
+      ],
+      "missing-type-annotations": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-77754",
+    "language": "Python",
+    "golden_total": 4,
+    "valid_golden": 3,
+    "invalid_golden": 1,
+    "discovered_clusters": 11,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "queued-default-evaluated-at-import": [
+        "greptile-v4-1"
+      ],
+      "assignment-source-module-placement": [
+        "nathan-code-review"
+      ],
+      "sync-status-outbound-dead-assignment-source": [
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "no-different-integration-sync-test": [
+        "nathan-code-review"
+      ],
+      "multi-integration-loop-not-guarded": [
+        "nathan-code-review"
+      ],
+      "guard-not-tested-end-to-end": [
+        "nathan-code-review"
+      ],
+      "from-dict-silent-failure": [
+        "nathan-code-review"
+      ],
+      "deassign-guard-untested": [
+        "nathan-code-review"
+      ],
+      "duplicated-test-setup": [
+        "nathan-code-review"
+      ],
+      "rolling-deploy-new-task-kwarg": [
+        "nathan-code-review"
+      ],
+      "weak-queued-assertion": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-80168",
+    "language": "Python",
+    "golden_total": 2,
+    "valid_golden": 2,
+    "invalid_golden": 0,
+    "discovered_clusters": 15,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "no-op-setup-override": [
+        "nathan-code-review"
+      ],
+      "metric-alert-handler-missing-abstract-methods": [
+        "nathan-code-review"
+      ],
+      "unused-detector-type-param": [
+        "nathan-code-review"
+      ],
+      "counter-names-classvar": [
+        "coderabbit"
+      ],
+      "type-param-shadows-builtin": [
+        "nathan-code-review"
+      ],
+      "occurrence-eq-id-only-vacuous-assertions": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "wrong-group-key-in-expected-occurrence": [
+        "cubic-v2",
+        "greptile-v4-1"
+      ],
+      "removed-duplicate-group-key-check": [
+        "nathan-code-review"
+      ],
+      "multi-group-wrong-value-arg": [
+        "augment",
+        "claude-code",
+        "coderabbit"
+      ],
+      "kafka-produce-before-state-commit": [
+        "nathan-code-review"
+      ],
+      "builtins-type-no-comment": [
+        "nathan-code-review"
+      ],
+      "unused-value-param-in-helper": [
+        "coderabbit"
+      ],
+      "hardcoded-project-id-1": [
+        "nathan-code-review"
+      ],
+      "assert-has-calls-allows-extras": [
+        "cubic-v2"
+      ],
+      "stale-todo-stateful-detector": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-80528",
+    "language": "Python",
+    "golden_total": 2,
+    "valid_golden": 1,
+    "invalid_golden": 1,
+    "discovered_clusters": 8,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "docstring-typo-humam-readible": [
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "incident-opens-below-threshold": [
+        "augment",
+        "cubic-v2"
+      ],
+      "new-modules-missing-docstrings": [
+        "nathan-code-review"
+      ],
+      "docstring-example-nonexistent-output": [
+        "nathan-code-review"
+      ],
+      "comment-typo-commits": [
+        "coderabbit"
+      ],
+      "unused-module-loggers": [
+        "nathan-code-review"
+      ],
+      "tests-not-split-with-modules": [
+        "nathan-code-review"
+      ],
+      "list-keys-index-zero": [
+        "coderabbit"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-93824",
+    "language": "Python",
+    "golden_total": 5,
+    "valid_golden": 5,
+    "invalid_golden": 0,
+    "discovered_clusters": 15,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "docstring-missing-max-processes-param": [
+        "nathan-code-review"
+      ],
+      "dead-create-process-for-shard": [
+        "claude-code",
+        "coderabbit",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "flusher-unhealthy-metric-per-shard": [
+        "nathan-code-review"
+      ],
+      "max-flush-segments-per-process": [
+        "nathan-code-review"
+      ],
+      "docstring-one-process-per-shard": [
+        "nathan-code-review"
+      ],
+      "buffer-arg-only-needs-shards": [
+        "nathan-code-review"
+      ],
+      "default-divergence-cli-vs-class": [
+        "nathan-code-review"
+      ],
+      "test-only-asserts-bookkeeping": [
+        "nathan-code-review"
+      ],
+      "claudemd-trailing-blank-line": [
+        "nathan-code-review"
+      ],
+      "isinstance-spawnprocess-kill": [
+        "claude-code"
+      ],
+      "flusher-processes-no-lower-bound": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "claudemd-unrelated-change": [
+        "nathan-code-review"
+      ],
+      "redundant-cluster-memory-query": [
+        "nathan-code-review"
+      ],
+      "dead-process-truthiness-guard": [
+        "nathan-code-review"
+      ],
+      "shard-tag-cardinality": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-95633",
+    "language": "Python",
+    "golden_total": 3,
+    "valid_golden": 2,
+    "invalid_golden": 1,
+    "discovered_clusters": 22,
+    "unclear": {
+      "golden": 0,
+      "candidate": 2
+    },
+    "discovered_detail": {
+      "gap-skipped-after-first-commit": [
+        "nathan-code-review"
+      ],
+      "queue-depth-gauge-per-message": [
+        "nathan-code-review"
+      ],
+      "filtered-payload-decoder-assert": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "worker-transaction-name": [
+        "nathan-code-review"
+      ],
+      "shutdown-does-not-drain": [
+        "augment",
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "commit-from-background-thread": [
+        "nathan-code-review"
+      ],
+      "error-handling-test-inconsistent": [
+        "cubic-v2"
+      ],
+      "queue-depth-gauge-tag-collision": [
+        "nathan-code-review"
+      ],
+      "hash-distribution-test-flake": [
+        "nathan-code-review"
+      ],
+      "offset-tracker-partition-lifecycle": [
+        "nathan-code-review"
+      ],
+      "pool-dead-after-rebalance": [
+        "augment",
+        "claude-code",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "test-base-literal-not-widened": [
+        "greptile-v4-1"
+      ],
+      "nested-sentry-transaction": [
+        "nathan-code-review"
+      ],
+      "test-cleanup-except-pass": [
+        "coderabbit"
+      ],
+      "stats-assert-race": [
+        "nathan-code-review"
+      ],
+      "non-brokervalue-offsets-dropped": [
+        "nathan-code-review"
+      ],
+      "tests-in-wrong-class": [
+        "nathan-code-review"
+      ],
+      "wait-until-empty-qsize-only": [
+        "greptile-v4-1"
+      ],
+      "workitem-message-unused": [
+        "nathan-code-review"
+      ],
+      "commit-thread-stops-before-drain": [
+        "nathan-code-review"
+      ],
+      "no-backpressure-unbounded-queues": [
+        "nathan-code-review"
+      ],
+      "complete-offset-on-error": [
+        "augment"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-greptile-1",
+    "language": "Python",
+    "golden_total": 4,
+    "valid_golden": 3,
+    "invalid_golden": 1,
+    "discovered_clusters": 11,
+    "unclear": {
+      "golden": 0,
+      "candidate": 0
+    },
+    "discovered_detail": {
+      "no-tests": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "value-from-cursor-not-datetime": [
+        "claude-code",
+        "coderabbit",
+        "greptile-v4-1"
+      ],
+      "base-paginator-clamp": [
+        "nathan-code-review"
+      ],
+      "negative-offset-branch-broken": [
+        "nathan-code-review"
+      ],
+      "get-result-duplication": [
+        "nathan-code-review"
+      ],
+      "formatting-lint": [
+        "nathan-code-review"
+      ],
+      "misleading-comments": [
+        "nathan-code-review"
+      ],
+      "weak-admin-gate": [
+        "nathan-code-review"
+      ],
+      "param-not-validated": [
+        "nathan-code-review"
+      ],
+      "cursors-comment-misleading": [
+        "coderabbit"
+      ],
+      "no-perf-evidence": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-greptile-2",
+    "language": "Python",
+    "golden_total": 3,
+    "valid_golden": 3,
+    "invalid_golden": 0,
+    "discovered_clusters": 15,
+    "unclear": {
+      "golden": 0,
+      "candidate": 1
+    },
+    "discovered_detail": {
+      "weak-admin-gate": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "member-none-attributeerror": [
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "zunionstore-aggregate-sum": [
+        "augment",
+        "nathan-code-review"
+      ],
+      "optimized-pagination-param-unvalidated": [
+        "nathan-code-review"
+      ],
+      "formatting-trailing-whitespace": [
+        "nathan-code-review"
+      ],
+      "root-span-evicted-hrs-stale": [
+        "nathan-code-review"
+      ],
+      "set-to-zset-wrongtype-migration": [
+        "nathan-code-review"
+      ],
+      "hardcoded-1000-vs-max-segment-spans": [
+        "augment",
+        "greptile-v4-1",
+        "nathan-code-review"
+      ],
+      "optimized-value-from-cursor-no-datetime": [
+        "claude-code"
+      ],
+      "redirect-depth-cap-lowered": [
+        "nathan-code-review"
+      ],
+      "base-paginator-negative-offset": [
+        "augment"
+      ],
+      "base-paginator-silent-clamp-sitewide": [
+        "nathan-code-review"
+      ],
+      "stale-lua-args-doc": [
+        "greptile-v4-1"
+      ],
+      "silent-truncation-no-metric": [
+        "nathan-code-review"
+      ],
+      "no-test-coverage": [
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-greptile-3",
+    "language": "Python",
+    "golden_total": 3,
+    "valid_golden": 1,
+    "invalid_golden": 2,
+    "discovered_clusters": 18,
+    "unclear": {
+      "golden": 0,
+      "candidate": 3
+    },
+    "discovered_detail": {
+      "no-tests-for-behaviour-changes": [
+        "nathan-code-review"
+      ],
+      "upsampled-count-result-type-mismatch": [
+        "claude-code"
+      ],
+      "upsampled-count-not-private": [
+        "cubic-v2"
+      ],
+      "ifnull-removed-undercount": [
+        "nathan-code-review"
+      ],
+      "invalidate-fn-dead-code": [
+        "nathan-code-review"
+      ],
+      "stray-sentry-repo-gitlink": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "allowlist-membership-linear-scan": [
+        "coderabbit"
+      ],
+      "alias-input-not-matched": [
+        "greptile-v4-1"
+      ],
+      "error-query-substring-match": [
+        "coderabbit"
+      ],
+      "alias-output-serialization": [
+        "augment"
+      ],
+      "trailing-whitespace": [
+        "nathan-code-review"
+      ],
+      "hash-cache-key-debuggability": [
+        "nathan-code-review"
+      ],
+      "cache-key-not-invalidatable": [
+        "nathan-code-review"
+      ],
+      "unused-lambda-arg": [
+        "coderabbit"
+      ],
+      "comments-contradict-code": [
+        "nathan-code-review"
+      ],
+      "cache-perf-rationale-unfounded": [
+        "nathan-code-review"
+      ],
+      "unused-organization-param": [
+        "coderabbit"
+      ],
+      "transform-duplicated-three-branches": [
+        "coderabbit",
+        "nathan-code-review"
+      ]
+    }
+  },
+  {
+    "slug": "sentry-greptile-5",
+    "language": "TypeScript",
+    "golden_total": 3,
+    "valid_golden": 2,
+    "invalid_golden": 1,
+    "discovered_clusters": 33,
+    "unclear": {
+      "golden": 0,
+      "candidate": 4
+    },
+    "discovered_detail": {
+      "age-timestamp-truthy-check": [
+        "augment",
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "age-timestamp-neither-present": [
+        "claude-code",
+        "nathan-code-review"
+      ],
+      "env-info-per-issue-snuba-queries": [
+        "nathan-code-review"
+      ],
+      "test-requests-post-no-timeout": [
+        "coderabbit"
+      ],
+      "fixture-meta-missing-id": [
+        "coderabbit"
+      ],
+      "wrong-diff-range-bundled-commits": [
+        "nathan-code-review"
+      ],
+      "analytics-before-feature-check": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "error-breadcrumb-timestamp-units": [
+        "nathan-code-review"
+      ],
+      "falsy-cell-truthy-check": [
+        "augment",
+        "coderabbit"
+      ],
+      "format-comment-subtitle-dead": [
+        "nathan-code-review"
+      ],
+      "pr-comment-extra-blank-lines": [
+        "nathan-code-review"
+      ],
+      "get-environment-info-broad-except": [
+        "nathan-code-review"
+      ],
+      "hidden-attributes-only-when-searching": [
+        "claude-code",
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "table-widget-flag-empty-render": [
+        "augment",
+        "coderabbit",
+        "cubic-v2",
+        "nathan-code-review"
+      ],
+      "usequery-drops-retry-false": [
+        "nathan-code-review"
+      ],
+      "disable-error-fetching-negated-name": [
+        "nathan-code-review"
+      ],
+      "truncate-title-exceeds-max": [
+        "augment",
+        "coderabbit"
+      ],
+      "culprit-removed-from-pr-comment": [
+        "nathan-code-review"
+      ],
+      "unregistered-feature-flag": [
+        "nathan-code-review"
+      ],
+      "get-request-data-sorts-in-place": [
+        "nathan-code-review"
+      ],
+      "preprod-star-import-no-all": [
+        "nathan-code-review"
+      ],
+      "poolmap-exceptions-swallowed": [
+        "nathan-code-review"
+      ],
+      "batch-rejected-on-single-invalid-report": [
+        "nathan-code-review"
+      ],
+      "attributes-can-be-undefined": [
+        "nathan-code-review"
+      ],
+      "stories-duplicate-the-typo": [
+        "coderabbit"
+      ],
+      "fetch-error-details-broad-except": [
+        "coderabbit",
+        "nathan-code-review"
+      ],
+      "null-segment-guard-untested": [
+        "nathan-code-review"
+      ],
+      "segements-typo": [
+        "coderabbit"
+      ],
+      "null-max-segment-orphan-blobs": [
+        "nathan-code-review"
+      ],
+      "tests-dropped-content-type-and-logger-assert": [
+        "nathan-code-review"
+      ],
+      "grouping-variant-tooltip-text-lost": [
+        "nathan-code-review"
+      ],
+      "unbounded-nodestore-fanout": [
+        "nathan-code-review"
+      ],
+      "dead-nested-handle-regex-match": [
+        "nathan-code-review"
+      ]
+    }
+  }
+]

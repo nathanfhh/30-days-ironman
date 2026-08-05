@@ -1,0 +1,7 @@
+[
+  "UsersController#create now returns user.errors.to_hash which could potentially leak internal validation details",
+  "BlockedEmail.should_block? performs a database write (updating match_count and last_match_at) during a validation callback, which is an unusual side-effect pattern that could have subtle implications when validation is called without intending to persist",
+  "No updated specs for the changes to UsersController#create",
+  "No updated specs for the modified User model validations",
+  "email_validator.rb file is missing a trailing newline"
+]

@@ -1,0 +1,13 @@
+[
+  "Icon-only d-button elements (save, cancel, edit, delete) lack accessible labels for screen readers - need title attributes with i18n keys that don't currently exist in locale files",
+  "obj[k].map in store.js.es6 will throw if API returns null or non-array for *_ids fields - needs Array.isArray guard before calling map",
+  "EmbeddableHost.where(id:).first returns nil causing NoMethodError in update/destroy actions when invalid id is passed - need find_by with explicit guard",
+  "Host validation regex caps TLDs at 5 characters, rejecting valid domains like .museum or .community - should allow up to 63 characters",
+  "self.host.sub! in before_validation raises on nil host instead of returning validation error - needs nil guard",
+  "Migration execute(...)[0] will raise IndexError if embed_category or uncategorized_category_id queries return no rows - needs presence checks",
+  "Migration backfill interpolates host strings directly into SQL without escaping and doesn't filter blank lines - needs connection.quote and blank check",
+  "Fabricator(:private_category) after_build uses update! which persists even for Fabricate.build, and transients[:group].id raises if group not passed - should set attribute directly and guard group usage",
+  "Extra blank lines in spec files violate RuboCop layout rules (Layout/EmptyLinesAroundBlockBody)",
+  "Typo in spec context description: 'emeddable' should be 'embeddable'",
+  "Test requests fruit id 2 but mock always returns fruit id 1 - test passes accidentally due to matching color_ids"
+]

@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-80329",
+  "tool": "greptile-v4-1",
+  "n_golden": 1,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "log.Error used for normal-path informational messages flooding error logs — the same log-level misuse the golden flags."
+    }
+  ]
+}

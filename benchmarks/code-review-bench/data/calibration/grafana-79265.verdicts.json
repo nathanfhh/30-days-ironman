@@ -1,0 +1,275 @@
+{
+  "slug": "grafana-79265",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "device-limit-test-missing-update-path",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database_test.go:51-70",
+      "reason": "TestIntegrationBeyondDeviceLimit only asserts that a second, new device ID gets ErrDeviceLimitReached; it never re-tags the already-stored '32mdo31deeqwes' to show updateDevice still succeeds past the limit."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "missing-created-at-in-test",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database_test.go:19-24,77-82",
+      "reason": "The two pre-existing integration tests in the same file build Device literals without CreatedAt and pass on the same insert path, so the omission is the file's established convention and does not trip a constraint or default-value problem."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Medium",
+      "cluster": "stale-wire-registration",
+      "evidence": "pkg/server/wire.go:374-375",
+      "reason": "wire.go still registers anonstore.ProvideAnonDBStore (now (db.DB, int64)) and the AnonStore bind while nothing in the graph consumes AnonStore anymore; whether wire gen hard-fails is not verifiable without the toolchain, but the registration is definitely stale."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "not_real",
+      "confidence": 0.95,
+      "severity": null,
+      "cluster": "exec-signature-compile",
+      "evidence": "pkg/util/xorm/session_raw.go:208",
+      "reason": "go.mod replaces xorm.io/xorm with ./pkg/util/xorm, whose Session.Exec is `Exec(sqlOrArgs ...any)`; the query-first splat is exactly the pattern the pre-existing CreateOrUpdateDevice already uses at database.go:150-151, so it compiles."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "bootconfig-undefined-type",
+      "evidence": "packages/grafana-runtime/src/config.ts:97",
+      "reason": "`anonymousDeviceLimit = undefined;` on a class property under strict mode infers the type `undefined` (no evolving-any for properties), so the field can never hold a number in typed code; the file's own `loginError: string | undefined = undefined` two dozen lines up shows the intended annotation. It still satisfies the interface, so the 'required by GrafanaConfig' framing overstates it."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "update-window-uses-device-updatedat",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:80-82 vs 110",
+      "reason": "CreateOrUpdateDevice derives its count window from time.Now().UTC() while updateDevice derives its BETWEEN bounds from the caller-supplied device.UpdatedAt; they coincide today only because TagDevice sets UpdatedAt to time.Now() (impl.go:141), which is a caller contract nowhere stated."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "missing-config-defaults-and-docs",
+      "evidence": "conf/defaults.ini:581-589; pkg/setting/setting.go:686-698",
+      "reason": "device_limit is absent from the [auth.anonymous] block in defaults.ini/sample.ini, and applyEnvVariableOverrides only walks keys that already exist in the parsed ini, so GF_AUTH_ANONYMOUS_DEVICE_LIMIT is silently ignored and MustInt64(0) leaves the limit off."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "cache-set-before-db-write",
+      "evidence": "pkg/services/anonymous/anonimpl/impl.go:83-95",
+      "reason": "tagDeviceUI calls localCache.SetDefault(key, ...) before CreateOrUpdateDevice and does not evict on error, so the retry inside the 29-minute TTL returns nil at the Get short-circuit, TagDevice reports success, and the rejected device authenticates without ever being written to anon_device."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "duplicated-30day-window-const",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:16; pkg/services/anonymous/anonimpl/api/api.go:18",
+      "reason": "Both files declare an unexported `anonymousDeviceExpiration = 30 * 24 * time.Hour`; they are independent package-level constants with no shared source, so one can be changed without the other."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "no-device-id-header-bypass",
+      "evidence": "pkg/services/anonymous/anonimpl/impl.go:118-122",
+      "reason": "TagDevice returns nil immediately when the X-Grafana-Device-Id header is absent, so such requests are neither counted nor rejected; the header is set by the frontend runtime, so document loads and any non-browser client are unaffected by device_limit."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "stale-wire-registration",
+      "evidence": "pkg/server/wire.go:43,374-375; pkg/services/anonymous/anonimpl/impl.go:36-43",
+      "reason": "The cited lines and import are exactly as described and are now dead — ProvideAnonymousDeviceService takes db.DB and builds the store itself. The int64 dependency only breaks generation if wire has to resolve it, and nothing in the graph asks for AnonStore any more, so the 'must be removed or wire gen fails' consequence is probably too strong; the stale registration itself is real."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "duplicated-30day-window-const",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:16,110; pkg/services/anonymous/anonimpl/api/api.go:18,71",
+      "reason": "Same duplicated constant; api.go uses its copy for the admin listing window and database.go uses its copy for the count/update window, so drift would silently desynchronise what admins see from what is enforced."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "device-limit-test-missing-update-path",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database_test.go:51-70; database.go:72-103",
+      "reason": "The only new test asserts the rejection branch; updateDevice's documented purpose — letting an already-known device keep updating once the limit is hit — has no coverage."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "not-errutil-error",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:18; pkg/services/contexthandler/model/model.go:117-129; pkg/middleware/auth.go:37-50",
+      "reason": "ErrDeviceLimitReached is a plain fmt.Errorf, so writeErrOrFallback's errors.As(err, &errutil.Error{}) misses and the API path emits a bare 401 'Unauthorized' while browsers get redirected to /login; every other authn client (api_key.go, basic.go, jwt.go, oauth.go) uses errutil with a public message."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "bootconfig-undefined-type",
+      "evidence": "packages/grafana-runtime/src/config.ts:97; packages/grafana-data/src/types/config.ts:200",
+      "reason": "A repo-wide grep for anonymousDeviceLimit outside node_modules returns only the two declarations plus the Go side — no frontend reads it — and the boot-config property does infer as bare `undefined`."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "sync-write-on-auth-path",
+      "evidence": "pkg/services/anonymous/anonimpl/client.go:43-49 (diff removes the goroutine and 2-minute background context)",
+      "reason": "Tagging is now inline in Authenticate for every deployment regardless of device_limit; the local cache limits it to one write per device per 29 minutes rather than literally every request, but the write — plus an extra COUNT when a limit is set — is now on the request path."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "not_real",
+      "confidence": 0.55,
+      "severity": null,
+      "cluster": "auth-fails-at-limit",
+      "evidence": "pkg/services/anonymous/anonimpl/client.go:43-48",
+      "reason": "Every sentence is accurate, but it restates the deliberate purpose of the change — refusing anonymous auth for a new device once device_limit is reached is the feature, not a defect, and nothing further is asserted about it."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "missing-config-defaults-and-docs",
+      "evidence": "conf/defaults.ini:581-589; conf/sample.ini:570-578; grep for device_limit under docs/ and conf/ returns nothing",
+      "reason": "The new key exists only in setting.go:1654; it appears in neither shipped ini nor the configuration docs."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "missing-client-authenticate-test",
+      "evidence": "pkg/services/anonymous/anonimpl/client_test.go:19-70",
+      "reason": "TestAnonymous_Authenticate only varies the org lookup; anonDeviceService is always a plain anontest fake that returns nil, so neither the ErrDeviceLimitReached-fails branch nor the log-and-continue branch is exercised."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "cache-set-before-db-write",
+      "evidence": "pkg/services/anonymous/anonimpl/impl.go:83-95",
+      "reason": "Same ordering defect: the cache key is written before the store call and never rolled back on ErrDeviceLimitReached, so the retry is waved through and the device is never recorded in anon_device."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "cache-set-before-db-write",
+      "evidence": "pkg/services/anonymous/anonimpl/impl.go:87,93; client.go:43-46",
+      "reason": "Correct: propagating the error only blocks the first request, because the cache entry set at impl.go:87 makes the next call return nil from the Get short-circuit at line 83."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "interface-slice-style",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:80,84 vs 59,120,150",
+      "reason": "updateDevice is the only place in the file using []interface{}; ListDevices and CreateOrUpdateDevice both use []any."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "int64-zero-vs-undefined-serialization",
+      "evidence": "pkg/api/dtos/frontend_settings.go:195; packages/grafana-data/src/types/config.ts:200",
+      "reason": "The Go field has no omitempty and MustInt64(0) defaults it, so the payload always carries anonymousDeviceLimit: 0; the TS type advertising `undefined` describes a value the backend never sends."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "cache-set-before-db-write",
+      "evidence": "pkg/services/anonymous/anonimpl/impl.go:83-95",
+      "reason": "Accurate description of the ordering and of the two viable fixes (populate the cache only after a successful write, or delete the key on error)."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "cache-set-before-db-write",
+      "evidence": "pkg/services/anonymous/anonimpl/impl.go:87,93",
+      "reason": "SetDefault is on line 87, CreateOrUpdateDevice on line 93; nothing evicts the key when the store returns ErrDeviceLimitReached."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "stale-wire-registration",
+      "evidence": "pkg/services/anonymous/anonimpl/impl.go:36-43,61; pkg/server/wire.go:374-375; impl_test.go:113-115",
+      "reason": "The service now constructs anonstore.ProvideAnonDBStore itself from db.DB and cfg, wire.go's registration is left behind unusable, and the tests confirm the seam is gone — they had to switch from injecting a store to injecting the raw db.DB."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "duplicated-30day-window-const",
+      "evidence": "anonstore/database.go:16; api/api.go:18; anonimpl/impl.go:25,70; pkg/api/admin.go:67",
+      "reason": "The 30-day literal appears in four anon-related places under two names (anonymousDeviceExpiration twice, thirtyDays in impl.go and again as a local in admin.go), covering enforcement, admin listing and both usage-stat counts."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "misleading-error-on-zero-rows",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:95-97",
+      "reason": "updateDevice maps any rowsAffected == 0 onto ErrDeviceLimitReached — including a known device whose row is outside the BETWEEN window, and on MySQL a matched row whose column values are unchanged, which reports 0 changed rows and would fail auth for an already-tracked device."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "count-then-insert-race",
+      "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:109-118,149-153",
+      "reason": "The CountDevices check and the upsert run in two separate WithDbSession calls with no transaction or lock, so concurrent requests can all observe count < limit and insert, overshooting the limit."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "request-context-cancellation",
+      "evidence": "pkg/services/anonymous/anonimpl/client.go:43; pkg/services/contexthandler/contexthandler.go:116; impl.go:87",
+      "reason": "Authenticate now passes the request-scoped ctx (contexthandler builds it from reqContext.Req.Context()) where the removed goroutine used context.Background() with a 2-minute timeout, so a disconnect aborts the write while the cache key set at impl.go:87 already claims the device is tagged."
+    }
+  ]
+}

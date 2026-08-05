@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-7",
+  "tool": "augment",
+  "n_golden": 3,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.85,
+      "reasoning": "Same issue: light-theme colour moved from $primary 30% to 70% by the dark-light-choose conversion."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "Same issue: .group-member-info .name light-theme value changed from $primary 30% to 50%, breaking the keep-light/adjust-dark pattern."
+    }
+  ]
+}

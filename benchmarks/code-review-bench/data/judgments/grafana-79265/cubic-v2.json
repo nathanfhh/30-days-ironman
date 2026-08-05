@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-79265",
+  "tool": "cubic-v2",
+  "n_golden": 5,
+  "n_candidates": 5,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 2, "confidence": 0.9,
+     "reasoning": "Both describe the count-then-insert TOCTOU race allowing concurrent requests to pass the device-count check and exceed the limit."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.85,
+     "reasoning": "Both describe ErrDeviceLimitReached now propagating out to Authenticate and blocking anonymous authentication entirely, instead of the prior non-blocking behavior."},
+    {"golden_index": 3, "candidate_index": 3, "confidence": 0.9,
+     "reasoning": "Both point out that rowsAffected == 0 / no rows updated does not necessarily mean the device limit was reached — the device may simply not exist or not match the window."}
+  ]
+}

@@ -1,0 +1,7 @@
+[
+  "deleteCacheMutation does not invalidate the connectedCalendars query on success, so the dropdown continues to show the old cacheUpdatedAt timestamp until the user manually refreshes",
+  "Throwing a bare Error instead of TRPCError bypasses tRPC's error serialization - the client receives a generic INTERNAL_SERVER_ERROR (500) instead of the intended NOT_FOUND/FORBIDDEN status",
+  "CalendarCacheRepository is instantiated directly, bypassing the CalendarCache factory that checks the calendar-cache feature flag and returns CalendarCacheRepositoryMock when the feature is disabled",
+  "Hardcoded 'en-US' locale for date formatting will format dates in US English for all users regardless of their browser or profile locale",
+  "updateManyByCredentialId called with empty data object {} means no application-level fields are changed, only an automatic updatedAt bump which is not surfaced in the frontend"
+]

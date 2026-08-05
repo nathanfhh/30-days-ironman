@@ -1,0 +1,5 @@
+[
+  "Bug: `config` is copied and updated with the human-readable `schedule_type`, but the return dict references `monitor_environment.monitor.config` (the original) instead of the local `config`. The `schedule_type` transformation is lost.",
+  "Require at least `failure_issue_threshold` check-ins before opening the incident.",
+  "The `failed_checkin: MonitorCheckIn` parameter forces the caller to re-query `MonitorCheckIn` objects from the database even though `previous_checkins` already contains the relevant check-in data and `monitor_environment` is already known at the call site. Consider passing `monitor_environment` and `trace_id` directly instead of requiring a full model fetch."
+]

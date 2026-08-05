@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-8",
+  "tool": "greptile-v4-1",
+  "n_golden": 3,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.8,
+      "reasoning": "Same off-by-one: totalPages overcounts on exact division, showing a phantom page with no results."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Same issue: remove_member spec uses PUT although the route is delete."
+    }
+  ]
+}

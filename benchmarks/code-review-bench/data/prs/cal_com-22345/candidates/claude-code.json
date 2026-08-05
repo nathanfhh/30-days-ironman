@@ -1,0 +1,5 @@
+[
+  "SQL operator precedence bug: buildOrgAuthorizationCondition and buildTeamAuthorizationCondition produce top-level OR expressions without outer parentheses. When getBaseConditions() returns these directly (line 75, no filters), callers composing with AND get incorrect precedence - AND binds tighter than OR, so team bookings bypass additional filters entirely. Fix: wrap the return at line 75 with parens around authConditions, or add outer parens in the reduce calls.",
+  "Dead code: since authConditions is always a Prisma.Sql object (never null), the else if (filterConditions) and else branches (lines 76-80) are unreachable dead code",
+  "Constructor parameter type was changed from InsightsBookingServiceOptions (discriminated union requiring teamId when scope: 'team') to InsightsBookingServicePublicOptions (flat type with teamId?: number), which loses compile-time enforcement that teamId is provided for team scope. While runtime zod validation catches this, the failure mode is silent empty results instead of a compile error. This is inconsistent with InsightsRoutingService which still uses the strict discriminated union type."
+]

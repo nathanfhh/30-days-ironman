@@ -1,0 +1,32 @@
+{
+  "slug": "cal_com-14740",
+  "tool": "augment",
+  "n_golden": 5,
+  "n_candidates": 6,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.8,
+      "reasoning": "Covers the golden's case-sensitivity blacklist bypass as part of the same uniqueGuests comment."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.98,
+      "reasoning": "Both say && between isTeamAdmin and isTeamOwner wrongly requires both roles."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 2,
+      "confidence": 0.9,
+      "reasoning": "Both say sendAddGuestsEmails uses the raw input rather than the actually-added filtered list, misclassifying new vs existing attendees."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 1,
+      "confidence": 0.85,
+      "reasoning": "Covers the golden's point that uniqueGuests does not de-duplicate the incoming guests array."
+    }
+  ]
+}

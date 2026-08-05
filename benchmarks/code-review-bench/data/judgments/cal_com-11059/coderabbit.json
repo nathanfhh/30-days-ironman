@@ -1,0 +1,44 @@
+{
+  "slug": "cal_com-11059",
+  "tool": "coderabbit",
+  "n_golden": 5,
+  "n_candidates": 19,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 6,
+      "confidence": 0.95,
+      "reasoning": "Both say the placeholder 'refresh_token' string overwrites valid refresh tokens and breaks future refreshes."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 5,
+      "confidence": 0.95,
+      "reasoning": "Both say [z.string().toString()] yields a literal key so real token payloads fail validation."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 18,
+      "confidence": 0.9,
+      "reasoning": "Both say the entire parseRefreshTokenResponse wrapper is stored as the credential key instead of the parsed data."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 7,
+      "confidence": 0.9,
+      "reasoning": "Both say refreshOAuthTokens returns a Response when sharing is enabled while callers expect a .data-bearing object."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 14,
+      "confidence": 0.6,
+      "reasoning": "Another of the 'several callers' the golden generalizes over: zohocrm expects an AxiosResponse .data but may receive a fetch Response."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 7,
+      "confidence": 0.75,
+      "reasoning": "Same defect stated in the golden's .data terms: Response objects have no .data property for callers to read."
+    }
+  ]
+}

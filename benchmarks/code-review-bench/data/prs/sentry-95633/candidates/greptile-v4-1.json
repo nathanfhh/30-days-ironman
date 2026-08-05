@@ -1,0 +1,5 @@
+[
+  "decode_payload asserts not isinstance(payload, FilteredPayload), but SimpleQueueProcessingStrategy passes FilteredPayload messages to the decoder expecting None back - this causes AssertionError for filtered messages in thread-queue-parallel mode, which gets caught by broad except, logs spurious error, and silently discards the record by completing+committing the offset",
+  "wait_until_empty only checks qsize() which counts items in queue, but workers dequeue items before processing - queue can read as empty while workers are still executing, causing shutdown path to proceed before in-flight items finish and potentially skip complete_offset calls leaving offsets uncommitted",
+  "strategy_processing_mode Literal type annotation in test base class not updated to include 'thread-queue-parallel', so subclasses using the new mode would be flagged by type checker"
+]

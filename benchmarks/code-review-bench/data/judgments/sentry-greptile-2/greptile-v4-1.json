@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-greptile-2",
+  "tool": "greptile-v4-1",
+  "n_golden": 3,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.5,
+      "reasoning": "Candidate describes a generic negative-slicing crash tied to the superuser/global-access cursor path, which best matches the OptimizedCursorPaginator branch rather than the separate BasePaginator instance; location is not explicit so confidence is capped."
+    }
+  ]
+}

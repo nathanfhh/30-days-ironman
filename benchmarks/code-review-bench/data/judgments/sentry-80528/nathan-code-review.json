@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-80528",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 8,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both say get_monitor_environment_context computes a display-string copy of config but the returned dict still uses the original monitor.config, so the conversion has no effect."}
+  ]
+}

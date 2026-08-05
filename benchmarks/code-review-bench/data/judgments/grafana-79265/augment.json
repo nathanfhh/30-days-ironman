@@ -1,0 +1,10 @@
+{
+  "slug": "grafana-79265",
+  "tool": "augment",
+  "n_golden": 5,
+  "n_candidates": 2,
+  "matches": [
+    {"golden_index": 3, "candidate_index": 1, "confidence": 0.7,
+     "reasoning": "Both flag that treating RowsAffected()==0 as ErrDeviceLimitReached is unreliable/misleading, just citing different scenarios that trigger the false signal."}
+  ]
+}

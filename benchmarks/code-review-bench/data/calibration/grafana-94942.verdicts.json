@@ -1,0 +1,104 @@
+{
+  "slug": "grafana-94942",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "sql-type-still-advertised",
+      "evidence": "public/app/features/expressions/types.ts:66-76, pkg/expr/query.types.json:542-556, pkg/expr/query.go:31",
+      "reason": "The frontend still lists ExpressionQueryType.sql (filtered only on config.featureToggles.sqlExpressions) and query.types.json still declares the 'sql' query type, while pkg/expr/reader.go:129-132 now rejects every sql query, so a user with the toggle on can still pick SQL and only gets an error at query time."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "docstring-coverage-threshold",
+      "evidence": ".golangci.toml (linters list; issues.exclude-rules for ST1000/ST1020/ST1021)",
+      "reason": "No such requirement exists in this repo: golangci-lint runs with revive at confidence 3 and explicitly excludes stylecheck ST1000/ST1020/ST1021, the rules that demand comments on exported types and functions, and there is no docstring-coverage gate of any percentage anywhere in the config."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "db-tableslist-unused-shadow",
+      "evidence": "pkg/expr/sql/db.go:12, pkg/expr/sql/parser.go:22",
+      "reason": "Grepping the whole tree for TablesList shows only the declaration of (*DB).TablesList and no call site; the only callers (sql_command.go:30, parser_test.go) all target the package-level sql.TablesList declared in the same package, so the new method is dead and its name collides with the existing free function."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "stub-db-not-implemented",
+      "evidence": "pkg/expr/sql/db.go:12-25, pkg/expr/sql/parser.go:26, pkg/expr/sql_command.go:100",
+      "reason": "Accurate: all three DB methods return errors.New(\"not implemented\"), and both live callers hit them — parser.go:26 turns it into 'error serializing sql: not implemented' and sql_command.go:100 into a raw response error, so the disablement surfaces as an opaque internal string rather than a user-facing message."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "duckdb-references-remain",
+      "evidence": "pkg/expr/query.go:30, public/app/features/expressions/types.ts:69, pkg/services/featuremgmt/registry.go:1084, docs/sources/setup-grafana/configure-grafana/feature-toggles/index.md:187",
+      "reason": "The go-duck dependency and its import are gone from go.mod and from parser.go/sql_command.go, yet the comment '// SQL query via DuckDB', the toggle description 'Enables using SQL and DuckDB functions as Expressions.' (registry.go, toggles_gen.go/json, docs) and the frontend description 'Supports Aggregate/Analytics functions from DuckDB' all remain; parser.go:23-25 also still names its variable duckDB and builds a DuckDB-only json_serialize_sql statement."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "enable-sql-expressions-dead-logic",
+      "evidence": "pkg/expr/reader.go:194-200",
+      "reason": "The function named enableSqlExpressions neither enables anything nor reports the toggle state — it returns false on both branches — and the local is bound to the negation (`enabled := !IsEnabledGlobally(...)`), so the name and the value it holds are inverted relative to each other."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "no-test-for-disabled-sql",
+      "evidence": "pkg/expr/reader_test.go (only TestReaderReduceMode), pkg/expr/sql_command_test.go:9, pkg/expr/sql/parser_test.go:10",
+      "reason": "`git show --stat 6e6ed734` shows the change touches only reader.go, sql/db.go, sql/parser.go and sql_command.go with no test file; reader_test.go contains just TestReaderReduceMode and never exercises QueryTypeSQL, and the pre-existing SQL tests are all t.Skip()'d, so nothing asserts that a sql query now returns an error."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "disablement-permanence-intent",
+      "evidence": "pkg/services/featuremgmt/registry.go:1083, pkg/expr/reader.go:195",
+      "reason": "Nothing in the code settles this: the sqlExpressions toggle is still registered and enableSqlExpressions still reads it (though it ignores the result), which hints at a planned re-enable, but whether the disablement is temporary is a product decision. The PR description, linked issue, or the author's answer would settle it."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "gomod-trim-verification",
+      "evidence": "go.mod, go.sum, go.work.sum (diff hunks); no go-duck import remains under pkg/",
+      "reason": "What I can check by reading holds up — no source file imports scottlepp/go-duck or the dropped transitive deps any more — but confirming that the go.sum/go.work.sum trimming is exactly what the toolchain produces needs a real `go mod tidy`/`make update-workspace` run, and this environment has no module cache and no network. Running `go mod tidy -diff` with a populated cache would settle it."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "enable-sql-expressions-dead-logic",
+      "evidence": "pkg/expr/reader.go:194-200, pkg/expr/reader.go:129-132",
+      "reason": "Both branches of enableSqlExpressions return false, so the IsEnabledGlobally(FlagSqlExpressions) call and the if are dead and QueryTypeSQL always returns 'sqlExpressions is not implemented' regardless of the toggle; the description of the behaviour is exactly right, even if unconditional disablement is what the commit intended."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "legacy-path-gate-bypass",
+      "evidence": "pkg/expr/nodes.go:159-160, pkg/expr/sql_command.go:30, pkg/expr/sql/parser.go:22-30, pkg/expr/sql/db.go:16-18",
+      "reason": "The routing half is right (with FlagExpressionParser off, buildCMDNode reaches TypeSQL -> UnmarshalSQLCommand without touching enableSqlExpressions), but following it to the end shows nothing is bypassed: UnmarshalSQLCommand calls NewSQLCommand, which calls sql.TablesList, which calls NewInMemoryDB().RunCommands and now always gets 'not implemented', so construction fails with a BadRequest and no SQL is ever executed — and SQLCommand.Execute would likewise dead-end at the stubbed QueryFramesInto."
+    }
+  ]
+}

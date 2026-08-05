@@ -1,0 +1,97 @@
+{
+  "slug": "keycloak-37429",
+  "issues": [
+    {
+      "text": "The error-invalid-multivalued-size message in the account/admin console JS bundles (messages_en.properties) was rewritten to use java.text.MessageFormat syntax ({0}/{1}/{2} and {2,choice,...}), but those consoles are rendered via i18next with {{n}} interpolation and no MessageFormat step server-side, so users will see the raw unsubstituted placeholders and choice expression instead of a translated message.",
+      "zh": "account / admin console 的 error-invalid-multivalued-size 改成 MessageFormat 語法，i18next 不會做代換，畫面會直接印出 {0} {1} {2} 與 choice 運算式",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "messages_lt.properties' totpStep1 line was filled in with Italian text instead of Lithuanian, while surrounding lines in the same file remain correctly Lithuanian.",
+      "zh": "立陶宛文檔案被填入義大利文：messages_lt.properties 的 totpStep1",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "messages_zh_CN.properties' totpStep1 line was filled in with Traditional Chinese (Taiwan) wording instead of Simplified Chinese, while surrounding lines in the same file remain correctly Simplified.",
+      "zh": "簡體中文檔案被填入繁體中文：messages_zh_CN.properties 的 totpStep1",
+      "finding_id": "F-003",
+      "severity": "Critical"
+    },
+    {
+      "text": "The prefix/suffix trimming logic that builds the diff message computes the start and end counters independently, both bounded only by min(value.length(), sanitized.length()), with nothing preventing start+end from exceeding a string's length — causing substring(begin, end) with begin > end to throw StringIndexOutOfBoundsException instead of a readable validation error (e.g. reproducible with an unclosed <b> tag that the sanitizer auto-closes).",
+      "zh": "產生差異訊息的前後綴裁切會丟 StringIndexOutOfBoundsException，把一則可讀的驗證錯誤變成看不懂的 build 崩潰",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The path to the English source bundle is derived by string-replacing the checked file's path with no validation, and can derive a nonexistent path for filenames that don't fit the expected `xxx_<locale>.properties` shape (the MR itself had to rename a test fixture to avoid tripping this).",
+      "zh": "英文來源檔的路徑用字串取代硬推，推導規則沒有寫在任何地方，對「檔名不是 xxx_<locale>.properties 形狀」的輸入會推出不存在的路徑",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "verifySafeHtml throws a raw RuntimeException when the derivation fails, inconsistent with the existing convention in the same verify() method of wrapping read failures in MojoExecutionException (which Maven prints cleanly).",
+      "zh": "推不到時丟裸 RuntimeException，與同檔案既有的錯誤處理慣例不一致",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new HTML check requires the sanitizer's output to be byte-for-byte identical to the original string, which turns the sanitizer's own formatting choices (e.g. it always emits <br /> never <br/>) into a repo-wide data format requirement — this MR alone had to touch 76 lines across 19 files just for that whitespace difference, needed ad hoc unescaping/comment-stripping/key-based exemptions to compensate, and the exemptions for {n,choice,...} content are unconditional per-key rather than tied to whether the English source actually needs them, so a future translator adding pluralization to a new key will get an opaque 'Illegal HTML' failure.",
+      "zh": "以「sanitizer 輸出必須與原字串逐字相等」當判準，等於把 sanitizer 的排版慣例升格成全庫資料格式規範",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "All four new/updated theme-verifier tests only assert that an error message is produced; none assert that a clean, valid file produces zero messages, leaving the check's most dangerous failure mode (false positives blocking the whole build) completely untested.",
+      "zh": "四個測試全部只驗「會報錯」，沒有任何一個驗「乾淨的檔案不會報錯」",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "verifyDuplicateKeysDetected's assertion was relaxed from Matchers.contains(...) (exactly this one message) to Matchers.hasItem(...) (at least this one message), so the test will no longer catch extra/noisy messages being emitted alongside the expected one.",
+      "zh": "verifyDuplicateKeysDetected 從 Matchers.contains 放寬成 Matchers.hasItem",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "POLICY_SOME_HTML, POLICY_NO_HTML, and HTML_TAGS are named like constants (UPPER_SNAKE_CASE) but are declared as non-static, non-final, package-private instance fields — unlike ANCHOR_PATTERN in the same file which is properly private static final — so they get needlessly rebuilt for every file the mojo processes and could be reassigned by other code in the package.",
+      "zh": "POLICY_SOME_HTML / POLICY_NO_HTML / HTML_TAGS 用常數命名，實際上是 package-private 的可變 instance 欄位",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "The method name santizeAnchors is misspelled (missing an 'i'); it should be sanitizeAnchors.",
+      "zh": "santizeAnchors 方法名拼錯，應是 sanitizeAnchors",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "The key parameter to the anchor-checking method is never used, so the 'Didn't find anchor tag ... in original string' message doesn't say which file or key the problem is in, making it hard to locate in output covering 162 files.",
+      "zh": "參數 key 沒用到，導致訊息沒有講是哪個檔案哪個 key",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "The anchor loop does `break` on the first anchor that doesn't match, so subsequent tampered anchors in the same value are never reported, and the author has to fix-and-rerun the build once per anchor instead of seeing all problems at once.",
+      "zh": "第一個不符就 break 讓後面的 anchor 不再檢查",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does the new verifier check actually pass on all 162 existing messages_*.properties bundles when run for real (via Maven), or only on the specific files the author noticed and fixed by hand?",
+      "zh": "這個新檢查跑過全部 162 個 messages_*.properties 都會通過嗎？還是只有作者手動注意到的那幾個被修掉了？"
+    },
+    {
+      "text": "Are the per-key exemptions in normalizeValue (the entire {n,choice,...} block, CLAIM.<NAME>, <Extensions>) — which apply unconditionally by key name regardless of the English source — also covered by kcSanitize at every runtime output point, or could a malicious translation smuggle markup through one of these exempted keys?",
+      "zh": "normalizeValue 依 key 名稱、對所有語系無條件豁免內容，這些豁免區塊在執行期是否也同樣受 kcSanitize 保護？"
+    },
+    {
+      "text": "Was removing the freeotp.github.io / Google Play links from totpStep1 in the fi/lt/sk/sv/zh_CN locales (as a side effect of the new anchor rule) an intentional product decision, or just an incidental consequence of the new build check?",
+      "zh": "本 MR 移除了 fi / lt / sk / sv / zh_CN 的 totpStep1 裡指向 freeotp.github.io 與 Google Play 的連結，這是刻意的產品決定嗎？"
+    }
+  ]
+}

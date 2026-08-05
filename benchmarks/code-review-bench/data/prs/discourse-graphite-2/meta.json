@@ -1,0 +1,17 @@
+{
+  "slug": "discourse-graphite-2",
+  "source_repo": "discourse-graphite",
+  "language": "Ruby",
+  "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/2",
+  "pr_title": "FEATURE: per-topic unsubscribe option in emails",
+  "original_url": "https://github.com/discourse/discourse/commit/6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "fork_repo": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR2__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR2__20260122.git",
+  "base_sha": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "head_sha": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "stat": " .../discourse/components/dropdown-button.js.es6    |  5 ++-\n .../discourse/controllers/topic-unsubscribe.js.es6 |  9 +++++\n .../discourse/routes/app-route-map.js.es6          |  1 +\n .../discourse/routes/topic-from-params.js.es6      | 25 +++++++-------\n .../discourse/routes/topic-unsubscribe.js.es6      | 23 +++++++++++++\n .../discourse/templates/topic/unsubscribe.hbs      |  8 +++++\n .../discourse/views/topic-unsubscribe.js.es6       |  3 ++\n app/assets/stylesheets/common/base/topic.scss      | 12 +++++++\n app/controllers/topics_controller.rb               | 26 ++++++++++++--\n app/mailers/user_notifications.rb                  |  5 ++-\n app/models/topic.rb                                |  4 +++\n app/models/topic_user.rb                           | 21 +++++-------\n app/views/email/notification.html.erb              | 40 ++++++++++------------\n config/locales/client.en.yml                       |  4 ++-\n config/locales/server.en.yml                       |  5 ++-\n config/routes.rb                                   |  8 +++--\n lib/email/message_builder.rb                       | 23 +++++++------\n spec/components/email/message_builder_spec.rb      |  3 +-\n 18 files changed, 156 insertions(+), 69 deletions(-)\n",
+  "name_status": "M\tapp/assets/javascripts/discourse/components/dropdown-button.js.es6\nA\tapp/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6\nM\tapp/assets/javascripts/discourse/routes/app-route-map.js.es6\nM\tapp/assets/javascripts/discourse/routes/topic-from-params.js.es6\nA\tapp/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6\nA\tapp/assets/javascripts/discourse/templates/topic/unsubscribe.hbs\nA\tapp/assets/javascripts/discourse/views/topic-unsubscribe.js.es6\nM\tapp/assets/stylesheets/common/base/topic.scss\nM\tapp/controllers/topics_controller.rb\nM\tapp/mailers/user_notifications.rb\nM\tapp/models/topic.rb\nM\tapp/models/topic_user.rb\nM\tapp/views/email/notification.html.erb\nM\tconfig/locales/client.en.yml\nM\tconfig/locales/server.en.yml\nM\tconfig/routes.rb\nM\tlib/email/message_builder.rb\nM\tspec/components/email/message_builder_spec.rb\n",
+  "commits": "6669a2d FEATURE: per-topic unsubscribe option in emails\n"
+}

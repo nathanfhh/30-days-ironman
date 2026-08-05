@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-10",
+  "tool": "cubic-v2",
+  "n_golden": 4,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Same issue: before_validation self.host.sub! raises NoMethodError on a nil host."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Same issue: lower(host) comparison without downcasing the bound parameter."
+    }
+  ]
+}

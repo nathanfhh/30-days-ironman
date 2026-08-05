@@ -1,0 +1,554 @@
+{
+  "slug": "sentry-greptile-5",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "age-timestamp-truthy-check",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:57-68",
+      "reason": "validate_timestamp/validate_age use `if self.initial_data.get(\"age\"):` / `.get(\"timestamp\")`; `age` has no min_value so age=0 is legal and falsy, letting a report carrying both timestamp and age=0 pass the mutual-exclusion check."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "attr-values-props-type-mismatch",
+      "evidence": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx:25-28; static/app/views/explore/types.tsx:7-21",
+      "reason": "No type incompatibility exists: the base interface declares `projects?: Project[]` and the child adds a differently-named `projectIds?: PageFilters['projects']`, so both coexist and TypeScript accepts it. (The inherited `projects` is simply unused by the hook, which is not what the claim asserts.)"
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "age-timestamp-neither-present",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:50-51",
+      "reason": "Both `age` and `timestamp` are `required=False` and DRF only runs `validate_<field>` for fields present in the input, so a report with neither field validates successfully; there is no object-level `validate()` on BrowserReportSerializer."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "env-info-per-issue-snuba-queries",
+      "evidence": "src/sentry/integrations/source_code_management/commit_context.py:582-596; src/sentry/models/group.py:870-891",
+      "reason": "get_environment_info calls Group.get_recommended_event(), which issues a Snuba get_events_snql query and falls back to get_latest_event (a second query); it is invoked once per issue inside the get_comment_body list comprehension over the top-5 issues, where previously only the already-loaded `issue.culprit` was read."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "test-requests-post-no-timeout",
+      "evidence": "tests/sentry/replays/test_project_replay_summarize_breadcrumbs.py:41-44",
+      "reason": "The new `store_replays` test helper calls `requests.post(settings.SENTRY_SNUBA + \"/tests/entities/replays/insert\", json=[replay])` with no timeout. True, though it copies the existing (also timeout-less) helper in src/sentry/testutils/cases.py:2270, so it matches house style."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "fixture-meta-missing-id",
+      "evidence": "static/app/views/dashboards/widgets/tableWidget/fixtures/sampleHTTPRequestTableData.ts:5-40",
+      "reason": "Every row carries `id: ''` but meta.fields/meta.units list only `http.request_method` and `count(span.duration)` — an internally inconsistent fixture. The stated consequence is softer than claimed: TableWidgetVisualization derives default columns from `Object.keys(tableData.meta.fields)`, so `id` is never rendered unless a caller supplies it in `columns`."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "wrong-diff-range-bundled-commits",
+      "evidence": "whole diff; `git rev-list --count 49a27584..HEAD` = 32, `git diff --stat 49a27584 HEAD` = 106 files",
+      "reason": "Verified: the diff is exactly `49a27584..ea188e2d`, 32 squash-merged commits and 106 files, including a revert (668229d1), the migration no-op patch (8a179d9b), and many unrelated frontend refactors. No single change in it can be reverted independently."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "analytics-before-feature-check",
+      "evidence": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py:80-92",
+      "reason": "`analytics.record(\"preprod_artifact.api.assemble\", ...)` is placed above the `features.has(\"organizations:preprod-artifact-assemble\", ...)` check that returns 404, so requests from non-enabled orgs are counted as assemble events."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "not_real",
+      "confidence": 0.65,
+      "severity": null,
+      "cluster": "attempts-min-value",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:48; tests/sentry/api/endpoints/test_browser_reporting_collector.py:20,35",
+      "reason": "The real Chrome-shaped fixtures added in this PR both carry `attempts: 1` on first delivery, and the spec increments a report's attempts before serializing it, so attempts=0 is not what browsers send; `min_value=1` is deliberate and covered by test_rejects_invalid_attempts."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "tracewaterfall-height-100",
+      "evidence": "static/app/views/performance/newTraceDetails/traceWaterfall.tsx:707,803,864-871",
+      "reason": "The premise is accurate — the removed `FlexBox` set `flex-grow:1; flex-direction:column; height:100%` and `<Flex direction=\"column\" flex={1}>` reproduces everything except `height: 100%`. Whether that changes rendering in the drawer-left/right/bottom layouts needs an actual browser render; a screenshot of TraceGrid in each layout would settle it."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "error-breadcrumb-timestamp-units",
+      "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:117-146; src/sentry/replays/testutils.py:571 (\"rrweb timestamps are in ms\"); tests/sentry/replays/test_project_replay_summarize_breadcrumbs.py:158-215,309-330",
+      "reason": "gen_request_data compares `error_events[i][\"timestamp\"]` (nodestore event data, unix seconds) against `event.get(\"timestamp\")` from rrweb frames, which testutils explicitly documents as milliseconds, so the while-condition is always true and every error is emitted before the first breadcrumb. Both new tests feed seconds-scale values (1.5/2.0 and `float(now.timestamp())`) into the rrweb timestamp field, which is why they pass."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "falsy-cell-truthy-check",
+      "evidence": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx:33-36,74-77",
+      "reason": "Both renderDefaultHeadCell and renderDefaultBodyCell use `const cell = render...?.(...); if (cell) return cell;`. The stories document the contract as 'if the function returns undefined, fallback renderer will run', so `0`, `''`, `false` and `null` returns silently fall through to the default renderer."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "format-comment-subtitle-dead",
+      "evidence": "src/sentry/integrations/github/integration.py:393-395; src/sentry/integrations/gitlab/integration.py:239-243",
+      "reason": "A repo-wide grep for `format_comment_subtitle` returns only the two definitions — no callers remain after the subtitle was dropped from get_comment_body, and PRCommentWorkflow declares no abstract `format_comment_subtitle`."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "pr-comment-extra-blank-lines",
+      "evidence": "src/sentry/integrations/source_code_management/commit_context.py:143; tests/sentry/integrations/github/tasks/test_pr_comment.py:373-380",
+      "reason": "MERGED_PR_SINGLE_ISSUE_TEMPLATE ends in `\\n` and get_comment_body still joins with `\"\\n\"`. The updated expected fixtures bake in the result: a blank line between every issue and `\\n\\n\\n` before the `<sub>` footer."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "age-timestamp-truthy-check",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:57-68",
+      "reason": "Same defect: the mutual-exclusion guards test truthiness of `self.initial_data.get(...)` rather than key presence, so a zero value reads as absent."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "get-environment-info-broad-except",
+      "evidence": "src/sentry/integrations/source_code_management/commit_context.py:582-596",
+      "reason": "`except Exception` wraps the whole Snuba lookup and returns `\"\"`, the same value returned when the issue genuinely has no environment; only a logger.info distinguishes them, and the comment body cannot."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "hidden-attributes-only-when-searching",
+      "evidence": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx:59-70",
+      "reason": "`if (!searchQuery.trim()) { return sorted; }` returns before the `.filter(...)` that applies HIDDEN_ATTRIBUTES, so is_segment/project_id/received are visible in the default, empty-search state."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "unclear",
+      "confidence": 0.55,
+      "severity": null,
+      "cluster": "migration-noop-safety",
+      "evidence": "src/sentry/migrations/0917_convert_org_saved_searches_to_views.py:14-17; 0920_...:14-16; 0921_..._rerevised.py",
+      "reason": "The files themselves assert 'This migration had an error and was never run', and the corrective 0921 already exists and is guarded by a matching-view check. Whether any SaaS or self-hosted install actually recorded 0917/0920 as applied — and whether 0921 is idempotent against rows 0917's `update_or_create` may have written — is deployment state I cannot see; the django_migrations table across environments would settle it."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "attr-values-ignores-projectids",
+      "evidence": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx:100-101; static/app/views/explore/components/traceItemSearchQueryBuilder.tsx:71-75",
+      "reason": "The hook uses `projectIds: projectIds ?? selection.projects` — the provided prop wins, and the only caller passes `projectIds: projects`. Falling back to page filters when the prop is absent is the documented behaviour of UseTraceItemAttributeBaseProps."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "table-widget-flag-empty-render",
+      "evidence": "static/app/views/dashboards/widgetCard/chart.tsx:164-173",
+      "reason": "The `use-table-widget-visualization` branch renders `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />`, discarding `result` entirely, while the else branch passes `result.meta`/`result.data` to StyledSimpleTableChart."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "usequery-drops-retry-false",
+      "evidence": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:49-53; static/app/utils/queryClient.tsx:19-26",
+      "reason": "The old useApiQuery call passed `retry: false`; the new plain useQuery passes only `enabled`, and DEFAULT_QUERY_CLIENT_CONFIG sets only refetchOnReconnect/refetchOnWindowFocus, so react-query v5's default of 3 retries now applies."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "feedback-summary-undefined-data",
+      "evidence": "static/app/components/feedback/list/useFeedbackSummary.tsx:22-66; package.json:79",
+      "reason": "On react-query v5 a disabled query has status 'pending', so `isPending` is true and the hook returns early before touching `data`; the `isPending`/`isError` guards also narrow UseQueryResult's discriminated union, which is why `data.summary` type-checks."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "table-widget-flag-empty-render",
+      "evidence": "static/app/views/dashboards/widgetCard/chart.tsx:164-173",
+      "reason": "Same hardcoded empty `columns` and `tableData` in the flag branch; the table renders with no headers and no rows."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "not_real",
+      "confidence": 0.55,
+      "severity": null,
+      "cluster": "error-response-format-break",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:88-127",
+      "reason": "The status codes are unchanged (404/422/200); the only difference is that 422 responses now carry a JSON body where previously they had none. Adding a body is additive, and the consumers are browsers that discard the response body, so nothing is broken. The claim states no specific breakage."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "detector-update-wrong-type-key",
+      "evidence": "src/sentry/workflow_engine/endpoints/validators/base/detector.py:64,113,137",
+      "reason": "`update()` reads `validated_data.get(\"detector_type\", instance.group_type)` but `validate_type` stores the resolved GroupType under the field name `type` (as `create()` does with `validated_data[\"type\"].slug`); grep finds no producer of a `detector_type` key in validated_data, so the type is never updated. Note the line itself is diff context, not a changed line, but it sits inside the `update()` method this PR modifies."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "disable-error-fetching-negated-name",
+      "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:96-104",
+      "reason": "`disable_error_fetching = request.query_params.get(\"enable_error_context\", \"true\").lower() == \"false\"` inverts the parameter and renames 'context' to 'fetching'; reading `if disable_error_fetching:` requires undoing both."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "flex-div-in-span",
+      "evidence": "static/app/components/codecov/branchSelector/branchSelector.tsx:63-71; static/app/components/core/layout/flex.tsx:18",
+      "reason": "`Flex` is `styled('div')`, and the `FlexContainer` it replaces was also `styled('div')`, so the div-inside-span nesting under TriggerLabelWrap is unchanged by this diff — nothing new is introduced."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "wrong-diff-range-bundled-commits",
+      "evidence": "`git diff --stat 49a27584 HEAD` = 106 files; `git rev-list --count 49a27584..HEAD` = 32",
+      "reason": "Confirmed exactly: the base is 49a27584 'feat(replays): Add self-serve bulk deletes (#93864)' — the feature's own squash commit — so the diff contains the 32 PRs merged after it and none of the bulk-delete code itself (tests/sentry/replays/tasks/test_delete_replays_bulk.py appears as a modification, not an addition)."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "truncate-title-exceeds-max",
+      "evidence": "src/sentry/integrations/source_code_management/commit_context.py:576-580",
+      "reason": "`return title[:max_length].rstrip() + \"...\"` produces up to max_length+3 characters; slicing to max_length-3 first would be needed to honour the bound."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "culprit-removed-from-pr-comment",
+      "evidence": "src/sentry/integrations/github/integration.py:401-410; git log fd4ab7b5 'feat(scm): add environment infomation to suspect commit prs'",
+      "reason": "The commit that added environment info also dropped `subtitle=self.format_comment_subtitle(issue.culprit ...)` from both integrations' get_comment_body; get_environment_info returns `\"\"` when no recommended event or no environment is found, so those issues lose the culprit with nothing in its place. The commit subject mentions only the addition."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "unregistered-feature-flag",
+      "evidence": "static/app/views/dashboards/widgetCard/chart.tsx:164",
+      "reason": "A repo-wide grep for `use-table-widget-visualization` across .py/.ts/.tsx matches only this one line — there is no registration in the backend feature registry, so the flag cannot be turned on for any organization."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "get-request-data-sorts-in-place",
+      "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:112-117",
+      "reason": "`get_request_data` calls `error_events.sort(...)` on the caller's list; the name promises a read, and the same list object is held by analyze_recording_segments' partial across paginated calls."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "preprod-star-import-no-all",
+      "evidence": "src/sentry/preprod/__init__.py:1; src/sentry/preprod/analytics.py:1",
+      "reason": "analytics.py starts with `from sentry import analytics` and defines no `__all__`, so `from .analytics import *` rebinds the name `analytics` in the `sentry.preprod` namespace to the top-level `sentry.analytics` module, shadowing the submodule attribute that the import machinery had just set."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "anonymous-user-id",
+      "evidence": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py:81-86",
+      "reason": "Django's AnonymousUser defines `id = None` as a class attribute, so `request.user.id` returns None rather than raising; the analytics attribute is declared `required=False` and accepts it."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "unclear",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "summarize-breadcrumbs-latency",
+      "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:60-104",
+      "reason": "The added work is real — a query_replay_instance Snuba call plus a nodestore.get_multi on every GET — but no '150ms target' appears anywhere in the repo and the endpoint's latency cannot be measured from source. Production p95 numbers for sentry-api-0-project-replay-summarize-breadcrumbs, or the team's documented SLO, would settle it."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "poolmap-exceptions-swallowed",
+      "evidence": "src/sentry/replays/usecases/delete.py:73-83",
+      "reason": "`pool.map(...)` inside `with cf.ThreadPoolExecutor(...)` submits all tasks eagerly and the `with` exit waits for them, but the returned generator is never iterated, so any exception other than NotFound stays parked in its future while delete_replays still archives the replay. (The function itself is diff context rather than a changed line.)"
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "table-widget-flag-empty-render",
+      "evidence": "static/app/views/dashboards/widgetCard/chart.tsx:164-173",
+      "reason": "Same finding: `columns={[]}` and an empty `tableData` are passed unconditionally in the flagged branch, so the table is blank even when `result.data`/`result.meta` are populated."
+    },
+    {
+      "claim_id": "c038",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "migration-noop-safety",
+      "evidence": "src/sentry/migrations/0917_convert_org_saved_searches_to_views.py:14-17; 0920_...:14-16",
+      "reason": "Answering this needs the applied-migration state of SaaS and self-hosted installs, which is not in the repo. The in-file comments claim both migrations errored and never ran, and 0921 exists as the corrective, but neither fact proves no environment recorded them."
+    },
+    {
+      "claim_id": "c039",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "batch-rejected-on-single-invalid-report",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:110-124",
+      "reason": "The validation loop `return`s a 422 on the first invalid report, so the already-valid reports earlier in the same array are dropped and the browser will retry the whole batch — a poor fit for an endpoint whose stated purpose is observing real-world browser data."
+    },
+    {
+      "claim_id": "c040",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "attributes-can-be-undefined",
+      "evidence": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:49-61",
+      "reason": "`useQuery<TagCollection>` gives `data: TagCollection | undefined`, and the hook returns `attributes: isFetching ? previous : data`; previously the memo always produced a TagCollection, so the public type of `attributes` has widened to include undefined."
+    },
+    {
+      "claim_id": "c041",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "zip-get-multi-order",
+      "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:107-131; src/sentry/nodestore/base.py:174-210; src/sentry/nodestore/django/backend.py:47-48",
+      "reason": "`zip(error_ids, events.values())` assumes get_multi preserves input order, but the base implementation dedupes ids and does `items.update(cache_items)` (cached entries land last), and the Django backend's `_get_bytes_multi` returns `{n.id: ...}` from a `filter(id__in=...)` queryset — arbitrary order, and missing nodes omitted entirely, which shifts every subsequent pairing."
+    },
+    {
+      "claim_id": "c042",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "truncate-title-exceeds-max",
+      "evidence": "src/sentry/integrations/source_code_management/commit_context.py:576-580",
+      "reason": "Same defect: the ellipsis is appended after slicing to ISSUE_TITLE_MAX_LENGTH, so the result can be 53 characters."
+    },
+    {
+      "claim_id": "c043",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "table-widget-flag-empty-render",
+      "evidence": "static/app/views/dashboards/widgetCard/chart.tsx:164-173",
+      "reason": "Same finding, restated: empty columns and empty tableData in the flag branch yield a blank table regardless of the query results."
+    },
+    {
+      "claim_id": "c044",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "hidden-attributes-only-when-searching",
+      "evidence": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx:59-70",
+      "reason": "Confirmed, including the line reference: `sortAttributes` runs, then the empty-search early return at line 61-62 hands back `sorted` unfiltered, so is_segment/project_id/received show in the default view."
+    },
+    {
+      "claim_id": "c045",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "stories-duplicate-the-typo",
+      "evidence": "static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.stories.tsx:27",
+      "reason": "The prose reads 'Below is the the most basic example of the table'."
+    },
+    {
+      "claim_id": "c046",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "fetch-error-details-broad-except",
+      "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:107-131",
+      "reason": "fetch_error_details wraps the whole nodestore read in `except Exception`, capturing to Sentry and returning `[]`; narrowing to the errors actually expected from nodestore would let genuine faults surface."
+    },
+    {
+      "claim_id": "c047",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "falsy-cell-truthy-check",
+      "evidence": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx:33-36,74-77",
+      "reason": "Same truthiness check in both default renderers; an explicit `cell !== undefined` is what the documented contract requires."
+    },
+    {
+      "claim_id": "c048",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "null-segment-guard-untested",
+      "evidence": "tests/sentry/replays/tasks/test_delete_replays_bulk.py:82-84,96-98,113-116",
+      "reason": "The test changed to `max_segment_id: None` is decorated with `@patch(\"sentry.replays.tasks.delete_matched_rows\")`, so _make_recording_filenames — where the new `if row[\"max_segment_id\"] is None: return []` guard lives — never executes; the test only asserts `mock_delete_matched_rows.assert_called_once_with(...)`."
+    },
+    {
+      "claim_id": "c049",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "age-timestamp-neither-present",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:50-51,57-68",
+      "reason": "Both fields are optional and DRF skips `validate_<field>` for absent fields, so a report with neither age nor timestamp is accepted despite the spec requiring exactly one."
+    },
+    {
+      "claim_id": "c050",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "segements-typo",
+      "evidence": "src/sentry/replays/usecases/delete.py:87-88",
+      "reason": "The new comment reads 'we can skip deleting the segements.'"
+    },
+    {
+      "claim_id": "c051",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Medium",
+      "cluster": "null-max-segment-orphan-blobs",
+      "evidence": "src/sentry/replays/usecases/delete.py:54-62,86-90,136-155; src/sentry/replays/testutils.py:247,292",
+      "reason": "Rows with NULL segment_id genuinely exist in the replays entity (replay_actions/click and replay_viewed payloads carry no segment_id), so a window containing only such rows yields max(segment_id) = NULL, `_make_recording_filenames` returns [], and delete_matched_rows still archives the replay via delete_replays — leaving segment blobs written outside the window in storage."
+    },
+    {
+      "claim_id": "c052",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "tests-dropped-content-type-and-logger-assert",
+      "evidence": "tests/sentry/api/endpoints/test_browser_reporting_collector.py:77-79",
+      "reason": "After the rewrite the only `content_type=` in the file is the negative test's `\"bad/type/json\"` — no test posts `application/reports+json` any more — and grep finds no remaining reference to `logger`, so the `browser_report_received` log assertion is gone."
+    },
+    {
+      "claim_id": "c053",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "analytics-before-feature-check",
+      "evidence": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py:80-92",
+      "reason": "Same ordering problem: the analytics.record call precedes the feature check that returns 404."
+    },
+    {
+      "claim_id": "c054",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "fetch-error-details-broad-except",
+      "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:107-131",
+      "reason": "`except Exception: sentry_sdk.capture_exception(e); return []` makes a nodestore failure indistinguishable from a replay with no errors, and the caller feeds that empty list straight into the Seer summary as if it were complete."
+    },
+    {
+      "claim_id": "c055",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "wrong-diff-range-bundled-commits",
+      "evidence": "`git diff --stat 49a27584 HEAD`; `git rev-list --count 49a27584..HEAD` = 32",
+      "reason": "No — the range is wrong. The base resolves to 49a27584, the bulk-delete squash commit itself, so its own changes are excluded and 32 later unrelated PRs are included."
+    },
+    {
+      "claim_id": "c056",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "age-timestamp-truthy-check",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:57-68",
+      "reason": "Correct: `age: 0` is falsy, `self.initial_data.get(\"age\")` therefore reads as absent, and a report with both timestamp and age=0 passes exclusivity."
+    },
+    {
+      "claim_id": "c057",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "age-timestamp-truthy-check",
+      "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:57-60",
+      "reason": "Same defect with the right fix: `\"age\" in self.initial_data` tests presence, which is what the spec's exclusivity rule needs; `age` is declared without min_value so 0 is a legal value."
+    },
+    {
+      "claim_id": "c058",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "grouping-variant-tooltip-text-lost",
+      "evidence": "static/app/components/events/groupingInfo/groupingVariant.tsx:102-131",
+      "reason": "Removing the Type row deleted five distinct QuestionTooltip strings; grep finds none of them anywhere else under static/app. CUSTOM_FINGERPRINT and BUILT_IN_FINGERPRINT are now both just `addFingerprintInfo(data, variant); break;` — byte-identical cases."
+    },
+    {
+      "claim_id": "c059",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "unbounded-nodestore-fanout",
+      "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:88-101,107-113",
+      "reason": "`error_ids` comes straight from the replay row's groupUniqArray aggregation with no slice or cap before `Event.generate_node_id` / `nodestore.backend.get_multi`, on a synchronous GET."
+    },
+    {
+      "claim_id": "c060",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "hidden-attributes-only-when-searching",
+      "evidence": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx:59-70",
+      "reason": "Same defect: HIDDEN_ATTRIBUTES is applied only inside the branch taken when searchQuery is non-empty."
+    },
+    {
+      "claim_id": "c061",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dead-nested-handle-regex-match",
+      "evidence": "src/sentry/grouping/parameterization.py:335-344,310-320",
+      "reason": "The inner `_handle_regex_match` in parametrize_w_experiments lost its only use when the `else: experiment.run(content, _handle_regex_match)` branch was deleted; the identically-named function at line 310 inside parametrize_w_regex is still used at line 320, so the two must not be conflated."
+    }
+  ]
+}

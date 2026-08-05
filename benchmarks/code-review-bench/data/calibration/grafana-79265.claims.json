@@ -1,0 +1,125 @@
+{
+  "slug": "grafana-79265",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Test for device limit doesn't verify that existing devices can still be updated when limit is reached"
+    },
+    {
+      "claim_id": "c002",
+      "text": "Missing CreatedAt field in test device struct may cause issues with DB constraints or default value handling"
+    },
+    {
+      "claim_id": "c003",
+      "text": "Whether CI's wire gen step still succeeds given that pkg/server/wire.go's provider registration was not updated for the new constructor signature."
+    },
+    {
+      "claim_id": "c004",
+      "text": "This call won\u2019t compile: dbSession.Exec(args...) is given a []interface{} where the first element is the query, but Exec\u2019s signature requires a first parameter of type string (not an interface{} splat)."
+    },
+    {
+      "claim_id": "c005",
+      "text": "GrafanaBootConfig class property anonymousDeviceLimit lacks explicit type annotation, causing TypeScript to infer narrower type 'undefined' instead of 'number | undefined' required by GrafanaConfig interface"
+    },
+    {
+      "claim_id": "c006",
+      "text": "Time window calculation inconsistency: Using device.UpdatedAt.UTC().Add(-anonymousDeviceExpiration) as the lower bound but device.UpdatedAt as the current time may not match the intended logic. Consider using time.Now().UTC() consistently."
+    },
+    {
+      "claim_id": "c007",
+      "text": "Add device_limit to the shipped [auth.anonymous] config files; otherwise the new setting cannot be overridden via GF_AUTH_ANONYMOUS_DEVICE_LIMIT and silently falls back to 0"
+    },
+    {
+      "claim_id": "c008",
+      "text": "tagDeviceUI() sets the local cache entry BEFORE the CreateOrUpdateDevice DB call. When the device limit is reached, the first request from a new device poisons the cache and fails auth, but the second request within 29 minutes hits the cache, returns nil (no error), and bypasses the device limit entirely. Fix by moving localCache.SetDefault after the successful DB write, or by clearing the cache entry when ErrDeviceLimitReached is returned."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Duplicate constant anonymousDeviceExpiration defined in both database.go and api/api.go risks drift if one is updated without the other"
+    },
+    {
+      "claim_id": "c010",
+      "text": "Anonymous requests that don't carry the X-Grafana-Device-Id header (scripts, curl, or the initial HTML document request) completely bypass device_limit enforcement."
+    },
+    {
+      "claim_id": "c011",
+      "text": "pkg/server/wire.go lines 374-375 still register anonstore.ProvideAnonDBStore and wire.Bind for AnonStore, but ProvideAnonDBStore now requires (db.DB, int64) which wire cannot inject, and ProvideAnonymousDeviceService no longer accepts anonstore.AnonStore. Both lines and the anonstore import in wire.go must be removed for wire generation to succeed."
+    },
+    {
+      "claim_id": "c012",
+      "text": "Duplicated anonymousDeviceExpiration constant - constant is defined in both anonstore/database.go and api/api.go, which could cause the API's device listing window and limit-enforcement window to silently disagree if values drift"
+    },
+    {
+      "claim_id": "c013",
+      "text": "The new test for the device limit only covers the rejected path; it never asserts that an existing device can still be updated once the limit is reached, even though that is the documented purpose of updateDevice."
+    },
+    {
+      "claim_id": "c014",
+      "text": "ErrDeviceLimitReached is not an errutil error, so a user who hits the device limit only gets an unexplained 401 or is redirected to /login, unlike every other authn client in the same layer."
+    },
+    {
+      "claim_id": "c015",
+      "text": "The new frontend anonymousDeviceLimit config field has no consumers anywhere in the frontend code, and its declared type is incorrectly inferred as plain undefined instead of number | undefined."
+    },
+    {
+      "claim_id": "c016",
+      "text": "The device-tagging database write, which used to run in a background goroutine, is now executed synchronously on every anonymous request's auth path \u2014 including for deployments that never configured a device_limit \u2014 adding a database round trip on the request path without the change being disclosed by the MR title."
+    },
+    {
+      "claim_id": "c017",
+      "text": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDeviceLimitReached. Previously, device tagging was asynchronous and non-blocking. This change prevents anonymous users from authenticating when the device limit is reached."
+    },
+    {
+      "claim_id": "c018",
+      "text": "The new device_limit setting was not added to conf/defaults.ini, conf/sample.ini, or the configuration documentation."
+    },
+    {
+      "claim_id": "c019",
+      "text": "There is no test covering the new error-branching behavior added to Anonymous.Authenticate in client.go \u2014 that ErrDeviceLimitReached fails authentication while other errors are only logged and allowed through \u2014 even though that is the only user-visible behavior change in this MR."
+    },
+    {
+      "claim_id": "c020",
+      "text": "The anonymous device limit can be bypassed via the local cache: tagDeviceUI writes the cache key before writing to the database and doesn't roll it back on failure, so a device rejected once will be waved through on any retry within the cache TTL and is never recorded in anon_device."
+    },
+    {
+      "claim_id": "c021",
+      "text": "Propagating this error makes device-limit enforcement bypassable after the first rejected request because the device is cached before the store write runs"
+    },
+    {
+      "claim_id": "c022",
+      "text": "updateDevice uses []interface{} while the rest of the file consistently uses []any."
+    },
+    {
+      "claim_id": "c023",
+      "text": "int64 serializes as 0 when no limit is configured, but TS type is number | undefined - AnonymousDeviceLimit defaults to 0 and will always serialize as 0 in JSON, but TypeScript type implies field could be absent, causing incorrect behavior when checking if limit is set"
+    },
+    {
+      "claim_id": "c024",
+      "text": "tagDeviceUI caches the device ID before calling CreateOrUpdateDevice, so returning ErrDeviceLimitReached can leave the cache entry set and let subsequent requests bypass the device limit until cache expiry. The cache should only be populated after a successful DB write or cleared on error."
+    },
+    {
+      "claim_id": "c025",
+      "text": "Local cache set before DB operation succeeds - localCache.SetDefault is called before CreateOrUpdateDevice, so if DB call returns ErrDeviceLimitReached the device is already cached, allowing subsequent requests to bypass the device limit"
+    },
+    {
+      "claim_id": "c026",
+      "text": "AnonStore construction was moved out of the wire dependency-injection graph, leaving pkg/server/wire.go's provider registration stale and incompatible with the new constructor signature, and removing the interface substitution point that was used for testing."
+    },
+    {
+      "claim_id": "c027",
+      "text": "The '30-day anonymous device' window is now hardcoded in four places under two different names, so the enforcement window, the usage-stat window, and the admin listing window can silently drift out of sync with each other."
+    },
+    {
+      "claim_id": "c028",
+      "text": "Returning ErrDeviceLimitReached when no rows were updated is misleading; the device might not exist."
+    },
+    {
+      "claim_id": "c029",
+      "text": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock."
+    },
+    {
+      "claim_id": "c030",
+      "text": "The synchronous device-tagging write now uses the request's own context instead of a background context, so a client disconnect (context cancellation) can interrupt the write after the cache key was already set, leaving that device untracked and uncounted for the cache TTL."
+    }
+  ]
+}

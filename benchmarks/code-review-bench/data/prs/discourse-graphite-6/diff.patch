@@ -1,0 +1,184 @@
+diff --git a/app/assets/javascripts/discourse/controllers/user.js.es6 b/app/assets/javascripts/discourse/controllers/user.js.es6
+index 60fd3fc..419e6f8 100644
+--- a/app/assets/javascripts/discourse/controllers/user.js.es6
++++ b/app/assets/javascripts/discourse/controllers/user.js.es6
+@@ -9,22 +9,16 @@ export default ObjectController.extend(CanCheckEmails, {
+   needs: ['user-notifications', 'user-topics-list'],
+ 
+   viewingSelf: function() {
+     return this.get('content.username') === Discourse.User.currentProp('username');
+   }.property('content.username'),
+ 
+   collapsedInfo: Em.computed.not('indexStream'),
+ 
+-  websiteName: function() {
+-    var website = this.get('model.website');
+-    if (Em.isEmpty(website)) { return; }
+-    return website.split("/")[2];
+-  }.property('model.website'),
+-
+   linkWebsite: Em.computed.not('model.isBasic'),
+ 
+   removeNoFollow: function() {
+     return this.get('model.trust_level') > 2 && !this.siteSettings.tl3_links_no_follow;
+   }.property('model.trust_level'),
+ 
+   canSeePrivateMessages: Ember.computed.or('viewingSelf', 'currentUser.admin'),
+   canSeeNotificationHistory: Em.computed.alias('canSeePrivateMessages'),
+diff --git a/app/assets/javascripts/discourse/models/user.js.es6 b/app/assets/javascripts/discourse/models/user.js.es6
+index bcc84e8..2790739 100644
+--- a/app/assets/javascripts/discourse/models/user.js.es6
++++ b/app/assets/javascripts/discourse/models/user.js.es6
+@@ -51,17 +51,17 @@ const User = RestModel.extend({
+       return this.get('name');
+     }
+     return this.get('username');
+   }.property('username', 'name'),
+ 
+   /**
+     This user's profile background(in CSS).
+ 
+-    @property websiteName
++    @property profileBackground
+     @type {String}
+   **/
+   profileBackground: function() {
+     var url = this.get('profile_background');
+     if (Em.isEmpty(url) || !Discourse.SiteSettings.allow_profile_backgrounds) { return; }
+     return ('background-image: url(' + Discourse.getURLWithCDN(url) + ')').htmlSafe();
+   }.property('profile_background'),
+ 
+diff --git a/app/assets/javascripts/discourse/templates/user/user.hbs b/app/assets/javascripts/discourse/templates/user/user.hbs
+index a21b59d..7ba76ca 100644
+--- a/app/assets/javascripts/discourse/templates/user/user.hbs
++++ b/app/assets/javascripts/discourse/templates/user/user.hbs
+@@ -58,22 +58,22 @@
+           <div class="primary-textual">
+             <h1>{{model.username}} {{user-status model currentUser=currentUser}}</h1>
+             <h2>{{model.name}}</h2>
+             {{#if model.title}}
+               <h3>{{model.title}}</h3>
+             {{/if}}
+             <h3>
+             {{#if model.location}}{{fa-icon "map-marker"}} {{model.location}}{{/if}}
+-            {{#if websiteName}}
++            {{#if model.website_name}}
+               {{fa-icon "globe"}}
+               {{#if linkWebsite}}
+-                <a href={{model.website}} rel={{unless removeNoFollow 'nofollow'}} target="_blank">{{websiteName}}</a>
++                <a href={{model.website}} rel={{unless removeNoFollow 'nofollow'}} target="_blank">{{model.website_name}}</a>
+               {{else}}
+-                <span title={{model.website}}>{{websiteName}}</span>
++                <span title={{model.website}}>{{model.website_name}}</span>
+               {{/if}}
+             {{/if}}
+             </h3>
+ 
+             <div class='bio'>
+               {{#if model.isSuspended}}
+                 <div class='suspended'>
+                   {{fa-icon "ban"}}
+diff --git a/app/serializers/user_serializer.rb b/app/serializers/user_serializer.rb
+index fc35edd..dd51325 100644
+--- a/app/serializers/user_serializer.rb
++++ b/app/serializers/user_serializer.rb
+@@ -35,16 +35,17 @@ class UserSerializer < BasicUserSerializer
+   attributes :name,
+              :email,
+              :last_posted_at,
+              :last_seen_at,
+              :bio_raw,
+              :bio_cooked,
+              :created_at,
+              :website,
++             :website_name,
+              :profile_background,
+              :card_background,
+              :location,
+              :can_edit,
+              :can_edit_username,
+              :can_edit_email,
+              :can_edit_name,
+              :stats,
+@@ -128,16 +129,36 @@ class UserSerializer < BasicUserSerializer
+   def bio_cooked
+     object.user_profile.bio_processed
+   end
+ 
+   def website
+     object.user_profile.website
+   end
+ 
++  def website_name
++    website_host = URI(website.to_s).host rescue nil
++    discourse_host = Discourse.current_hostname
++    return if website_host.nil?
++    if website_host == discourse_host
++      # example.com == example.com
++      website_host + URI(website.to_s).path
++    elsif (website_host.split('.').length == discourse_host.split('.').length) && discourse_host.split('.').length > 2
++      # www.example.com == forum.example.com
++      website_host.split('.')[1..-1].join('.') == discourse_host.split('.')[1..-1].join('.') ? website_host + URI(website.to_s).path : website_host
++    else
++      # example.com == forum.example.com
++      discourse_host.ends_with?("." << website_host) ? website_host + URI(website.to_s).path : website_host
++    end
++  end
++
++  def include_website_name
++    website.present?
++  end
++
+   def card_image_badge_id
+     object.user_profile.card_image_badge.try(:id)
+   end
+ 
+   def include_card_image_badge_id?
+     card_image_badge_id.present?
+   end
+ 
+diff --git a/spec/serializers/user_serializer_spec.rb b/spec/serializers/user_serializer_spec.rb
+index 0f9acf7..43e5689 100644
+--- a/spec/serializers/user_serializer_spec.rb
++++ b/spec/serializers/user_serializer_spec.rb
+@@ -61,21 +61,38 @@ describe UserSerializer do
+ 
+       it "has a profile background" do
+         expect(json[:profile_background]).to eq 'http://background.com'
+       end
+     end
+ 
+     context "with filled out website" do
+       before do
+-        user.user_profile.website = 'http://example.com'
++        user.user_profile.website = 'http://example.com/user'
+       end
+ 
+       it "has a website" do
+-        expect(json[:website]).to eq 'http://example.com'
++        expect(json[:website]).to eq 'http://example.com/user'
++      end
++
++      context "has a website name" do
++        it "returns website host name when instance domain is not same as website domain" do
++          Discourse.stubs(:current_hostname).returns('discourse.org')
++          expect(json[:website_name]).to eq 'example.com'
++        end
++
++        it "returns complete website path when instance domain is same as website domain" do
++          Discourse.stubs(:current_hostname).returns('example.com')
++          expect(json[:website_name]).to eq 'example.com/user'
++        end
++
++        it "returns complete website path when website domain is parent of instance domain" do
++          Discourse.stubs(:current_hostname).returns('forums.example.com')
++          expect(json[:website_name]).to eq 'example.com/user'
++        end
+       end
+     end
+ 
+     context "with filled out bio" do
+       before do
+         user.user_profile.bio_raw = 'my raw bio'
+         user.user_profile.bio_cooked = 'my cooked bio'
+       end

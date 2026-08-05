@@ -1,0 +1,3 @@
+[
+  "get_monitor_environment_context() creates a local config copy and modifies schedule_type to a human-readable display value, but line 168 returns monitor_environment.monitor.config (the original) instead of the local config variable, silently discarding the transformation. Line 168 should use 'config' instead of 'monitor_environment.monitor.config'"
+]

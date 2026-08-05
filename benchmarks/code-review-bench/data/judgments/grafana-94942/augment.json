@@ -1,0 +1,20 @@
+{
+  "slug": "grafana-94942",
+  "tool": "augment",
+  "n_golden": 2,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "enableSqlExpressions returns false regardless of the flag; gating logic is dead."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "NewInMemoryDB()'s unimplemented RunCommands makes all calls error — the same not-implemented stub the golden names."
+    }
+  ]
+}

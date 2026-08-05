@@ -1,0 +1,17 @@
+{
+  "slug": "discourse-graphite-8",
+  "source_repo": "discourse-graphite",
+  "language": "Ruby",
+  "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/8",
+  "pr_title": "FIX: proper handling of group memberships",
+  "original_url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "fork_repo": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR8__20260122.git",
+  "pr_number": 1,
+  "golden_count": 3,
+  "repo_url": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR8__20260122.git",
+  "base_sha": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head_sha": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "stat": " .../admin/controllers/admin-group.js.es6           |  81 +++++++---\n .../javascripts/admin/routes/admin_group_route.js  |  12 +-\n app/assets/javascripts/admin/templates/group.hbs   |  74 ++++++---\n .../javascripts/admin/templates/group_member.hbs   |   1 +\n .../javascripts/admin/views/group-member.js.es6    |   4 +\n app/assets/javascripts/discourse/models/group.js   |  81 ++++++----\n .../discourse/routes/group-members.js.es6          |  13 +-\n .../templates/components/admin-group-selector.hbs  |   2 -\n .../discourse/templates/group/members.hbs          |   2 +-\n .../templates/user-selector-autocomplete.raw.hbs   |  16 +-\n .../stylesheets/common/admin/admin_base.scss       |  55 +++++--\n app/controllers/admin/groups_controller.rb         | 109 +++++++------\n app/controllers/groups_controller.rb               |  37 +++--\n config/locales/client.en.yml                       |   6 +-\n config/routes.rb                                   |   3 +-\n spec/controllers/admin/groups_controller_spec.rb   | 176 ++++++++++-----------\n 16 files changed, 389 insertions(+), 283 deletions(-)\n",
+  "name_status": "M\tapp/assets/javascripts/admin/controllers/admin-group.js.es6\nM\tapp/assets/javascripts/admin/routes/admin_group_route.js\nM\tapp/assets/javascripts/admin/templates/group.hbs\nA\tapp/assets/javascripts/admin/templates/group_member.hbs\nA\tapp/assets/javascripts/admin/views/group-member.js.es6\nM\tapp/assets/javascripts/discourse/models/group.js\nM\tapp/assets/javascripts/discourse/routes/group-members.js.es6\nM\tapp/assets/javascripts/discourse/templates/components/admin-group-selector.hbs\nM\tapp/assets/javascripts/discourse/templates/group/members.hbs\nM\tapp/assets/javascripts/discourse/templates/user-selector-autocomplete.raw.hbs\nM\tapp/assets/stylesheets/common/admin/admin_base.scss\nM\tapp/controllers/admin/groups_controller.rb\nM\tapp/controllers/groups_controller.rb\nM\tconfig/locales/client.en.yml\nM\tconfig/routes.rb\nM\tspec/controllers/admin/groups_controller_spec.rb\n",
+  "commits": "060cda77 FIX: proper handling of group memberships\n"
+}

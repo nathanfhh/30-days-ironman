@@ -1,0 +1,12 @@
+{
+  "slug": "sentry-80168",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.97,
+     "reasoning": "Both identify the four unimplemented abstract methods from StatefulDetectorHandler causing a TypeError at instantiation."},
+    {"golden_index": 1, "candidate_index": 3, "confidence": 0.95,
+     "reasoning": "Both point out the docstring still says list of DetectorEvaluationResult while evaluate() now returns a dict keyed by DetectorGroupKey."}
+  ]
+}

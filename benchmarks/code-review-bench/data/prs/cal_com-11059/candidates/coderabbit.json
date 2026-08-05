@@ -1,0 +1,21 @@
+[
+  "Handler accepts any HTTP method but should enforce POST with a 405 response like other webhook handlers",
+  "Header lookup is case-sensitive - if CALCOM_WEBHOOK_HEADER_NAME is set in mixed case, lookup will fail because Node.js normalizes incoming headers to lowercase",
+  "Header lookup doesn't handle arrays - if the header is sent multiple times, req.headers[...] will be an array and comparison against a string will incorrectly allow the request through",
+  "appCredentialWebhookRequestBodySchema.parse can throw on invalid payload, turning bad input into 500s instead of 400s",
+  "JSON.parse(symmetricDecrypt(...)) can throw on decrypt/JSON errors, turning bad input into 500s instead of 400s",
+  "minimumTokenResponseSchema uses [z.string().toString()] which yields a literal key and makes it required, so real token payloads will fail validation",
+  "parseRefreshTokenResponse overwrites missing refresh tokens with placeholder 'refresh_token' string, which will clobber valid refresh tokens downstream and break future refreshes",
+  "refreshOAuthTokens returns a Response object when credential sharing is enabled but returns refreshFunction() result otherwise - callers expect .data property which doesn't exist on Response objects",
+  "No error handling for the fetch call in refreshOAuthTokens - network failures throw unhandled exceptions",
+  "No timeout on the external fetch in refreshOAuthTokens, risking indefinite hangs",
+  "The () => any type signature in refreshOAuthTokens provides no type safety",
+  "No response validation in refreshOAuthTokens - the fetch response status and content aren't checked",
+  "Missing prisma import in salesforce/lib/CalendarService.ts for credential update",
+  "zoho-bigin/lib/CalendarService.ts passes credentialId instead of credential.userId to refreshOAuthTokens, causing sync to target wrong subject",
+  "zohocrm/lib/CalendarService.ts caller expects AxiosResponse with .data property but refreshOAuthTokens can return fetch Response, causing runtime error",
+  "Read-then-write pattern for credential upsert can create duplicates under concurrent requests without unique constraint",
+  "office365calendar/lib/CalendarService.ts silently persists stale credentials if token parsing fails instead of throwing error",
+  "salesforce/lib/CalendarService.ts uses stale credentialKey values when creating jsforce connection instead of refreshed token values",
+  "googlecalendar/lib/CalendarService.ts stores entire parseRefreshTokenResponse wrapper object as credential key instead of extracting .data property"
+]

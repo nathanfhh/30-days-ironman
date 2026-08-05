@@ -1,0 +1,12 @@
+[
+  "canManage() Javadoc says V2 VIEW is enough to manage groups, but this is incorrect - VIEW should not grant management rights",
+  "requireManageMembers() Javadoc points at canManage() but should point at canManageMembership(GroupModel)",
+  "@return tags say Stream but the method returns Set<String>",
+  "canManage() method treats AdminPermissionsSchema.VIEW as sufficient for global group management by calling hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE) - VIEW should not confer create/move authority",
+  "getGroupIdsWithViewPermission() uses groupResource.getId() (authorization resource IDs) instead of groupResource.getName() (Keycloak group IDs), causing permission checks to miss intended per-group resources and returning UUIDs that downstream group filters cannot match",
+  "canMapRole() checks root.hasOneAdminRole(AdminRoles.MANAGE_USERS) then calls checkAdminRoles(role), removing the schema-level users-manage shortcut - should return true immediately when MANAGE_USERS is detected",
+  "UserPermissionsV2 dropped the AdminRoles.ADMIN fast-path shortcut - users granted only the umbrella admin role will fail canView/canManage/canMapRoles/canManageGroupMembership checks",
+  "AdminPermissions listener for cleanup on role/client/group removal is only registered when ADMIN_FINE_GRAINED_AUTHZ is enabled, leaving orphaned authorization state in V2-only deployments",
+  "response.getLocation() can be null even with 201 status, causing NPE - should add explicit null assertion before parsing the path",
+  "RealmAdminPermissionsConfig adds AdminRoles.QUERY_GROUPS to shared fixture, which may hide regressions in Groups resource-type permission path for tests that shouldn't satisfy the group list gate"
+]

@@ -1,0 +1,13 @@
+[
+  "deleteCacheMutation doesn't invalidate connectedCalendars query after cache deletion, causing stale UI state when onSuccess isn't supplied",
+  "Hardcoded 'en-US' locale in Intl.DateTimeFormat instead of using runtime locale from useLocale() i18n.language",
+  "deleteCache handler only checks credential.userId === user.id, blocking team members from clearing cache for team-owned credentials - needs teamId support in authorization",
+  "Script assumes /tmp/tmole.log exists when tmole is already running, causing false failure if log is missing or stale",
+  "sed -i '' syntax is BSD-only and will fail on GNU sed (Linux systems) - should use portable sed -i.bak syntax",
+  "Add tsx to devDependencies for reproducibility instead of using npx tsx",
+  "Unused loop variable 'i' in shell script should be replaced with '_'",
+  "Mock getCacheStatusByCredentialIds should accept credentialIds parameter to match interface signature",
+  "Missing guard against missing/duplicate credentialId values before cache lookup query",
+  "credentialId validation should use z.number().int().positive() instead of just z.number()",
+  "getCacheStatusByCredentialIds should add early return for empty credential lists and deduplicate IDs"
+]

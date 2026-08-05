@@ -1,0 +1,101 @@
+{
+  "slug": "grafana-80329",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Cleanup scheduler ticker changed from 10 minutes to 1 minute, causing all cleanup jobs (snapshots, query history, short URLs, temp users, etc.) to run 10x more often instead of only changing annotation cleanup behavior"
+    },
+    {
+      "claim_id": "c002",
+      "text": "The migrator import is placed in a separate import group from the sqlstore import in the same file."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The ERROR-level log statements dump potentially thousands of annotation IDs into the log stream and will trigger monitoring alerts"
+    },
+    {
+      "claim_id": "c004",
+      "text": "The code uses Error log level for what appears to be debugging information. This will pollute error logs in production. Consider using Debug or Info level instead."
+    },
+    {
+      "claim_id": "c005",
+      "text": "t.Cleanup is registered after test data is created, so a failing subtest leaves data behind and contaminates subsequent test cases."
+    },
+    {
+      "claim_id": "c006",
+      "text": "The 'err' field is logged after the error has already been checked and returned, meaning err is guaranteed to be nil at those log points, showing misleading err=<nil> output"
+    },
+    {
+      "claim_id": "c007",
+      "text": "The whole refactor is premised on a single-statement batched subquery deadlocking with concurrent writes on MySQL, but there's no reproducible evidence of this in the branch. Where was this deadlock actually observed?"
+    },
+    {
+      "claim_id": "c008",
+      "text": "New cleanup cycle scheduled every minute but each cycle can run for up to 9 minutes, causing overlapping annotation-cleanup sweeps and 10\u00d7 increase in database load"
+    },
+    {
+      "claim_id": "c009",
+      "text": "Changing the CleanUpService ticker from 10 minutes to 1 minute could cause the cleanup loop to run nearly continuously if srv.clean() takes >1 minute (ticks accumulate), increasing load and lock contention"
+    },
+    {
+      "claim_id": "c010",
+      "text": "Logging all IDs with 'ids', ids in every batch log call produces very large log entries at scale - with batch size up to 32,767, a single log entry could contain tens of thousands of int64 values"
+    },
+    {
+      "claim_id": "c011",
+      "text": "fetchIDs builds the SELECT statement before checking whether condition is empty."
+    },
+    {
+      "claim_id": "c012",
+      "text": "Variable 'err' at line 534 will always be nil at that point since errors return early, so logging it is unnecessary"
+    },
+    {
+      "claim_id": "c013",
+      "text": "untilDoneOrCancelled stops when a batch's affected count is 0; under multi-instance concurrent cleanup, could this end a round prematurely and prevent the backlog from converging?"
+    },
+    {
+      "claim_id": "c014",
+      "text": "The new large-batch test doesn't actually push the annotation deletion path past the parameter limit; it's the annotation_tag path that actually guards against the regression."
+    },
+    {
+      "claim_id": "c015",
+      "text": "The err field will be nil on the happy path, making these look like misformatted error events"
+    },
+    {
+      "claim_id": "c016",
+      "text": "The workaround for the parameter limit only handles SQLite, and branches on the configured batch size instead of the actual number of IDs."
+    },
+    {
+      "claim_id": "c017",
+      "text": "The SQLite branch builds the IN list via O(n^2) string concatenation."
+    },
+    {
+      "claim_id": "c018",
+      "text": "The cleanup background job's ticker was changed from 10 minutes to 1 minute, affecting eight unrelated cleanup jobs."
+    },
+    {
+      "claim_id": "c019",
+      "text": "The cleanup ticker interval was changed from 10 minutes to 1 minute (time.Minute * 1), causing all 8 cleanup jobs to run 10x more frequently - this appears to be a debugging/testing change accidentally included"
+    },
+    {
+      "claim_id": "c020",
+      "text": "Ticker interval reduced from 10 minutes to 1 minute, likely a debugging artifact that causes cleanup jobs to fire 10\u00d7 more frequently than intended"
+    },
+    {
+      "claim_id": "c021",
+      "text": "The 9-minute timeout on line 89 was designed for the 10-minute interval; with a 1-minute ticker, overlapping cleanup cycles are nearly guaranteed"
+    },
+    {
+      "claim_id": "c022",
+      "text": "deleteByIDs at line 608 checks r.cfg.AnnotationCleanupJobBatchSize > sqliteParameterLimit but should check len(ids) > sqliteParameterLimit instead - when batchSize is configured above 999, the last partial batch with fewer than 999 IDs will unnecessarily use string-interpolation instead of safer parameterized queries"
+    },
+    {
+      "claim_id": "c023",
+      "text": "The t.Skip message casing is inconsistent with the existing convention in the repo."
+    },
+    {
+      "claim_id": "c024",
+      "text": "Condition checks r.cfg.AnnotationCleanupJobBatchSize > sqliteParameterLimit instead of len(ids) > sqliteParameterLimit, meaning even small final batches unnecessarily use inlined IDs when configured batch size is large"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-8",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 20,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 17, "confidence": 0.85,
+     "reasoning": "Both say the now-async findMembers is called in setupController with its promise discarded and unhandled, leaving the controller without member data (and without loading/error handling) when it renders."},
+    {"golden_index": 1, "candidate_index": 5, "confidence": 0.7,
+     "reasoning": "Both describe the pagination arithmetic yielding a trailing empty page when the member count is an exact multiple of the page size; the candidate attributes it to the totalPages formula rather than to the offset cap, but it is the same blank-last-page defect."},
+    {"golden_index": 2, "candidate_index": 10, "confidence": 0.95,
+     "reasoning": "Both identify the remove_member spec using PUT while the routed action is DELETE."}
+  ]
+}

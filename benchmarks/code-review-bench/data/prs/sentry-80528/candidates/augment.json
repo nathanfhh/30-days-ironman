@@ -1,0 +1,5 @@
+[
+  "If `failed_checkins` contains only statuses not in `HUMAN_FAILURE_STATUS_MAP`, `status_counts` will be empty and this can yield a user-visible message like `\" check-ins detected\"` despite the docstring mentioning a generic fallback. Consider explicitly handling the empty-count case to avoid confusing evidence text.",
+  "`config` is copied and `schedule_type` is converted to a display value, but the returned payload uses `monitor_environment.monitor.config`, so this transformation is currently ignored. If the intent was to publish a human-readable `schedule_type`, it won't happen as written.",
+  "If there are fewer than `failure_issue_threshold` check-ins available, `previous_checkins[:failure_issue_threshold]` will still return a shorter list and the code proceeds to open an incident. This seems at odds with the \"N consecutive missed or failed check-ins in a row\" threshold semantics (it could create an incident on the first failure for a brand-new monitor)."
+]

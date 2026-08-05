@@ -1,0 +1,81 @@
+{
+  "slug": "keycloak-32918",
+  "issues": [
+    {
+      "text": "getForLogin's cache-hit path returns identity providers in hash-set order instead of the alias order the fallback (uncached) path always returns, so the login page's IDP button ordering depends on whether the cache happened to be warm.",
+      "zh": "加上快取後，命中快取的那條路徑先 collect(Collectors.toSet())，再把 model 放進 HashSet，回傳順序變成 hash 順序；而兩條 fallback 仍然是 alias 順序。",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "getForLogin's fallback paths don't deduplicate results the way the cache path does, so a realm-level provider whose config also carries BROKER_PUBLIC=true can be returned twice via the fallback path but only once when served from cache.",
+      "zh": "同一個 Set 也讓去重行為分歧：一個 realm-level 但 config 帶 BROKER_PUBLIC=true 的 provider 會同時符合兩段而重複出現，fallback 路徑會回傳兩次，快取路徑則只有一次。",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "update()'s login-cache invalidation check compares the original and updated identity provider using two different isEnabled() semantics (organization-wrapped vs raw field value), creating a path where a change that should invalidate the login cache doesn't — a disabled/hidden organization broker can keep showing on the public login page even after the organization is later re-enabled.",
+      "zh": "update() 的 login cache 失效判斷，原值與新值不是用同一套 isEnabled() 比較，存在漏失效路徑。",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "getLoginPredicate()'s semantic change (adding organizationId/BROKER_PUBLIC checks) leaks into IdentityProviderBean.federatedProviderPredicate(), an unrelated call site used to filter already-federated brokers on the login page, causing a user's already-linked organization broker without BROKER_PUBLIC to disappear from the login page when organizations are disabled for the realm.",
+      "zh": "getLoginPredicate() 的語意變更外溢到登入頁的 federated broker 過濾。使用者已經綁定、但沒有 BROKER_PUBLIC 的組織 broker，會從登入頁消失，該使用者失去這個登入管道。",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "getLoginPredicate() and its query-side counterpart getLoginSearchOptions() are no longer symmetric after this change, and the enum's javadoc claiming to cover 'all fields that determine login availability' is now inaccurate.",
+      "zh": "getLoginPredicate() 與它的查詢端孿生 getLoginSearchOptions() 現在不再對稱，enum 自己的 javadoc 也寫著「包含所有判斷 provider 是否可用於登入的欄位」。",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Only 2 of getForLogin's 4 call sites re-check isEnabled() on the returned providers, pushing responsibility for a contract violation (cached organization-wrapped providers may be disabled even though they remain in the cached set) onto individual callers instead of the provider itself.",
+      "zh": "getForLogin 的四個呼叫端只有兩個補上 isEnabled() 重新檢查，等於把 provider 的契約攤給呼叫端各自負責。",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new test registers its cleanup using the hardcoded literal string \"alias\" instead of the actual per-iteration alias variable, so none of the 21 identity providers the test creates are ever cleaned up, and the failure is silently swallowed by TestCleanup.",
+      "zh": "測試的 cleanup 用了字面值 \"alias\"，這個測試建立的 21 個 identity provider 不會被清掉。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "registerIDPLoginInvalidation's 'should invalidate' branch (create/remove of an IDP that is actually eligible for login) has zero test coverage — all new assertions only exercise the 'should not invalidate' branch.",
+      "zh": "registerIDPLoginInvalidation 的「應該失效」分支完全沒有測試覆蓋。",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "remove() now always queries the database for the identity provider even when it's already known/invalid via the cache, and the two invalidation calls within the same method now source the model from two different places (one from the fresh query, one from the cached value).",
+      "zh": "remove() 現在每次都多打一次資料庫，即使快取裡就有這個 IDP；同一個方法裡對同一個 IDP 有兩個來源。",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "The new cache-key constant IDP_LOGIN_SUFFIX and method cacheKeyForLogin don't follow the naming convention of the other constants/methods in the same class (missing 'KEY', missing 'Idp').",
+      "zh": "新增的常數與方法命名跟同一個 class 內的鄰居不一致。",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "getLoginPredicate() rebuilds its predicate chain from scratch on every call — 4 times within a single update() invocation — and there's an unnecessary static import for it.",
+      "zh": "getLoginPredicate() 每次呼叫都重新組出一條 predicate 鏈，一次 update 呼叫四次；static import 也是多餘的。",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Whether packing every organization's login IDP list into a single cache entry keyed by realm+mode will scale acceptably — rebuild and invalidation cost grows with the number of cached organizations, unlike the existing getByOrganization cache which has a bounded key space.",
+      "zh": "在組織數量很多的 realm 上，把所有組織的 login IDP 清單塞進同一個 cache entry，重建與失效的成本可以接受嗎？"
+    },
+    {
+      "text": "Whether JUnit's default (hash-based) method execution order could make testCacheIDPByOrg's leaked identity providers (same cleanup bug as F-005) cause testCacheIDPForLogin's exact-count assertions to fail.",
+      "zh": "以目前的 JUnit method 執行順序，testCacheIDPByOrg 洩漏的 identity provider 會不會讓 testCacheIDPForLogin 的絕對數字斷言直接失敗？"
+    }
+  ]
+}

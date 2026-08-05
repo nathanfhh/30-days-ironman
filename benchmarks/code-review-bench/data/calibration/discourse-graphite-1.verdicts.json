@@ -1,0 +1,230 @@
+{
+  "slug": "discourse-graphite-1",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.98,
+      "severity": "Critical",
+      "cluster": "downsize-method-redefined",
+      "evidence": "app/models/optimized_image.rb:145-151; app/jobs/regular/resize_emoji.rb:14",
+      "reason": "Both `def self.downsize` bodies are present in the file; the 3-arg one at line 149 discards the 4-arg one (ruby -w prints 'method redefined; discarding old downsize'). Jobs::ResizeEmoji calls `OptimizedImage.downsize(path, path, 100, 100, opts)` — I reproduced the resulting `ArgumentError: wrong number of arguments (given 5, expected 3..4)` with a minimal Ruby script."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "download-rescue-nil-silent",
+      "evidence": "app/controllers/uploads_controller.rb:55",
+      "reason": "The modified line still ends in `rescue nil`, which swallows every StandardError from FileHelper.download (open-uri network failures, Discourse::InvalidParameters, timeouts) with no log line; the caller only learns tempfile is nil."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "downsize-magic-numbers",
+      "evidence": "app/controllers/uploads_controller.rb:65-67",
+      "reason": "`attempt = 5` and the literal `\"80%\"` are both new, unnamed and uncommented, and together they do bound the reduction the feature can achieve (5 rounds of 80% linear scaling); nothing in the code or the comment above records where those values came from."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "unclear",
+      "confidence": 0.45,
+      "severity": null,
+      "cluster": "filesize-arg-stale",
+      "evidence": "app/controllers/uploads_controller.rb:72; /opt/rbenv/versions/3.3.6/lib/ruby/3.3.0/tempfile.rb:274",
+      "reason": "Tempfile#size fstats the still-open fd, so it tracks an in-place truncating rewrite but goes stale the moment something replaces the path by rename — I verified both behaviours in Ruby. Whether ImageMagick's `convert` and image_optim 0.20.2's `optimize_image!` rewrite in place or rename over the path decides this, and neither gem/binary is installed here. Settled by reading image_optim's ImagePath#replace (rename vs in-place) and ImageMagick's output OpenBlob mode; note that even under the rename model the value would be the post-first-iteration size, not the 'original file size' the claim states."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "downsize-return-ignored",
+      "evidence": "app/controllers/uploads_controller.rb:65-72; app/models/optimized_image.rb:157-169",
+      "reason": "OptimizedImage.downsize returns convert_with's boolean (false on a non-zero exit or any exception), and the new loop assigns it nowhere; after the while loop there is no size re-check either, so line 72 calls Upload.create_for unconditionally and the only backstop is Validators::UploadValidator rejecting the upload."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "stale-tempfile-size-loop",
+      "evidence": "app/controllers/uploads_controller.rb:66; /opt/rbenv/versions/3.3.6/lib/ruby/3.3.0/tempfile.rb:271-279",
+      "reason": "The Ruby half of the mechanism is exactly right — Tempfile#size delegates to File#size on the open fd, and I confirmed experimentally that a rename-over-write leaves that fd reporting the old inode's size. But convert_with runs `convert` and then ImageOptim; if both rewrite the same inode the loop condition is fine. Settled by image_optim 0.20.2's ImagePath#replace and ImageMagick's write path, neither of which is available offline here."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "unclear",
+      "confidence": 0.4,
+      "severity": null,
+      "cluster": "convert-with-shell-redirect",
+      "evidence": "app/models/optimized_image.rb:160-162",
+      "reason": "`&>` is a bashism; under dash (Ubuntu's /bin/sh, which Kernel#` invokes for a command containing metacharacters) it parses as background-then-redirect, making $?.exitstatus meaningless. Which shell /bin/sh points at in the deployment is a production config not present in the repo, and these two lines are unchanged context in this diff."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "unclear",
+      "confidence": 0.4,
+      "severity": null,
+      "cluster": "downsize-loop-resource-cost",
+      "evidence": "app/controllers/uploads_controller.rb:64-69; config/nginx.sample.conf:61",
+      "reason": "The loop really does fan one upload out into up to five convert + ImageOptim invocations, and only the API/URL branch has its own 10MB cap; the browser branch is bounded by whatever the front-end web server allows (the shipped nginx sample sets client_max_body_size 10m, but that is a sample). Whether the resulting cost is 'acceptable' is an ops/product decision, not something the code settles."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "in-place-overwrite",
+      "evidence": "app/controllers/uploads_controller.rb:67",
+      "reason": "`OptimizedImage.downsize(tempfile.path, tempfile.path, ...)` really does pass the same path as source and destination, and since the return value is dropped a partially written file would be handed straight to Upload.create_for. Severity is held down because the codebase already does this at app/models/upload.rb:98 and in Jobs::ResizeEmoji."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "downsize-in-controller-not-model",
+      "evidence": "app/controllers/uploads_controller.rb:63-70; lib/email/receiver.rb:235; app/jobs/regular/pull_hotlinked_images.rb:41; app/models/user_avatar.rb:23,71",
+      "reason": "The new block sits in the controller, and every other Upload.create_for caller it names does exist and still goes straight to Validators::UploadValidator's max_image_size_kb check (lib/validators/upload_validator.rb:81-85). The count is off — I find 4 other callers under app/ and lib/, plus 8 in script/import_scripts — but the substance holds."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "downsize-return-ignored",
+      "evidence": "app/controllers/uploads_controller.rb:66-69; app/models/optimized_image.rb:166-169",
+      "reason": "convert_with returns false both on a non-zero exit status and from its bare rescue, leaving the file untouched; the loop has no `break` on false, so it re-runs the identical failing command until attempt hits zero."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "stale-tempfile-size-loop",
+      "evidence": "/opt/rbenv/versions/3.3.6/lib/ruby/3.3.0/tempfile.rb:271-279",
+      "reason": "Ruby does not cache file size: Tempfile#size calls File#size on the live fd, which fstats every time. I confirmed by experiment that it does pick up a same-inode truncating rewrite by an external process. The stated cause is wrong; the only way the value goes stale is an inode swap, which is not what this claim asserts."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "hardcoded-10mb-duplicated",
+      "evidence": "app/assets/javascripts/discourse/lib/utilities.js:182,246; app/controllers/uploads_controller.rb:55; config/nginx.sample.conf:61",
+      "reason": "The 10MB figure now appears independently in exactly those four places — the two JS literals and the FileHelper.download cap introduced by this diff, plus the pre-existing `client_max_body_size 10m` in the shipped nginx sample — with nothing cross-referencing them."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "downsize-return-ignored",
+      "evidence": "app/controllers/uploads_controller.rb:66-72",
+      "reason": "Same defect as c011 stated more compactly: the false return is discarded, the loop keeps spinning, and execution falls through to Upload.create_for with the file still oversized."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "allow-animated-thumbnails-misused",
+      "evidence": "app/controllers/uploads_controller.rb:67; app/models/optimized_image.rb:126-139,155; config/site_settings.yml:574",
+      "reason": "allow_animated_thumbnails is elsewhere only ever passed to thumbnail generation (app/models/upload.rb:32). Here it gates the animated branch for the user's own upload: with it off, optimize() picks downsize_instructions, whose `convert #{from}[0]` frame selector keeps only the first frame, and the result is written back over tempfile.path with no notification."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "downsize-budget-insufficient",
+      "evidence": "app/controllers/uploads_controller.rb:65-72",
+      "reason": "The conclusion holds — five bounded attempts can end with the file still above max_image_size_kb and the code proceeds to Upload.create_for regardless. The arithmetic is off, though: `-resize 80%` scales each dimension, so 0.8^5 ≈ 33% is the linear factor and byte size falls closer to 0.64^5 ≈ 11%."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "gifsicle-percentage-geometry",
+      "evidence": "app/models/optimized_image.rb:115-124,137-139; app/controllers/uploads_controller.rb:67",
+      "reason": "downsize_instructions_animated delegates to resize_instructions_animated, which interpolates the dimensions argument into `gifsicle --resize-fit #{dimensions}`. --resize-fit takes a WxH geometry (gifsicle spells percentage scaling --scale), so `--resize-fit 80%` is rejected; the non-zero exit makes convert_with return false, which this caller ignores. Every other caller of resize/downsize passes real integer dimensions."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "unclear",
+      "confidence": 0.45,
+      "severity": null,
+      "cluster": "stale-tempfile-size-loop",
+      "evidence": "app/controllers/uploads_controller.rb:66; app/models/optimized_image.rb:160-164",
+      "reason": "This is precisely the open question. I established the Ruby side (Tempfile#size fstats the open fd, so in-place truncation is observed and rename-over-write is not), but answering it needs image_optim 0.20.2's ImagePath#replace and ImageMagick's writer behaviour, and no gems are installed and there is no network."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "js-hardcoded-max-size",
+      "evidence": "app/assets/javascripts/discourse/lib/utilities.js:182,246; config/site_settings.yml:513-518",
+      "reason": "The replaced expression was `Discourse.SiteSettings['max_' + type + '_size_kb']`, so the client no longer distinguishes image from attachment and no longer follows the site settings (both default to 3072 KB, both `client: true`). A default install now accepts a 10MB attachment in the browser that Validators::UploadValidator rejects server-side, and the 413 handler reports a limit the server does not use."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "unclear",
+      "confidence": 0.45,
+      "severity": null,
+      "cluster": "rack-tempfile-extension-gif",
+      "evidence": "app/models/optimized_image.rb:155; app/controllers/uploads_controller.rb:58,67",
+      "reason": "The in-repo half checks out: optimize() matches `from =~ /\\.GIF$/i` against the tempfile path, while the surrounding guard uses FileHelper.is_image?(filename) on the original filename, so a path without an extension would silently take the frame-stripping branch. Whether Rack 1.5.5 (Gemfile.lock:231) names its multipart tempfile with the uploaded file's extension is a gem internal I cannot read here; settled by Rack::Multipart::Parser's Tempfile.new call in that version."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "allow-animation-ineffective-on-upload-path",
+      "evidence": "app/controllers/uploads_controller.rb:67; app/models/optimized_image.rb:115-124,155",
+      "reason": "Scoped to this call site the conclusion holds on the strength of c017 alone: on the API/URL path FileHelper.download does give the tempfile a .gif extension so the animated branch is taken, and it then fails on the percentage geometry; on the browser path it either fails the same way or is never reached. So passing allow_animation here buys nothing either way."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "stale-tempfile-size-loop",
+      "evidence": "app/controllers/uploads_controller.rb:65-69; /opt/rbenv/versions/3.3.6/lib/ruby/3.3.0/tempfile.rb:271-279",
+      "reason": "Two things are wrong: the loop is bounded by `attempt = 5` and always terminates, and there is no 'cached size' — Tempfile#size fstats the live fd on every call, which I verified picks up an in-place rewrite."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "js-case-var-scope",
+      "evidence": "app/assets/javascripts/discourse/lib/utilities.js:245-248",
+      "reason": "Correct about the language: `var` in a switch case is function-scoped and hoisted, so maxSizeKB is visible (as undefined) in the case 0/422 arms and the default path. Minor here since nothing else reads it, and note the suggested remedy is ineffective — a bare block does not scope `var` in ES5."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "tests-broken-and-missing",
+      "evidence": "test/javascripts/lib/utilities-test.js.es6:51-61; spec/controllers/uploads_controller_spec.rb",
+      "reason": "'prevents files that are too big from being uploaded' sets max_image_size_kb = 5 against a 10 KB file; with maxSizeKB pinned to 10240 the 10 > 10240 comparison is false, so validUpload returns true and both assertions fail. And uploads_controller_spec.rb has no example touching the downsize loop — nothing in spec/ stubs or asserts OptimizedImage.downsize at all."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "hardcoded-download-cap",
+      "evidence": "app/controllers/uploads_controller.rb:55; lib/file_helper.rb:9-24",
+      "reason": "The cap that was SiteSetting.max_image_size_kb.kilobytes is now a fixed 10.megabytes, so an instance configured above 10MB silently loses the excess — FileHelper.download's `while f.size <= max_file_size` loop truncates rather than raising, producing a corrupt image — while every other FileHelper.download caller (app/models/user_avatar.rb:22,66, lib/file_store/base_store.rb:61) still honours the setting."
+    }
+  ]
+}

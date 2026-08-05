@@ -1,0 +1,20 @@
+{
+  "slug": "grafana-103633",
+  "tool": "cubic-v2",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.6,
+      "reasoning": "Describes the same asymmetric trust in Check — denial cache trusted while permission-cache denials are ignored and re-queried — though it emphasizes the opposite harm."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.8,
+      "reasoning": "Same observation about the test: the cached permission is seeded as denied, so the test does not prove what its comment claims."
+    }
+  ]
+}

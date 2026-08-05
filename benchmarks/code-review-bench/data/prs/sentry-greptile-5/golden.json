@@ -1,0 +1,20 @@
+{
+  "slug": "sentry-greptile-5",
+  "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/5",
+  "pr_title": "Replays Self-Serve Bulk Delete System",
+  "language": "Python",
+  "comments": [
+    {
+      "comment": "Breaking changes in error response format",
+      "severity": "Medium"
+    },
+    {
+      "comment": "Detector validator uses wrong key when updating type",
+      "severity": "Medium"
+    },
+    {
+      "comment": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+      "severity": "Low"
+    }
+  ]
+}

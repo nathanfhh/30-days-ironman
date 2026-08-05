@@ -1,0 +1,6 @@
+[
+  "Django QuerySets do not support negative indexing. When `enable_advanced_features` is True and `cursor.offset < 0`, this code will raise an `AssertionError` at runtime with message 'Negative indexing is not supported.'",
+  "`OptimizedCursorPaginator.get_item_key` applies `math.floor`/`math.ceil` directly to the raw attribute value. When paginating by `-datetime`, the value is a `datetime` object, and `math.floor(datetime)` raises `TypeError`. The `DateTimePaginator` it replaces handles this correctly by first converting to a float timestamp.",
+  "`organization_context.member` can be `None` (when the user has no membership in the organization), so accessing `.has_global_access` will raise `AttributeError` for non-superusers without membership. Guard against the `None` case.",
+  "Comment incorrectly states that Django QuerySets handle negative slicing - they actually raise an `AssertionError`. This misleading documentation could cause confusion and bugs."
+]

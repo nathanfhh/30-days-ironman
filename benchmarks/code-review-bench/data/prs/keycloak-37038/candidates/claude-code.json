@@ -1,0 +1,5 @@
+[
+  "AdminPermissionsSchema.getOrCreateResource() never calls resource.setType(resourceType) on individual group resources, so findByType(server, GROUPS_RESOURCE_TYPE, ...) cannot find them",
+  "In GroupPermissionsV2.getGroupIdsWithViewPermission(), granted.add(groupResource.getId()) adds the authorization resource UUID instead of the group model ID - should be groupResource.getName()",
+  "Per-group VIEW_MEMBERS permissions are non-functional in V2, breaking getUsersCount and the DB-level group filtering optimization in user searches"
+]

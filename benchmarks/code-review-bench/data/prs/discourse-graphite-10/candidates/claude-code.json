@@ -1,0 +1,8 @@
+[
+  "Migration at db/migrate/20150818190757_create_embeddable_hosts.rb uses string interpolation in raw SQL: VALUES ('#{h}', ...) which is unparameterized and a SQL injection risk",
+  "Fabricator files appear swapped: category_fabricator.rb contains the embeddable_host fabricator and embeddable_host_fabricator.rb contains category fabricators",
+  "Migration uses force: true which will drop the table if it already exists, potentially causing data loss on re-run",
+  "embedding_controller.rb update action is a no-op - it re-renders without saving anything",
+  "rest.js.es6 type.replace('_', '-') only replaces the first underscore, not all occurrences, which could be fragile for other types",
+  "Tests for the new controller are minimal - only checks inheritance with no integration tests for CRUD actions"
+]

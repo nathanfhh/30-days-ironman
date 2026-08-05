@@ -1,0 +1,18 @@
+{
+  "slug": "sentry-93824",
+  "tool": "nathan-code-review",
+  "n_golden": 5,
+  "n_candidates": 20,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 7, "confidence": 0.85,
+     "reasoning": "Both flag the same metric value being tagged inconsistently under the keys 'shard' and 'shards'."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.55,
+     "reasoning": "Both concern the newly-added test sleep being an unreliable wait mechanism, though the candidate's specific reason (monkeypatched no-op) is more detailed than the golden's generic flakiness framing."},
+    {"golden_index": 2, "candidate_index": 0, "confidence": 0.95,
+     "reasoning": "Both identify that spawn-context flusher processes are SpawnProcess, not a subclass of multiprocessing.Process on POSIX, so the isinstance guard is always False and hung processes are never killed."},
+    {"golden_index": 3, "candidate_index": 4, "confidence": 0.85,
+     "reasoning": "Both say the newly added time.sleep in test_consumer.py/test_basic does not actually wait because time.sleep was monkeypatched to a no-op earlier in the test."},
+    {"golden_index": 4, "candidate_index": 11, "confidence": 0.9,
+     "reasoning": "Both say the deadline check breaks out of the join loop entirely, skipping terminate() on remaining processes instead of continuing to terminate them."}
+  ]
+}

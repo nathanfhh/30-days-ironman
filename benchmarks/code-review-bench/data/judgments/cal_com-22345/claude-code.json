@@ -1,0 +1,14 @@
+{
+  "slug": "cal_com-22345",
+  "tool": "claude-code",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both say authConditions is always non-null so the else-if/else branches are unreachable dead code."
+    }
+  ]
+}

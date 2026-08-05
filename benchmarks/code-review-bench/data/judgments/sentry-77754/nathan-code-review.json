@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-77754",
+  "tool": "nathan-code-review",
+  "n_golden": 4,
+  "n_candidates": 13,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.93,
+     "reasoning": "Both identify that AssignmentSource.queued's default timezone.now() is evaluated once at class/module definition time and shared across instances instead of per-instance."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.97,
+     "reasoning": "Both point to the identical typo: test_from_dict_inalid_data missing the 'v', should be test_from_dict_invalid_data."},
+    {"golden_index": 2, "candidate_index": 5, "confidence": 0.95,
+     "reasoning": "Both note test_from_dict_empty_array actually tests an empty dict, not an array, and the name is misleading."}
+  ]
+}

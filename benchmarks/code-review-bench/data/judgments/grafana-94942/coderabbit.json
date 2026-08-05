@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-94942",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both branches return false, making the feature flag check dead code."
+    }
+  ]
+}

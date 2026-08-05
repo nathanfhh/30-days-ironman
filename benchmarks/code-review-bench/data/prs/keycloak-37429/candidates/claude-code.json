@@ -1,0 +1,7 @@
+[
+  "Instance fields POLICY_SOME_HTML, POLICY_NO_HTML, HTML_TAGS use constant naming convention but aren't declared as static final",
+  "Typo in method name 'santizeAnchors' (should be 'sanitizeAnchors')",
+  "The santizeAnchors method modifies value via replaceFirst while iterating matches, which could have subtle edge cases with repeated identical anchors",
+  "Two new dependencies added with hardcoded versions instead of being managed via a BOM",
+  "The normalizeValue method has special cases for specific keys (templateHelp, optimizeLookupHelp, linkExpirationFormatter, error-invalid-multivalued-size, and email RTL styles) that bypass parts of sanitization and should be verified for completeness and correctness"
+]

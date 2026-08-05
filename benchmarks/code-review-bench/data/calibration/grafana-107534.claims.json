@@ -1,0 +1,69 @@
+{
+  "slug": "grafana-107534",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Interpolate before filtering `query.expr`, otherwise template-only queries that resolve to an empty expression can reach the shard-splitting path and crash `runSplitQuery()`"
+    },
+    {
+      "claim_id": "c002",
+      "text": "The applyTemplateVariables added at the two entry points doesn't replace the downstream call, so the same query gets interpolated 2-3 times."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The two new tests mock templateSrv.replace to substitute $__auto with 5m and assert expr === 'count_over_time({a=\"b\"}[5m])'. Does the real applyTemplateVariables actually substitute $__auto in production?"
+    },
+    {
+      "claim_id": "c004",
+      "text": "toHaveBeenCalledTimes(5) doesn't explain how the number 5 was derived."
+    },
+    {
+      "claim_id": "c005",
+      "text": "Test asserts call count (toHaveBeenCalledTimes(5)) which encodes the multi-pass symptom rather than the intended behavior - any future optimization removing redundant calls will break the test even though behavior improves. Should assert what the query looks like after interpolation instead"
+    },
+    {
+      "claim_id": "c006",
+      "text": "The fix should remove the applyTemplateVariables call from runSplitQuery and runShardSplitQuery, relying solely on the existing call in DataSourceWithBackend.query()"
+    },
+    {
+      "claim_id": "c007",
+      "text": "Double application of applyTemplateVariables/ad hoc filters: applyTemplateVariables is called upfront, then again in DataSourceWithBackend.query() which unconditionally calls it. For parsed log queries with ad hoc filters, addFilterAsLabelFilter has no duplicate-detection guard, causing duplicate label filters like `| env=`prod` | env=`prod``"
+    },
+    {
+      "claim_id": "c008",
+      "text": "The applyTemplateVariables method is called with request.filters as the third parameter, but this parameter is not used in the corresponding test setup."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Test assertion expects template interpolation once per shard, but the code now interpolates each target only once before splitting - assertion count should be 1 instead of 5"
+    },
+    {
+      "claim_id": "c010",
+      "text": "The new applyTemplateVariables call in runSplitQuery (line 298) causes ad-hoc filters to be duplicated on every split query, because DataSourceWithBackend.query() also calls applyTemplateVariables downstream, and addAdHocFilters unconditionally appends filter clauses without deduplication"
+    },
+    {
+      "claim_id": "c011",
+      "text": "Call-count expectation in test at line 112 expects 5 calls to datasource.applyTemplateVariables, but runShardSplitQuery only calls applyTemplateVariables once per initial target (this test has one target), so the expectation should be changed to 1"
+    },
+    {
+      "claim_id": "c012",
+      "text": "The split request now carries interpolated targets into trackGroupedQueries, where legendFormat is reported without obfuscation \u2014 does analytics expect the pre- or post-interpolation value?"
+    },
+    {
+      "claim_id": "c013",
+      "text": "For shard-split queries, applyTemplateVariables is called three times (runShardSplitQuery + runSplitQuery + DataSourceWithBackend.query), tripling the ad-hoc filters"
+    },
+    {
+      "claim_id": "c014",
+      "text": "Triple application of applyTemplateVariables in shard-split path: runShardSplitQuery calls applyTemplateVariables, then dispatches to runSplitQuery which calls it again, then datasource.runQuery calls DataSourceWithBackend.query() which calls it a third time, causing ad hoc filters to be added multiple times per sub-request"
+    },
+    {
+      "claim_id": "c015",
+      "text": "The two entry points now run the same three-step pipeline, but their filter order is reversed."
+    },
+    {
+      "claim_id": "c016",
+      "text": "Tests don't catch this bug because they mock datasource.runQuery so super.query() and its applyTemplateVariables call never execute, and the mock applyTemplateVariables does an idempotent string replace that hides the duplication"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "slug": "sentry-greptile-1",
+  "source_repo": "sentry-greptile",
+  "language": "Python",
+  "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/1",
+  "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR1__20260122.git",
+  "pr_number": 1,
+  "golden_count": 4,
+  "base_rev": "refs/ncr/pr~1",
+  "repo_url": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR1__20260122.git",
+  "base_sha": "74618671bff8114fcec8fe77c6260c9a2bc2864a",
+  "head_sha": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "stat": " src/sentry/api/endpoints/organization_auditlogs.py |  33 +++++--\n src/sentry/api/paginator.py                        | 103 ++++++++++++++++++++-\n src/sentry/utils/cursors.py                        |   2 +\n 3 files changed, 128 insertions(+), 10 deletions(-)\n",
+  "name_status": "M\tsrc/sentry/api/endpoints/organization_auditlogs.py\nM\tsrc/sentry/api/paginator.py\nM\tsrc/sentry/utils/cursors.py\n",
+  "commits": "8ab881451 feat(audit-logs): Enhanced pagination performance for high-volume deployments\n"
+}

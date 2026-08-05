@@ -1,0 +1,26 @@
+{
+  "slug": "keycloak-37634",
+  "tool": "nathan-code-review",
+  "n_golden": 4,
+  "n_candidates": 13,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 3,
+      "confidence": 0.98,
+      "reasoning": "Both identify the copy-pasted null check in AccessTokenContext that validates grantType while claiming to guard rawTokenId."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both identify isAccessTokenId's grant-shortcut check as having both the wrong substring offset and an inverted return, so a matching shortcut is not treated as valid."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 4,
+      "confidence": 0.9,
+      "reasoning": "Both say the test catches the overly broad RuntimeException rather than the IllegalArgumentException the implementation actually throws, weakening the assertion."
+    }
+  ]
+}

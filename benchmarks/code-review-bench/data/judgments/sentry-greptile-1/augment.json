@@ -1,0 +1,26 @@
+{
+  "slug": "sentry-greptile-1",
+  "tool": "augment",
+  "n_golden": 4,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.92,
+      "reasoning": "Both say a negative offset reaching queryset slicing will crash because Django QuerySets don't support negative indices."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both say organization_context.member can be None (e.g. API key/org auth token requests) so accessing .has_global_access on it raises/crashes."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 3,
+      "confidence": 0.93,
+      "reasoning": "Both say get_item_key assumes a numeric sort key, but with order_by=-datetime the key is a datetime and math.floor/ceil raises TypeError."
+    }
+  ]
+}

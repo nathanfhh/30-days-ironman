@@ -1,0 +1,266 @@
+{
+  "slug": "cal_com-7232",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "send-code-no-loading-guard",
+      "evidence": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:408-421",
+      "reason": "The send-code Button is `disabled={numberVerified || false}` only; sendVerificationCodeMutation.isLoading is never consulted, so repeated clicks fire repeated mutations. The Verify button 30 lines below does guard on verifyPhoneNumberMutation.isLoading, so the omission is inconsistent within the same block."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "immediate-delete-workflows-router",
+      "evidence": "packages/trpc/server/routers/viewer/workflows.tsx:214,521; packages/prisma/schema.prisma:WorkflowStep/WorkflowReminder relations",
+      "reason": "Both workflows.tsx sites that pass immediateDelete=true are immediately followed by workflow.deleteMany / workflowStep.delete, and WorkflowStep->Workflow and WorkflowReminder->WorkflowStep are both `onDelete: Cascade`, so the reminder row is destroyed in the same request. Deferred cancellation requires the row to survive until the cron, so it is impossible at those call sites; immediate SendGrid cancellation is the deliberate and necessary choice there, not a reintroduced regression."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "unclear",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "sendgrid-repeat-cancel-semantics",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:57-64",
+      "reason": "The cron re-issues POST /v3/user/scheduled_sends with status=cancel on every run until the row is deleted, so the answer matters, but SendGrid's response to a duplicate cancel (and to a cancel racing an imminent send) is external API runtime behaviour not present in this repo. Settled only by SendGrid's scheduled-sends API docs or a live call against a sandbox key."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "cancel-query-missing-filters",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-51 vs :34-41 and :80-87",
+      "reason": "The remindersToCancel where-clause is only `{ cancelled: true, scheduledDate: {lte} }`, while both sibling queries in the same email-only cron file filter `method: WorkflowMethods.EMAIL`. Today nothing sets cancelled=true on an SMS row (deleteScheduledSMSReminder deletes outright), so the claim is correctly stated as conditional on SMS adopting the same flag."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "unrelated-ui-refactor",
+      "evidence": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:390",
+      "reason": "The wrapper condition changes from `(isPhoneNumberNeeded || isSenderIdNeeded)` to `isPhoneNumberNeeded`, splitting the phone-verification block out of the shared sender-id panel. Nothing in that block touches reminder scheduling or cancellation, so it is a separate UI change riding along in a reminder-lifecycle PR."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Medium",
+      "cluster": "cron-cancel-loop-no-error-isolation",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-77",
+      "reason": "The try wraps the whole for-loop, so the first SendGrid rejection aborts every remaining cancellation - that part is correct. The second half is inverted: prisma.workflowReminder.delete() returns a lazy PrismaPromise that only runs when awaited, and the throw skips `await Promise.all(...)`, so the collected deletions are NOT executed."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "cancel-query-missing-filters",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-51",
+      "reason": "The actionable part is correct: the query lacks the `method: EMAIL` / `scheduled: true` restrictions that the adjacent queries carry. The stated harm (an unscheduled or non-email row producing an invalid batch_id) is not reachable today because emailReminderManager only sets cancelled=true on rows that already have a referenceId."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "prisma-delegate-type-namespace",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:54; packages/prisma/client/index.d.ts",
+      "reason": "packages/prisma/client/index.d.ts is a one-line re-export of node_modules/.prisma/client/index.d, which is not present in this checkout, so the generated declaration cannot be inspected and nothing type-checks here. The two-parameter form `<WorkflowReminder, never>` matches Prisma 4.x's generated delegate class shape, but only running tsc against a generated client settles whether the symbol lives under the `Prisma` namespace."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "cron-cancel-loop-no-error-isolation",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-77 vs :105-224",
+      "reason": "One try/catch wraps the entire for-loop, unlike the scheduling loop further down which puts try/catch inside each iteration. A single rejected client.request aborts the run before `await Promise.all(workflowRemindersToDelete)`, so no row is deleted even for reminders whose cancel already succeeded."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "cancel-window-vs-cron-ordering",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:34-41 then :44-51; .github/workflows/cron-scheduleEmailReminders.yml",
+      "reason": "The unconditional deleteMany of `scheduledDate lte now` does run first, and it does not look at `cancelled`. A booking cancelled inside the gap before the next cron tick (shipped schedule is every 15 min, and GitHub Actions cron is best-effort) has its SendGrid send fire, and the row is then deleted by that deleteMany, so the missed cancellation leaves no trace. The ordering framing is slightly off - the root cause is the deferral window versus cron cadence - but the described failure is genuine."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "cancel-query-missing-filters",
+      "evidence": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:203-232",
+      "reason": "deleteScheduledEmailReminder is the only writer of cancelled=true in the repo, and it returns early (deleting the row) when !referenceId, so a row selected by remindersToCancel always has a non-null referenceId set by the email scheduling path. The null/empty batch_id the claim predicts cannot arrive, so the described throw-and-retry loop does not occur."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dead-trycatch-handlenewbooking",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:963-975, :745-773",
+      "reason": "The forEach callback is synchronous and calls two async functions without await, so any failure surfaces as a rejected promise outside the try. Both callees also wrap their whole body in their own try/catch. workflowReminders is in the `include`, so the array access cannot throw either - the catch block is unreachable and the log.error never fires."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "immediate-delete-reschedule-handlenewbooking",
+      "evidence": "packages/features/bookings/lib/handleNewBooking.ts:968 vs packages/trpc/server/routers/viewer/bookings.tsx:490",
+      "reason": "handleNewBooking's reschedule path passes immediateDelete=true, which short-circuits straight to the SendGrid cancel and returns before the cancelled-flag write - the deferred path the rest of the PR builds. Unlike the workflows.tsx sites there is no cascade here (the original booking is only marked CANCELLED), and the sibling requestReschedule in bookings.tsx calls the same function without the flag, so the two reschedule paths now behave differently."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "missing-index-workflowreminder",
+      "evidence": "packages/prisma/schema.prisma:635-646",
+      "reason": "The WorkflowReminder model declares no @@index at all (only the @unique on referenceId), yet the new cron query filters on cancelled + scheduledDate and runs every 15 minutes. Other models in the same schema do carry @@index declarations, so adding one is consistent with existing practice."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "nullable-cancelled-no-default",
+      "evidence": "packages/prisma/schema.prisma:644; packages/prisma/migrations/20230217230604_add_cancelled_to_workflow_reminder/migration.sql",
+      "reason": "`cancelled Boolean?` with `ADD COLUMN \"cancelled\" BOOLEAN` and no DEFAULT gives null/false/true where two states suffice; nothing in the codebase ever writes cancelled: false, so every row is null or true and the third state is dead weight. `Boolean @default(false)` would express the flag exactly."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "cancel-window-vs-cron-ordering",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:34-41, :44-51",
+      "reason": "The leading deleteMany removes every EMAIL reminder with scheduledDate <= now regardless of the cancelled flag, and it runs before the cancellation pass. If a run is late (or skipped), a row marked cancelled is dropped without its SendGrid cancel ever being issued and there is no record left to retry from."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "verify-empty-input",
+      "evidence": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:416-418, :450-455",
+      "reason": "Neither button is inside a submitted form, so the `required` props on PhoneInput and TextField are not enforced; both onClick handlers coerce with `|| \"\"` and fire the mutation regardless, and verificationCode is passed straight through even when empty."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "hardcoded-strings-i18n",
+      "evidence": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:439, :455",
+      "reason": "`placeholder=\"Verification code\"` and the literal `Verify` label sit in added lines beside t(\"custom_phone_number\"), t(\"phone_number\"), t(\"send_code\") and t(\"number_verified\"), so they are the only untranslated strings in the block."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "cron-cancel-loop-no-error-isolation",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-77 vs :106-223",
+      "reason": "Accurate on all points I could check: the try encloses the whole loop, the accumulated PrismaPromises are lazy and never execute because `await Promise.all` is skipped, and the scheduling loop below does use the per-iteration pattern the claim proposes. The blockage self-clears only once the poisoned row's scheduledDate passes and the leading deleteMany removes it."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "cancel-query-missing-filters",
+      "evidence": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:203-232; packages/features/ee/workflows/api/scheduleEmailReminders.ts:61",
+      "reason": "The type is indeed `string | null`, but reminders reach the cancelled=true state only through the branch of deleteScheduledEmailReminder that already established referenceId is truthy; rows without a referenceId are deleted outright instead. No row with a null batch_id can be selected by remindersToCancel, so the predicted API errors do not occur."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "no-tests",
+      "evidence": "repo-wide search: no test/spec/e2e file references deleteScheduledEmailReminder, deleteScheduledSMSReminder or workflowReminder",
+      "reason": "Grepping the checkout for those identifiers across *.test.*, *.spec.* and *.e2e.* returns nothing, and there is no workflow-named test file anywhere. The PR changes cancellation semantics at eight call sites plus the cron endpoint with no coverage added."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "unclear",
+      "confidence": 0.55,
+      "severity": null,
+      "cluster": "cron-cadence-unknown",
+      "evidence": ".github/workflows/cron-scheduleEmailReminders.yml:8",
+      "reason": "The repo ships a GitHub Actions schedule of `0,15,30,45 * * * *`, which is the self-host answer and bounds the 1-hour window comfortably in theory. What is not in the repo is whether cal.com's own deployment uses that workflow and how much the GitHub Actions scheduler actually slips - and that is exactly what decides whether the deferred-cancellation window is safe. Settled by the deployment's scheduler config plus observed invocation timestamps."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "cancel-query-missing-filters",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-51",
+      "reason": "Same missing `method: WorkflowMethods.EMAIL` predicate; the file is the email-specific cron and its other two queries both carry it. Correctly hedged as 'could' - no current code path marks an SMS reminder cancelled."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "immediate-delete-no-db-cleanup",
+      "evidence": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-223",
+      "reason": "Every assertion checks out: the immediateDelete branch issues the SendGrid cancel and returns with no prisma write, the pre-change code also issued DELETE /v3/user/scheduled_sends/{referenceId} which is now gone, and the other two branches do touch the row (delete when referenceId is null, update cancelled=true otherwise). At the handleNewBooking call site no cascade cleans up afterwards, so the row lingers until the cron's date-based deleteMany."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "unawaited-reminder-deletes",
+      "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:484-494; packages/features/bookings/lib/handleNewBooking.ts:966-972; packages/trpc/server/routers/viewer/bookings.tsx:487-494; packages/trpc/server/routers/viewer/workflows.tsx:212-218,376-382,519-525,574-580",
+      "reason": "Both functions are `async` and every call site invokes them bare inside forEach. The PR actively made this worse: handleCancelBooking, bookings.tsx and workflows.tsx all previously pushed the reminder deletions into arrays that were awaited via Promise.all, and those awaits were removed, so the handler can now return before the DB write or vendor cancel lands."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "type-only-imports-reverted",
+      "evidence": "packages/trpc/server/routers/viewer/workflows.tsx:1-10 (Prisma at :9, only PrismaPromise use at :342); packages/features/bookings/lib/handleNewBooking.ts:1-10; packages/features/ee/workflows/api/scheduleEmailReminders.ts:10",
+      "reason": "The load-bearing half is confirmed: `Prisma` at workflows.tsx:9 has no remaining reference in the file (the `Prisma.BatchPayload` annotation that used it was deleted), and packages/config/eslint-preset.js sets unused-imports/no-unused-imports to error and consistent-type-imports to error. The 'three files' count is loose - two are genuine `import type` reverts and scheduleEmailReminders.ts is a new plain import of type-only symbols."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "type-only-imports-reverted",
+      "evidence": "packages/trpc/server/routers/viewer/workflows.tsx:2, :342",
+      "reason": "PrismaPromise moved out of the `import type {...}` clause into the value import, and its single remaining use at line 342 is a type annotation on remindersToDeletePromise. packages/config/eslint-preset.js:35 configures @typescript-eslint/consistent-type-imports as an error with prefer: type-imports, so this is a lint failure, not just a preference."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "cancel-query-missing-filters",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-51, :61",
+      "reason": "The query genuinely selects on cancelled + scheduledDate only, and referenceId holds a SendGrid batch id for email rows and a Twilio SID for SMS rows, so the guard the claim asks for is the thing standing between the two namespaces. Correctly scoped as a risk conditional on the SMS path changing."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "cron-cancel-loop-no-error-isolation",
+      "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-77",
+      "reason": "One catch around the whole loop means the first failed client.request skips every later reminder, and those reminders' SendGrid sends then go out on schedule - which is precisely the outcome the PR exists to prevent."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-greptile-5",
+  "tool": "greptile-v4-1",
+  "n_golden": 3,
+  "n_candidates": 1,
+  "matches": [
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both say zip(error_ids, events.values()) assumes get_multi preserves input order, so cache-hit/miss reordering can pair events with the wrong error ID."
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+{
+  "slug": "discourse-graphite-7",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Medium",
+      "cluster": "mobile-topic-map-h3-lightness",
+      "evidence": "app/assets/stylesheets/mobile/topic-post.scss:182",
+      "reason": "The .topic-map h3 rule was scale-color($primary, $lightness: 20%) and is now dark-light-choose(scale-color($primary, $lightness: 50%), ...), so the light-theme value really did move 20% -> 50%; every other conversion in the diff keeps the original light value, so this one is out of pattern."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "group-member-info-name-lightness",
+      "evidence": "app/assets/stylesheets/desktop/user.scss:522, app/assets/stylesheets/mobile/user.scss:497",
+      "reason": ".group-member-info .name was scale-color($primary, $lightness: 30%) and became dark-light-choose(scale-color($primary, 50%), scale-color($secondary, 50%)) in both desktop/user.scss and mobile/user.scss, so light-theme .name now renders identically to the adjacent .title; the file is .scss not .css, but the change described is exactly what happened."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "wmd-input-disabled-contrast",
+      "evidence": "app/assets/stylesheets/mobile/compose.scss:171-175",
+      "reason": ".wmd-input:disabled background became dark-light-choose(..., scale-color($secondary, 25%)) while .wmd-input color stays darken($primary, 40%); in a dark theme $secondary is dark so the background drops to roughly 35% lightness while the text (a light $primary darkened 40%) lands near 47% lightness, about 1.6:1 - before the change the dark-theme background was scale-color($primary, 75%), i.e. near-white, and the pair was legible."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "stale-comment-topic-list-default",
+      "evidence": "app/assets/stylesheets/common/base/discourse.scss:72-73",
+      "reason": "The comment still reads \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\" while the rule it refers to (common/base/_topic-list.scss td) was converted to dark-light-choose in this same diff, so the comment now describes a value that no longer exists there."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "whitespace-reformat-noise",
+      "evidence": "app/assets/stylesheets/common/base/_topic-list.scss:51",
+      "reason": "Six removed lines ended in ';}' (diff lines 174, 877, 918, 1032, 1083, 1203); five came back as '; }' while the one in common/base/_topic-list.scss stayed ';}' - exactly the five-changed/one-left pattern described."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "topic-post-70-to-30",
+      "evidence": "app/assets/stylesheets/desktop/topic-post.scss:291, app/assets/stylesheets/mobile/topic-post.scss:182",
+      "reason": "No rule in any topic-post file went from $lightness: 70% to a light-theme 30%: I parsed all 115 conversions and the only topic-post deviations are desktop/topic-post.scss:291 (30% -> 70%, i.e. lighter, not darker) and mobile/topic-post.scss:182 (20% -> 50%). The 70% -> 30% swap exists only in mobile/modal.scss."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Medium",
+      "cluster": "mobile-custom-message-length-swapped",
+      "evidence": "app/assets/stylesheets/mobile/modal.scss:102, app/assets/stylesheets/desktop/modal.scss:94",
+      "reason": "Both .custom-message-length rules were scale-color($primary, $lightness: 70%) before this commit; desktop now keeps 70% for light while mobile got dark-light-choose(scale-color($primary, 30%), scale-color($secondary, 70%)), so the two files that used to agree now point opposite ways."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "no-shared-mixin-duplication",
+      "evidence": "diff.patch (115 added dark-light-choose calls across 32 files)",
+      "reason": "I counted 115 added dark-light-choose(scale-color($primary, X), scale-color($secondary, 100-X)) call sites over 32 changed files with no helper mixin encoding the sum-to-100 invariant, and the five drift bugs in this diff are exactly hand-edit slips; the stated count of 116 is off by one but the substance holds."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "secondary-tertiary-out-of-scope",
+      "evidence": "app/assets/stylesheets/mobile/compose.scss:33, app/assets/stylesheets/desktop/topic-post.scss:962",
+      "reason": "21 raw scale-color($tertiary, ...) declarations and one scale-color($secondary, ...) remain untouched after the sweep (grep across app/assets/stylesheets), so the premise of the question is correct and the scope decision is worth stating."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "badge-notification-dark-contrast",
+      "evidence": "app/assets/stylesheets/common/components/badges.css.scss:235,239-242",
+      "reason": ".badge-notification keeps color: $secondary (and the same for &[href]) while its background became dark-light-choose(..., scale-color($secondary, $lightness: 30%)); in a dark theme both sides derive from $secondary, and scale-color moving 30% toward white gives roughly 2.5-2.7:1 for any plausible dark $secondary (e.g. #222 -> ~39% lightness vs 13%), below the 4.5:1 AA threshold - the pre-change dark background was scale-color($primary, 70%), i.e. near-white, so this is a regression."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Medium",
+      "cluster": "mobile-custom-message-length-swapped",
+      "evidence": "app/assets/stylesheets/mobile/modal.scss:102, app/assets/stylesheets/desktop/modal.scss:94",
+      "reason": "mobile/modal.scss .custom-message-length light arg is scale-color($primary, $lightness: 30%) where the removed line was 70%, and desktop/modal.scss:94 kept 70% for light - the described inconsistency is exactly what the two files now contain."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "mobile-custom-message-length-swapped",
+      "evidence": "app/assets/stylesheets/mobile/modal.scss:102",
+      "reason": "The pair is (primary 30%, secondary 70%) where the convention used by the other 110 mechanical conversions of a 70% source would be (primary 70%, secondary 30%), so the two arguments are indeed swapped relative to the original value."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Medium",
+      "cluster": "mobile-topic-map-h3-lightness",
+      "evidence": "app/assets/stylesheets/mobile/topic-post.scss:182, app/assets/stylesheets/desktop/topic-post.scss:321",
+      "reason": "mobile .topic-map h3 light arg is now 50% (was 20%), while desktop/topic-post.scss:321 kept dark-light-choose(scale-color($primary, 20%), scale-color($secondary, 80%)) - both halves of the comparison check out."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "wmd-input-disabled-contrast",
+      "evidence": "app/assets/stylesheets/mobile/compose.scss:175",
+      "reason": ".wmd-input { color: darken($primary, 40%) } is genuinely still there and untouched while the disabled background two lines above was made theme-aware, so it does need converting; the stated mechanism is backwards though - the readability failure happens in dark themes where $primary is light, not because primary is 'already dark'."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "desktop-topic-meta-h5-lightness",
+      "evidence": "app/assets/stylesheets/desktop/topic-post.scss:291",
+      "reason": "The removed line was color: scale-color($primary, $lightness: 30%) and the added line is dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)) inside .topic-meta-data h5 a - quoted verbatim and correct, so the light-theme poster name goes from dark to light gray."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "file-uploading-unconverted",
+      "evidence": "app/assets/stylesheets/mobile/compose.scss:30-37",
+      "reason": "#file-uploading really does still use scale-color($secondary, $lightness: 50%) two lines above the #draft-status rule that this commit converted, so the inconsistency is there; the direction is wrong, however - in a dark theme that expression lightens a dark $secondary and stays visible, it is the light theme (white $secondary on a near-white dark-light-diff background) where it disappears."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "missed-badge-notification-conversion",
+      "evidence": "app/assets/stylesheets/common/base/_topic-list.scss:113-115",
+      "reason": ".topic-list.categories .category .badge-notification still reads color: scale-color($primary, $lightness: 50%); grepping the whole stylesheet tree, it is the only remaining unconverted scale-color($primary, ...) declaration after this sweep."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "mobile-topic-map-h3-lightness",
+      "evidence": "app/assets/stylesheets/mobile/topic-post.scss:182,190",
+      "reason": "mobile .topic-map h3 (line 182) and h4 (line 190) now carry byte-identical dark-light-choose(scale-color($primary, 50%), scale-color($secondary, 50%)) values, whereas desktop keeps h3 at 20% and h4 at 50% - the hierarchy claim and the desktop divergence both check out."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "mobile-topic-map-h3-lightness",
+      "evidence": "app/assets/stylesheets/mobile/topic-post.scss:182",
+      "reason": "The selector, the 20% -> 50% change and the suggested fix (keep 20% light / 80% dark, matching desktop/topic-post.scss:321) are all correct, but the citation is wrong: the .topic-map h3 color sits at line 182; line 49 is the top-level button rule, which was converted mechanically from 50%."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Medium",
+      "cluster": "mobile-custom-message-length-swapped",
+      "evidence": "app/assets/stylesheets/mobile/modal.scss:102",
+      "reason": "Line 102 is exactly the .custom-message-length color declaration and it holds (primary 30%, secondary 70%) where desktop/modal.scss:94 holds (primary 70%, secondary 30%); the line number and the proposed fix are both right."
+    }
+  ]
+}

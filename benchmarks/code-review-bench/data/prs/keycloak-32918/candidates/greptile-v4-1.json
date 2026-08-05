@@ -1,0 +1,5 @@
+[
+  "Potential NPE on remove() when alias does not exist - storedIdp can be null if alias is not found, and registerIDPInvalidation(storedIdp) is called unconditionally which will throw NullPointerException when storedIdp is null",
+  "getLoginPredicate() called multiple times per invocation in registerIDPLoginInvalidationOnUpdate - each call reconstructs the composed predicate by streaming over all LoginFilter values and reducing, should cache the predicate in a local variable",
+  "removeAll() skips login cache invalidation - does not call registerIDPLoginInvalidation or invalidate IDP_LOGIN_SUFFIX keys, leaving stale IdentityProviderListQuery entries in the cache pointing at IDP IDs that no longer exist"
+]

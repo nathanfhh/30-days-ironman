@@ -1,0 +1,5 @@
+[
+  "The default-strategy test case returns before the new rolling-updates feature flag is enabled, so the `null` branch no longer covers the rolling-update path",
+  "`picocli.exit()` calls `System.exit(4)` for non-zero exit codes, which is a hard JVM termination path designed for build failures. For a 'feature disabled' condition, this bypasses graceful shutdown and makes the subsequent `return` unreachable. Consider throwing a `PropertyException` instead, consistent with how other error conditions in these commands are handled, or setting the exit code on the `CommandSpec` to let picocli handle it through its normal lifecycle",
+  "Documentation warning is broader than the implementation: the default `<not set>` strategy still works without `rolling-updates`, so saying the operator will fail is misleading"
+]

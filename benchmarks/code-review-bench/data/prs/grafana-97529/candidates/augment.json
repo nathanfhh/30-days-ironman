@@ -1,0 +1,5 @@
+[
+  "s.search.TotalDocs() is called after the watch goroutine is started, which can cause race conditions or panics with concurrent map writes if the backend updates its index cache concurrently since Bleve's TotalDocs() iterates b.cache without locking",
+  "With the function-wide cacheMu lock removed from BuildIndex, concurrent callers can build the same key at the same time, leading to duplicate work or intermittent build failures for file-based indexes",
+  "On init failure, the error is logged both at the call site and inside (*server).Init, producing duplicate error logs for a single failure"
+]

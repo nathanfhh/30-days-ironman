@@ -1,0 +1,20 @@
+{
+  "slug": "sentry-80168",
+  "tool": "claude-code",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both flag MetricAlertDetectorHandler inheriting from StatefulDetectorHandler without implementing its required abstract methods, causing a TypeError on instantiation."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both note the docstring still claims a list of DetectorEvaluationResult is returned when the method now returns a dict keyed by DetectorGroupKey."
+    }
+  ]
+}

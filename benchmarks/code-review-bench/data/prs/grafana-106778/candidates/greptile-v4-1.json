@@ -1,0 +1,6 @@
+[
+  "Missing React list key on GrafanaRuleListItem - the key variable is destructured from ruleWithOrigin but never forwarded to GrafanaRuleListItem, unlike sibling branches which supply the key prop, causing incorrect React list reconciliation for streamed/batched results",
+  "Stray literal } in the getGrafanaRuleKey template string (line 209) makes keys slightly malformed",
+  "Delete menu item unavailable in list view despite user having permission - canDelete can be true when only promRule is supplied, but the delete menu item is gated by rulerRule &&, so it will never render for list-view consumers that pass only promRule",
+  "Misleading test descriptions in RuleDetails.test.tsx - descriptions read 'Should not render Edit/Delete button for users with the update/delete permission' which sounds like a permission violation, when the intent is that these buttons have moved to a separate component"
+]

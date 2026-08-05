@@ -1,0 +1,145 @@
+{
+  "slug": "sentry-77754",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "Need to add `field` to the imports: `from dataclasses import asdict, dataclass, field`",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "Is src/sentry/integrations/services/ the right home for AssignmentSource, given the rest of that directory is hybrid-cloud RPC service layer and AssignmentSource is a plain non-RPC frozen dataclass?",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 0,
+      "text": "Ruff flags both parameters (attribute, sync_source) as unused in the default should_sync implementation, which may cause CI lint failures",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 1,
+      "text": "The new assignment_source parameter added to IssueSyncIntegration.sync_status_outbound has no producer and no consumer anywhere in the repo, and its declared signature is incompatible with ExampleIntegration's implementation, which doesn't even accept **kwargs.",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "ExampleIntegration.sync_status_outbound method lacks **kwargs and will raise TypeError when called with the new assignment_source parameter",
+      "claim_id": "c005"
+    },
+    {
+      "source": "golden",
+      "golden_index": 2,
+      "tool": null,
+      "text": "Method name says 'empty_array' but tests empty dict - consider renaming to 'test_from_dict_empty_dict' for clarity.",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "No test verifies that a different integration still propagates changes outward \u2014 only the same-integration blocking case is tested \u2014 so an inverted guard condition (blocking everything instead of only the matching source) would still pass all existing tests.",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "Does the same-integration loop guard actually stop a multi-integration back-and-forth (A \u2192 Sentry \u2192 B \u2192 Sentry \u2192 A) when two or more issue-sync integrations are linked to the same group, and which loop originally motivated this fix?",
+      "claim_id": "c008"
+    },
+    {
+      "source": "golden",
+      "golden_index": 3,
+      "tool": null,
+      "text": "to_dict() returns a datetime for queued; if this dict is passed in task kwargs (e.g., via apply_async), JSON serialization may fail depending on the serializer, which can cause enqueue errors.",
+      "claim_id": "c009"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "Shared mutable default in dataclass timestamp",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "The new test exercises the guard by calling GroupAssignee.objects.assign(assignment_source=...) directly rather than through the real entry point sync_group_assignee_inbound, so the actual end-to-end behavior (\"webhook comes in \u2192 no outbound re-send to the same integration\") remains untested.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "AssignmentSource.from_dict swallows parse failures and returns None; since the caller treats None as \"no source\" and the guard is `if sync_source and ...`, a parse failure silently disables the outbound-sync loop protection with no logging or metric to reveal it happened.",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "The deassign-direction loop guard (matching source) has no corresponding test.",
+      "claim_id": "c013"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "The method name has a typo: test_from_dict_inalid_data should be test_from_dict_invalid_data.",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "The ~30-45 line integration + ExternalIssue + GroupLink test setup is now duplicated verbatim for the third time by this PR's new test, triggering the Rule of Three, and risks silent drift since the 5-key sync config dict must stay consistent across every copy.",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 11,
+      "text": "During a rolling deploy, will the retry configuration on sync_assignee_outbound tolerate the window where new code enqueues an assignment_source_dict kwarg that old workers' function signature can't accept (causing a TypeError)?",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "test_to_dict only asserts that queued `is not None`, an assertion too weak to catch the shared-default-timestamp bug described in F-001 even though this test is the only place that exercises the queued field.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "The `assignment_source` parameter added to the `sync_status_outbound` abstract method is never passed by the `sync_status_outbound` task and has no effect today - it's unused dead code that should either have a TODO comment or be removed",
+      "claim_id": "c018"
+    }
+  ]
+}

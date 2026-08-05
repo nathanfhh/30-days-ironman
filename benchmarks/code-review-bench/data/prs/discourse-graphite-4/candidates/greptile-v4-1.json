@@ -1,0 +1,7 @@
+[
+  "XSS vulnerability: request.referer is interpolated directly into a JavaScript string literal without any escaping, allowing an attacker to craft a Referer header to inject arbitrary JavaScript",
+  "Invalid Ruby syntax: 'end if' is not valid Ruby and will raise a SyntaxError, preventing the template from rendering",
+  "Origin check uses substring matching instead of exact comparison, allowing an attacker whose origin is a prefix of discourseUrl to bypass the guard",
+  "i.content may be nil when RSS/Atom items have no content element, causing NoMethodError when calling .scrub on nil",
+  "Port exclusion in absolutize_urls ignores scheme - an http:// URL on port 443 would have its port silently dropped, producing an incorrect absolute URL"
+]

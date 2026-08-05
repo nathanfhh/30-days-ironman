@@ -1,0 +1,14 @@
+[
+  "await runs inside a forEach(async \u2026) which isn't awaited - use a for\u2026of loop or Promise.all so calendar deletions finish and errors surface before the handler continues (packages/features/bookings/lib/handleCancelBooking.ts:243)",
+  "Avoid async callbacks in forEach - deletions are not awaited so cancellation work can continue or fail after the function moves on - use Promise.all or for...of loop (packages/trpc/server/routers/viewer/bookings.tsx:553)",
+  "Wrap the awaited appStore import in error handling so a failed async import doesn't throw past this function without context (packages/lib/payment/handlePayment.ts:26)",
+  "Handle errors from the awaited appStore import so a failed dynamic import doesn't surface as an unhandled rejection (packages/app-store/_utils/getCalendar.ts:15)",
+  "forEach doesn't await async callbacks so calendar/video deletions run in background and errors won't be caught by surrounding try/catch - use Promise.all with map and await (packages/app-store/wipemycalother/lib/reschedule.ts:125)",
+  "forEach does not await async callbacks so errors from getCalendar/deleteEvent/deleteMeeting will bypass surrounding try/catch - use await Promise.all or for...of loop (packages/app-store/vital/lib/reschedule.ts:125)",
+  "Handle errors from the awaited getCalendar call - rejected import will bubble out of createEvent without any recovery or logging (packages/core/CalendarManager.ts:233)",
+  "Wrap the awaited appStore lookup in error handling so a failed dynamic import doesn't throw out of deletePayment without a controlled response (packages/lib/payment/deletePayment.ts:16)",
+  "Handle failures from getCalendar - awaited call is not wrapped in error handling so rejected import inside async callback will go uncaught (packages/app-store/wipemycalother/lib/reschedule.ts:128)",
+  "The awaited getCalendar call has no error handling inside the async callback - if it rejects the error becomes unhandled because callback promise isn't awaited (packages/app-store/vital/lib/reschedule.ts:128)",
+  "Wrap the awaited appStore import in error handling - dynamic imports can reject and without try/catch this will throw and interrupt the refund flow (packages/trpc/server/routers/viewer/bookings.tsx:967)",
+  "Wrap the awaited appStore lookup with error handling so a failed async import doesn't throw out of the cancellation flow (packages/features/bookings/lib/handleCancelBooking.ts:589)"
+]

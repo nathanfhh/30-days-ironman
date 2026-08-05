@@ -1,0 +1,7 @@
+[
+  "Sanitize `raw_html` posts before returning them - the early return turns imported embed HTML into stored, unsanitized output",
+  "Security: `Kernel#open(url)` with user-supplied input is a command injection risk - when `open-uri` is loaded, `open` still supports the `|command` pipe syntax. Should use `URI.open(url)` or `Net::HTTP`/`OpenURI.open_uri` to restrict to HTTP(S) fetching",
+  "URL format validation should be added before fetching, rather than relying on the check inside `import`",
+  "`contents` is used without a nil check - `contents <<` will crash if nil",
+  "`url` is interpolated directly into HTML without escaping, risking HTML injection - should use `ERB::Util.html_escape` or `CGI.escapeHTML` on the URL before interpolating"
+]

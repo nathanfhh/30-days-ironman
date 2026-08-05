@@ -1,0 +1,243 @@
+## 審查結論：Request Changes
+
+> Critical 1 · Suggestion 3 · Nit 6 · 未驗證提問 2
+> nathan-code-review 2026.08.02.05 · 第 1 次審查
+
+### 總評
+
+| A 風格 | B 簡潔 | C 安全 |
+|:--:|:--:|:--:|
+| ❌ | ❌ | ❌ |
+
+| D API 慣例 | E 架構 | F 資料取用與資料庫 |
+|:--:|:--:|:--:|
+| ❌ | ✅ | ❌ |
+
+| G 測試 | H 非 Python 檔 | I 回溯分析 |
+|:--:|:--:|:--:|
+| ❌ | ❌ | ✅ |
+
+- **A 風格**（未通過）：命名與可讀性上有三處：should_block? 這個述詞會寫資料庫（記在 F-002）、set_defaults 是 public 而 should_block? 查無資料時回傳 nil（F-008）、BlockedEmail 與既有的 User#blocked 概念撞名（F-009），另有 and/&& 與檔尾換行（F-007）。都不影響行為。
+- **B 簡潔**（未通過）：F-002：BlockedEmail.should_block? 把「查詢」和「更新統計」綁在同一個以 ? 結尾的方法裡，屬於典型的隱性副作用——呼叫端（任何 User#valid?）從名字看不出來會產生 UPDATE，而且實際上一次註冊會跑兩次。其餘沒有重複邏輯或過度設計；EmailValidator 是把既有邏輯搬家，不是新造機制。
+- **C 安全**（未通過）：F-001：封鎖名單的比對是大小寫敏感的字串相等，改一個字母的大小寫就能繞過整個機制。另外 Q-002 記了一個產品面的取捨（被封鎖的註冊會回傳可辨識的原因，等於允許列舉名單）。新增程式沒有非參數化 SQL、沒有硬編憑證、沒有 eval；EmailValidator:20 由 SiteSetting 組出 Regexp 是原封不動搬過來的既有程式，不算本次引入。
+- **D API 慣例**（未通過）：F-005：POST /users 新增的 errors 是以欄位為 key 的 hash，和同一個 controller 既有的 errors（字串陣列）同名不同形狀。沒有新增 URL，動詞語意未變，回應也只是加 key 不是改既有 key（屬於 expand），沒有 PII 進到 URL。
+- **F 資料取用與資料庫**（未通過）：F-003：match_count 是 read-modify-write，兩個同時進來的請求會遺失一次更新，且 record.save 的回傳值被丟棄。F-002 的重複累加也落在這個維度。migration 本身沒問題：欄位有 null: false、match_count 有 default 0、email 有 unique index，change 可逆。
+- **G 測試**（未通過）：F-010：EmailValidator:13 的短路條件（已經有 email 錯誤時不呼叫 should_block?）沒有測試，users_controller 新增的 errors / values 回應欄位也沒有測試。已經寫的 spec 品質可以：blocked_email_spec 對 match_count 做的是 change {...}.by(1) 而不是「有東西回來」，email_validator_spec 的 stub 是換掉協作者、斷言的是 validator 自己的行為，不是在驗證 mock。
+- **H 非 Python 檔**（未通過）：F-004：rejectedEmails 宣告在 class body，陣列掛在 prototype 上被共用。F-006：欄位錯誤訊息與 flash 訊息不一致。locale 已用 YAML 實際載入確認 user.email.blocked 解析到正確層級（config/locales/server.en.yml:734）。migration 的 change 由 create_table + add_index 組成，可逆，無破壞性 DDL。
+
+### 意圖確認
+
+以下項目在審查前留有疑慮。疑慮不阻擋審查，列出是因為這個決定屬於人，不屬於審查流程：
+
+- **該在這個時機做？**：封鎖的執行路徑已經完整（EmailValidator:13 → BlockedEmail.should_block?），但這張 MR 沒有附任何建立 blocked_emails 資料的方式：config/routes.rb 沒有相關 admin route，也沒有 rake task 或 seeds，全 repo 對 BlockedEmail 的引用只有 model 自己、validator 與 spec。合併後在有人手動 INSERT 之前這段程式不會作用。spec/models/blocked_email_spec.rb:13 的註解「If we manually load the table with some emails」看起來是刻意的，但值得作者明說是分批進行。記在 Q-001。
+
+### 掃描執行狀況
+
+| 工具 | 狀態 | 說明 |
+|---|---|---|
+| trivy | 略過 | 本機未安裝（preflight 確認），因此本次沒有相依套件漏洞掃描與 secret 掃描的覆蓋。新增的 Gemfile 相依為零，但這是人工閱讀 diff 得到的結論，不是掃描結果。 |
+| opengrep | 略過 | 本機未安裝（preflight 確認），也沒有 semgrep 可替代。本次沒有任何 SAST 規則覆蓋，C 安全維度的結論全部來自人工閱讀與 grep。 |
+| ruff | 略過 | ruff 有安裝，但本次 diff 的十個檔案是 Ruby / JavaScript / YAML，沒有任何 .py，ruff 不適用。（實測把 .rb 餵給 ruff 只會得到把 Ruby 當 Python 解析的假錯誤，不具參考價值，故不列入。） |
+| ty | 略過 | 本機未安裝，且本次 diff 無 Python 檔，即使安裝也不適用。 |
+| oxlint | 略過 | 本機未安裝。diff 內唯一的 JavaScript 檔 app/assets/javascripts/discourse/controllers/create_account_controller.js 因此沒有 lint 覆蓋；F-004 與 F-006 是人工閱讀得到的，不是工具報出來的。 |
+| rubocop / rspec | 略過 | 環境沒有安裝任何 gem 也沒有網路，bundle install 不可行，因此既無法跑 Ruby linter 也無法執行 spec。新增的三個 spec 檔只做了靜態閱讀，沒有實際跑過；「測試會通過」不在本報告的主張範圍內。 |
+| codegraph | 略過 | 本機未安裝，Phase 3 的呼叫端列舉與 affected 分析改用 grep 完成（例如確認 User#email_validator 已無呼叫端、確認 BlockedEmail 在 repo 內的所有引用點）。 |
+| ncr-fresh-eyes | 略過 | 本次執行環境沒有可用的 subagent 派送工具（沒有 Task / Agent tool），無法派出 ncr-fresh-eyes。依 skill 規定不由主 agent 自行模擬，因此本報告缺少「未被此 skill 框架塑形過的第一眼」這一層，findings 全部來自維度檢查。 |
+| ncr-quality-check | 略過 | 同上，無法派送 subagent。報告 JSON 只經過 report_model.py 的機械驗證，沒有經過 ncr-quality-check 的第二眼複查。 |
+| ruby -c (syntax) | 已執行 | files 8、errors 0 |
+| node --check (syntax) | 已執行 | files 1、errors 0 |
+| YAML.load_file (config/locales/server.en.yml) | 已執行 | files 1、errors 0 |
+
+### Critical
+
+#### F-001 封鎖名單的 email 比對是大小寫敏感的，改一個字母的大小寫就能繞過封鎖 — `app/models/blocked_email.rb:12`
+
+面向 C 安全 · Critical
+
+**問題**：BlockedEmail.should_block? 用 `BlockedEmail.where(email: email).first` 做字串相等比對，而這條路徑上沒有任何一處把 email 正規化過：UsersController#create 直接把 params[:email] 交給 User.new_from_params（app/models/user.rb:84-91，逐欄位指派、不做任何處理），User 上也沒有任何 before_validation / before_save 會動 email（只有 cook、update_username_lower、ensure_password_is_hashed），EmailValidator 收到的 value 就是使用者原樣輸入的字串。資料庫是 PostgreSQL（config/database.yml.development-sample:2），`=` 大小寫敏感，migration:10 的 unique index 也是建在原始欄位上。結果是：名單上有 spammer@example.com 時，Spammer@example.com 完全不會命中，等於一個字母就能繞過整個機制。同一份 codebase 在 UsersController#change_email:269 已經有 `Email.downcase(params[:email]).strip` 這個先例，正是為了避免同一類問題，但註冊這條路徑沒有跟上。附帶的後果是統計也失真：should_block? 只有在命中資料列時才會累加，繞過的嘗試永遠不會反映在 match_count / last_match_at 上，看報表的人會以為這個地址已經放棄了，而不是它成功註冊了。
+
+**證據**：
+- `app/models/blocked_email.rb:12`
+- `db/migrate/20130724201552_create_blocked_emails.rb:10`
+- `app/models/user.rb:84`
+- `app/controllers/users_controller.rb:269`
+
+**POC**：
+
+```
+前提：blocked_emails 內有一列 email = 'spammer@example.com'、action_type = BlockedEmail.actions[:block]。
+
+1. 取得 honeypot 與 challenge（config/routes.rb:120）：
+   curl -s https://forum.example.com/users/hp
+   # => {"value":"<HP>","challenge":"<CH>"}
+
+2. 用同一個地址、只把第一個字母改成大寫送出註冊（config/routes.rb:101，users#create）：
+   curl -s -X POST https://forum.example.com/users \
+     -d 'name=Spam Bot' \
+     -d 'username=spambot' \
+     -d 'password=hunter2hunter2' \
+     -d 'email=Spammer@example.com' \
+     -d 'password_confirmation=<HP>' \
+     -d 'challenge=<CH 反轉>'
+   # => {"success":true,...}
+
+3. 對照組（原樣小寫）會得到 {"success":false, "errors":{"email":["is not allowed."]}}。
+
+4. 驗證統計也沒動：SELECT match_count, last_match_at FROM blocked_emails WHERE email = 'spammer@example.com'; 仍是 0 / NULL。
+```
+
+**影響範圍**：名單上的每一個地址都可以用大小寫變形直接繞過，而變形數量隨地址長度指數成長，實務上等於這個封鎖機制對任何有意繞過的人不成立——只對忠實重送同一字串的人有效。第二層代價是可觀測性：被繞過的嘗試不會累加 match_count，管理者從統計上看到的是「這個地址沒再來過」，而不是「它換了大小寫進來了」，因此連事後察覺都被擋住。第三層是資料完整性：unique index 建在原始欄位上，同一個地址可以用不同大小寫存成多列，名單本身會慢慢分裂。本次不涉及 PHI（見 meta.phi_trigger），沒有病患資料成本。
+
+**風險處置**：Mitigate（降低）
+
+**修復參考**：app/models/blocked_email.rb:12 與 db/migrate/20130724201552_create_blocked_emails.rb:10
+
+**修復方向**：在寫入和查詢兩端都正規化。BlockedEmail 加 `before_validation { self.email = email.to_s.downcase.strip if email }`，should_block? 改成 `BlockedEmail.where(email: email.to_s.downcase.strip).first`；unique index 因此也才真的能防止同一個地址以不同大小寫存成兩列。注意不要只套現成的 `Email.downcase`（lib/email.rb:19）——它只小寫化 domain 部分，local part 原封不動，所以 Spammer@example.com 仍然繞得過 spammer@example.com。若要保留 local part 的大小寫，替代做法是把索引與比對都改成 `lower(email)`（`add_index :blocked_emails, 'lower(email)', unique: true` 搭配 `where('lower(email) = ?', email.downcase)`）。順帶建議把前後空白也一起 strip 掉。
+
+<details>
+<summary>Suggestion（3）</summary>
+
+#### F-002 should_block? 是個會寫資料庫的述詞，而且一次註冊嘗試會被呼叫兩次，match_count 每次多加一 — `app/models/blocked_email.rb:11`
+
+面向 B 簡潔 · Suggestion
+
+**問題**：UsersController#create 先在 :168 呼叫 `user.valid?`（`&&` 的左運算元，一定會執行），再在 :172 呼叫 `user.save`，而 save 會重新跑一次完整驗證。兩次之間 user 沒有被寫入資料庫，`email_changed?` 仍為 true，所以 app/models/user.rb:47 的 `validates :email, email: true, if: :email_changed?` 兩次都成立；`valid?` 開頭會清空 errors，所以 EmailValidator:13 的 `record.errors[attribute].blank?` 這道短路兩次也都成立。結論是 BlockedEmail.should_block? 在一次註冊嘗試中執行兩次，match_count 從 0 直接變成 2、last_match_at 寫兩次。spec/models/blocked_email_spec.rb:13 的註解說明這兩個欄位的用途正是「看某個 email 究竟被擋過幾次」，所以這不是無害的雜訊，而是這個功能唯一的觀測指標系統性地被放大一倍。根本原因是設計：以 ? 結尾的方法照慣例是查詢，呼叫端（任何一處 `User#valid?`）從名字和簽名都看不出來它會產生 UPDATE，於是「這個方法被呼叫幾次」這件本來無關緊要的事變成了資料正確性問題。
+
+**證據**：
+- `app/models/blocked_email.rb:11`
+- `app/models/blocked_email.rb:14`
+- `app/controllers/users_controller.rb:168`
+- `app/controllers/users_controller.rb:172`
+- `lib/validators/email_validator.rb:13`
+
+**修復方向**：把查詢和記錄拆開，讓寫入次數由呼叫端決定而不是由驗證被跑幾次決定。例如 BlockedEmail 提供純查詢的 `self.blocked?(email)`（或 `self.find_match(email)`）與明確帶副作用的 `record_match!`；EmailValidator 只呼叫查詢版本，真正要記一次命中的地方改由 UsersController（或 User 的 after_validation / 一個明確的 service）呼叫一次。若想維持現在的呼叫結構，最小修法是在 User 上快取——例如把命中結果記在 instance variable，同一個 instance 第二次驗證時不再重複寫入——但那只是遮住症狀，仍建議走拆開的作法。
+
+#### F-003 match_count 用 read-modify-write 累加，沒有原子性，而且 save 的回傳值被丟掉 — `app/models/blocked_email.rb:14`
+
+面向 F 資料取用與資料庫 · Suggestion
+
+**問題**：`record.match_count += 1` 是在 Ruby 這一側讀出舊值再寫回。兩個同時打進來的註冊請求（多個 unicorn/passenger worker 是常態）會各自讀到同一個舊值、各自寫回同一個新值，其中一次累加就這樣消失——而這個功能唯一的產出就是這個計數。另外 `record.save` 會連帶跑 BlockedEmail 自己的 presence / uniqueness 驗證（app/models/blocked_email.rb:5），也就是每一次註冊嘗試都多一次 SELECT；而 save 的回傳值沒有人接，一旦驗證失敗（例如日後為 BlockedEmail 加上新的驗證規則、或資料庫暫時性錯誤），統計就會安靜地停止更新，沒有任何訊號。
+
+**證據**：
+- `app/models/blocked_email.rb:14`
+- `app/models/blocked_email.rb:15`
+- `app/models/blocked_email.rb:16`
+
+**修復方向**：改成一次原子的 SQL 更新，順便繞開不必要的驗證：`BlockedEmail.where(id: record.id).update_all(['match_count = match_count + 1, last_match_at = ?', Time.zone.now])`。若偏好 ActiveRecord 慣用寫法，`record.increment!(:match_count)` 搭配 `record.update_column(:last_match_at, Time.zone.now)` 也可以（increment! 走 SQL 累加）。這同時解掉「回傳值被忽略」的問題，因為 update_all 不再有驗證會失敗。既有的 spec（spec/models/blocked_email_spec.rb:29）用 `change { blocked_email.reload.match_count }.by(1)` 斷言，改用 update_all 後仍然成立。
+
+#### F-004 rejectedEmails 宣告在 class body，陣列實際掛在 prototype 上被所有 instance 共用 — `app/assets/javascripts/discourse/controllers/create_account_controller.js:17`
+
+面向 H 非 Python 檔 · Suggestion
+
+**問題**：`rejectedEmails: Em.A([])` 寫在 extend 的物件字面值裡，那個陣列在 class 定義時就建立一次並掛在 prototype 上；之後每個 instance 透過 prototype chain 拿到的都是同一個物件，:275 的 `pushObject` 也就直接改在那個共用陣列上。我確認過今天不會出事：Discourse.Route.showModal 走 `router.controllerFor(name)`（app/assets/javascripts/discourse/routes/discourse_route.js:56），拿到的是 container 的 singleton，整個 app 只會有一個 instance——所以這是潛在缺陷而不是現行 bug，這點必須說清楚。但它是 Ember 明確警告過的寫法，代價會在兩個地方先出現：一是測試裡手動 `Discourse.CreateAccountController.create()` 出第二個 instance 時，被拒絕的 email 會跨測試案例殘留；二是這個陣列從 class 定義到頁面關閉都不會被重設，modal 關掉再開仍帶著舊資料（這也許就是「表單記得曾經失敗的 email」的預期行為，但目前是巧合而不是設計）。此外 codebase 裡沒有第二處這樣寫的地方——grep 整個 app/assets/javascripts/discourse/ 只有這一行。
+
+**證據**：
+- `app/assets/javascripts/discourse/controllers/create_account_controller.js:17`
+- `app/assets/javascripts/discourse/controllers/create_account_controller.js:275`
+
+**修復方向**：改在 init 裡建立，讓每個 instance 有自己的陣列：`init: function() { this._super(); this.set('rejectedEmails', Em.A()); }`。如果「跨 modal 開關保留」是刻意的，那也建議在 ModalFunctionality 的 onShow（discourse_route.js:61-63 會呼叫）明確決定要保留還是清空，把行為寫成意圖而不是留給 prototype 共用去決定。
+
+</details>
+
+<details>
+<summary>Nit（6）</summary>
+
+#### F-005 POST /users 新增的 errors 是以欄位為 key 的 hash，和同一個 controller 既有的 errors（字串陣列）同名不同形狀 — `app/controllers/users_controller.rb:198`
+
+面向 D API 慣例 · Nit
+
+**問題**：同一個 UsersController 現在有兩種 errors：check_username 回的是字串陣列（:110、:154），create 回的是 `user.errors.to_hash`，也就是以欄位名為 key 的 hash（:198）。兩者都由同一個 JS 檔消費，:192 對前者做 `.join(' ')`，:274 對後者取 `.email`。我確認過目前不會壞：這兩段程式各自打的是不同的 endpoint（Discourse.User.checkUsername 對 users#check_username，createAccount 對 users#create），沒有交叉。所以這是可讀性與慣例問題，不是 bug——但下一個維護者把兩段錯誤處理合併時，同名不同形狀正是會踩到的地方。
+
+**證據**：
+- `app/controllers/users_controller.rb:198`
+- `app/controllers/users_controller.rb:154`
+- `app/assets/javascripts/discourse/controllers/create_account_controller.js:192`
+- `app/assets/javascripts/discourse/controllers/create_account_controller.js:274`
+
+**修復方向**：把新的欄位取一個能自我說明的名字，例如 `field_errors: user.errors.to_hash`；或反過來讓 check_username 也回 hash 形狀，全 controller 統一。前者改動小、風險低，建議先做前者。
+
+#### F-006 被擋下的 email 在欄位上顯示通用的「invalid」，和 flash 顯示的伺服器訊息不一致 — `app/assets/javascripts/discourse/controllers/create_account_controller.js:72`
+
+面向 H 非 Python 檔 · Nit
+
+**問題**：伺服器對被封鎖的 email 回的是 user.email.blocked（「is not allowed.」），而且 :273 的 flash 會把整句 result.message 顯示出來；但 :72 在 email 欄位旁顯示的是 user.email.invalid。使用者同一畫面上會同時看到「is not allowed」和「is invalid」兩種說法。:274 其實已經拿到了 result.errors.email，裡面就是伺服器那句話，只是被丟掉沒用。（如果刻意不想在欄位上洩漏封鎖原因，那 flash 早就洩漏了，所以目前的組合兩邊都不成立。）
+
+**證據**：
+- `app/assets/javascripts/discourse/controllers/create_account_controller.js:72`
+- `app/assets/javascripts/discourse/controllers/create_account_controller.js:273`
+- `config/locales/server.en.yml:727`
+
+**修復方向**：把伺服器訊息一起存進 rejectedEmails 旁（例如改存 `{email: ..., reason: ...}`，或另存一個 rejectedEmailReasons），emailValidation 直接用 `result.errors.email.join(' ')` 當 reason；若決定要對外統一用通用訊息，那 flash 那邊也要一起改成通用文案，並在程式碼加一行註解說明是刻意不揭露原因。
+
+#### F-007 新增的 EmailValidator 有兩個風格問題：條件式用 and、檔尾缺換行 — `lib/validators/email_validator.rb:13`
+
+面向 A 風格 · Nit
+
+**問題**：:13 的 `if record.errors[attribute].blank? and BlockedEmail.should_block?(value)` 在這裡結果是對的，但 `and` 的優先權低於 `=`，這個習慣一旦出現在有賦值的條件式裡就會安靜地算錯；Ruby 社群慣例是 and/or 只用於控制流程（`raise ... unless x`），布林運算一律用 &&/||。:24 的 `end` 之後沒有換行字元（實測 `tail -c 1` 得到 `d`），同批新增的 app/models/blocked_email.rb 與 spec/fabricators/blocked_email_fabricator.rb 都有正常換行，只有這一個檔案沒有。
+
+**證據**：
+- `lib/validators/email_validator.rb:13`
+- `lib/validators/email_validator.rb:24`
+
+**修復方向**：:13 的 `and` 換成 `&&`；:24 補上檔尾換行。
+
+#### F-008 set_defaults 是 public callback，should_block? 在查無資料時回傳 nil 而非 false — `app/models/blocked_email.rb:21`
+
+面向 A 風格 · Nit
+
+**問題**：:21 的 set_defaults 只被 :3 的 before_validation 用到，卻是 public instance method，等於對外承諾了一個沒人該呼叫的 API。:18 的 `record && record.action_type == actions[:block]` 在查無資料時回傳的是 nil，而不是 false——以 ? 結尾的方法回傳非布林值，呼叫端若哪天寫成 `should_block?(e) == false` 就會靜靜地不成立。spec/models/blocked_email_spec.rb:23 的 `should be_false` 目前會通過，是因為 RSpec 的 be_false 匹配任何 falsy 值，所以測試不會告訴你這件事。
+
+**證據**：
+- `app/models/blocked_email.rb:21`
+- `app/models/blocked_email.rb:18`
+
+**修復方向**：set_defaults 移到 `private` 之下。:18 改成 `!!(record && record.action_type == actions[:block])`，或直接 `record.present? && record.action_type == actions[:block]`。
+
+#### F-009 BlockedEmail 這個名字和既有的 User#blocked 概念撞名 — `app/models/blocked_email.rb:1`
+
+面向 A 風格 · Nit
+
+**問題**：這個 codebase 裡「blocked」已經有既定意思：User 有 blocked 欄位與 `scope :blocked`（user.rb:65），admin dashboard 也在數 `User.blocked.count`（admin_dashboard_data.rb:58），指的是「被停權的既有帳號」。新的 BlockedEmail 指的卻是「不准註冊的 email 名單」，兩者概念不同。日後看到 `BlockedEmail` 的人很容易先以為它跟被停權帳號的 email 有關；而且一旦之後要做 admin 介面，「Blocked Users」和「Blocked Emails」兩張表在同一個側欄裡會讓人以為是同一組資料的兩個視角。
+
+**證據**：
+- `app/models/blocked_email.rb:1`
+- `app/models/user.rb:65`
+- `app/models/admin_dashboard_data.rb:58`
+
+**修復方向**：換一個和既有語彙不衝突的名字，例如 ScreenedEmail / EmailBlacklistEntry / RejectedEmail（連同 table、fabricator、spec 一起改）。現在動成本最低，因為還沒有任何資料與外部引用。若決定保留 BlockedEmail，至少在 model 頂端加一行註解說明它和 User#blocked 是兩回事。
+
+#### F-010 EmailValidator 的短路分支與 controller 新增的回應欄位沒有測試 — `lib/validators/email_validator.rb:13`
+
+面向 G 測試 · Nit
+
+**問題**：email_validator_spec 只覆蓋了 should_block? 回 true / false 兩條，沒有覆蓋 :13 前半那道短路——也就是「email 已經因為 domain blacklist 被擋下時，不應該再呼叫 should_block?、也不該再累加一次 match_count」。這條分支是刻意寫的（否則同一次嘗試會同時算進 domain 統計和封鎖統計），但目前把它刪掉所有測試都還是綠的。另一邊，users_controller.rb:198-199 新增的 errors / values 是前端 :274 判斷的依據，形狀改了功能就靜靜失效，也沒有任何 request spec 盯著。
+
+**證據**：
+- `lib/validators/email_validator.rb:13`
+- `spec/components/validators/email_validator_spec.rb:10`
+- `app/controllers/users_controller.rb:198`
+
+**修復方向**：email_validator_spec 補一個案例：stub SiteSetting.email_domains_blacklist 讓 email 先被擋下，然後 `BlockedEmail.expects(:should_block?).never`，驗證短路真的生效。users_controller_spec 的 create 失敗案例補一句斷言，確認回應 JSON 含有 `errors['email']` 與 `values['email']`。
+
+</details>
+
+<details>
+<summary>未驗證提問（2）</summary>
+
+#### Q-001 blocked_emails 這張表要怎麼被填資料？這張 MR 是刻意只做執行路徑、資料來源留給後續，還是漏了？
+
+面向 E 架構
+
+**背景**：grep 全 repo 對 BlockedEmail / blocked_email 的引用，除了 spec 與 migration 之外只有 app/models/blocked_email.rb 自己和 lib/validators/email_validator.rb:13；config/routes.rb 沒有任何相關 route，也沒有 rake task 或 seeds。也就是說合併之後，在有人手動對資料庫下 INSERT 之前，這段程式不會產生任何效果。spec/models/blocked_email_spec.rb:13 的註解「If we manually load the table with some emails, we can see whether those emails have ever been blocked by looking at last_match_at」讀起來就是刻意先手動灌資料，所以我不把它當成缺失來記——但這是需要一個人來確認的判斷，不是我能從程式碼裡讀出來的。
+
+**如何確認**：作者說明是否有後續的 admin UI / rake task MR，或明確表示初期就是由維運人員手動 INSERT。
+
+#### Q-002 被封鎖的註冊該不該讓對方看出「這個地址在名單上」？現在的回應足以讓人逐一列舉名單內容。
+
+面向 C 安全
+
+**背景**：被擋下時，flash 會顯示伺服器的 login.errors（內含「Email is not allowed.」），回應也帶 errors.email（users_controller.rb:197-198）。對方只要對一批候選地址各送一次註冊，就能分辨哪些在名單上。既有的 email_domains_blacklist 本來就是這個行為，所以這不是這張 MR 新引入的洩漏管道；但封鎖名單針對的是「特定地址」而不是「整個 domain」，被列舉出來的資訊量和代價都比較高（等於把維運人員的封鎖清單交出去）。這條路徑上已經有的防禦是 honeypot 與 challenge（users_controller.rb:347-362），會擋掉最粗糙的自動化，但擋不住願意先呼叫 users#get_honeypot_value（config/routes.rb:120）取值的腳本。要不要為此犧牲對真人使用者的訊息清晰度，是產品決定而不是我能單獨判定的，所以不給嚴重度。
+
+**如何確認**：產品端決定被封鎖的註冊該回傳什麼：維持現況、改為與一般驗證失敗無異的通用訊息，或比照 users_controller.rb:351 的 fake_success_response 直接回假成功。
+
+</details>

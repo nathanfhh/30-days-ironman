@@ -1,0 +1,18 @@
+{
+  "slug": "cal_com-8087",
+  "tool": "claude-code",
+  "n_golden": 2,
+  "n_candidates": 6,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both identify the core forEach(async...) anti-pattern causing promises to be silently discarded/unawaited."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.85,
+     "reasoning": "Describes the fire-and-forget calendar/video deletion consequence of the same forEach-with-async-callback bug the golden comment describes."},
+    {"golden_index": 1, "candidate_index": 2, "confidence": 0.8,
+     "reasoning": "Race condition (email sent before deletions finish) is a direct consequence of the same unawaited forEach callbacks issue."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.75,
+     "reasoning": "Unhandled promise rejections from async forEach callbacks is part of the same underlying concurrency/error-handling problem."},
+    {"golden_index": 1, "candidate_index": 5, "confidence": 0.9,
+     "reasoning": "Proposes the exact fix (for...of or Promise.all with map) that the golden comment recommends for the same forEach async issue."}
+  ]
+}

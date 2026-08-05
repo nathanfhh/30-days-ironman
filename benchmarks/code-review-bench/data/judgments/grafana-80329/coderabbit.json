@@ -1,0 +1,26 @@
+{
+  "slug": "grafana-80329",
+  "tool": "coderabbit",
+  "n_golden": 1,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Explicitly names Error level used for informational annotation-cleanup messages polluting error logs."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.7,
+      "reasoning": "Restates the same log-level misuse for the by-count cleanup logs; golden comment is not location-specific."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 3,
+      "confidence": 0.7,
+      "reasoning": "Restates the same log-level misuse for the tag cleanup logs; golden comment is not location-specific."
+    }
+  ]
+}

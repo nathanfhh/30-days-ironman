@@ -1,0 +1,26 @@
+{
+  "slug": "keycloak-37429",
+  "tool": "coderabbit",
+  "n_golden": 4,
+  "n_candidates": 10,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Both report Italian text at totpStep1 in messages_lt.properties."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 4,
+      "confidence": 0.95,
+      "reasoning": "Both report Traditional Chinese characters in the zh_CN Simplified Chinese bundle."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 7,
+      "confidence": 0.98,
+      "reasoning": "Identical typo report: santizeAnchors should be sanitizeAnchors."
+    }
+  ]
+}

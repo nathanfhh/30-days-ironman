@@ -1,0 +1,404 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T04:24:29+00:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "sentry-95633 — feat(uptime): Add ability to use queues to manage parallelism（git diff fd358e8a3889..9966ec5a13e3）",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "不涉及病患資料。本次改動處理的是 Kafka uptime check 結果（sentry_kafka_schemas.schema_types.uptime_results_v1.CheckResult）與 offset 記帳，資料內容為 subscription id、check status、URL 與時間戳。整條路徑上沒有病歷號、身分證字號、姓名、檢驗或用藥資料，也沒有 HL7 / FHIR / DICOM payload。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "已檢視 PR 標題、8 個 commit message、新增檔案的 docstring 與註解。queue_consumer.py 的 class docstring 有多處對程式行為的斷言（例如 line 253 的「Natural backpressure when queues fill up」、line 39 的「Only commits offsets when all prior offsets are processed」），但那是對程式碼的主張、屬於本次要驗證的材料，不是指向審查流程的指示。未發現要求略過檢查、指定 severity 或改寫結論的文字。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "doubt",
+      "note": "以 per-group queue 取代 batch 邊界來做平行化，方向本身合理：現有 batched-parallel 模式把平行度綁在 BatchStep 上，一個慢的 group 會拖住整批。但這個 MR 讓 `ResultsStrategyFactory` 從三種模式變成四種（serial / parallel / batched-parallel / thread-queue-parallel），每一種都有自己的旗標、建構路徑與 teardown 路徑（src/sentry/remote_subscriptions/consumers/result_consumer.py:106-152、200-259、180-185），而 MR 沒有說明哪一種會被淘汰、或這四種要並存多久。四條並存的 consumer 執行路徑意味著之後每一次 offset 或錯誤處理的修改都要在四個地方各做一次。這個取捨該由人決定，不阻擋審查。"
+    },
+    "right_mr": {
+      "verdict": "ok",
+      "note": "新的執行元件（queue_consumer.py）、把它接上 factory、CLI 選項、單元測試與整合測試在同一個 MR，內聚性合理，拆開反而會有一段時間存在無法執行的死碼。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "`--mode` 預設仍是 `serial`（src/sentry/consumers/__init__.py:119-124），新模式必須明確指定才會啟用，所以合併本身不會改變現行 uptime consumer 的行為。這也是本報告 Critical 的爆炸半徑限縮在「有人用這個 flag 部署之後」的原因。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "git",
+      "status": "ok",
+      "exit_code": 0,
+      "artifact": "",
+      "counts": {
+        "files_changed": 7,
+        "commits": 8
+      },
+      "skipped_reason": ""
+    },
+    {
+      "tool": "ruff",
+      "status": "ok",
+      "exit_code": 1,
+      "artifact": "",
+      "counts": {
+        "project_total": 162,
+        "in_diff": 0
+      },
+      "skipped_reason": ""
+    },
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "trivy 未安裝於審查環境，略過相依套件漏洞、設定錯誤與 secret 掃描。本次 diff 未變動任何相依套件宣告或設定檔，影響有限。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "opengrep 未安裝，且規則目錄（/root/semgrep-rules）不存在，兩項條件都缺，略過 SAST 掃描。"
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "ty 未安裝，略過 Python 型別檢查。本次新增的 queue_consumer.py 泛型（Generic[T]）與 arroyo 型別註記未經型別檢查器驗證。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "oxlint 未安裝；本次 diff 也不含 JavaScript/TypeScript 檔案，本來就無可掃描對象。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "codegraph 未安裝，無法建立符號索引。Dimension E 與 I 的呼叫者列舉改以 grep 完成（已對 create_with_partitions、ResultsStrategyFactory、FixedQueuePool、factory.shutdown、MessageRejected 逐一搜尋）。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "fail",
+      "note": "docstring 與實際行為不一致（F-002 引用的 line 253、F-003 引用的 line 39），以及沿用自 monitors 的 transaction 命名與重複的 transaction 層（F-005）。"
+    },
+    "B": {
+      "verdict": "fail",
+      "note": "WorkItem.message 是從未被讀取的欄位（F-008）、每則訊息一次的 gauge（F-007）、OffsetTracker 的四個 dict 沒有回收路徑（F-009）。"
+    },
+    "C": {
+      "verdict": "pass",
+      "note": "本次改動不接受新的外部輸入、不組 SQL、不含憑證、無 eval/os.system。payload 解析仍走既有的 sentry_kafka_schemas codec（src/sentry/remote_subscriptions/consumers/result_consumer.py:187-198），解析失敗被攔截。`hash(group_key)` 只用於決定本行程內的 queue index（queue_consumer.py:198-202），不是安全邊界，雜湊碰撞的後果只是兩個 group 共用一條 queue。"
+    },
+    "D": {
+      "verdict": "na",
+      "note": "本次改動沒有新增或修改任何 HTTP endpoint、URL 或 request/response schema。唯一的對外介面變動是 CLI 選項 `--mode` 多一個 choice 值（src/sentry/consumers/__init__.py:121），不適用本維度的 URL 命名、HTTP verb、認證授權等規則。"
+    },
+    "E": {
+      "verdict": "fail",
+      "note": "strategy 與 factory 的資源生命週期錯位（F-001）、缺少 backpressure 機制（F-002）、FilteredPayload 契約未實作（F-004）、shutdown 排序讓 drain 失效（F-006）。"
+    },
+    "F": {
+      "verdict": "fail",
+      "note": "OffsetTracker 宣稱的「所有前序 offset 都完成才 commit」不成立（F-003），已用實際執行驗證。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "錯誤路徑的測試斷言與實作相反且靠 timing 才通過（F-010）、兩個具競態的斷言（F-011）、新測試被放進 serial 模式的測試類別（F-012）。另外 `send_result`（tests/sentry/uptime/consumers/test_results_consumer.py:91-109）對每則訊息都硬寫 `Partition(Topic(\"test\"), 1)` 與 offset 1，所以用它送訊息的 test_thread_queue_parallel / _preserves_order / _concurrent_subscriptions / _graceful_shutdown 這四個測試完全沒有觸及 offset 記帳（tracker 裡永遠只有一個 offset）；只有自建 message 的 _offset_commit / _error_handling / _offset_gaps 三個有。"
+    },
+    "H": {
+      "verdict": "na",
+      "note": "diff 內 7 個檔案全部是 .py，沒有前端元件、Dockerfile、nginx.conf、docker-compose 或 migration。"
+    },
+    "I": {
+      "verdict": "pass",
+      "note": "被修改的既有函式是 `ResultsStrategyFactory.__init__`、`create_with_partitions`、`shutdown`。(1) 簽章相容：`mode` 的 Literal 只擴充不移除，其餘參數未變；grep 確認唯一的子類別 `UptimeResultsStrategyFactory`（src/sentry/uptime/consumers/results_consumer.py:600）沒有覆寫 `__init__`，其餘呼叫點只有 CLI 與測試。(2) `self.result_processor = self.result_processor_cls()` 從 __init__ 尾端移到開頭（result_consumer.py:118），因為 FixedQueuePool 建構時就需要它；`result_processor_cls` 在子類別是 class attribute（results_consumer.py:601），提前取用安全，其餘模式不受影響。(3) `commit_offsets` 的 +1（result_consumer.py:249-252）與其他模式用的 `CommitOffsets` 語意一致——arroyo 的 `message.committable` 本來就是 next-offset，這裡自行記帳所以要自己加，註解也寫明了。ruff 全專案掃描的 162 件診斷沒有一件落在本次變動的檔案內，也沒有因簽章變動而在 diff 外新增的診斷。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "E",
+      "severity": "Critical",
+      "status": "new",
+      "title": "strategy 的 close() 會摧毀 factory 持有的 FixedQueuePool，而 pool 只在 factory __init__ 建立一次——第一次 rebalance 之後 consumer 會靜默丟訊息並照常 commit offset",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-345",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:231-243",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:317-325",
+        "src/sentry/remote_subscriptions/consumers/result_consumer.py:131-137",
+        "src/sentry/remote_subscriptions/consumers/result_consumer.py:244-259",
+        "src/sentry/spans/consumers/process/flusher.py:402-406",
+        "src/sentry/spans/consumers/process/factory.py:76-85"
+      ],
+      "rationale": "`FixedQueuePool` 在 `ResultsStrategyFactory.__init__` 建立一次（result_consumer.py:131-137），之後 `create_thread_queue_parallel_worker` 每次都把同一個 pool 交給新的 `SimpleQueueProcessingStrategy`（result_consumer.py:254-259）。但 `SimpleQueueProcessingStrategy.close()` 會呼叫 `self.queue_pool.shutdown()`（queue_consumer.py:335-338），`terminate()` 同樣呼叫它（340-342），而 `join()` 直接呼叫 `close()`（344-345）——三個 arroyo 生命週期方法沒有一個能倖免。\n\narroyo 在每次 rebalance 開始時就會對 strategy 呼叫 close()——這件事在本 repo 內有直接證據：src/sentry/spans/consumers/process/flusher.py:402-406 的註解寫著 `Do not shut down the flusher here -- this is running at the beginning of rebalancing`，而 spans 的 factory 正是因此把 `SpansBuffer` 與 `SpanFlusher` 都改成在 `create_with_partitions` 內重建（src/sentry/spans/consumers/process/factory.py:76-85）。相對地，本次的 pool 沒有任何重建路徑。\n\n`FixedQueuePool.shutdown()`（queue_consumer.py:231-243）會把每個 worker 的 `shutdown` 旗標設為 True，並對每個 queue 呼叫 `q.shutdown(immediate=False)`，然後 join 掉所有 worker thread。這是不可逆的：queue 沒有「重新開啟」的 API，thread 也不能重啟。\n\n第一次 rebalance 之後的行為：新的 strategy 拿到的是一個 worker 全數結束、queue 全數 shutdown 的 pool。每一則訊息走到 `FixedQueuePool.submit` 的 `work_queue.put(work_item)`（queue_consumer.py:212），在 Python 3.13（setup.cfg:24 `python_requires = >=3.13`，.python-version 為 3.13.1）會拋出 `queue.ShutDown`。`queue.ShutDown` 是 `Exception` 的子類別，於是被 `SimpleQueueProcessingStrategy.submit` 最外層的 `except Exception`（queue_consumer.py:317-325）接走，記一筆 log，然後執行 `add_offset` 緊接著 `complete_offset`——offset 被標記成「已處理完成」，commit thread 一秒後就把它 commit 出去。\n\n結果是：consumer 程序還活著、offset 持續前進、lag 指標正常，但每一則訊息都沒有被處理。這是靜默的資料遺失，而且 restart 也救不回來，因為 offset 已經 commit。\n\n反證檢查：(a) 是否有別處重建 pool？grep `FixedQueuePool(` 在整個 repo 只有 result_consumer.py:133 與測試，沒有第二個建構點。(b) `create_thread_queue_parallel_worker` 的 `assert self.queue_pool is not None`（result_consumer.py:247）是否會先擋下來？不會——`queue_pool` 只有在 `ResultsStrategyFactory.shutdown()` 才被設為 None（result_consumer.py:183-185），而 grep 顯示 `factory.shutdown()` 在 src/ 下沒有任何呼叫點，只有測試呼叫；rebalance 路徑上 `queue_pool` 仍是那個已死的物件，assert 通過。(c) 是否只有 close() 有問題、join() 可以倖免？不行，join() 就是 close()。",
+      "fix": "把 pool 的生命週期對齊 strategy：在 `create_thread_queue_parallel_worker` 內建立 `FixedQueuePool`（如同 spans factory 對 `SpansBuffer` / `SpanFlusher` 的做法），讓每次 assignment 得到一個乾淨的 pool，`close()` 收掉自己建立的那一個。若要保留「pool 由 factory 持有」的設計，則 `SimpleQueueProcessingStrategy.close()/join()/terminate()` 都不可碰 `queue_pool`——只停掉自己的 commit thread、並在 close 時等待 pool 清空（`wait_until_empty` 已經寫好但目前沒有任何呼叫者），把 pool 的關閉留給 `ResultsStrategyFactory.shutdown()`。無論選哪一條，都應該補一個測試：對同一個 factory 連續呼叫兩次 `create_with_partitions`，中間對第一個 strategy 呼叫 `close()`，然後驗證第二個 strategy 仍能實際處理訊息。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-002",
+      "dimension": "E",
+      "severity": "Critical",
+      "status": "new",
+      "title": "queue 沒有上限也不會丟 MessageRejected，等於完全沒有 backpressure——但 class docstring 宣稱有",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:185",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:247-255",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:293-325",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:327-333",
+        "src/sentry/spans/consumers/process/flusher.py:359-364",
+        "src/sentry/replays/_case_studies/INC_1184_consumer_backlog_from_increased_threads/report.py:131-168"
+      ],
+      "rationale": "`SimpleQueueProcessingStrategy` 的 docstring 列出的保證之一是 `Natural backpressure when queues fill up`（queue_consumer.py:253），但 queue 是 `queue.Queue()`（queue_consumer.py:185），沒有傳 `maxsize`，所以它永遠不會滿。`submit()`（293-325）也從來不會丟 `MessageRejected`，`poll()`（327-333）只送 gauge 不做任何節流。\n\narroyo 讓 consumer 減速的唯一機制就是 strategy 丟 `MessageRejected`——這一點在本 repo 內有寫成案例研究：src/sentry/replays/_case_studies/INC_1184_consumer_backlog_from_increased_threads/report.py:131-168，結論寫著 `The queue depth controls the MessageRejected error. If messages arrive faster than they can be processed a MessageRejected error is raised.`，而該案例本身就是「thread 數調高之後 consumer 積壓」的事故報告。同 repo 的 `SpanFlusher.submit` 也是以 `raise MessageRejected()` 實作背壓（flusher.py:359-364）。\n\n沒有這個機制，StreamProcessor 會用 Kafka 能給的最快速度把訊息灌進記憶體。實際觸發條件不需要異常狀況：任何一次 consumer 重啟後追 lag、或下游（DB、Redis）變慢，producer 端速率不變而 worker 端變慢，差額就全部堆在這 20 條無上限的 queue 裡。每個 `WorkItem` 還額外持有整個 `Message`（見 F-008），所以每則訊息的常駐成本是 decode 後的 result 加上 decode 前的原始 payload。同時 `OffsetTracker.all_offsets` 也會跟著長到同樣的量級（queue_consumer.py:56-60）。終點是 OOM。\n\n反證檢查：(a) 上游是否已經有背壓？uptime-results 的 strategy chain（src/sentry/consumers/__init__.py:578-628）只會包上 ValidateSchema / DlqStaleMessages / MinPartitionMetricTag / Healthcheck，這幾層都只是轉發，沒有任何一層限制 in-flight 數量。(b) `--max-workers` 是否間接限制了佇列深度？沒有——它只決定 queue 的「條數」（result_consumer.py:136），不影響每條 queue 的深度。(c) 是否有其他既有模式也這樣？沒有：batched-parallel 由 `BatchStep` 的 `max_batch_size` 限制 in-flight 量，parallel 由 `run_task_with_multiprocessing` 的 block size 限制。",
+      "fix": "給 queue 一個明確的深度上限，並在 `SimpleQueueProcessingStrategy.submit` 裡把「目標 queue 已滿」轉成 `raise MessageRejected()`（arroyo 會據此暫停 poll 並稍後重送同一則訊息，不會丟訊息）。實作上：`queue.Queue(maxsize=...)` 加上 `work_queue.put_nowait(...)` 攔 `queue.Full` 改丟 `MessageRejected`，注意此時不可先呼叫 `offset_tracker.add_offset`，否則重送會重複記帳。深度值建議做成建構參數並從 CLI 帶入。同時把 docstring line 253 的 `Natural backpressure when queues fill up` 改成與實作相符的敘述。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-003",
+      "dimension": "F",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "OffsetTracker 只在第一次 commit 時擋住 offset gap，之後會直接跳過 gap——與它自己 docstring 宣稱的「所有前序 offset 完成才 commit」相反",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:34-42",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:67-98",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:86",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:100-105",
+        "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py:351-372"
+      ],
+      "rationale": "`OffsetTracker` 的 class docstring 第 39 行寫 `Only commits offsets when all prior offsets are processed`。實際上 `get_committable_offsets` 的起點是 `start = max(last_committed + 1, min_offset)`（queue_consumer.py:86），而 `mark_committed` 會把所有 `<= committed` 的 offset 從 `all_offsets` 移除（queue_consumer.py:105）。這兩件事合起來的後果是：gap 只擋得住一輪。\n\n我把 `OffsetTracker` 原樣抽出來實際跑過（Partition 以等價的可雜湊物件替代，其餘邏輯逐字複製）：送入 offset 100、102、103（101 從未進入 tracker），三個都 complete。第一次 `get_committable_offsets()` 回 `{P0: 100}`——正確，gap 擋住了。接著照 `_commit_loop` 的流程呼叫 `mark_committed(P0, 100)`，第二次 `get_committable_offsets()` 回 `{P0: 103}`。因為此時 `all_offsets` 只剩 {102, 103}，`min_offset` 變成 102，`start = max(101, 102) = 102`，迴圈直接從 gap 的另一側開始。commit thread 每秒跑一次（queue_consumer.py:276），所以「擋住」只維持一個 tick。\n\n一旦 offset 101 被跳過並 commit，該訊息在 restart 後也不會被重讀，等同永久遺失。\n\n值得一提的是，這個不變量原本是有測試釘住的：`test_handles_gaps`（docstring 為 `Test that we never commit past gaps.`）在本 MR 的最後一個 commit 9966ec5a「remove gap test」被整段刪掉，commit message 沒有說明原因。留下的 `test_offset_gaps_block_commits`（test_queue_consumer.py:351-372）只驗證第一次 commit，正好落在會通過的那一輪。\n\n反證檢查（為什麼是 Suggestion 而不是 Critical）：gap 必須來自「某個 offset 從未進入 tracker」。`SimpleQueueProcessingStrategy.submit` 對 BrokerValue 的每一條路徑（成功、result 為 None、例外）都會 `add_offset`，所以正常訊息不會產生 gap。目前能確認的觸發路徑是 F-004 描述的非 BrokerValue 訊息，那需要部署時帶上 `--stale-threshold-sec`；另一類是 Kafka 本身的 offset 空洞（transaction control record、compaction）。這兩者是否會出現在 uptime-results 上，我無法從這個 checkout 判定，因此列為 Q-002。行為本身已由實測確立，可達性未定，所以不給 Critical。",
+      "fix": "讓 `start` 只由 `last_committed` 決定，不要用 `min_offset` 把起點往前推：`start = last_committed + 1`，並在 `last_committed` 尚未初始化（-1）時改用該 partition 第一次看到的 offset 當基準（例如在 `add_offset` 首次看到某 partition 時記下 `first_seen[partition]`，用它初始化 `last_committed`）。這樣 gap 會永久擋住 commit，符合 docstring。若團隊的決定其實是「gap 應該跳過」（例如確定 topic 會有控制訊息），那就反過來改 docstring line 39 明說這件事，並讓跳過時送一個 metric 出來，不要讓它沉默發生。無論選哪一邊，把 `test_handles_gaps` 依新語意補回來——它是唯一能釘住這個不變量的測試。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-004",
+      "dimension": "E",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "沒有實作 FilteredPayload 的處理契約：filtered 訊息會走 AssertionError 例外路徑，且 Value（非 BrokerValue）訊息的 offset 會被整個丟掉",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:293-295",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:317-325",
+        "src/sentry/remote_subscriptions/consumers/result_consumer.py:187-188",
+        "src/sentry/consumers/dlq.py:132-141",
+        "src/sentry/consumers/__init__.py:585-588"
+      ],
+      "rationale": "`SimpleQueueProcessingStrategy.submit` 的型別是 `Message[KafkaPayload | FilteredPayload]`（queue_consumer.py:293），但實際處理只有一條路：先呼叫 `self.decoder(message.payload)`（queue_consumer.py:295），而 decoder 是 `ResultsStrategyFactory.decode_payload`，第一行就是 `assert not isinstance(payload, FilteredPayload)`（result_consumer.py:188）。所以每一則 filtered 訊息都會拋 AssertionError，被最外層 `except Exception` 接住並記一筆 `logger.exception(\"Error submitting message to queue\")`——正常運作的訊息在 log 上長得像錯誤。\n\n更實際的問題在後半段：例外處理只有在 `isinstance(message.value, BrokerValue)` 成立時才補記 offset（queue_consumer.py:319-325）。arroyo 的 filtered 訊息用的是 `Value` 而不是 `BrokerValue`——src/sentry/consumers/dlq.py:136 的 `Message(Value(FILTERED_PAYLOAD, self.offsets_to_forward))` 就是這種形狀，它的用途正是把 stale 訊息已經被 DLQ 掉的 offset 往下游帶去 commit。走到這裡，那些 offset 既沒有被記帳也沒有被 commit，等於整批被吞掉，並且在 tracker 裡留下一個 gap（接著就會遇到 F-003）。\n\n可達條件是明確的：`get_stream_processor` 只要收到 `stale_threshold_sec`，就會用 `DlqStaleMessagesStrategyFactoryWrapper` 把本 factory 包起來（src/sentry/consumers/__init__.py:585-588），該 wrapper 的 `poll()` 每秒最多送一次 filtered 訊息（dlq.py:132-141）。這是部署參數，不是程式碼裡寫死的，所以是否已啟用要看 uptime-results 的實際命令列（Q-002）。其餘三種模式因為終點是 arroyo 的 `CommitOffsets`，本來就正確處理這種訊息，只有新模式沒有。",
+      "fix": "在 `submit` 最前面先處理 filtered 的分支，不要讓它走進 decoder：判斷 `isinstance(message.payload, FilteredPayload)`，若是，就把 `message.committable`（arroyo 對 filtered 訊息提供的 partition→next-offset 對映）直接交給 offset tracker 或 commit 路徑，然後 return。同時把 `except Exception` 那段的補救邏輯拆開——例外路徑不該和「這是一則設計上就沒有 payload 的訊息」共用同一條程式碼。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-005",
+      "dimension": "A",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "worker 內每則訊息開一個 sentry transaction，和 ResultProcessor.__call__ 已經開的那個重複，而且名稱沿用 monitors. 前綴",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:136-140",
+        "src/sentry/remote_subscriptions/consumers/result_consumer.py:44-54",
+        "src/sentry/uptime/consumers/results_consumer.py:603"
+      ],
+      "rationale": "`OrderedQueueWorker.run` 對每個 work item 開一個 transaction `op=\"queue_worker.process\", name=f\"monitors.{self.identifier}.worker_{self.worker_id}\"`（queue_consumer.py:136-139），然後在裡面呼叫 `self.result_processor(...)`（140）。但 `ResultProcessor.__call__` 自己就會開一個 transaction `name=f\"monitors.{identifier}.result_consumer.ResultProcessor\"`（result_consumer.py:48-51）。兩層 transaction 包住同一段工作，外層沒有涵蓋任何內層以外的動作。\n\n名稱有兩個問題。一是 `monitors.` 前綴：這個模組在 `remote_subscriptions/`，identifier 是 `\"uptime\"`（src/sentry/uptime/consumers/results_consumer.py:603），所以會產生 `monitors.uptime.worker_7` 這種名稱。內層的既有寫法也有同樣的前綴，但那是既有的；新程式碼複製它會讓這個誤稱再多一處。二是把 `worker_id` 放進 transaction name：worker 數量由 `--max-workers` 決定，這會在 transaction name 這個維度上產生 N 個彼此無關的名稱，而 worker id 對「這筆工作做了什麼」沒有解釋力。",
+      "fix": "移除 worker 內的 transaction，讓 `ResultProcessor.__call__` 既有的那一個負責——如果需要區分 queue 模式，改成在既有 transaction 上設 tag（`sentry_sdk.set_tag(\"queue_worker_id\", ...)`）而不是新開一層。若確定要保留外層 span，改用 `start_span` 而非 `start_transaction`，並把 worker id 移到 tag、名稱去掉 `monitors.` 前綴。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": false,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-006",
+      "dimension": "E",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "shutdown 順序讓 `shutdown(immediate=False)` 的 drain 語意失效，且 commit thread 比 worker 先結束",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:231-243",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:127-131",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-338",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:222-229"
+      ],
+      "rationale": "`FixedQueuePool.shutdown()` 先把每個 worker 的 `shutdown` 旗標設為 True，再對 queue 呼叫 `q.shutdown(immediate=False)`（queue_consumer.py:231-243）。`immediate=False` 是刻意選的「讓 queue 排乾」模式——阻塞中的 `get()` 會繼續拿到剩餘項目，直到清空才拋 `ShutDown`。但 worker 的迴圈條件是 `while not self.shutdown`（queue_consumer.py:129），旗標已經是 True，所以 worker 最多再處理一個項目就跳出迴圈，queue 裡剩下的全部留在原地。兩個機制互相抵消，寫成 `immediate=False` 的意圖沒有實現。\n\n第二層是 `SimpleQueueProcessingStrategy.close()` 的順序（queue_consumer.py:335-338）：先 `shutdown_event.set()` 並 `commit_thread.join(timeout=5.0)`，最後才 `queue_pool.shutdown()`。commit thread 結束時 queue 裡還有未處理的項目，所以即使真的排乾了，完成的 offset 也沒有人 commit。\n\n後果本身是 at-least-once（未 commit 的 offset 會在 restart 後重讀），不是資料遺失，所以不是 Critical。但每次部署都會產生一批可避免的重複處理，而且和 `wait_until_empty`（queue_consumer.py:222-229，目前整個 repo 沒有任何呼叫者）顯示的設計意圖不符——那個方法看起來就是為了這個場景寫的。",
+      "fix": "把 close 的順序改成：`queue_pool.wait_until_empty(timeout=...)` → 停 worker → 最後一次 `get_committable_offsets()` 並 commit → 停 commit thread。worker 迴圈的終止條件也要改成「旗標為真且 queue 已空」，或乾脆拿掉 `self.shutdown` 旗標、單純依賴 `queue.ShutDown` 來結束——後者比較乾淨，因為 `shutdown(immediate=False)` 的語意本來就已經表達了「排乾後結束」。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-007",
+      "dimension": "B",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "每處理一則訊息就送一次 queue_depth gauge，20 個 worker 共用同一組 tag 互相覆蓋，而 poll() 已經在送總量",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:148-156",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:327-333"
+      ],
+      "rationale": "`OrderedQueueWorker.run` 的 `finally` 區塊對每個 work item 送一次 `metrics.gauge(\"remote_subscriptions.queue_worker.queue_depth\", self.work_queue.qsize(), tags={\"identifier\": self.identifier})`（queue_consumer.py:150-156）。兩個問題疊在一起：頻率是「每則訊息一次」，也就是和 consumer 吞吐量同數量級；而 tag 只有 `identifier`，沒有 `worker_id` 或 `queue_index`，所以 20 個 worker 送的是同一條時間序列，最後留下的值取決於哪個 worker 剛好最後寫入——這條指標既無法代表任何特定 queue，也無法代表全體。\n\n同時 `SimpleQueueProcessingStrategy.poll()` 已經在送 `remote_subscriptions.queue_pool.total_queued`（queue_consumer.py:327-333），那是有意義的聚合值，而且頻率由 arroyo 的 poll 節奏決定。per-item 的那一條並沒有補充任何前者沒有的資訊。",
+      "fix": "刪掉 worker `finally` 裡的 gauge。若確實需要看單一 queue 的深度分佈，改在 `SimpleQueueProcessingStrategy.poll()` 裡從 `get_stats()[\"queue_depths\"]` 一次送出（加上 `queue_index` tag，或改送 max / p95 這類聚合值），頻率跟著 poll 走。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": false,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-008",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "WorkItem.message 從未被讀取，卻讓每個排隊項目多持有一份完整的 Kafka 訊息",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:24-31",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:308-313"
+      ],
+      "rationale": "`WorkItem` 的 docstring 寫 `Work item that includes the original message for offset tracking`（queue_consumer.py:26），但 offset tracking 用的是同一個 dataclass 上的 `partition` 與 `offset` 兩個欄位（28-29），`message` 本身（31）在 `queue_consumer.py` 內沒有任何讀取點——grep `work_item.message` 在整個 repo 零命中，測試裡也只是為了建構 `WorkItem` 而填值。\n\n它不是零成本：`Message` 持有 `BrokerValue`，`BrokerValue` 持有原始 `KafkaPayload`，也就是尚未 decode 的 bytes。每個排隊項目因此同時常駐 decode 後的 result 與 decode 前的 payload，在 queue 無上限（F-002）的情況下，這是把記憶體壓力乘以約兩倍。",
+      "fix": "把 `message` 欄位拿掉，`WorkItem` 只留 `partition` / `offset` / `result`；`SimpleQueueProcessingStrategy.submit`（queue_consumer.py:308-313）相應不再傳入。若日後真的需要原始訊息（例如要送 DLQ），再連同使用點一起加回來。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-009",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "OffsetTracker 的四個 dict 沒有回收路徑，partition 被 revoke 之後條目與 lock 永久留著",
+      "evidence": [
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:43-47",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:100-105"
+      ],
+      "rationale": "`all_offsets`、`outstanding`、`last_committed`、`partition_locks` 四個 dict（queue_consumer.py:44-47）只有寫入與 key 層級的增長，沒有任何移除 partition 的路徑；`mark_committed` 只清理某個 partition 內的 offset 集合，不會刪掉 partition 本身（queue_consumer.py:100-105）。因為 tracker 隨 pool 綁在 factory 上（見 F-001），它會跨越所有 rebalance 存活，看過的每一個 partition 都會留下一組條目與一個 `threading.Lock`。\n\n數量級不大（partition 數有限），所以是 Nit。真正值得注意的是 `last_committed` 的殘留語意：某個 partition 被 revoke 後再被指派回來，`last_committed` 還是舊值，`get_committable_offsets` 會以它為基準（queue_consumer.py:81）——只要新的起始 offset 低於舊值（consumer group offset 被往回重設的情況），該 partition 就會永遠算不出可 commit 的 offset。",
+      "fix": "加一個 `remove_partitions(partitions)`，在 `create_with_partitions` 拿到新的 assignment 時把不再持有的 partition 清掉。若採納 F-001 的「pool 隨 strategy 建立」方案，tracker 自然跟著重建，這個問題一併消失——那樣的話只需在 docstring 說明 tracker 的生命週期等同一次 assignment。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-010",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "test_thread_queue_parallel_error_handling 斷言的行為和實作相反，只因為沒等到 commit tick 才通過",
+      "evidence": [
+        "tests/sentry/uptime/consumers/test_results_consumer.py:1874-1924",
+        "tests/sentry/uptime/consumers/test_results_consumer.py:1922",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:142-149",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:273-291"
+      ],
+      "rationale": "這個測試的 docstring 說 `Test that errors in processing don't block offset commits for other messages.`，但最後的斷言是 `assert len(committed_offsets) == 0 or test_partition not in committed_offsets`（test_results_consumer.py:1922）——也就是斷言「什麼都沒 commit」，和 docstring 說的相反。\n\n而實作的行為是兩者都不是：`OrderedQueueWorker.run` 的 `complete_offset` 在 `finally` 裡無條件執行（queue_consumer.py:148-149），所以拋例外的 offset 100 和成功的 offset 101 都會被標記完成，`get_committable_offsets()` 會算出 101，commit thread 會 commit 102。這個測試之所以會通過，是因為等待迴圈在 `total_items == 0 and call_count >= 2` 就 break，再 `time.sleep(0.2)`，而 `_commit_loop` 的第一件事是 `self.shutdown_event.wait(1.0)`（queue_consumer.py:276）——commit 通常還沒發生。這是靠 timing 通過的斷言，兩邊都不穩：機器慢一點、或前面的 `create_uptime_result` DB 操作多花一秒，測試就會翻面。\n\n結論是這條錯誤路徑目前實質上沒有被測到，而且測試留下的是一個關於失敗語意的錯誤描述：讀者會以為失敗的訊息不會被 commit，實際上會。",
+      "fix": "先決定失敗語意再改測試。若「處理失敗仍然 commit」是刻意的（和 serial 模式一致——`ResultProcessor.__call__` 本來就吞例外，src/sentry/remote_subscriptions/consumers/result_consumer.py:53-54），就把斷言改成明確等待 commit 發生並驗證 `committed_offsets[test_partition] == 102`，docstring 改寫成「失敗的訊息不會擋住後續 offset」。若失敗應該擋住 commit，就要在 `run()` 裡區分成功與失敗、失敗時不呼叫 `complete_offset`（並想清楚那條 offset 之後怎麼收斂）。無論哪一種，等待條件都要改成等 commit 事件而不是等固定秒數。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-011",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "兩個具競態／機率性的斷言：test_stats_reporting 與 test_different_groups_distributed",
+      "evidence": [
+        "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py:175-207",
+        "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py:98-107",
+        "src/sentry/remote_subscriptions/consumers/queue_consumer.py:198-202"
+      ],
+      "rationale": "`test_stats_reporting`（test_queue_consumer.py:175-207）在 for 迴圈送完 10 個項目後立刻 `assert stats[\"total_items\"] > 0`。但 3 個 worker thread 在 `setUp` 就已經啟動並阻塞在 `get()` 上，而 `result_processor` 只是把 tuple append 進 list——處理時間遠短於主執行緒建構 `WorkItem`（含 `datetime.now()` 與 `Message`/`BrokerValue` 建構）的時間。queue 在斷言執行時已經被排乾是完全可能的，這條斷言本身就是競態。\n\n`test_different_groups_distributed`（test_queue_consumer.py:98-107）用 20 個 group key 打進 3 條 queue，斷言 `len(queue_indices) == 3`。分派用的是 `hash(group_key) % num_queues`（queue_consumer.py:198-202），而 CPython 對 str 的 hash 每個行程隨機（本 repo 沒有釘 `PYTHONHASHSEED`，全 repo grep 無命中）。三條 queue 中至少一條落空的機率約 3×(2/3)^20 ≈ 0.09%，在 sentry 這種執行頻率下是可觀測的偶發失敗。\n\n這兩條都不是「測錯東西」，而是「測對東西但斷言方式不穩」，會變成之後沒人相信的紅燈。",
+      "fix": "`test_stats_reporting`：把 `assert total_items > 0` 拿掉，或改成在送出前先讓 worker 停住（例如 result_processor 內等一個 `threading.Event`），確定佇列一定有東西再斷言；真正要驗的「處理完後歸零」那一段（`stats[\"total_items\"] == 0`）本來就是穩的，保留即可。`test_different_groups_distributed`：把斷言放寬成 `len(queue_indices) > 1`（驗證「有分散」而不是「剛好全中」），或改用固定的 key 集合並斷言同一 key 兩次得到相同 index——後者才是 `get_queue_for_group` 真正的契約。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-012",
+      "dimension": "G",
+      "severity": "Nit",
+      "status": "new",
+      "title": "七個 thread-queue-parallel 測試被放進 ProcessResultSerialTest，該類別的 strategy_processing_mode 是 serial，而該屬性的型別根本不含新模式",
+      "evidence": [
+        "tests/sentry/uptime/consumers/test_results_consumer.py:1586-1587",
+        "tests/sentry/uptime/consumers/test_results_consumer.py:1689-2006",
+        "tests/sentry/uptime/consumers/test_results_consumer.py:73-74",
+        "tests/sentry/uptime/consumers/test_results_consumer.py:2008-2009"
+      ],
+      "rationale": "`class ProcessResultSerialTest(ProcessResultTest)` 宣告 `strategy_processing_mode = \"serial\"`（test_results_consumer.py:1586-1587），這個屬性是 `send_result` 在沒有傳入 consumer 時用來建 factory 的（test_results_consumer.py:105）。新增的七個 `test_thread_queue_parallel*`（1689-2006）都放在這個類別裡，各自建立 `mode=\"thread-queue-parallel\"` 的 factory 再傳進去，所以功能上沒有問題——但類別名稱與 `strategy_processing_mode` 現在都在說謊，之後要在 serial 類別裡加測試的人得先分辨哪些方法其實不屬於這裡。\n\n另外 `strategy_processing_mode` 的抽象宣告型別是 `Literal[\"batched-parallel\", \"parallel\", \"serial\"]`（test_results_consumer.py:73-74），本 MR 沒有把新模式加進去——這正好說明新測試從一開始就沒打算走這條共用路徑。同一份檔案已經有 `ProcessResultParallelTest`（2008-2009）這種一個模式一個類別的慣例，本 MR 也確實新開了 `ProcessResultThreadQueueParallelKafkaTest` 放整合測試，只是單元測試沒有跟著搬。",
+      "fix": "把七個 `test_thread_queue_parallel*` 移到自己的類別。最有價值的做法是 `class ProcessResultThreadQueueParallelTest(ProcessResultTest)` 並設 `strategy_processing_mode = \"thread-queue-parallel\"`（同時把 line 73-74 的 Literal 補上這個值），這樣繼承來的既有案例也會跑在新模式上，覆蓋率比現在高得多；若不想擴大範圍，至少獨立成一個不繼承 `ProcessResultTest` 的類別。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "E",
+      "question": "arroyo 傳給 `create_with_partitions` 的 `commit` callable，可以從 strategy 自己開的背景執行緒呼叫嗎？",
+      "context": "`SimpleQueueProcessingStrategy` 在 `__init__` 就啟動一條 commit thread，由它每秒呼叫一次 `self.commit_function(committable)`（src/sentry/remote_subscriptions/consumers/queue_consumer.py:268-291），最終進到 arroyo 的 commit callback。本 repo 內其他所有 strategy 都是在 arroyo 主迴圈的 `submit()` / `poll()` 裡經由 `CommitOffsets` 提交，沒有第二個從背景執行緒 commit 的例子。若 arroyo 的 commit callback 內部會操作 KafkaConsumer 的 staged offsets 而該結構非執行緒安全，就會和主迴圈的 poll/rebalance 競爭；rebalance 當下背景執行緒送出已被 revoke 的 partition 也可能拋例外，而那會被 `_commit_loop` 的 `except Exception`（queue_consumer.py:290-291）靜默吞掉，只留一行 log。審查環境沒有安裝 arroyo（`import arroyo` 失敗，套件也不在 checkout 內），無法讀它的實作來判定，因此不給 severity。",
+      "what_would_settle_it": "讀 sentry-arroyo>=2.28.0（requirements-base.txt:66）中 `arroyo/processing/processor.py` 的 commit callback 與 `arroyo/backends/kafka/consumer.py` 的 `stage_offsets` / `commit_offsets`，確認是否有鎖或明確的執行緒約束；或直接向 arroyo 維護者確認這個 callable 的執行緒契約。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "F",
+      "question": "uptime-results 這個 topic 實際上會不會出現 offset 空洞（transaction control record、compaction），以及部署時有沒有帶 `--stale-threshold-sec`？",
+      "context": "F-003 已用實測確認「gap 只擋一輪、之後會被跳過」的行為，但它要造成資料遺失得先有 gap。目前能指認的 gap 來源有兩個：F-004 的非 BrokerValue 訊息（需要 `DlqStaleMessagesStrategyFactoryWrapper` 被啟用，src/sentry/consumers/__init__.py:585-588），以及 Kafka 層級的 offset 空洞。前者取決於部署時的命令列參數，後者取決於 topic 設定與 producer 是否使用 transaction——這兩件事都在這個 checkout 之外。答案決定 F-003 與 F-004 是「理論上的正確性缺陷」還是「上線就會踩到」。",
+      "what_would_settle_it": "查 uptime-results consumer 的實際部署參數（是否帶 `--stale-threshold-sec`），以及該 topic 的 `cleanup.policy` 與 producer 是否啟用 transaction。任一為真，F-003 就應該升級為 Critical。"
+    },
+    {
+      "id": "Q-003",
+      "dimension": "F",
+      "question": "20 條常駐 worker thread 各自持有的 Django DB 連線與 Redis 連線，在連線池與 pgbouncer 的容量上撐得住嗎？連線又何時被回收？",
+      "context": "每個 `OrderedQueueWorker` 是一條永不結束的 thread（src/sentry/remote_subscriptions/consumers/queue_consumer.py:127-156），裡面呼叫 `ResultProcessor.__call__` → `get_subscription()` → `objects.get_from_cache()`（src/sentry/remote_subscriptions/consumers/result_consumer.py:44-62），以及 uptime result handler 內的 Redis 操作。Django 的 DB 連線是 thread-local，所以 `--max-workers` 的預設值 20（result_consumer.py:136）意味著每個 consumer 行程最多 20 條常駐連線，且因為 thread 從不結束、也沒有任何 `close_old_connections()` 呼叫點，連線不會被回收。部分反證：既有的 batched-parallel 模式同樣在 `ThreadPoolExecutor` 的執行緒裡跑 `process_group`（result_consumer.py:304-331），也沒有處理連線回收，所以這不是全新的情況——但那條路徑的工作是批次的，而新模式把「每條 queue 一條常駐執行緒」寫成了預設 20。無法從 checkout 判定實際的連線池上限與 pgbouncer 設定，故不給 severity。",
+      "what_would_settle_it": "查 uptime consumer 部署的 DB 連線上限（CONN_MAX_AGE、pgbouncer pool size）與目前 batched-parallel 模式實際使用的執行緒數，比對 `--max-workers` 預設 20 之下的總連線數；或在 staging 以該模式跑一段時間觀察 `pg_stat_activity` 與連線年齡。"
+    }
+  ],
+  "rereview": null,
+  "conclusion": "Request Changes",
+  "summary": "本次審查為 local_branch 模式第 1 輪，無 GitLab MR、未發佈。\n\n這個 MR 為 uptime results consumer 新增第四種處理模式 thread-queue-parallel：一個固定數量的 queue pool，用 group key 雜湊決定 queue，每條 queue 一個常駐 worker thread，另有一條背景執行緒每秒依 offset 記帳結果 commit。設計目標（同一 subscription 內保序、跨 subscription 平行、只在處理成功後 commit）本身是合理的，程式碼也帶了相當完整的測試，這在新增 consumer 執行路徑的改動裡不常見。\n\n擋下合併的是兩件與 arroyo 生命週期有關的事。第一，`SimpleQueueProcessingStrategy.close()` 會把 `FixedQueuePool` 關掉，但那個 pool 是 factory 在 `__init__` 建立一次、之後不再重建的；arroyo 每次 rebalance 開始都會呼叫 close()（本 repo 的 spans flusher 對此有明文註解），所以第一次 rebalance 之後 pool 已死，訊息會在 `except Exception` 裡被吞掉、offset 卻照常前進——consumer 看起來健康，實際上什麼都沒處理。第二，queue 沒有上限也不會丟 `MessageRejected`，等於沒有 backpressure，儘管 docstring 宣稱有；本 repo 的 INC_1184 案例研究記錄的正是這個機制失效的後果。\n\n另有一項 offset 記帳的正確性缺陷（F-003）：`OffsetTracker` 宣稱「所有前序 offset 完成才 commit」，但把它抽出來實際執行後可見，gap 只擋得住一個 commit 週期，之後就會被跳過。它沒有列為 Critical，是因為觸發需要真的出現 offset 空洞，而那取決於部署參數與 topic 設定（Q-002）。順帶一提，釘住這個不變量的 `test_handles_gaps` 在本 MR 最後一個 commit（9966ec5a）被刪除，commit message 未說明原因。\n\n緩解事實一併記錄：`--mode` 預設仍是 `serial`，新模式必須明確指定才會生效，所以合併本身不改變現行行為——上述 Critical 的爆炸半徑落在「有人用這個 flag 部署之後」。\n\n流程揭露：本次審查環境沒有 Agent/Task 工具（已用 ToolSearch 確認不存在），`ncr-fresh-eyes` 與 `ncr-quality-check` 兩個 subagent 都無法派出，依 SKILL.md 的規定略過並在此揭露，未以主 agent 自行模擬。掃描工具僅 git 與 ruff 可用，trivy / opengrep / ty / oxlint / codegraph 皆未安裝，導航改用 grep。ruff 全專案 162 件診斷均為專案既有問題，不列入本次。"
+}

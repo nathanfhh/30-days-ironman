@@ -1,0 +1,6 @@
+[
+  "Python's built-in hash() uses a per-process random seed (PYTHONHASHSEED) by default, so the same tuple(sorted(project_ids)) will produce different values across different worker processes, making the shared cache ineffective with constant cache misses",
+  "invalidate_upsampling_cache uses the same non-deterministic hash() bug, meaning cache invalidation from one worker will not clear the key set by another, making invalidation silently a no-op in production",
+  "is_errors_query_for_error_upsampled_projects receives the outer closure dataset variable instead of the scoped_dataset being queried, causing upsampling to be applied to transaction data when it shouldn't be, or skipped for error data when it should apply",
+  "Column alias is hardcoded to 'count' in transform_query_columns_for_error_upsampling, ignoring any existing alias on the column - if caller passes 'count() as errors' the condition fails and upsampling silently does not apply"
+]

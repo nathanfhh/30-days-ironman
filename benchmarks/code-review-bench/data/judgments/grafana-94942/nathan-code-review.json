@@ -1,0 +1,20 @@
+{
+  "slug": "grafana-94942",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 9,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.98,
+      "reasoning": "Both identify that enableSqlExpressions computes the feature-flag result and then unconditionally returns false."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.55,
+      "reasoning": "Both point at the stubbed-out DB methods that only return a not-implemented error; the candidate frames it as the default path being blocked solely by that stub failing with a misleading message."
+    }
+  ]
+}

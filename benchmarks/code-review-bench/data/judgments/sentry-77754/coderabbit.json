@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-77754",
+  "tool": "coderabbit",
+  "n_golden": 4,
+  "n_candidates": 5,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 2, "confidence": 0.9,
+     "reasoning": "Both describe timezone.now() being evaluated once at class definition, producing a shared mutable default timestamp across instances."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.95,
+     "reasoning": "Both flag the same typo, test_from_dict_inalid_data should be test_from_dict_invalid_data."},
+    {"golden_index": 2, "candidate_index": 3, "confidence": 0.9,
+     "reasoning": "Both point out the empty_array test name should be renamed since it actually tests an empty dict."}
+  ]
+}

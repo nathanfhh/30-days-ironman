@@ -1,0 +1,12 @@
+{
+  "slug": "sentry-67876",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 18,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 0, "confidence": 0.92,
+     "reasoning": "Both identify that the OAuth state is pipeline.signature, a static value constant across users, providing no real CSRF protection instead of a per-request random value."},
+    {"golden_index": 2, "candidate_index": 1, "confidence": 0.95,
+     "reasoning": "Both identify integration.metadata[\"sender\"][\"login\"] being indexed without checking the sender key exists, causing an unhandled KeyError."}
+  ]
+}

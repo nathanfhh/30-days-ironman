@@ -1,0 +1,6 @@
+[
+  "All dynamic imports are evaluated immediately when the module is first required, so all 28 app bundles begin loading in parallel at startup - no true lazy loading benefit is achieved. Should use thunk functions (() => import(...)) so modules are only fetched when first accessed.",
+  "vital/lib/reschedule.ts uses forEach(async ...) which doesn't await calendar deletions - forEach ignores the Promise returned by async callbacks, so deleteEvent calls run as detached fire-and-forget tasks and errors become unhandled Promise rejections",
+  "wipemycalother/lib/reschedule.ts uses forEach(async ...) which doesn't await calendar deletions - same issue as vital/lib/reschedule.ts where forEach discards returned Promises",
+  "packages/trpc/server/routers/viewer/bookings.tsx uses forEach(async ...) for booking ref deletions - calendar and video event deletions are not awaited, errors are silently lost, and subsequent code runs before deletions complete"
+]

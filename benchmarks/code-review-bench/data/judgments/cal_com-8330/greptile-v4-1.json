@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-8330",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both identify end being computed from slotStartTime instead of slotEndTime."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both identify dayjs object identity comparison always returning false; should use isSame()."
+    }
+  ]
+}

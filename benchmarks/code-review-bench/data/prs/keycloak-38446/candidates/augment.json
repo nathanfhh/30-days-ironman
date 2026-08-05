@@ -1,0 +1,6 @@
+[
+  "RecoveryAuthnCodesUtils.getCredential() can return credentials from user storage (CredentialInputUpdater#getCredentials); if those CredentialModels don't have credentialData/secretData in Keycloak's expected JSON format, the subsequent RecoveryAuthnCodesCredentialModel.createFromCredentialModel(...) will throw at runtime and break login",
+  "RecoveryAuthnCodesCredentialModel.createFromValues(...) doesn't set an id, so the credential returned from getCredentials() will have a null id; this can break flows that rely on credential IDs (e.g., removal via removeStoredCredentialById)",
+  "Recovery-code validation accepts any stored code and never consumes/removes it, which makes recovery codes reusable and ignores the sequential 'code #N' behavior enforced by RecoveryAuthnCodesCredentialProvider",
+  "TestAppHelper.logout() relies on refreshToken set by completeLogin(), but this test never calls completeLogin() after submitting the recovery code; logout may become a no-op and leave sessions behind for later tests"
+]

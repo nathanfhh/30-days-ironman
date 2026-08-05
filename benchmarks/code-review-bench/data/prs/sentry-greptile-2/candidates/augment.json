@@ -1,0 +1,7 @@
+[
+  "OptimizedCursorPaginator.get_item_key assumes the ordered field is numeric and applies math.floor/ceil, but for common order_by values like -datetime this will be a datetime object and will raise a TypeError at runtime",
+  "start_offset can still be negative when cursor.is_prev is true, and Django QuerySet slicing does not support negative indices (it asserts), so a crafted/invalid cursor could crash pagination",
+  "Code branch relies on negative queryset slicing but Django explicitly rejects negative slicing on QuerySet, so cursor.offset < 0 with enable_advanced_features is likely to raise at runtime",
+  "ZUNIONSTORE defaults to AGGREGATE SUM, so if the same span payload exists in both inputs its score will be summed (doubling timestamps), which can skew ordering and the subsequent ZPOPMIN eviction behavior",
+  "The eviction threshold is hard-coded to 1000 in the Lua script, but SpansBuffer is configured with max_segment_spans (default 1001); this mismatch can cause unexpected eviction/data loss and makes the Python-side limit effectively ignored"
+]

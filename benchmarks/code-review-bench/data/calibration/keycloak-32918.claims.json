@@ -1,0 +1,85 @@
+{
+  "slug": "keycloak-32918",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Potential NPE on remove() when alias does not exist - storedIdp can be null if alias is not found, and registerIDPInvalidation(storedIdp) is called unconditionally which will throw NullPointerException when storedIdp is null"
+    },
+    {
+      "claim_id": "c002",
+      "text": "removeAll() skips login cache invalidation - does not call registerIDPLoginInvalidation or invalidate IDP_LOGIN_SUFFIX keys, leaving stale IdentityProviderListQuery entries in the cache pointing at IDP IDs that no longer exist"
+    },
+    {
+      "claim_id": "c003",
+      "text": "registerIDPLoginInvalidation's 'should invalidate' branch (create/remove of an IDP that is actually eligible for login) has zero test coverage \u2014 all new assertions only exercise the 'should not invalidate' branch."
+    },
+    {
+      "claim_id": "c004",
+      "text": "getLoginPredicate() called multiple times per invocation in registerIDPLoginInvalidationOnUpdate - each call reconstructs the composed predicate by streaming over all LoginFilter values and reducing, should cache the predicate in a local variable"
+    },
+    {
+      "claim_id": "c005",
+      "text": "registerIDPLoginInvalidationOnUpdate compares a wrapped (org-aware) original model from getById() with the raw unwrapped updated model parameter, creating asymmetry in isEnabled() evaluation that can cause under-invalidation - when an org-linked IDP is cached for login, then the org is disabled, then a login-relevant field like hideOnLogin is changed, both models fail the login predicate for different reasons, triggering early return that skips cache invalidation, causing stale cache entries after org re-enablement"
+    },
+    {
+      "claim_id": "c006",
+      "text": "remove() now always queries the database for the identity provider even when it's already known/invalid via the cache, and the two invalidation calls within the same method now source the model from two different places (one from the fresh query, one from the cached value)."
+    },
+    {
+      "claim_id": "c007",
+      "text": "The new cache-key constant IDP_LOGIN_SUFFIX and method cacheKeyForLogin don't follow the naming convention of the other constants/methods in the same class (missing 'KEY', missing 'Idp')."
+    },
+    {
+      "claim_id": "c008",
+      "text": "Whether JUnit's default (hash-based) method execution order could make testCacheIDPByOrg's leaked identity providers (same cleanup bug as F-005) cause testCacheIDPForLogin's exact-count assertions to fail."
+    },
+    {
+      "claim_id": "c009",
+      "text": "getForLogin's cache-hit path returns identity providers in hash-set order instead of the alias order the fallback (uncached) path always returns, so the login page's IDP button ordering depends on whether the cache happened to be warm."
+    },
+    {
+      "claim_id": "c010",
+      "text": "getLoginPredicate()'s semantic change (adding organizationId/BROKER_PUBLIC checks) leaks into IdentityProviderBean.federatedProviderPredicate(), an unrelated call site used to filter already-federated brokers on the login page, causing a user's already-linked organization broker without BROKER_PUBLIC to disappear from the login page when organizations are disabled for the realm."
+    },
+    {
+      "claim_id": "c011",
+      "text": "Recursive caching call using session instead of delegate"
+    },
+    {
+      "claim_id": "c012",
+      "text": "getLoginPredicate() and its query-side counterpart getLoginSearchOptions() are no longer symmetric after this change, and the enum's javadoc claiming to cover 'all fields that determine login availability' is now inaccurate."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Guard against null storedIdp before invalidation - if the alias doesn't exist, storedIdp can be null, and invalidation calls will throw NPE. The remove method should return false without NPEs when storedIdp is null"
+    },
+    {
+      "claim_id": "c014",
+      "text": "Pre-existing bug in testCacheIDPByOrg method at line 303 has the same hardcoded 'alias' cleanup issue instead of using the actual alias variable"
+    },
+    {
+      "claim_id": "c015",
+      "text": "getForLogin's fallback paths don't deduplicate results the way the cache path does, so a realm-level provider whose config also carries BROKER_PUBLIC=true can be returned twice via the fallback path but only once when served from cache."
+    },
+    {
+      "claim_id": "c016",
+      "text": "Whether packing every organization's login IDP list into a single cache entry keyed by realm+mode will scale acceptably \u2014 rebuild and invalidation cost grows with the number of cached organizations, unlike the existing getByOrganization cache which has a bounded key space."
+    },
+    {
+      "claim_id": "c017",
+      "text": "Cleanup reference uses incorrect alias - should be 'idp-alias-' + i instead of 'alias'."
+    },
+    {
+      "claim_id": "c018",
+      "text": "update()'s login-cache invalidation check compares the original and updated identity provider using two different isEnabled() semantics (organization-wrapped vs raw field value), creating a path where a change that should invalidate the login cache doesn't \u2014 a disabled/hidden organization broker can keep showing on the public login page even after the organization is later re-enabled."
+    },
+    {
+      "claim_id": "c019",
+      "text": "getLoginPredicate() rebuilds its predicate chain from scratch on every call \u2014 4 times within a single update() invocation \u2014 and there's an unnecessary static import for it."
+    },
+    {
+      "claim_id": "c020",
+      "text": "Only 2 of getForLogin's 4 call sites re-check isEnabled() on the returned providers, pushing responsibility for a contract violation (cached organization-wrapped providers may be disabled even though they remain in the cached set) onto individual callers instead of the provider itself."
+    }
+  ]
+}

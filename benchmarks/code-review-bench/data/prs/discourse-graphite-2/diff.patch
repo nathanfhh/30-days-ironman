@@ -1,0 +1,732 @@
+diff --git a/app/assets/javascripts/discourse/components/dropdown-button.js.es6 b/app/assets/javascripts/discourse/components/dropdown-button.js.es6
+index 3747452..99d211b 100644
+--- a/app/assets/javascripts/discourse/components/dropdown-button.js.es6
++++ b/app/assets/javascripts/discourse/components/dropdown-button.js.es6
+@@ -19,18 +19,21 @@ export default Ember.Component.extend(StringBuffer, {
+     }
+   }.on('didInsertElement'),
+ 
+   _unbindClick: function() {
+     this.$().off('click.dropdown-button', 'ul li');
+   }.on('willDestroyElement'),
+ 
+   renderString(buffer) {
++    const title = this.get('title');
++    if (title) {
++      buffer.push("<h4 class='title'>" + title + "</h4>");
++    }
+ 
+-    buffer.push("<h4 class='title'>" + this.get('title') + "</h4>");
+     buffer.push("<button class='btn standard dropdown-toggle' data-toggle='dropdown'>");
+     buffer.push(this.get('text'));
+     buffer.push("</button>");
+     buffer.push("<ul class='dropdown-menu'>");
+ 
+     const contents = this.get('dropDownContent');
+     if (contents) {
+       const self = this;
+diff --git a/app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6 b/app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6
+new file mode 100644
+index 0000000..c486b94
+--- /dev/null
++++ b/app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6
+@@ -0,0 +1,9 @@
++import ObjectController from "discourse/controllers/object";
++
++export default ObjectController.extend({
++
++  stopNotificiationsText: function() {
++    return I18n.t("topic.unsubscribe.stop_notifications", { title: this.get("model.fancyTitle") });
++  }.property("model.fancyTitle"),
++
++})
+diff --git a/app/assets/javascripts/discourse/routes/app-route-map.js.es6 b/app/assets/javascripts/discourse/routes/app-route-map.js.es6
+index 779822e..152aaba 100644
+--- a/app/assets/javascripts/discourse/routes/app-route-map.js.es6
++++ b/app/assets/javascripts/discourse/routes/app-route-map.js.es6
+@@ -5,16 +5,17 @@ export default function() {
+   this.resource('about', { path: '/about' });
+ 
+   // Topic routes
+   this.resource('topic', { path: '/t/:slug/:id' }, function() {
+     this.route('fromParams', { path: '/' });
+     this.route('fromParamsNear', { path: '/:nearPost' });
+   });
+   this.resource('topicBySlug', { path: '/t/:slug' });
++  this.route('topicUnsubscribe', { path: '/t/:slug/:id/unsubscribe' });
+ 
+   this.resource('discovery', { path: '/' }, function() {
+     // top
+     this.route('top');
+     this.route('topCategory', { path: '/c/:slug/l/top' });
+     this.route('topCategoryNone', { path: '/c/:slug/none/l/top' });
+     this.route('topCategory', { path: '/c/:parentSlug/:slug/l/top' });
+ 
+diff --git a/app/assets/javascripts/discourse/routes/topic-from-params.js.es6 b/app/assets/javascripts/discourse/routes/topic-from-params.js.es6
+index bfb8468..6de3d07 100644
+--- a/app/assets/javascripts/discourse/routes/topic-from-params.js.es6
++++ b/app/assets/javascripts/discourse/routes/topic-from-params.js.es6
+@@ -1,53 +1,54 @@
+ // This route is used for retrieving a topic based on params
+ export default Discourse.Route.extend({
+ 
+   // Avoid default model hook
+-  model: function(p) { return p; },
++  model(params) { return params; },
+ 
+-  setupController: function(controller, params) {
++  setupController(controller, params) {
+     params = params || {};
+     params.track_visit = true;
+-    var topic = this.modelFor('topic'),
+-        postStream = topic.get('postStream');
+ 
+-    var topicController = this.controllerFor('topic'),
+-        topicProgressController = this.controllerFor('topic-progress'),
+-        composerController = this.controllerFor('composer');
++    const self = this,
++          topic = this.modelFor('topic'),
++          postStream = topic.get('postStream'),
++          topicController = this.controllerFor('topic'),
++          topicProgressController = this.controllerFor('topic-progress'),
++          composerController = this.controllerFor('composer');
+ 
+     // I sincerely hope no topic gets this many posts
+     if (params.nearPost === "last") { params.nearPost = 999999999; }
+ 
+-    var self = this;
+     params.forceLoad = true;
+-    postStream.refresh(params).then(function () {
+ 
++    postStream.refresh(params).then(function () {
+       // TODO we are seeing errors where closest post is null and this is exploding
+       // we need better handling and logging for this condition.
+ 
+       // The post we requested might not exist. Let's find the closest post
+-      var closestPost = postStream.closestPostForPostNumber(params.nearPost || 1),
+-          closest = closestPost.get('post_number'),
+-          progress = postStream.progressIndexOfPost(closestPost);
++      const closestPost = postStream.closestPostForPostNumber(params.nearPost || 1),
++            closest = closestPost.get('post_number'),
++            progress = postStream.progressIndexOfPost(closestPost);
+ 
+       topicController.setProperties({
+         'model.currentPost': closest,
+         enteredAt: new Date().getTime().toString(),
+       });
+ 
+       topicProgressController.setProperties({
+         progressPosition: progress,
+         expanded: false
+       });
+ 
+       // Highlight our post after the next render
+       Ember.run.scheduleOnce('afterRender', function() {
+         self.appEvents.trigger('post:highlight', closest);
+       });
++
+       Discourse.URL.jumpToPost(closest);
+ 
+       if (topic.present('draft')) {
+         composerController.open({
+           draft: Discourse.Draft.getLocal(topic.get('draft_key'), topic.get('draft')),
+           draftKey: topic.get('draft_key'),
+           draftSequence: topic.get('draft_sequence'),
+           topic: topic,
+diff --git a/app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6 b/app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6
+new file mode 100644
+index 0000000..10e77c4
+--- /dev/null
++++ b/app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6
+@@ -0,0 +1,23 @@
++import PostStream from "discourse/models/post-stream";
++
++export default Discourse.Route.extend({
++  model(params) {
++    const topic = this.store.createRecord("topic", { id: params.id });
++    return PostStream.loadTopicView(params.id).then(json => {
++      topic.updateFromJson(json);
++      return topic;
++    });
++  },
++
++  afterModel(topic) {
++    // hide the notification reason text
++    topic.set("details.notificationReasonText", null);
++  },
++
++  actions: {
++    didTransition() {
++      this.controllerFor("application").set("showFooter", true);
++      return true;
++    }
++  }
++});
+diff --git a/app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs b/app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs
+new file mode 100644
+index 0000000..d153867
+--- /dev/null
++++ b/app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs
+@@ -0,0 +1,8 @@
++<div class="container">
++  <p>
++    {{{stopNotificiationsText}}}
++  </p>
++  <p>
++    {{i18n "topic.unsubscribe.change_notification_state"}} {{topic-notifications-button topic=model}}
++  </p>
++</div>
+diff --git a/app/assets/javascripts/discourse/views/topic-unsubscribe.js.es6 b/app/assets/javascripts/discourse/views/topic-unsubscribe.js.es6
+new file mode 100644
+index 0000000..a846972
+--- /dev/null
++++ b/app/assets/javascripts/discourse/views/topic-unsubscribe.js.es6
+@@ -0,0 +1,3 @@
++export default Discourse.View.extend({
++  classNames: ["topic-unsubscribe"]
++});
+diff --git a/app/assets/stylesheets/common/base/topic.scss b/app/assets/stylesheets/common/base/topic.scss
+index 1870111..873278a 100644
+--- a/app/assets/stylesheets/common/base/topic.scss
++++ b/app/assets/stylesheets/common/base/topic.scss
+@@ -58,8 +58,20 @@
+ }
+ 
+ #suggested-topics h3 .badge-wrapper.bullet,
+ #suggested-topics h3 .badge-wrapper.bullet span.badge-category-parent-bg,
+ #suggested-topics h3 .badge-wrapper.bullet span.badge-category-bg {
+   // Top of bullet aligns with top of line - adjust line height to vertically align bullet.
+   line-height: 0.8;
+ }
++
++.topic-unsubscribe {
++  .notification-options {
++    display: inline-block;
++    .dropdown-toggle {
++      float: none;
++    }
++    .dropdown-menu {
++      bottom: initial;
++    }
++  }
++}
+diff --git a/app/controllers/topics_controller.rb b/app/controllers/topics_controller.rb
+index 88e30c3..01d960e 100644
+--- a/app/controllers/topics_controller.rb
++++ b/app/controllers/topics_controller.rb
+@@ -19,21 +19,22 @@ class TopicsController < ApplicationController
+                                           :move_posts,
+                                           :merge_topic,
+                                           :clear_pin,
+                                           :re_pin,
+                                           :autoclose,
+                                           :bulk,
+                                           :reset_new,
+                                           :change_post_owners,
+-                                          :bookmark]
++                                          :bookmark,
++                                          :unsubscribe]
+ 
+   before_filter :consider_user_for_promotion, only: :show
+ 
+-  skip_before_filter :check_xhr, only: [:show, :feed]
++  skip_before_filter :check_xhr, only: [:show, :unsubscribe, :feed]
+ 
+   def id_for_slug
+     topic = Topic.find_by(slug: params[:slug].downcase)
+     guardian.ensure_can_see!(topic)
+     raise Discourse::NotFound unless topic
+     render json: {slug: topic.slug, topic_id: topic.id, url: topic.url}
+   end
+ 
+@@ -89,16 +90,36 @@ class TopicsController < ApplicationController
+     if current_user
+       # If the user can't see the topic, clean up notifications for it.
+       Notification.remove_for(current_user.id, params[:topic_id])
+     end
+ 
+     raise ex
+   end
+ 
++  def unsubscribe
++    @topic_view = TopicView.new(params[:topic_id], current_user)
++
++    if slugs_do_not_match || (!request.format.json? && params[:slug].blank?)
++      return redirect_to @topic_view.topic.unsubscribe_url, status: 301
++    end
++
++    tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])
++
++    if tu.notification_level > TopicUser.notification_levels[:regular]
++      tu.notification_level = TopicUser.notification_levels[:regular]
++    else
++      tu.notification_level = TopicUser.notification_levels[:muted]
++    end
++
++    tu.save!
++
++    perform_show_response
++  end
++
+   def wordpress
+     params.require(:best)
+     params.require(:topic_id)
+     params.permit(:min_trust_level, :min_score, :min_replies, :bypass_trust_level_score, :only_moderator_liked)
+ 
+     opts = { best: params[:best].to_i,
+       min_trust_level: params[:min_trust_level] ? params[:min_trust_level].to_i : 1,
+       min_score: params[:min_score].to_i,
+@@ -471,16 +492,17 @@ class TopicsController < ApplicationController
+ 
+   def perform_show_response
+     topic_view_serializer = TopicViewSerializer.new(@topic_view, scope: guardian, root: false, include_raw: !!params[:include_raw])
+ 
+     respond_to do |format|
+       format.html do
+         @description_meta = @topic_view.topic.excerpt
+         store_preloaded("topic_#{@topic_view.topic.id}", MultiJson.dump(topic_view_serializer))
++        render :show
+       end
+ 
+       format.json do
+         render_json_dump(topic_view_serializer)
+       end
+     end
+   end
+ 
+diff --git a/app/mailers/user_notifications.rb b/app/mailers/user_notifications.rb
+index da27294..438e63f 100644
+--- a/app/mailers/user_notifications.rb
++++ b/app/mailers/user_notifications.rb
+@@ -287,31 +287,30 @@ class UserNotifications < ActionMailer::Base
+       topic_excerpt: topic_excerpt,
+       message: email_post_markdown(post),
+       url: post.url,
+       post_id: post.id,
+       topic_id: post.topic_id,
+       context: context,
+       username: username,
+       add_unsubscribe_link: true,
++      unsubscribe_url: post.topic.unsubscribe_url,
+       allow_reply_by_email: allow_reply_by_email,
+       use_site_subject: use_site_subject,
+       add_re_to_subject: add_re_to_subject,
+       show_category_in_subject: show_category_in_subject,
+       private_reply: post.topic.private_message?,
+       include_respond_instructions: !user.suspended?,
+       template: template,
+       html_override: html,
+       site_description: SiteSetting.site_description,
+       site_title: SiteSetting.title,
+       style: :notification
+     }
+ 
+     # If we have a display name, change the from address
+-    if from_alias.present?
+-      email_opts[:from_alias] = from_alias
+-    end
++    email_opts[:from_alias] = from_alias if from_alias.present?
+ 
+     TopicUser.change(user.id, post.topic_id, last_emailed_post_number: post.post_number)
+ 
+     build_email(user.email, email_opts)
+   end
+ end
+diff --git a/app/models/topic.rb b/app/models/topic.rb
+index 60ad4cc..30bd8fc 100644
+--- a/app/models/topic.rb
++++ b/app/models/topic.rb
+@@ -711,16 +711,20 @@ class Topic < ActiveRecord::Base
+   end
+ 
+   def relative_url(post_number=nil)
+     url = "#{Discourse.base_uri}/t/#{slug}/#{id}"
+     url << "/#{post_number}" if post_number.to_i > 1
+     url
+   end
+ 
++  def unsubscribe_url
++    "#{url}/unsubscribe"
++  end
++
+   def clear_pin_for(user)
+     return unless user.present?
+     TopicUser.change(user.id, id, cleared_pinned_at: Time.now)
+   end
+ 
+   def re_pin_for(user)
+     return unless user.present?
+     TopicUser.change(user.id, id, cleared_pinned_at: nil)
+diff --git a/app/models/topic_user.rb b/app/models/topic_user.rb
+index 9876d0d..b900c9b 100644
+--- a/app/models/topic_user.rb
++++ b/app/models/topic_user.rb
+@@ -2,18 +2,19 @@ class TopicUser < ActiveRecord::Base
+   belongs_to :user
+   belongs_to :topic
+ 
+   # used for serialization
+   attr_accessor :post_action_data
+ 
+   scope :tracking, lambda { |topic_id|
+     where(topic_id: topic_id)
+-        .where("COALESCE(topic_users.notification_level, :regular) >= :tracking",
+-                regular: TopicUser.notification_levels[:regular], tracking: TopicUser.notification_levels[:tracking])
++   .where("COALESCE(topic_users.notification_level, :regular) >= :tracking",
++     regular: TopicUser.notification_levels[:regular],
++     tracking: TopicUser.notification_levels[:tracking])
+   }
+ 
+   # Class methods
+   class << self
+ 
+     # Enums
+     def notification_levels
+       @notification_levels ||= Enum.new(:muted, :regular, :tracking, :watching, start: 0)
+@@ -53,23 +54,19 @@ class TopicUser < ActiveRecord::Base
+       return {} if user.blank? || topics.blank?
+ 
+       topic_ids = topics.map(&:id)
+       create_lookup(TopicUser.where(topic_id: topic_ids, user_id: user.id))
+     end
+ 
+     def create_lookup(topic_users)
+       topic_users = topic_users.to_a
+-
+       result = {}
+       return result if topic_users.blank?
+-
+-      topic_users.each do |ftu|
+-        result[ftu.topic_id] = ftu
+-      end
++      topic_users.each { |ftu| result[ftu.topic_id] = ftu }
+       result
+     end
+ 
+     def get(topic, user)
+       topic = topic.id if topic.is_a?(Topic)
+       user = user.id if user.is_a?(User)
+       TopicUser.find_by(topic_id: topic, user_id: user)
+     end
+@@ -108,31 +105,29 @@ class TopicUser < ActiveRecord::Base
+ 
+           TopicUser.create(attrs.merge!(user_id: user_id, topic_id: topic_id, first_visited_at: now ,last_visited_at: now))
+         else
+           observe_after_save_callbacks_for topic_id, user_id
+         end
+       end
+ 
+       if attrs[:notification_level]
+-        MessageBus.publish("/topic/#{topic_id}",
+-                         {notification_level_change: attrs[:notification_level]}, user_ids: [user_id])
++        MessageBus.publish("/topic/#{topic_id}", { notification_level_change: attrs[:notification_level] }, user_ids: [user_id])
+       end
+ 
+-
+     rescue ActiveRecord::RecordNotUnique
+       # In case of a race condition to insert, do nothing
+     end
+ 
+     def track_visit!(topic,user)
+       topic_id = topic.is_a?(Topic) ? topic.id : topic
+       user_id = user.is_a?(User) ? user.id : topic
+ 
+       now = DateTime.now
+-      rows = TopicUser.where({topic_id: topic_id, user_id: user_id}).update_all({last_visited_at: now})
++      rows = TopicUser.where(topic_id: topic_id, user_id: user_id).update_all(last_visited_at: now)
+       if rows == 0
+         TopicUser.create(topic_id: topic_id, user_id: user_id, last_visited_at: now, first_visited_at: now)
+       else
+         observe_after_save_callbacks_for topic_id, user_id
+       end
+     end
+ 
+     # Update the last read and the last seen post count, but only if it doesn't exist.
+@@ -191,17 +186,17 @@ class TopicUser < ActiveRecord::Base
+ 
+         if before_last_read < post_number
+           # The user read at least one new post
+           TopicTrackingState.publish_read(topic_id, post_number, user.id, after)
+           user.update_posts_read!(post_number - before_last_read, mobile: opts[:mobile])
+         end
+ 
+         if before != after
+-          MessageBus.publish("/topic/#{topic_id}", {notification_level_change: after}, user_ids: [user.id])
++          MessageBus.publish("/topic/#{topic_id}", { notification_level_change: after }, user_ids: [user.id])
+         end
+       end
+ 
+       if rows.length == 0
+         # The user read at least one post in a topic that they haven't viewed before.
+         args[:new_status] = notification_levels[:regular]
+         if (user.auto_track_topics_after_msecs || SiteSetting.auto_track_topics_after) == 0
+           args[:new_status] = notification_levels[:tracking]
+@@ -215,17 +210,17 @@ class TopicUser < ActiveRecord::Base
+                   FROM topics AS ft
+                   JOIN users u on u.id = :user_id
+                   WHERE ft.id = :topic_id
+                     AND NOT EXISTS(SELECT 1
+                                    FROM topic_users AS ftu
+                                    WHERE ftu.user_id = :user_id and ftu.topic_id = :topic_id)",
+                   args)
+ 
+-        MessageBus.publish("/topic/#{topic_id}", {notification_level_change: args[:new_status]}, user_ids: [user.id])
++        MessageBus.publish("/topic/#{topic_id}", { notification_level_change: args[:new_status] }, user_ids: [user.id])
+       end
+     end
+ 
+     def observe_after_save_callbacks_for(topic_id, user_id)
+       TopicUser.where(topic_id: topic_id, user_id: user_id).each do |topic_user|
+         UserActionObserver.instance.after_save topic_user
+       end
+     end
+diff --git a/app/views/email/notification.html.erb b/app/views/email/notification.html.erb
+index c2292f6..bf5e286 100644
+--- a/app/views/email/notification.html.erb
++++ b/app/views/email/notification.html.erb
+@@ -1,31 +1,29 @@
+ <div id='main' class=<%= classes %>>
+ 
+-<%= render :partial => 'email/post', :locals => {:post => post} %>
++  <%= render partial: 'email/post', locals: { post: post } %>
+ 
+-<% if context_posts.present? %>
+-  <div class='footer'>
+-    %{respond_instructions}
+-  </div>
+-  <hr>
+-  <h4 class='.previous-discussion'><%= t "user_notifications.previous_discussion" %></h4>
++  <% if context_posts.present? %>
++    <div class='footer'>%{respond_instructions}</div>
++
++    <hr>
+ 
+-  <% context_posts.each do |p| %>
+-  <%= render :partial => 'email/post', :locals => {:post => p} %>
++    <h4 class='.previous-discussion'><%= t "user_notifications.previous_discussion" %></h4>
++
++    <% context_posts.each do |p| %>
++      <%= render partial: 'email/post', locals: { post: p } %>
++    <% end %>
+   <% end %>
+-<% end %>
+ 
+-<hr>
++  <hr>
++
++  <div class='footer'>%{respond_instructions}</div>
++  <div class='footer'>%{unsubscribe_link}</div>
+ 
+-<div class='footer'>
+-%{respond_instructions}
+-</div>
+-<div class='footer'>
+-%{unsubscribe_link}
+-</div>
+ </div>
++
+ <div itemscope itemtype="http://schema.org/EmailMessage" style="display:none">
+-    <div itemprop="action" itemscope itemtype="http://schema.org/ViewAction">
+-        <link itemprop="url" href="<%= Discourse.base_url %><%= post.url  %>" />
+-        <meta itemprop="name" content="<%= t 'read_full_topic' %>"/>
+-    </div>
++  <div itemprop="action" itemscope itemtype="http://schema.org/ViewAction">
++    <link itemprop="url" href="<%= Discourse.base_url %><%= post.url  %>" />
++    <meta itemprop="name" content="<%= t 'read_full_topic' %>"/>
++  </div>
+ </div>
+diff --git a/config/locales/client.en.yml b/config/locales/client.en.yml
+index c83886f..95a37b5 100644
+--- a/config/locales/client.en.yml
++++ b/config/locales/client.en.yml
+@@ -976,16 +976,19 @@ en:
+         new: "There are no more new topics."
+         unread: "There are no more unread topics."
+         category: "There are no more {{category}} topics."
+         top: "There are no more top topics."
+         bookmarks: "There are no more bookmarked topics."
+         search: "There are no more search results."
+ 
+     topic:
++      unsubscribe:
++        stop_notifications: "You will stop receiving notifications for <strong>{{title}}</strong>."
++        change_notification_state: "You can change your notification state"
+       filter_to: "{{post_count}} posts in topic"
+       create: 'New Topic'
+       create_long: 'Create a new Topic'
+       private_message: 'Start a message'
+       list: 'Topics'
+       new: 'new topic'
+       unread: 'unread'
+       new_topics:
+@@ -1009,17 +1012,16 @@ en:
+         one: "you have 1 unread post in this topic"
+         other: "you have {{count}} unread posts in this topic"
+       unread_posts:
+         one: "you have 1 unread old post in this topic"
+         other: "you have {{count}} unread old posts in this topic"
+       new_posts:
+         one: "there is 1 new post in this topic since you last read it"
+         other: "there are {{count}} new posts in this topic since you last read it"
+-
+       likes:
+         one: "there is 1 like in this topic"
+         other: "there are {{count}} likes in this topic"
+       back_to_list: "Back to Topic List"
+       options: "Topic Options"
+       show_links: "show links within this topic"
+       toggle_information: "toggle topic details"
+       read_more_in_category: "Want to read more? Browse other topics in {{catLink}} or {{latestLink}}."
+diff --git a/config/locales/server.en.yml b/config/locales/server.en.yml
+index 7d10fb4..b919935 100644
+--- a/config/locales/server.en.yml
++++ b/config/locales/server.en.yml
+@@ -1844,17 +1844,20 @@ en:
+         There are new user signups waiting to be approved (or rejected) before they can access this forum.
+ 
+         [Please review them in the admin section](%{base_url}/admin/users/list/pending).
+ 
+     download_remote_images_disabled:
+       subject_template: "Downloading remote images disabled"
+       text_body_template: "The `download_remote_images_to_local` setting was disabled because the disk space limit at `download_remote_images_threshold` was reached."
+ 
+-  unsubscribe_link: "To unsubscribe from these emails, visit your [user preferences](%{user_preferences_url})."
++  unsubscribe_link: |
++    To unsubscribe from these emails, visit your [user preferences](%{user_preferences_url}).
++
++    To stop receiving notifications about this particular topic, [click here](%{unsubscribe_url}).
+ 
+   subject_re: "Re: "
+   subject_pm: "[PM] "
+ 
+   user_notifications:
+     previous_discussion: "Previous Replies"
+     unsubscribe:
+       title: "Unsubscribe"
+diff --git a/config/routes.rb b/config/routes.rb
+index 1998644..d4f87ce 100644
+--- a/config/routes.rb
++++ b/config/routes.rb
+@@ -429,20 +429,22 @@ Discourse::Application.routes.draw do
+   get 'embed/comments' => 'embed#comments'
+   get 'embed/count' => 'embed#count'
+ 
+   get "new-topic" => "list#latest"
+ 
+   # Topic routes
+   get "t/id_for/:slug" => "topics#id_for_slug"
+   get "t/:slug/:topic_id/wordpress" => "topics#wordpress", constraints: {topic_id: /\d+/}
+-  get "t/:slug/:topic_id/moderator-liked" => "topics#moderator_liked", constraints: {topic_id: /\d+/}
+   get "t/:topic_id/wordpress" => "topics#wordpress", constraints: {topic_id: /\d+/}
+-  get "t/:slug/:topic_id/summary" => "topics#show", defaults: {summary: true}, constraints: {topic_id: /\d+/, post_number: /\d+/}
+-  get "t/:topic_id/summary" => "topics#show", constraints: {topic_id: /\d+/, post_number: /\d+/}
++  get "t/:slug/:topic_id/moderator-liked" => "topics#moderator_liked", constraints: {topic_id: /\d+/}
++  get "t/:slug/:topic_id/summary" => "topics#show", defaults: {summary: true}, constraints: {topic_id: /\d+/}
++  get "t/:slug/:topic_id/unsubscribe" => "topics#unsubscribe", constraints: {topic_id: /\d+/}
++  get "t/:topic_id/unsubscribe" => "topics#unsubscribe", constraints: {topic_id: /\d+/}
++  get "t/:topic_id/summary" => "topics#show", constraints: {topic_id: /\d+/}
+   put "t/:slug/:topic_id" => "topics#update", constraints: {topic_id: /\d+/}
+   put "t/:slug/:topic_id/star" => "topics#star", constraints: {topic_id: /\d+/}
+   put "t/:topic_id/star" => "topics#star", constraints: {topic_id: /\d+/}
+   put "t/:slug/:topic_id/status" => "topics#status", constraints: {topic_id: /\d+/}
+   put "t/:topic_id/status" => "topics#status", constraints: {topic_id: /\d+/}
+   put "t/:topic_id/clear-pin" => "topics#clear_pin", constraints: {topic_id: /\d+/}
+   put "t/:topic_id/re-pin" => "topics#re_pin", constraints: {topic_id: /\d+/}
+   put "t/:topic_id/mute" => "topics#mute", constraints: {topic_id: /\d+/}
+diff --git a/lib/email/message_builder.rb b/lib/email/message_builder.rb
+index 5e1428d..bacc5f1 100644
+--- a/lib/email/message_builder.rb
++++ b/lib/email/message_builder.rb
+@@ -16,30 +16,31 @@ module Email
+ 
+   class MessageBuilder
+     attr_reader :template_args
+ 
+     def initialize(to, opts=nil)
+       @to = to
+       @opts = opts || {}
+ 
+-      @template_args = {site_name: SiteSetting.email_prefix.presence || SiteSetting.title,
+-                        base_url: Discourse.base_url,
+-                        user_preferences_url: "#{Discourse.base_url}/my/preferences" }.merge!(@opts)
++      @template_args = {
++        site_name: SiteSetting.email_prefix.presence || SiteSetting.title,
++        base_url: Discourse.base_url,
++        user_preferences_url: "#{Discourse.base_url}/my/preferences",
++      }.merge!(@opts)
+ 
+       if @template_args[:url].present?
+         if @opts[:include_respond_instructions] == false
+           @template_args[:respond_instructions] = ''
+         else
+-          @template_args[:respond_instructions] =
+-            if allow_reply_by_email?
+-              I18n.t('user_notifications.reply_by_email', @template_args)
+-            else
+-              I18n.t('user_notifications.visit_link_to_respond', @template_args)
+-            end
++          @template_args[:respond_instructions] = if allow_reply_by_email?
++            I18n.t('user_notifications.reply_by_email', @template_args)
++          else
++            I18n.t('user_notifications.visit_link_to_respond', @template_args)
++          end
+         end
+       end
+     end
+ 
+     def subject
+       if @opts[:use_site_subject]
+         subject = String.new(SiteSetting.email_subject)
+         subject.gsub!("%{site_name}", @template_args[:site_name])
+@@ -51,25 +52,25 @@ module Email
+         subject = @opts[:subject]
+         subject = I18n.t("#{@opts[:template]}.subject_template", template_args) if @opts[:template]
+       end
+       subject
+     end
+ 
+     def html_part
+       return unless html_override = @opts[:html_override]
+-      if @opts[:add_unsubscribe_link]
+ 
++      if @opts[:add_unsubscribe_link]
+         if response_instructions = @template_args[:respond_instructions]
+           respond_instructions = PrettyText.cook(response_instructions).html_safe
+           html_override.gsub!("%{respond_instructions}", respond_instructions)
+         end
+ 
+         unsubscribe_link = PrettyText.cook(I18n.t('unsubscribe_link', template_args)).html_safe
+-        html_override.gsub!("%{unsubscribe_link}",unsubscribe_link)
++        html_override.gsub!("%{unsubscribe_link}", unsubscribe_link)
+       end
+ 
+       styled = Email::Styles.new(html_override)
+       styled.format_basic
+ 
+       if style = @opts[:style]
+         styled.send "format_#{style}"
+       end
+diff --git a/spec/components/email/message_builder_spec.rb b/spec/components/email/message_builder_spec.rb
+index eb03bf5..7515dee 100644
+--- a/spec/components/email/message_builder_spec.rb
++++ b/spec/components/email/message_builder_spec.rb
+@@ -163,17 +163,18 @@ describe Email::MessageBuilder do
+       end
+ 
+     end
+ 
+     context "with add_unsubscribe_link true" do
+ 
+       let(:message_with_unsubscribe) { Email::MessageBuilder.new(to_address,
+                                                                 body: 'hello world',
+-                                                                add_unsubscribe_link: true) }
++                                                                add_unsubscribe_link: true,
++                                                                unsubscribe_url: "/t/1234/unsubscribe") }
+ 
+       it "has an List-Unsubscribe header" do
+         expect(message_with_unsubscribe.header_args['List-Unsubscribe']).to be_present
+       end
+ 
+       it "has the user preferences url in the body" do
+         expect(message_with_unsubscribe.body).to match(builder.template_args[:user_preferences_url])
+       end

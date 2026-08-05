@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-80528",
+  "tool": "augment",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "Both say the config is copied/modified (schedule_type converted to a display value) but the code returns the original monitor.config, so the transformation is discarded."
+    }
+  ]
+}

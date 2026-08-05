@@ -1,0 +1,79 @@
+{
+  "slug": "sentry-greptile-3",
+  "issues": [
+    {
+      "text": "upsampled_count() removes ifNull(sample_weight, 1), so error events without a sample weight (no error_sampling context, or an out-of-range client_sample_rate) will be undercounted, contradicting this codebase's own parallel fallback-to-1 convention in _get_error_weighted_times_seen.",
+      "zh": "upsampled_count() 拿掉 ifNull(sample_weight, 1)，會讓沒有 sample weight 的錯誤事件被少算",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "The stated performance rationale for the new allowlist cache doesn't hold: options.get already hits an in-process local cache first, so this change replaces a single dict lookup on the hot path with a django cache get — a network round-trip against memcached/redis in production — which is likely to be slower, not faster.",
+      "zh": "效能前提不成立：options.get 並不是每次都打資料庫，改動之後，熱路徑上原本的一次 dict 查詢被換成一次 django cache 的 get，這個「最佳化」在延遲上很可能是負向的。",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new cache cannot actually be invalidated: its key doesn't include the allowlist option's own value, so there is no binding between a cached result and the input that produced it, and it can only expire via a 60-second TTL; the accompanying invalidate_upsampling_cache function would need to already know the exact set of historically-queried project_id combinations to invalidate the right keys, and nothing tracks that.",
+      "zh": "快取無法被失效：cache key 沒有包含 allowlist option 的值，只能靠 60 秒 TTL 自然過期，invalidate_upsampling_cache 需要呼叫端事先知道確切的 project_ids 組合才能刪對 key，但沒有人握有這份清單。",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The cache key is built by calling Python's built-in hash() on a tuple, which is unique to this file across the whole repo — the established conventions elsewhere are either readable field concatenation or an explicit md5_text() digest — making the key impossible to reverse-lookup to a project set when debugging (this is a debuggability concern, not a collision risk).",
+      "zh": "用 Python 內建 hash() 當 cache key 的組成部分，在本 repo 是獨一無二的寫法，這使得 key 無法從 Redis/memcached 端反查對應哪一組專案。",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "invalidate_upsampling_cache is dead code: grepping the whole repo finds no caller, no signal/receiver, and no options-change hook wired to it, so the cache-staleness problem it was meant to solve is never actually addressed.",
+      "zh": "invalidate_upsampling_cache 是死程式碼，全 repo 沒有任何呼叫端",
+      "finding_id": "B-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The column-transformation call in _get_event_stats was duplicated into three separate branches instead of being called once before the branching (behavior verified unchanged across all four return paths), leaving three places to keep in sync going forward, plus a newly added alias variable that is never read.",
+      "zh": "events_stats 內的欄位轉換被複製成三份，行為完全沒變，只是多了三個要一起維護的地方",
+      "finding_id": "B-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Several newly added docstrings and comments assert premises that contradict the actual code: a NOTE claiming the allowlist config is always read fresh sits right next to code that just added a 60-second cache for it, a \"safe because allowlist changes are infrequent\" claim has no supporting evidence, and comments claiming the database schema guarantees sample_weight exists for every event in allowlisted projects are contradicted by the write path.",
+      "zh": "新增的 docstring 與註解宣稱了幾項與程式碼相矛盾的前提，會誤導下一個維護者",
+      "finding_id": "A-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Neither of the two behavior changes (the removed ifNull and the new cache) has a test, and the existing tests are structurally incapable of catching either: the test file covering the cache never imports the public entry point with the new caching branch, per-test cache.clear() means staleness can never surface in CI, and no existing fixture event lacks a sample_weight.",
+      "zh": "兩項行為變更都沒有測試，而既有測試在結構上也接不到它們",
+      "finding_id": "G-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The diff adds a \"sentry-repo\" gitlink (mode 160000) at the repo root with no corresponding .gitmodules entry, which looks like an accidentally committed nested clone unrelated to the PR's stated purpose.",
+      "zh": "diff 在 repo 根目錄新增了一個沒有 .gitmodules 的 sentry-repo gitlink，看起來是誤加的巢狀 clone",
+      "finding_id": "H-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "11 lines of trailing whitespace will fail this repo's own pre-commit CI (black/flake8), including one line inside a docstring that black will not auto-fix.",
+      "zh": "11 行行尾空白，會讓本 repo 自己的 pre-commit CI 失敗",
+      "finding_id": "A-002",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Is the sample_weight field in Snuba's errors storage nullable, and what is its default? This determines whether F-001's undercounting shows up as a missing time bucket or as events counted as zero, though it doesn't change whether F-001 is valid.",
+      "zh": "Snuba errors storage 裡的 sample_weight 欄位到底是 Nullable 還是 non-nullable、預設值是什麼？"
+    },
+    {
+      "text": "What measurement motivated adding the cache — is there a profile or metrics dashboard showing the allowlist's options.get call as a hotspot on the events-stats path? The allowlist option currently defaults to an empty list and rollout hasn't started, so there should be no traffic to have measured yet.",
+      "zh": "促成這次快取的量測是什麼？是否有 profile 或 metrics 顯示 options.get 在 events-stats 路徑上是熱點？"
+    },
+    {
+      "text": "Which cache backend does settings.CACHES['default'] actually use in production? This repo's own default is DummyCache (a no-op), so whether the new cache does anything at all in production cannot be determined from this checkout.",
+      "zh": "在 getsentry 正式環境，settings.CACHES['default'] 實際掛的是哪個 backend？"
+    }
+  ]
+}

@@ -1,0 +1,297 @@
+{
+  "slug": "keycloak-37429",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 2,
+      "text": "The error message 'Didn't find anchor tag ...' doesn't include the message key or file, making it hard to locate the failing translation in large bundles",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 0,
+      "text": "Placeholder format mismatch in error-invalid-multivalued-size message - uses {0}, {1}, {2} and choice syntax instead of i18next-standard {{...}} interpolation, causing the Admin UI to display validation message literally instead of interpolating values",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 11,
+      "text": "The key parameter to the anchor-checking method is never used, so the 'Didn't find anchor tag ... in original string' message doesn't say which file or key the problem is in, making it hard to locate in output covering 162 files.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 1,
+      "text": "The prefix/suffix trimming (start/end) can yield overlapping indices which would throw StringIndexOutOfBoundsException and abort verification - needs an overlap/bounds guard",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 0,
+      "text": "In verifySafeHtml(), IO failures are rethrown as RuntimeException, while verify() otherwise reports IO problems as MojoExecutionException - exception types should be consistent for easier plugin failure interpretation",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 2,
+      "text": "commons-text dependency version 1.13.0 is outdated and should be updated to 1.15.0",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 13,
+      "text": "Does the new verifier check actually pass on all 162 existing messages_*.properties bundles when run for real (via Maven), or only on the specific files the author noticed and fixed by hand?",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "The anchor loop does `break` on the first anchor that doesn't match, so subsequent tampered anchors in the same value are never reported, and the author has to fix-and-rerun the build once per anchor instead of seeing all problems at once.",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 3,
+      "text": "Two new dependencies added with hardcoded versions instead of being managed via a BOM",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "owasp-java-html-sanitizer dependency version 20240325.1 is outdated and should be updated to 20260313.1",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 0,
+      "text": "StringIndexOutOfBoundsException in diagnostic substring calculation when sanitized shares a common suffix with value that extends past start (start + end >= value.length()), causing value.substring(start, value.length() - end) to throw and crash the Maven goal",
+      "claim_id": "c011"
+    },
+    {
+      "source": "golden",
+      "golden_index": 2,
+      "tool": null,
+      "text": "The anchor sanitization logic has a potential issue where it consumes English matcher groups without proper validation. If the translated text has more anchor tags than the English text, this could lead to incorrect validation results.",
+      "claim_id": "c012"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "The path to the English source bundle is derived by string-replacing the checked file's path with no validation, and can derive a nonexistent path for filenames that don't fit the expected `xxx_<locale>.properties` shape (the MR itself had to rename a test fixture to avoid tripping this).",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 5,
+      "text": "Inconsistent placeholder spacing after <br /> in Georgian locale (messages_ka.properties) - lines 172, 174, 451, 452 use <br />{0} while other locales use <br /> {0}",
+      "claim_id": "c014"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 0,
+      "text": "The error-invalid-multivalued-size message in the account/admin console JS bundles (messages_en.properties) was rewritten to use java.text.MessageFormat syntax ({0}/{1}/{2} and {2,choice,...}), but those consoles are rendered via i18next with {{n}} interpolation and no MessageFormat step server-side, so users will see the raw unsubstituted placeholders and choice expression instead of a translated message.",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 14,
+      "text": "Are the per-key exemptions in normalizeValue (the entire {n,choice,...} block, CLAIM.<NAME>, <Extensions>) \u2014 which apply unconditionally by key name regardless of the English source \u2014 also covered by kcSanitize at every runtime output point, or could a malicious translation smuggle markup through one of these exempted keys?",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 3,
+      "text": "ISO-8859-1 encoding used for potentially UTF-8 properties files when using PropertyResourceBundle(FileInputStream), causing garbled content and potential false positives for non-Latin locales",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "POLICY_SOME_HTML, POLICY_NO_HTML, and HTML_TAGS are named like constants (UPPER_SNAKE_CASE) but are declared as non-static, non-final, package-private instance fields \u2014 unlike ANCHOR_PATTERN in the same file which is properly private static final \u2014 so they get needlessly rebuilt for every file the mojo processes and could be reassigned by other code in the package.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "RuntimeException thrown instead of MojoExecutionException on I/O failure in verifySafeHtml, causing confusing stack trace instead of clean error message",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "The new HTML check requires the sanitizer's output to be byte-for-byte identical to the original string, which turns the sanitizer's own formatting choices (e.g. it always emits <br /> never <br/>) into a repo-wide data format requirement \u2014 this MR alone had to touch 76 lines across 19 files just for that whitespace difference, needed ad hoc unescaping/comment-stripping/key-based exemptions to compensate, and the exemptions for {n,choice,...} content are unconditional per-key rather than tied to whether the English source actually needs them, so a future translator adding pluralization to a new key will get an opaque 'Illegal HTML' failure.",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "verifySafeHtml throws a raw RuntimeException when the derivation fails, inconsistent with the existing convention in the same verify() method of wrapping read failures in MojoExecutionException (which Maven prints cleanly).",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 9,
+      "text": "Pattern HTML_TAGS should be static final to avoid recompilation per instance",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 15,
+      "text": "Was removing the freeotp.github.io / Google Play links from totpStep1 in the fi/lt/sk/sv/zh_CN locales (as a side effect of the new anchor rule) an intentional product decision, or just an incidental consequence of the new build check?",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 0,
+      "text": "Instance fields POLICY_SOME_HTML, POLICY_NO_HTML, HTML_TAGS use constant naming convention but aren't declared as static final",
+      "claim_id": "c024"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 4,
+      "text": "The normalizeValue method has special cases for specific keys (templateHelp, optimizeLookupHelp, linkExpirationFormatter, error-invalid-multivalued-size, and email RTL styles) that bypass parts of sanitization and should be verified for completeness and correctness",
+      "claim_id": "c025"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "All four new/updated theme-verifier tests only assert that an error message is produced; none assert that a clean, valid file produces zero messages, leaving the check's most dangerous failure mode (false positives blocking the whole build) completely untested.",
+      "claim_id": "c026"
+    },
+    {
+      "source": "golden",
+      "golden_index": 3,
+      "tool": null,
+      "text": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+      "claim_id": "c027"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 8,
+      "text": "PolicyFactory instances POLICY_SOME_HTML and POLICY_NO_HTML should be static final for performance and clarity",
+      "claim_id": "c028"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 2,
+      "text": "Instance fields POLICY_SOME_HTML, POLICY_NO_HTML, and HTML_TAGS should be static final to avoid allocating new HtmlPolicyBuilder, PolicyFactory, and compiled Pattern for every VerifyMessageProperties instance",
+      "claim_id": "c029"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+      "claim_id": "c030"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 2,
+      "text": "Theme verifier anchor check only rejects extra/different anchor tags but doesn't fail when a translation drops a required source anchor, allowing translations to lose clickable links while still passing verification",
+      "claim_id": "c031"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "verifyDuplicateKeysDetected's assertion was relaxed from Matchers.contains(...) (exactly this one message) to Matchers.hasItem(...) (at least this one message), so the test will no longer catch extra/noisy messages being emitted alongside the expected one.",
+      "claim_id": "c032"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+      "claim_id": "c033"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 6,
+      "text": "Wrong language in Lithuanian login bundle (messages_lt.properties) - loginTotpStep1 at line 71 contains Italian text instead of Lithuanian",
+      "claim_id": "c034"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 2,
+      "text": "The santizeAnchors method modifies value via replaceFirst while iterating matches, which could have subtle edge cases with repeated identical anchors",
+      "claim_id": "c035"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 1,
+      "text": "Admin UI message uses Java MessageFormat syntax ({0}, {2,choice,...}) but the Admin UI uses i18next which won't resolve these placeholders, causing raw placeholder text to appear in validation error messages",
+      "claim_id": "c036"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "The prefix/suffix trimming logic that builds the diff message computes the start and end counters independently, both bounded only by min(value.length(), sanitized.length()), with nothing preventing start+end from exceeding a string's length \u2014 causing substring(begin, end) with begin > end to throw StringIndexOutOfBoundsException instead of a readable validation error (e.g. reproducible with an unclosed <b> tag that the sanitizer auto-closes).",
+      "claim_id": "c037"
+    }
+  ]
+}

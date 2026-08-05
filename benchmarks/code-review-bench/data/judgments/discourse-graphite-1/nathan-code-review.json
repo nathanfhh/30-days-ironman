@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-1",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 12,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.95,
+     "reasoning": "Both identify downsize being defined twice, the later definition silently overriding the earlier one and breaking callers that use the original signature."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both say the frontend size limit is hardcoded to 10MB independently of the server-side per-type SiteSettings, so the two can diverge."},
+    {"golden_index": 2, "candidate_index": 8, "confidence": 0.8,
+     "reasoning": "Both raise the same concern that gifsicle's --resize-fit for the animated-GIF branch expects WxH geometry, not the percentage value being passed."}
+  ]
+}

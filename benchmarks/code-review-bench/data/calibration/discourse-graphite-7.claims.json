@@ -1,0 +1,85 @@
+{
+  "slug": "discourse-graphite-7",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "dark-light-choose changes the light-theme h3 color from scale-color($primary, $lightness: 20%) to scale-color($primary, $lightness: 50%) which may be unintentional"
+    },
+    {
+      "claim_id": "c002",
+      "text": "This change for desktop/user.css changes $primary from 30% to 50% for the light theme; most other changes preserve the original $primary value and move the complement to $secondary for dark. Consider reviewing this (also applies to a similar .name change in the mobile variant)."
+    },
+    {
+      "claim_id": "c003",
+      "text": "In the mobile editor's disabled state under dark theme, will the newly-changed background color and the unchanged, non-theme-aware text color end up clashing?"
+    },
+    {
+      "claim_id": "c004",
+      "text": "A code comment referencing a default scale-color value is now stale/inaccurate since the referenced rule was converted to dark-light-choose by this change."
+    },
+    {
+      "claim_id": "c005",
+      "text": "The conversion incidentally reformatted trailing whitespace (';}' to '; }') in five places but left an identically-formed line elsewhere unchanged, mixing unrelated whitespace changes into the diff."
+    },
+    {
+      "claim_id": "c006",
+      "text": "In topic-post.css the original code used $lightness: 70% but the replacement uses $lightness: 30% for the light theme. This makes the text significantly darker than intended."
+    },
+    {
+      "claim_id": "c007",
+      "text": "Mobile's .custom-message-length light-theme color was changed and now runs in the opposite direction from the equivalent desktop rule, which used to share the same value before this change."
+    },
+    {
+      "claim_id": "c008",
+      "text": "The same light/dark color-mapping rule is manually duplicated 116 times across 32 files with no single place to maintain the invariant that the two lightness arguments sum to 100, which is the direct cause of several of the drift bugs found in this review."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Is it intentional that the equivalent sweep for scale-color($secondary, ...) and scale-color($tertiary, ...) declarations was left out of scope for this commit?"
+    },
+    {
+      "claim_id": "c010",
+      "text": ".badge-notification's background was converted to dark-light-choose but the paired foreground color stays hardcoded to $secondary, so in dark theme both colors derive from $secondary and end up close together, dropping contrast well below WCAG AA on some usage sites."
+    },
+    {
+      "claim_id": "c011",
+      "text": "mobile/modal.scss: .custom-message-length light-theme value changed from $primary 70% to 30% lightness, inconsistent with desktop equivalent which correctly keeps 70%"
+    },
+    {
+      "claim_id": "c012",
+      "text": "dark-light-choose appears to swap the light-theme value from scale-color($primary, $lightness: 70%) to scale-color($primary, $lightness: 30%) and vice-versa for dark in mobile/modal.scss"
+    },
+    {
+      "claim_id": "c013",
+      "text": "mobile/topic-post.scss: h3 light-theme value changed from $primary 20% to 50% lightness, while desktop keeps 20%"
+    },
+    {
+      "claim_id": "c014",
+      "text": ".wmd-input text color uses darken($primary, 40%) which was not updated - darkening an already dark primary color could cause readability issues in some theme configurations"
+    },
+    {
+      "claim_id": "c015",
+      "text": "In .topic-meta-data h5 a, the original code had color: scale-color($primary, $lightness: 30%) but was changed to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)). The lightness for the light theme changed from 30% to 70%, which is a dramatic inversion"
+    },
+    {
+      "claim_id": "c016",
+      "text": "Inconsistent theme handling: #file-uploading uses scale-color($secondary, $lightness: 50%) while sibling #draft-status was updated to use dark-light-choose, which may cause visibility issues for #file-uploading text in dark themes"
+    },
+    {
+      "claim_id": "c017",
+      "text": "One .badge-notification declaration (.topic-list.categories .category) was missed by the conversion sweep and remains as the old unconverted scale-color($primary) call."
+    },
+    {
+      "claim_id": "c018",
+      "text": "Mobile's .topic-map h3 light-theme color was changed and now matches the adjacent h4's color exactly, erasing the visual hierarchy between title and subtitle, and diverging from the desktop equivalent which kept the original value."
+    },
+    {
+      "claim_id": "c019",
+      "text": "In mobile/topic-post.scss line 49: The light-theme $lightness for .topic-map h3 was changed from 20% to 50%, altering light-theme appearance - should preserve original 20% for light variant and use complementary 80% for dark variant to match desktop stylesheet"
+    },
+    {
+      "claim_id": "c020",
+      "text": "In mobile/modal.scss line 102: The light/dark scale-color percentages are reversed - should keep 70% for light-theme and 30% for dark-theme to match desktop .custom-message-length styling"
+    }
+  ]
+}

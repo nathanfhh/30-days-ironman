@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-80168",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both note the docstring still says the method returns a list of DetectorEvaluationResult when it now returns a dict."}
+  ]
+}

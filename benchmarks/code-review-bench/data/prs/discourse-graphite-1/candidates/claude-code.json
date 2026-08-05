@@ -1,0 +1,9 @@
+[
+  "Hardcoded 10MB limit on line 182 replaces dynamic max_attachment_size_kb setting, causing non-image attachments to pass client validation but fail server-side when they exceed the admin-configured limit but are under 10MB",
+  "Error message in displayErrorForUpload on line 246 shows hardcoded 10MB instead of the actual configured limit, misleading users when server rejects files for exceeding smaller configured limits",
+  "PR defines downsize method twice (lines 145-151) - a 4-arg and 3-arg version - but Ruby's last definition wins, making the 4-arg version dead code",
+  "Existing caller in app/jobs/regular/resize_emoji.rb:14 calls OptimizedImage.downsize with 5 arguments, which will raise ArgumentError at runtime since only the 3-4 arg version survives, breaking emoji resizing",
+  "For regular browser uploads, Rack tempfile paths lack .gif extension, so the GIF detection regex in optimize() never matches and convert with [0] strips animation from GIFs",
+  "For API URL uploads where .gif extension is preserved, gifsicle is triggered but --resize-fit 80% is invalid syntax (gifsicle requires WxH pixel dimensions, not percentages), causing silent failure",
+  "The allow_animation option is effectively dead code since animated GIF downsizing fails through both upload paths"
+]

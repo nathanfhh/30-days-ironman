@@ -1,0 +1,4 @@
+[
+  "HIDDEN_ATTRIBUTES filter is only applied when searchQuery is non-empty; when searchQuery is empty (default state), internal attributes (is_segment, project_id, received) are visible to users because the early return at line 62 returns sorted directly without filtering",
+  "BrowserReportSerializer allows reports with neither age nor timestamp since both fields are required=False and field-level validators only run when their respective field is present; need object-level validate() method to ensure at least one field is provided"
+]

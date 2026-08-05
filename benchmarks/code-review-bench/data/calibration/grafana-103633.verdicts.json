@@ -1,0 +1,194 @@
+{
+  "slug": "grafana-103633",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "denial-key-underscore-collision",
+      "evidence": "pkg/services/authz/rbac/cache.go:30",
+      "reason": "userPermDenialCacheKey joins action, name and parent with bare '_' separators, so (name=\"a_b\", parent=\"c\") and (name=\"a\", parent=\"b_c\") produce the same key; pkg/util/shortid_generator.go:33 shows Grafana's UID charset is `a-zA-Z0-9\\-\\_`, so underscores are legal in both the resource name and the folder UID, and a false hit returns Allowed:false at service.go:117-121."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "denial-key-raw-uid",
+      "evidence": "pkg/services/authz/rbac/service.go:116 vs 356-360",
+      "reason": "The denial key is built from checkReq.UserUID before any identity resolution, while getCachedIdentityPermissions/getUserPermissions key on userIdentifiers.UID; GetUserIdentifiers (service.go:463-469) explicitly accepts a numeric ID as the subject, so the same principal can produce two different denial keys and miss its own entries. Effectiveness only — both key spaces hold denials, so no wrong grant results."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "noop-cache-style",
+      "evidence": "pkg/services/authz/rbac.go:239-251",
+      "reason": "NoopCache is only referenced at rbac.go:103 inside its own package (grep finds no other use), the receiver is named `lc` (local cache) on a type that is not a local cache, and the type has no doc comment explaining why the in-proc client must not cache."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "cached-identity-perms-duplication",
+      "evidence": "pkg/services/authz/rbac/service.go:330-368",
+      "reason": "getCachedIdentityPermissions repeats the identity-type switch of getIdentityPermissions verbatim, and perm cache keys are now built in three separate places (service.go:348 and 423 for anonymous, 360 and 379 for users, plus 116 for the denial key), so the two switches can drift apart."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "denial-key-underscore-collision",
+      "evidence": "pkg/services/authz/rbac/cache.go:30, pkg/util/shortid_generator.go:33",
+      "reason": "Accurate: the key concatenates name and parent with an unescaped '_', and validUIDCharPattern is `a-zA-Z0-9\\-\\_`, i.e. Grafana UIDs may legitimately contain underscores."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "denial-cache-unbounded-memory",
+      "evidence": "pkg/services/authz/rbac/service.go:116,153-155; pkg/services/authz/rbac.go:86",
+      "reason": "Every denied (user, action, name, folder) tuple writes a new entry, and name/folder come straight from the request (validateCheckRequest copies req.GetName()/req.GetFolder() unfiltered), so the key space is caller-driven and unbounded, unlike the pre-existing per-user/per-action keys. The entries land in the shared LocalCache built at rbac.go:86 with a 10-minute CleanupInterval."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "deny-test-vacuous",
+      "evidence": "pkg/services/authz/rbac/service_test.go:973-995",
+      "reason": "Traced the test with the short-circuit removed: the seeded permCache map is {\"dashboards:uid:dash1\": false}, so checkPermission returns false, checkInheritedPermissions finds no folders in the empty fakeStore, and the DB fallback (fakeStore with no permissions) also denies — resp.Allowed is false either way, so the assertion never exercises permDenialCache."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "denial-key-missing-identity-type",
+      "evidence": "pkg/services/user/identity.go:287-302; pkg/services/authz/rbac/cache.go:30",
+      "reason": "SignedInUser.getTypeAndID returns (TypeAnonymous, \"0\") and (TypeRenderService, \"0\"), and the subject sent by the client is GetUID() (zanzana/client/client.go:41), so validateSubject yields UserUID \"0\" for both; the denial key omits IdentityType, so the two principals share denial records. The existing scheme avoided this by using a separate anonymousPermCacheKey and by not caching renderer permissions at all. A cached anonymous denial therefore blocks the render service (which otherwise gets {\"*\": true} from getRendererPermissions) and vice versa, for up to shortCacheTTL."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "denial-key-underscore-collision",
+      "evidence": "pkg/services/authz/rbac/cache.go:30",
+      "reason": "Same defect as c001/c005: unescaped '_' between name and parent in userPermDenialCacheKey, with underscores permitted in UIDs (pkg/util/shortid_generator.go:33); a false hit short-circuits to Allowed:false at service.go:117."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "stale-denial-no-invalidation",
+      "evidence": "pkg/services/authz/rbac/service.go:117-121,153-155",
+      "reason": "The denial short-circuit returns before any cache-permission or DB lookup, and grep shows permDenialCache is only ever Get/Set (cacheWrap has no Delete at all), so a newly granted permission cannot take effect until the 30s shortCacheTTL entry expires — even if permCache is refreshed sooner."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "denial-cache-unbounded-memory",
+      "evidence": "pkg/services/authz/rbac.go:86",
+      "reason": "The premise is right — the in-proc service cache really is cache.NewLocalCache(Config{Expiry: 5m, CleanupInterval: 10m}) — but whether authlib's LocalCache caps entry count and whether logically-expired entries are only reclaimed by a 10-minute janitor sweep depends on github.com/grafana/authlib/cache, which is neither vendored nor in the module cache here. Reading that package's LocalCache implementation would settle it."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "deny-test-vacuous",
+      "evidence": "pkg/services/authz/rbac/service_test.go:981-982",
+      "reason": "The comment says \"Allow access to the dashboard to prove this is not checked\" but the map is {\"dashboards:uid:dash1\": false}; checkPermission (service.go:558) reads scopeMap[t.scope(req.Name)], which is false, so the seeded entry grants nothing and the test's premise does not hold."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "stale-denial-no-invalidation",
+      "evidence": "pkg/services/authz/rbac/service.go:153-155; pkg/services/authz/rbac/cache.go:44-92",
+      "reason": "The code answers the question in the direction that makes it worth asking: there is no invalidation path — cacheWrap exposes only Get/Set, nothing calls Delete, and no permission-mutation path touches permDenialCache — so the 30s TTL is the entire contract, which the PR never states."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "dead-cachehit-testcase",
+      "evidence": "pkg/services/authz/rbac/service_test.go:333-393",
+      "reason": "After the removed case, both remaining test cases in TestService_getUserPermissions set cacheHit:false, so the `if tc.cacheHit` seeding branch (line 365) and the `require.Equal(t, 1, store.calls)` branch (line 388) are unreachable."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "denial-key-underscore-collision",
+      "evidence": "pkg/services/authz/rbac/cache.go:30",
+      "reason": "The worked example checks out: name=\"dash1_\"/parent=\"\" and name=\"dash1\"/parent=\"_\" both yield the suffix \"dash1__\", and underscores are valid UID characters (pkg/util/shortid_generator.go:33); the consequence described (immediate deny for up to 30s via service.go:117-121) is what the code does."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "unclear",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "inproc-noop-cache-latency",
+      "evidence": "pkg/services/authz/rbac.go:100-105",
+      "reason": "The factual premise is correct — the in-proc client now gets &NoopCache{} instead of a 30s LocalCache, so every Check crosses the inproc channel into the service. Whether the remaining server-side permCache keeps the authorizer hot path within budget is a latency question that needs a benchmark or production timings, which are not obtainable from the checkout."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "not_real",
+      "confidence": 0.65,
+      "severity": null,
+      "cluster": "asymmetric-cache-trust",
+      "evidence": "pkg/services/authz/rbac/service.go:123-144",
+      "reason": "The control-flow description is accurate, but the conclusion is not: falling through to the DB when the cached scope map does not grant is the fail-safe direction, not a risk, and the stale-grant window it complains about comes from permCache's pre-existing 30s TTL (before this PR getUserPermissions returned the same cached map to checkPermission). The change does not introduce the asserted security risk, and the remedy it implies — trusting cached denials — would be strictly worse."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "perm-cache-metric-mislabel",
+      "evidence": "pkg/services/authz/rbac/service.go:123-137",
+      "reason": "Correct on the substance: the permissionCacheUsage(\"true\") increment sits inside `if allowed`, so a genuine permCache hit that resolves to not-allowed falls through to the unconditional \"false\" increment at line 137 and is recorded as a miss. (It is a mislabel rather than a double count — only one increment happens per Check, since the counter was removed from getUserPermissions.)"
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "denial-key-underscore-collision",
+      "evidence": "pkg/services/authz/rbac/cache.go:30",
+      "reason": "Same collision as c001/c005/c009/c015, stated as a fix: the '_'-joined name/parent segments are unescaped and underscores are legal UID characters, so distinct (name, parent) pairs can share a denial entry and cause false denials."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "denial-key-missing-identity-type",
+      "evidence": "pkg/services/user/identity.go:295-298; pkg/services/authz/rbac/service.go:116",
+      "reason": "getTypeAndID returns id \"0\" for both TypeAnonymous and TypeRenderService, and the denial key is built from UserUID alone with no IdentityType component, so the two identities share denial records within a namespace."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "perm-cache-metric-mislabel",
+      "evidence": "pkg/services/authz/rbac/service.go:118,132,137",
+      "reason": "Both halves hold: line 118 records cache_hit=\"true\" for a hit in permDenialCache, not permCache, so one counter now mixes two caches; and line 137 records cache_hit=\"false\" on a path where permCache actually hit but did not grant."
+    }
+  ]
+}

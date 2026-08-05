@@ -1,0 +1,4 @@
+[
+  "`config` is copied from `monitor_environment.monitor.config` and potentially has its `schedule_type` replaced with the human-readable display value, but the return dict returns `monitor_environment.monitor.config` (the original) instead of `config` (the copy). The human-readable conversion is silently discarded on every call that has a `schedule_type`.",
+  "Docstring contains typos: \"humam readible\" should be \"human readable\""
+]

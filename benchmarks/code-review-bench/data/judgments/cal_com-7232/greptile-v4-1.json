@@ -1,0 +1,10 @@
+{
+  "slug": "cal_com-7232",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both flag that when immediateDelete is true the WorkflowReminder DB row is never deleted despite the SendGrid cancel succeeding, leaving an orphaned/stale record."}
+  ]
+}

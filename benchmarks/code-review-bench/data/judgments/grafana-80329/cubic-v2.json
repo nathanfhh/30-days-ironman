@@ -1,0 +1,20 @@
+{
+  "slug": "grafana-80329",
+  "tool": "cubic-v2",
+  "n_golden": 1,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Identifies the same issue: cleanup logs use Error level for routine debug/informational output and should be Debug."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "Same underlying issue, restated for the second Error-level informational log statement in the cleanup path."
+    }
+  ]
+}

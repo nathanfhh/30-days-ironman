@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-1",
+  "tool": "coderabbit",
+  "n_golden": 3,
+  "n_candidates": 9,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 5, "confidence": 0.95,
+     "reasoning": "Directly identifies the duplicate downsize method definition shadowing the first, exactly golden's issue."},
+    {"golden_index": 0, "candidate_index": 6, "confidence": 0.8,
+     "reasoning": "Describes the consequence of the duplicate downsize definition (old 4-arg call sites breaking against the new 3-arg signature), same underlying issue as golden."},
+    {"golden_index": 1, "candidate_index": 7, "confidence": 0.75,
+     "reasoning": "Identifies the hardcoded max size losing per-type flexibility, matching golden's point that hardcoding maxSizeKB ignores per-type SiteSettings."}
+  ]
+}

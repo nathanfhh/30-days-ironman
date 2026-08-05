@@ -1,0 +1,129 @@
+{
+  "slug": "grafana-106778",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Guard `rules` before calling `.map()`. An empty `groups` response is valid here, and the current expression will throw instead of rendering nothing."
+    },
+    {
+      "claim_id": "c002",
+      "text": "The actions array is rebuilt on every render, defeating the useMemo in useRulerRuleAbilities / useGrafanaPromRuleAbilities."
+    },
+    {
+      "claim_id": "c003",
+      "text": "promResponse.data.groups.at(0)?.rules.map() will throw runtime error if groups is empty because calling .map() on undefined crashes - needs optional chaining on .map()"
+    },
+    {
+      "claim_id": "c004",
+      "text": "RequireAtLeastOne looks like it guarantees 'at least one rule is present,' but it doesn't."
+    },
+    {
+      "claim_id": "c005",
+      "text": "getIsProvisioned passes a Rule into isProvisionedPromRule(promRule: PromRuleDTO) \u2014 are these two types actually compatible under TypeScript?"
+    },
+    {
+      "claim_id": "c006",
+      "text": "useIsRuleEditable triggers featureDiscoveryApi.endpoints.discoverDsFeatures.useQuery() call before checking if rule is undefined, causing unnecessary API calls"
+    },
+    {
+      "claim_id": "c007",
+      "text": "getRulesPermissions('grafana') uses a string literal instead of the GRAFANA_RULES_SOURCE_NAME constant."
+    },
+    {
+      "claim_id": "c008",
+      "text": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed."
+    },
+    {
+      "claim_id": "c009",
+      "text": "The refactored useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities which hardcodes isFederated = false instead of checking isFederatedRuleGroup(rule.group) - this means federated Mimir rule groups will no longer be correctly identified as immutable, potentially allowing edit/delete actions on rules that should be read-only"
+    },
+    {
+      "claim_id": "c010",
+      "text": "A leftover `// duplicate` comment from development remains in useAllGrafanaPromRuleAbilities."
+    },
+    {
+      "claim_id": "c011",
+      "text": "The new Grafana rule list lost Pause and Delete: the newly added grafanaPauseAbility / grafanaDeleteAbility are dead code that can never be reached on this path."
+    },
+    {
+      "claim_id": "c012",
+      "text": "The new GrafanaRuleListItem component omits the returnTo query parameter when building the view URL (line 40), unlike the deleted GrafanaRuleLoader and sibling DataSourceRuleListItem which both use createReturnTo() - this breaks back-navigation UX from the rule detail view back to the list"
+    },
+    {
+      "claim_id": "c013",
+      "text": "isProvisionedPromRule accesses promRule.provenance without proper type narrowing since PromRuleDTO doesn't include provenance property and prometheusRuleType.grafana.rule() is not a type predicate"
+    },
+    {
+      "claim_id": "c014",
+      "text": "After removing the Ruler query, three comments and one variable name still describe behavior that no longer exists."
+    },
+    {
+      "claim_id": "c015",
+      "text": "useCanSilence invokes hooks before its early return when rule is undefined"
+    },
+    {
+      "claim_id": "c016",
+      "text": "The new file and new tests leave behind an unreachable prop, an unused selector, and redundant type narrowing."
+    },
+    {
+      "claim_id": "c017",
+      "text": "The rule link no longer carries returnTo, so clicking into rule details from filtered results can't navigate back to the original list state."
+    },
+    {
+      "claim_id": "c018",
+      "text": "After useAllAlertRuleAbilities was rewritten as a wrapper, federated rule groups are no longer treated as immutable, so the old rules table gains an Edit button."
+    },
+    {
+      "claim_id": "c019",
+      "text": "The prom-based abilities narrow 'is a Grafana rule' down to 'is a Grafana alerting rule', causing Grafana recording rules to lose Pause / Export / Restore."
+    },
+    {
+      "claim_id": "c020",
+      "text": "After removing the Ruler query, the rule's 'Creating' and 'Deleting' transitional states have completely disappeared from the Grafana rule list \u2014 is this a deliberate product decision?"
+    },
+    {
+      "claim_id": "c021",
+      "text": "promResponse.data.groups.at(0)?.rules.map(...) can still throw if groups is empty because optional chaining only applies to the .rules access, not the subsequent .map - need to guard groups.at(0)/rules before mapping to avoid runtime crash when API returns no groups"
+    },
+    {
+      "claim_id": "c022",
+      "text": "Component-level doc comment says loader fetches from 'Prometheus and Ruler endpoints' but implementation now only calls the Prometheus API - comment is outdated and misleading"
+    },
+    {
+      "claim_id": "c023",
+      "text": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes."
+    },
+    {
+      "claim_id": "c024",
+      "text": "Delete and pause menu items are gated by rulerRule presence even though abilities are computed with OR logic from both ruler and Grafana sources, causing regression in promRule-only scenarios where delete/pause won't appear"
+    },
+    {
+      "claim_id": "c025",
+      "text": "Delete menu item unavailable in list view despite user having permission - canDelete can be true when only promRule is supplied, but the delete menu item is gated by rulerRule &&, so it will never render for list-view consumers that pass only promRule"
+    },
+    {
+      "claim_id": "c026",
+      "text": "The skipToken path isn't neutral: useAllGrafanaPromRuleAbilities(undefined) derives abilities from global Grafana permissions, causing a Duplicate option to leak onto cloud rules."
+    },
+    {
+      "claim_id": "c027",
+      "text": "GrafanaGroupLoader renders nothing and has no empty state when the query succeeds but groups is empty."
+    },
+    {
+      "claim_id": "c028",
+      "text": "Stray literal } in the getGrafanaRuleKey template string (line 209) makes keys slightly malformed"
+    },
+    {
+      "claim_id": "c029",
+      "text": "The new test hardcodes 'exactly 4 menu items,' effectively locking in F-002's missing Pause/Delete as expected behavior."
+    },
+    {
+      "claim_id": "c030",
+      "text": "Type signature mismatch: handleDelete expects RulerRuleDTO but call sites pass EditableRuleIdentifier"
+    },
+    {
+      "claim_id": "c031",
+      "text": "Misleading test descriptions in RuleDetails.test.tsx - descriptions read 'Should not render Edit/Delete button for users with the update/delete permission' which sounds like a permission violation, when the intent is that these buttons have moved to a separate component"
+    }
+  ]
+}

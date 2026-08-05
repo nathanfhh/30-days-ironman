@@ -1,0 +1,9 @@
+[
+  "In createAllCalendarEvents, the else branch (line 380) calls createEvent(c, event) without passing destination.externalId as the third argument, unlike the if-branch, causing externalCalendarId to be undefined for the legacy fallback path and potentially breaking future update/delete operations",
+  "In updateAllCalendarEvents (line 542), updateEvent(credential, ...) is called without checking if credential is defined, causing a runtime error if both in-memory lookup and DB fallback fail",
+  "EventManager.ts:119 will crash with TypeError when destinationCalendar is null/empty - the old code used optional chaining but the new code accesses .integration directly on potentially-undefined mainHostDestinationCalendar",
+  "GoogleCalendarService updateEvent (line 256) and deleteEvent (line 317) have broken fallback logic - the else branch searches .find(cal => cal.externalId === externalCalendarId) but externalCalendarId is falsy there, so it never matches",
+  "organizations/create.handler.ts:151 reverses the slug assignment logic - old: slug set when billing disabled, new: slug set when billing enabled",
+  "The loadUsers function in handleNewBooking.ts was refactored and the organization select was removed from the dynamic user query, which could break organization-related user lookups",
+  "Multiple places use destructuring like [first] = array without guarding against undefined before property access"
+]

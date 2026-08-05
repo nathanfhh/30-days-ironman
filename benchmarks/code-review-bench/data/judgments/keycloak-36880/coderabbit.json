@@ -1,0 +1,14 @@
+{
+  "slug": "keycloak-36880",
+  "tool": "coderabbit",
+  "n_golden": 3,
+  "n_candidates": 7,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both identify the cleanup block guarded only by the V1 ADMIN_FINE_GRAINED_AUTHZ flag so permission cleanup is skipped in V2-only deployments."
+    }
+  ]
+}

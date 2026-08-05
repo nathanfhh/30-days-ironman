@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-80329",
+  "tool": "claude-code",
+  "n_golden": 1,
+  "n_candidates": 6,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Flags the six r.log.Error() calls logging routine cleanup info at ERROR level — same issue as the golden."
+    }
+  ]
+}

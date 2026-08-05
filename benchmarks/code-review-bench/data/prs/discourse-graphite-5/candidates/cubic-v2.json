@@ -1,0 +1,6 @@
+[
+  "Adding flexbox to `.small-action` while its children (`.topic-avatar`, `.avatar`, `button`) still use `float: left`/`float: right` is contradictory \u2014 floats are ignored on flex items. These float declarations should be removed or replaced with flex-based alignment (e.g., `margin-left: auto` on the button) to avoid unexpected layout results.",
+  "Keep paragraph spacing inside `.custom-message`; zeroing `p` margins collapses multi-paragraph cooked messages into one block.",
+  "This removes the only right-alignment rule for the ERB header's `.panel`; `margin-left: auto` only works when `.panel` is a flex item, but `_header.html.erb` nests it inside `.row`.",
+  "The `align-items` mixin emits `-ms-align-items`, which is not a valid vendor-prefixed CSS property. The correct IE prefix is `-ms-flex-align` (already present in the mixin). The invalid `-ms-align-items` line in the mixin should be removed to avoid confusion."
+]

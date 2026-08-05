@@ -1,0 +1,26 @@
+{
+  "slug": "keycloak-37429",
+  "tool": "nathan-code-review",
+  "n_golden": 4,
+  "n_candidates": 16,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.98,
+      "reasoning": "Both report that the totpStep1 entry in messages_lt.properties contains Italian text instead of Lithuanian."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.98,
+      "reasoning": "Both report that totpStep1 in messages_zh_CN.properties uses Traditional Chinese wording in a Simplified Chinese bundle."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 10,
+      "confidence": 0.99,
+      "reasoning": "Both report the misspelled method name santizeAnchors, which should be sanitizeAnchors."
+    }
+  ]
+}

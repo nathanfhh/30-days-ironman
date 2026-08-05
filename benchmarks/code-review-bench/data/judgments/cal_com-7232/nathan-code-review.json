@@ -1,0 +1,12 @@
+{
+  "slug": "cal_com-7232",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 13,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 2, "confidence": 0.9,
+     "reasoning": "Both say the reminder-cancellation calls became fire-and-forget (no await), removing the prior await/Promise.all that ensured cancellation completed."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.85,
+     "reasoning": "Both say the immediateDelete branch fails to actually delete/clean up the WorkflowReminder record, unlike the other path."}
+  ]
+}

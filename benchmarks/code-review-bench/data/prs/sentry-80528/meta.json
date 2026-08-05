@@ -1,0 +1,17 @@
+{
+  "slug": "sentry-80528",
+  "source_repo": "sentry",
+  "language": "Python",
+  "golden_url": "https://github.com/getsentry/sentry/pull/80528",
+  "pr_title": "ref(crons): Reorganize incident creation / issue occurrence logic",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR80528__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR80528__20260122.git",
+  "base_sha": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "head_sha": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "stat": " src/sentry/monitors/logic/incident_occurrence.py | 171 +++++++++++++++\n src/sentry/monitors/logic/incidents.py           | 104 +++++++++\n src/sentry/monitors/logic/mark_failed.py         | 268 +----------------------\n src/sentry/monitors/types.py                     |  10 +\n 4 files changed, 289 insertions(+), 264 deletions(-)\n",
+  "name_status": "A\tsrc/sentry/monitors/logic/incident_occurrence.py\nA\tsrc/sentry/monitors/logic/incidents.py\nM\tsrc/sentry/monitors/logic/mark_failed.py\nM\tsrc/sentry/monitors/types.py\n",
+  "commits": "dcdcadb7 ref(crons): Reorganize incident creation / issue occurrence logic\n"
+}

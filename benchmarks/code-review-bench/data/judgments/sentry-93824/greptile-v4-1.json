@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-93824",
+  "tool": "greptile-v4-1",
+  "n_golden": 5,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 4,
+      "candidate_index": 0,
+      "confidence": 0.75,
+      "reasoning": "Both describe the shutdown loop breaking once the deadline elapses, leaving remaining flusher processes never terminated."
+    }
+  ]
+}

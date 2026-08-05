@@ -1,0 +1,57 @@
+{
+  "slug": "grafana-76186",
+  "issues": [
+    {
+      "text": "Log fields now depend on the order middlewares are chained in, but the comment that documented and protected that ordering constraint was deleted when the logic was moved into the new middleware.",
+      "zh": "log 欄位改為依賴 middleware 順序，但記載這個約束的註解在搬移中被刪掉了",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The newly added ContextualLoggerMiddleware has no tests at all, even though it's now the sole source of plugin-identifying fields in request logs.",
+      "zh": "新增的 ContextualLoggerMiddleware 沒有任何測試",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "TestLogger.FromContext returns a brand-new TestLogger instance rather than itself, so any log call made through FromContext can never be asserted against the fake logger instance a test holds a reference to.",
+      "zh": "TestLogger.FromContext 回傳全新的 TestLogger，讓經由 FromContext 產生的 log 無法被斷言",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The test file was renamed to metrics_middleware_test.go, but the test function itself is still named TestInstrumentationMiddleware.",
+      "zh": "測試檔已更名，測試函式名還是 TestInstrumentationMiddleware",
+      "finding_id": "F-004",
+      "severity": "Nit"
+    },
+    {
+      "text": "The logger name passed to NewLoggerMiddleware is still \"plugin.instrumentation\" even though no type named Instrumentation exists anymore after the rename.",
+      "zh": "logger 名稱仍是 plugin.instrumentation",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "The three stream endpoints (SubscribeStream/PublishStream/RunStream) in ContextualLoggerMiddleware are undocumented pure pass-throughs that don't attach any contextual logging fields, unlike TracingMiddleware which covers all seven endpoints.",
+      "zh": "ContextualLoggerMiddleware 的三個 stream 端點是無註解的純 pass-through",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "Pre-existing (not introduced by this PR): MetricsMiddleware shares a single globally-created instance and overwrites its `next` field on every request, an unprotected concurrent write that is a data race under concurrent requests.",
+      "zh": "既有寫法（非本次引入）：MetricsMiddleware 全域共用單一實例，每次請求覆寫 next",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "pkg/plugins/log.Logger is an exported interface that just gained a FromContext method — are there implementations outside this repo (e.g. Grafana Enterprise or other downstream consumers) that would now fail to compile?",
+      "zh": "pkg/plugins/log.Logger 是 exported interface，本次在上面新增了 FromContext。這個 repo 以外（例如 Grafana Enterprise 或其他 downstream）是否還有別的實作，會因此在編譯期壞掉？"
+    },
+    {
+      "text": "Is there any path where the same ctx passes through the plugin client decorator twice, which would cause the 'Plugin Request Completed' log line to show duplicated, stale endpoint/pluginId fields left over from the outer call?",
+      "zh": "有沒有任何路徑會讓同一條 ctx 兩次通過 plugin client decorator？若有，Plugin Request Completed 這行會出現重複且順序在前的 endpoint / pluginId，指到外層那次呼叫的 plugin。"
+    }
+  ]
+}

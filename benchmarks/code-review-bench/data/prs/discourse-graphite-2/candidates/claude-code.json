@@ -1,0 +1,4 @@
+[
+  "The unsubscribe action requires ensure_logged_in but the unsubscribe URL is embedded in notification emails - when logged-out users click the link, they are silently redirected to the homepage with no error message and no unsubscribe action taken, making the per-topic email unsubscribe feature non-functional for the most common use case",
+  "The unsubscribe_link i18n string now requires %{unsubscribe_url} interpolation but Email::MessageBuilder provides no default value for it - any plugin using build_email with add_unsubscribe_link: true without providing unsubscribe_url will raise I18n::MissingInterpolationArgument"
+]

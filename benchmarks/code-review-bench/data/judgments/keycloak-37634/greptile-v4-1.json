@@ -1,0 +1,26 @@
+{
+  "slug": "keycloak-37634",
+  "tool": "greptile-v4-1",
+  "n_golden": 4,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.98,
+      "reasoning": "Both say grantType is validated twice and rawTokenId never is, letting a null raw id through."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.9,
+      "reasoning": "Covers the inverted-condition half of the golden matcher issue."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Covers the wrong-substring half: (3,5) instead of (4,6), exactly as the golden states."
+    }
+  ]
+}

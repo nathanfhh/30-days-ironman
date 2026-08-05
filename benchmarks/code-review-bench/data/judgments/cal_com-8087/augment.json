@@ -1,0 +1,18 @@
+{
+  "slug": "cal_com-8087",
+  "tool": "augment",
+  "n_golden": 2,
+  "n_candidates": 6,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 0, "confidence": 0.85,
+     "reasoning": "Identifies the forEach(async...) not being awaited, so try/catch can't catch cleanup rejections, matching the golden's fire-and-forget concern."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.7,
+     "reasoning": "Describes the same unawaited forEach causing a race condition where subsequent code runs before async cleanup completes."},
+    {"golden_index": 1, "candidate_index": 2, "confidence": 0.85,
+     "reasoning": "Names the same forEach(async...) pattern causing uncaught calendar/video deletion failures, matching golden's example verbatim."},
+    {"golden_index": 1, "candidate_index": 3, "confidence": 0.85,
+     "reasoning": "Same unawaited forEach(async...) issue causing calendar/video state inconsistency, matching golden's described pattern."},
+    {"golden_index": 1, "candidate_index": 4, "confidence": 0.6,
+     "reasoning": "Same unawaited forEach(async...) root cause, here causing recurring-series deletes to not be enqueued before Promise.all runs."}
+  ]
+}

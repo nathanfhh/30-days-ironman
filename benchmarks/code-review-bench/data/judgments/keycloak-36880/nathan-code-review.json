@@ -1,0 +1,20 @@
+{
+  "slug": "keycloak-36880",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 17,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 16,
+      "confidence": 0.85,
+      "reasoning": "Both say the AdminPermissions cleanup listener is gated on the ADMIN_FINE_GRAINED_AUTHZ (V1) flag and therefore never runs under V2, leaving permissions orphaned after client/role/group deletion."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both identify that getClientsWithPermission uses findByType(CLIENTS_RESOURCE_TYPE), which only ever matches the type-level all-clients resource and returns its name instead of real client ids, breaking the caller that feeds realm.getClientById."
+    }
+  ]
+}

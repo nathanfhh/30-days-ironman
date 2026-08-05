@@ -1,0 +1,147 @@
+{
+  "slug": "cal_com-22532",
+  "issues": [
+    {
+      "text": "The connectedCalendars handler instantiates CalendarCacheRepository directly instead of going through CalendarCache.init(), bypassing the calendar-cache feature flag: the extra calendarCache.groupBy runs on every connectedCalendars query (8 call sites including the Booker and onboarding) regardless of the flag, and the newly added mock method is therefore unreachable.",
+      "zh": "connectedCalendars handler 直接 new CalendarCacheRepository()，繞過 calendar-cache feature flag",
+      "finding_id": "F-001",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The SelectedCalendar.updatedAt write (and the googleChannelId/updatedAt fields added to the select) is leftover from an earlier approach with no reader anywhere; it still costs an UPDATE over every SelectedCalendar row of the credential on each Google push notification and two unused columns on every authenticated session lookup.",
+      "zh": "SelectedCalendar.updatedAt 的寫入與相關欄位是前一版做法的殘留，沒有任何讀取端",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "deleteCache does not follow the calendars router conventions: the zod schema is inlined in _router.tsx instead of a deleteCache.schema.ts exporting Z/T input types, the handler redefines its input type inline, and no entry was added to CalendarsRouterHandlerCache.",
+      "zh": "deleteCache procedure 未遵循 calendars router 的 schema 慣例",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The handler throws a plain Error(\"Credential not found or access denied\") instead of a TRPCError, so tRPC wraps it as INTERNAL_SERVER_ERROR and an ordinary not-found / not-yours case shows up as a 500 in monitoring.",
+      "zh": "並以 throw new Error 取代 TRPCError",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "CredentialActionsDropdown in packages/features imports @calcom/platform-constants, a backwards dependency (platform builds on features, not the reverse) and the only such import outside packages/platform.",
+      "zh": "packages/features 反向相依 @calcom/platform-constants",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "That dependency is not declared in packages/features/package.json and only resolves through yarn workspace hoisting, so any change to hoisting or a stricter resolution mode breaks the build far from the change.",
+      "zh": "且該相依未宣告",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The static \"Cache Status / Last updated\" block is wrapped in a DropdownMenuItem, so Radix makes it focusable and selectable — keyboard users land on a menu entry that does nothing and closes the menu; DropdownMenuLabel is the right primitive and is already exported.",
+      "zh": "Dropdown 用 DropdownMenuItem 當靜態標題",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "A bare <hr className=\"my-1\" /> is used as the separator instead of the exported DropdownMenuSeparator.",
+      "zh": "用 <hr> 當分隔線",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The dropdown hardcodes raw Tailwind palette classes (text-gray-900 / text-gray-500 / dark:text-white) instead of the codebase's semantic tokens (text-emphasis / text-subtle), and in dark mode the secondary line becomes pure white, identical to the heading, destroying the intended hierarchy.",
+      "zh": "並硬編色票；text-xs text-gray-500 dark:text-white 在深色模式下會把次要說明文字染成純白，和上一行的標題完全同色",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The timestamp is formatted with new Intl.DateTimeFormat(\"en-US\", ...) even though the same component already calls useLocale(), so every non-English user sees US M/D/YY and 12-hour AM/PM next to fully translated text.",
+      "zh": "時間戳硬編 en-US 格式，忽略同一個元件已取得的使用者語系",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Replacing DisconnectIntegration with CredentialActionsDropdown dropped the component's own isDelegationCredential(credentialId < 0) guard, leaving only the caller-supplied delegationCredentialId; on the getConnectedCalendars path that returns early without that field, 'Remove app' becomes clickable for an in-memory delegation credential and always fails with a generic error toast.",
+      "zh": "換掉 DisconnectIntegration 的同時，遺失了 in-memory delegation credential 的第二道防護",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new mutation, repository method and component ship with no tests, including the ownership check in deleteCache which is the only authorization gate on a destructive path — and both the sibling router handler and the calendar cache repository already have test files to follow.",
+      "zh": "新增的 mutation、repository 方法與元件都沒有測試，授權檢查也在其中",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "dev:cron was switched from ts-node (a declared devDependency) to `npx tsx`, but tsx appears in no package.json in the repo, so it is downloaded unpinned from the npm registry at run time — network-dependent, unreproducible and outside the lockfile.",
+      "zh": "dev:cron 改用 npx tsx 會在執行時從 registry 下載未鎖版的套件",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Two changes unrelated to the cache-status UI are bundled into this MR: the dev:cron script change and the new scripts/test-gcal-webhooks.sh developer tooling.",
+      "zh": "夾帶無關改動",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "test-gcal-webhooks.sh uses the BSD/macOS form `sed -i '' -E ...`, which errors on GNU sed (Linux, containers, CI) so GOOGLE_WEBHOOK_URL is never written — yet the script still prints a success message; other scripts in the repo use the GNU form.",
+      "zh": "test-gcal-webhooks.sh 用了 BSD/macOS 專屬的 sed -i '' 語法，在 Linux 上會失敗",
+      "finding_id": "F-010",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "ENV_FILE is the relative path \"../.env\", so running the script from anywhere but scripts/ silently creates and writes a .env in the wrong location.",
+      "zh": "另外 ENV_FILE 寫成相對路徑 \"../.env\"，腳本必須從 scripts/ 目錄執行才會指到 repo 根目錄的 .env，從別處執行會安靜地建立並寫入一個錯誤位置的 .env。",
+      "finding_id": "F-010",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The hasCache branch is not gated by disableConnectionModification, so on the event type Advanced tab — where 'Remove app' is deliberately hidden — the destructive 'Delete cached data' action is still rendered and clickable, wiping the availability cache for every calendar under that credential.",
+      "zh": "在明確標記 disableConnectionModification 的畫面上，破壞性的「刪除快取」仍然顯示",
+      "finding_id": "F-011",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The migration adds updatedAt with DEFAULT NOW(), so every pre-existing CalendarCache row gets the deployment timestamp and the UI presents it as a real 'last updated' value; expiresAt minus the 30-day caching time could backfill the true write time.",
+      "zh": "migration 讓所有既有快取列的 updatedAt 等於部署時間，UI 會把它當成真實的最後更新顯示",
+      "finding_id": "F-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "The migration keeps Prisma's auto-generated warning that the required column was added 'without a default value', which contradicts both the DEFAULT NOW() in the SQL below it and the hand-written comment next to it.",
+      "zh": "migration 保留了與實際 SQL 互相矛盾的自動產生警告",
+      "finding_id": "F-013",
+      "severity": "Nit"
+    },
+    {
+      "text": "The migration directory timestamp (20250715160635) is earlier than 20250716135157, which already exists on the target branch, so after merging the migrations are no longer monotonically ordered and environments that applied the later one can be flagged as having an inconsistent history.",
+      "zh": "且檔名時間戳早於目標分支上已存在的 migration",
+      "finding_id": "F-013",
+      "severity": "Nit"
+    },
+    {
+      "text": "SelectedCalendarRepository.findMany dropped the `satisfies Prisma.SelectedCalendarFindManyArgs` constraint in favour of an inlined object, moving what was a compile-time check to a runtime Prisma error — and the change is unrelated to this feature.",
+      "zh": "SelectedCalendarRepository.findMany 拿掉了 satisfies 型別約束，與本次功能無關",
+      "finding_id": "F-014",
+      "severity": "Nit"
+    },
+    {
+      "text": "The wrapping <div className=\"flex w-32 justify-end\"> is now always rendered while only the inner component returns null, leaving an 8rem-wide empty column that squeezes the title and description on delegation-credential and read-only rows.",
+      "zh": "CredentialActionsDropdown 回傳 null 時，外層仍留下一個 w-32 的空欄位",
+      "finding_id": "F-015",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Does prisma.selectedCalendar.updateMany({ where: { credentialId }, data: {} }) actually emit SET \"updatedAt\" = now() on this project's Prisma 5.x, or is an empty data object rejected as an invalid update? There is no other empty-data updateMany in the repo to compare against and no test covering the line.",
+      "zh": "`prisma.selectedCalendar.updateMany({ where: { credentialId }, data: {} })` 在本專案的 Prisma 5.x 上，是否真的會產生 `SET \"updatedAt\" = now()`？還是會被視為空更新而報錯或無效？"
+    },
+    {
+      "text": "Is 'Delete cached data' meant to force an immediate refresh or simply to clear the cache? The handler only deletes the rows without triggering a refetch, unlike unwatchCalendar which re-populates afterwards, so the status disappears until the next Google push notification.",
+      "zh": "「Delete cached data」的產品意圖是「立刻強制重新整理」還是「單純清空」？目前的實作只做後者。"
+    }
+  ]
+}

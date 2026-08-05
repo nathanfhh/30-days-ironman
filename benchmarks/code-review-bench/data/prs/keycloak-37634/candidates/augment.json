@@ -1,0 +1,7 @@
+[
+  "Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") is a typo that validates grantType instead of rawTokenId, allowing null raw ID to slip through and potentially cause malformed encoded token IDs or later failures",
+  "isAccessTokenId() validates grant shortcut incorrectly: substring(3, 5) doesn't match the described 'grant is last 2 chars of the 6-char prefix'",
+  "isAccessTokenId() has inverted logic where equals(expectedGrantShortcut) branch returns false when it matches, causing it to reject correct tokens and accept wrong grant shortcuts",
+  "isAccessTokenId() may throw StringIndexOutOfBoundsException for short prefixes instead of returning false",
+  "session.getProvider(TokenContextEncoderProvider.class) is used without checking for a missing provider, which will cause NPE during token issuance if the SPI isn't available/registered"
+]

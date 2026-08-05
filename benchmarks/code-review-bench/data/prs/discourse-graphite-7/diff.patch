@@ -1,0 +1,1878 @@
+diff --git a/app/assets/stylesheets/common/admin/admin_base.scss b/app/assets/stylesheets/common/admin/admin_base.scss
+index 33da77e..a988f54 100644
+--- a/app/assets/stylesheets/common/admin/admin_base.scss
++++ b/app/assets/stylesheets/common/admin/admin_base.scss
+@@ -377,17 +377,17 @@ td.flaggers td {
+       line-height: 1.4em;
+     }
+ 
+     .validation-error {
+       color: $danger;
+     }
+ 
+     .desc {
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     }
+ 
+     h3 {
+       font-size: 0.929em;
+       font-weight: normal;
+     }
+   }
+ 
+@@ -498,17 +498,17 @@ section.details {
+     }
+   }
+ 
+   .current-badge {
+     margin: 20px;
+ 
+     p.help {
+       margin: 0;
+-      color: scale-color($primary, $lightness: 40%);
++      color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+       font-size: 0.9em;
+     }
+   }
+ 
+   .form-horizontal {
+     .delete-link {
+       margin-left: 15px;
+       margin-top: 5px;
+@@ -516,17 +516,17 @@ section.details {
+     textarea {
+       height: 200px;
+     }
+   }
+ 
+   .current-badge-actions {
+     margin: 10px;
+     padding: 10px;
+-    border-top: 1px solid scale-color($primary, $lightness: 80%);
++    border-top: 1px solid dark-light-choose(scale-color($primary, $lightness: 80%), scale-color($secondary, $lightness: 20%));
+   }
+ 
+   .buttons {
+     float: left;
+     width: 200px;
+     .saving {
+       padding: 5px 0 0 0;
+       margin-left: 10px;
+@@ -569,17 +569,17 @@ section.details {
+     }
+   }
+ }
+ 
+ // Groups area
+ .groups {
+   .ac-wrap {
+     width: 100% !important;
+-    border-color: scale-color($primary, $lightness: 75%);
++    border-color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+     .item {
+       width: 190px;
+       margin-right: 0 !important;
+     }
+   }
+   .next, .previous {
+     color: #333 !important;
+     &.disabled {
+@@ -592,17 +592,17 @@ section.details {
+   .controls {
+     margin-top: 10px;
+   }
+   .select2-container {
+     width: 100%;
+   }
+   .select2-choices {
+     width: 100%;
+-    border-color: scale-color($primary, $lightness: 75%);
++    border-color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+   }
+ }
+ 
+ // Customise area
+ .customize {
+   .admin-footer {
+     margin-top: 20px;
+   }
+@@ -718,17 +718,17 @@ section.details {
+     }
+   }
+   .colors {
+     thead th       { border: none; }
+     td.hex         { width: 100px; }
+     td.actions     { width: 200px; }
+     .hex-input     { width: 80px; margin-bottom: 0; }
+     .hex           { text-align: center; }
+-    .description   { color: scale-color($primary, $lightness: 50%); }
++    .description   { color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); }
+ 
+     .invalid .hex input {
+       background-color: white;
+       color: black;
+       border-color: $danger;
+     }
+   }
+ }
+@@ -1286,17 +1286,17 @@ table.api-keys {
+     }
+   }
+ }
+ 
+ .staff-action-logs-controls {
+   margin: 0 0 20px 6px;
+   a.filter {
+     display: inline-block;
+-    background-color: scale-color($primary, $lightness: 75%);
++    background-color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+     padding: 3px 10px;
+     border-radius: 3px;
+ 
+     color: $primary;
+     &:hover {
+       color: $primary;
+       background-color: dark-light-diff($primary, $secondary, 90%, -60%);
+ 
+@@ -1323,17 +1323,17 @@ table.api-keys {
+   position: relative;
+ }
+ .ember-list-item-view {
+   position: absolute;
+ }
+ 
+ .staff-actions, .screened-emails, .screened-urls, .screened-ip-addresses, .permalinks {
+ 
+-  border-bottom: dotted 1px scale-color($primary, $lightness: 75%);
++  border-bottom: dotted 1px dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+ 
+   .heading-container {
+     width: 100%;
+     background-color: dark-light-diff($primary, $secondary, 90%, -60%);
+   }
+   .col.heading {
+     font-weight: bold;
+     padding: 4px 0;
+diff --git a/app/assets/stylesheets/common/base/_topic-list.scss b/app/assets/stylesheets/common/base/_topic-list.scss
+index 6a89dae..71a5ef8 100644
+--- a/app/assets/stylesheets/common/base/_topic-list.scss
++++ b/app/assets/stylesheets/common/base/_topic-list.scss
+@@ -40,38 +40,38 @@ html.anon .topic-list a.title:visited:not(.badge-notification) {color: dark-ligh
+   th,
+   td {
+     line-height: 1.25;
+     text-align: left;
+     vertical-align: middle;
+ 
+   }
+   th {
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     font-weight: normal;
+     font-size: 1em;
+-    button i.fa {color: scale-color($primary, $lightness: 50%);}
++    button i.fa {color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));}
+ 
+   }
+   td {
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     font-size: 1em;
+   }
+ 
+   .main-link {
+     font-size: 1.143em;
+     a.title {
+       padding: 15px 0;
+     }
+   }
+ 
+   .topic-excerpt {
+     font-size: 0.929em;
+     margin-top: 8px;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     word-wrap: break-word;
+     line-height: 1.4;
+     padding-right: 20px;
+   }
+   .topic-statuses:empty {
+     display: none;
+   }
+   .topic-status {
+@@ -238,17 +238,17 @@ ol.category-breadcrumb {
+   display: inline-block;
+   @include unselectable;
+ 
+   h2 {
+     float: left;
+     margin: 5px 0 10px;
+ 
+     .top-date-string {
+-      color: scale-color($primary, $lightness: 60%);
++      color: dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%));
+       font-weight: normal;
+       font-size: 0.7em;
+       text-transform: uppercase;
+     }
+   }
+ 
+   button {
+     outline: 0;
+@@ -293,10 +293,10 @@ ol.category-breadcrumb {
+   display: inline;
+ 
+   button {
+     margin-right: 0.5em;
+   }
+ }
+ 
+ div.education {
+-  color: scale-color($primary, $lightness: 50%);
++  color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+ }
+diff --git a/app/assets/stylesheets/common/base/discourse.scss b/app/assets/stylesheets/common/base/discourse.scss
+index ae6aba1..c8cedb4 100644
+--- a/app/assets/stylesheets/common/base/discourse.scss
++++ b/app/assets/stylesheets/common/base/discourse.scss
+@@ -68,23 +68,23 @@ body {
+       color: $secondary;
+     }
+   }
+ 
+   // the default for table cells in topic list
+   // is scale-color($primary, $lightness: 50%)
+   // numbers get dimmer as they get colder
+   .coldmap-high {
+-    color: scale-color($primary, $lightness: 70%) !important;
++    color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)) !important;
+   }
+   .coldmap-med {
+-    color: scale-color($primary, $lightness: 60%) !important;
++    color: dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%)) !important;
+   }
+   .coldmap-low {
+-    color: scale-color($primary, $lightness: 50%) !important;
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)) !important;
+   }
+   .heatmap-high {
+     color: #fe7a15 !important;
+   }
+   .heatmap-med {
+     color: #cf7721 !important;
+   }
+   .heatmap-low {
+diff --git a/app/assets/stylesheets/common/base/header.scss b/app/assets/stylesheets/common/base/header.scss
+index 574d274..3126899 100644
+--- a/app/assets/stylesheets/common/base/header.scss
++++ b/app/assets/stylesheets/common/base/header.scss
+@@ -145,17 +145,17 @@
+     overflow: auto;
+     border: 1px solid dark-light-diff($primary, $secondary, 90%, -60%);
+     padding: 5px;
+ 
+     box-shadow: 0 2px 2px rgba(0,0,0, .4);
+ 
+   // note these topic counts only appear for anons in the category hamburger drop down
+   b.topics-count {
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     font-weight: normal;
+     font-size: 11px;
+   }
+ 
+   ul {
+     margin: 0;
+     list-style: none;
+   }
+@@ -187,18 +187,18 @@
+ 
+   .selected {
+     background-color: dark-light-diff($tertiary, $secondary, 85%, -65%);
+   }
+ 
+ 
+   // Notifications
+   &#notifications-dropdown {
+-    .fa { color: scale-color($primary, $lightness: 50%); }
+-    .icon { color: scale-color($primary, $lightness: 30%); }
++    .fa { color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); }
++    .icon { color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%)); }
+     li {
+       background-color: dark-light-diff($tertiary, $secondary, 85%, -65%);
+       i {
+         float: left;
+         margin-right: 5px;
+         padding-top: 2px;
+       }
+       span { color: $primary; }
+@@ -293,17 +293,17 @@
+ 
+   .category {
+     float: left;
+     background-color: transparent;
+     width: 45%;
+     margin: 5px 5px 0 5px;
+     .box {margin-top: 0;}
+     .badge-notification {
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+       background-color: transparent;
+       vertical-align: top;
+       padding: 5px 5px 2px 5px;
+     }
+   }
+ 
+   &#user-dropdown {
+     width: 118px;
+@@ -324,17 +324,17 @@
+   }
+   .topic-title {
+     margin-right: 6px;
+   }
+ 
+   .topic-statuses {
+     float: none;
+     display: inline-block;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     margin: 0;
+     .fa {
+       margin: 0;
+     }
+   }
+ }
+ 
+ .highlight-strong {
+diff --git a/app/assets/stylesheets/common/base/login.scss b/app/assets/stylesheets/common/base/login.scss
+index 6d30268..f66944b 100644
+--- a/app/assets/stylesheets/common/base/login.scss
++++ b/app/assets/stylesheets/common/base/login.scss
+@@ -31,25 +31,25 @@
+       margin-bottom: 15px;
+       label {
+         width: auto;
+         text-align: left;
+         font-weight: normal;
+         float: auto;
+       }
+       p {
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+         margin: 0;
+       }
+     }
+     clear: both;
+   }
+ }
+ 
+ // alternate login / create new account buttons should be de-emphasized
+ 
+ button#login-link, button#new-account-link
+ {
+   background: transparent;
+   padding-left: 0;
+   margin-left: 20px;
+-  color: scale-color($primary, $lightness: 35%);
++  color: dark-light-choose(scale-color($primary, $lightness: 35%), scale-color($secondary, $lightness: 65%));
+ }
+diff --git a/app/assets/stylesheets/common/base/notification-options.scss b/app/assets/stylesheets/common/base/notification-options.scss
+index c1d52c3..745f0aa 100644
+--- a/app/assets/stylesheets/common/base/notification-options.scss
++++ b/app/assets/stylesheets/common/base/notification-options.scss
+@@ -1,7 +1,7 @@
+ .fa.muted {
+-  color: scale-color($primary, $lightness: 40%);
++  color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+ }
+ .fa.tracking, .fa.watching {
+   color: $tertiary;
+   font-weight: normal;
+ }
+diff --git a/app/assets/stylesheets/common/base/search.scss b/app/assets/stylesheets/common/base/search.scss
+index 75de8a3..ec75223 100644
+--- a/app/assets/stylesheets/common/base/search.scss
++++ b/app/assets/stylesheets/common/base/search.scss
+@@ -23,23 +23,23 @@
+       font-size: 1.25em;
+     }
+   }
+   .blurb {
+     font-size: 1.0em;
+     line-height: 20px;
+     word-wrap: break-word;
+     clear: both;
+-    color: scale-color($primary, $lightness: 40%);
++    color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+     .date {
+-      color: scale-color($primary, $lightness: 40%);
++      color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+     }
+ 
+     .search-highlight {
+-      color: scale-color($primary, $lightness: 25%);
++      color: dark-light-choose(scale-color($primary, $lightness: 25%), scale-color($secondary, $lightness: 75%));
+     }
+   }
+ }
+ 
+ .search.row {
+   margin-bottom: 15px;
+   input {
+     height: 22px;
+diff --git a/app/assets/stylesheets/common/base/share_link.scss b/app/assets/stylesheets/common/base/share_link.scss
+index 49f56f7..25f2fdf 100644
+--- a/app/assets/stylesheets/common/base/share_link.scss
++++ b/app/assets/stylesheets/common/base/share_link.scss
+@@ -54,17 +54,17 @@
+   h3 {
+     margin: 5px 0;
+     float: left;
+   }
+ 
+   .date {
+     float: right;
+     margin: 5px;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   }
+ 
+   input[type=text] {
+     font-size: 1.143em;
+     margin-bottom: 10px;
+   }
+ }
+ 
+diff --git a/app/assets/stylesheets/common/base/topic-post.scss b/app/assets/stylesheets/common/base/topic-post.scss
+index 894e5db..c655b6d 100644
+--- a/app/assets/stylesheets/common/base/topic-post.scss
++++ b/app/assets/stylesheets/common/base/topic-post.scss
+@@ -7,26 +7,26 @@
+    font-size: 0.929em;
+    padding-right: 8px;
+    display: inline-block;
+    max-width: 280px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    a {
+-     color: scale-color($primary, $lightness: 30%);
++     color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));
+    }
+  }
+  .fa {
+    font-size: 11px;
+    margin-left: 3px;
+-   color: scale-color($primary, $lightness: 40%);
++   color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+  }
+   .new_user a, .user-title, .user-title a {
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+  }
+ }
+ 
+ // global styles for the cooked HTML content in posts (and preview)
+ .cooked, .wmd-preview {
+   word-wrap: break-word;
+   h1, h2, h3, h4, h5, h6 { margin: 30px 0 10px; }
+   h1 { line-height: 1em; } /* normalize.css sets h1 font size but not line height */
+@@ -47,33 +47,33 @@ aside.quote {
+   margin-top: 1em;
+   margin-bottom: 1em;
+ 
+   .badge-wrapper { margin-left: 5px; }
+ 
+   .title {
+     @include post-aside;
+ 
+-    color: scale-color($primary, $lightness: 30%);
++    color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));
+     // IE will screw up the blockquote underneath if bottom padding is 0px
+     padding: 12px 12px 1px 12px;
+     // blockquote is underneath this and has top margin
+     .avatar { margin-right: 7px; }
+     img { margin-top: -4px; }
+     @include unselectable;
+   }
+ 
+   // blockquote is docked within aside for content
+   blockquote {
+     margin-top: 0;
+   }
+ }
+ 
+ .quote-controls, .quote-controls .back:before, .quote-controls .quote-other-topic:before {
+-  color: scale-color($primary, $lightness: 70%);
++  color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+ }
+ 
+ .cooked .highlight {
+   background-color: dark-light-diff($tertiary, $secondary, 85%, -65%);
+   padding: 2px;
+   margin: -2px;
+ }
+ 
+@@ -151,17 +151,17 @@ aside.quote {
+       font-size: 1em;
+     }
+   }
+   &.wiki {
+     cursor: pointer;
+     color: $wiki;
+   }
+   &.via-email {
+-    color: scale-color($primary, $lightness: 70%);
++    color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+   }
+   &.raw-email {
+     cursor: pointer;
+   }
+ }
+ 
+ pre {
+   code {
+diff --git a/app/assets/stylesheets/common/base/user-badges.scss b/app/assets/stylesheets/common/base/user-badges.scss
+index e1bd5d0..9f812fa 100644
+--- a/app/assets/stylesheets/common/base/user-badges.scss
++++ b/app/assets/stylesheets/common/base/user-badges.scss
+@@ -54,17 +54,17 @@
+       margin: auto auto 4px;
+       width: 55px;
+       height: 55px;
+     }
+ 
+     .count {
+       display: block;
+       font-size: 0.8em;
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     }
+   }
+ }
+ 
+ /* Badge listing in /badges. */
+ table.badges-listing {
+   margin: 20px 0;
+   border-bottom: 1px solid dark-light-diff($primary, $secondary, 90%, -60%);
+@@ -89,17 +89,17 @@ table.badges-listing {
+ 
+   td.granted{
+    color: $success;
+    font-size: 120%;
+   }
+ 
+   td.grant-count {
+     text-align: center;
+-    color: scale-color($primary, $lightness: 40%);
++    color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+     font-size: 120%;
+   }
+ 
+   td.badge, td.grant-count {
+     white-space: nowrap;
+     padding-right: 10px;
+   }
+ 
+diff --git a/app/assets/stylesheets/common/base/user.scss b/app/assets/stylesheets/common/base/user.scss
+index cbca0be..5843e84 100644
+--- a/app/assets/stylesheets/common/base/user.scss
++++ b/app/assets/stylesheets/common/base/user.scss
+@@ -111,23 +111,23 @@
+     .name-line {
+       white-space: nowrap;
+       overflow: hidden;
+       text-overflow: ellipsis;
+     }
+ 
+     .username a {
+       font-weight: bold;
+-      color: scale-color($primary, $lightness: 30%);
++      color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));
+     }
+ 
+     .name {
+       margin-left: 5px;
+-      color: scale-color($primary, $lightness: 30%);
++      color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));
+     }
+ 
+     .title {
+       margin-top: 3px;
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     }
+ 
+   }
+ }
+diff --git a/app/assets/stylesheets/common/components/badges.css.scss b/app/assets/stylesheets/common/components/badges.css.scss
+index 9b52480..0a03ef0 100644
+--- a/app/assets/stylesheets/common/components/badges.css.scss
++++ b/app/assets/stylesheets/common/components/badges.css.scss
+@@ -231,17 +231,17 @@
+ .badge-notification {
+   @extend %badge;
+   padding: 4px 5px 2px 5px;
+   vertical-align: middle;
+   color: $secondary;
+   font-size: 11px;
+   line-height: 1;
+   text-align: center;
+-  background-color: scale-color($primary, $lightness: 70%);
++  background-color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+   &[href] {
+   color: $secondary;
+   }
+ 
+   // New posts
+ 
+   &.new-posts, &.unread-posts {
+     background-color: dark-light-choose(scale-color($tertiary, $lightness: 50%), scale-color($tertiary, $lightness: 20%));
+@@ -277,17 +277,17 @@
+ // Posts badge
+ // --------------------------------------------------
+ 
+ .badge-posts {
+   font-weight: normal;
+   font-size: 1em;
+   line-height: 1;
+   &[href] {
+-    color: scale-color($primary, $lightness: 40%);
++    color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+   }
+ }
+ 
+ // Group badge
+ // --------------------------------------------------
+ 
+ .badge-group {
+   @extend %badge;
+diff --git a/app/assets/stylesheets/common/components/buttons.css.scss b/app/assets/stylesheets/common/components/buttons.css.scss
+index 2ea0e60..af8f0df 100644
+--- a/app/assets/stylesheets/common/components/buttons.css.scss
++++ b/app/assets/stylesheets/common/components/buttons.css.scss
+@@ -52,17 +52,17 @@
+     color: $primary;
+   }
+   &:hover {
+     background: dark-light-diff($primary, $secondary, 65%, -75%);
+     color: #fff;
+   }
+   &[disabled] {
+     background: dark-light-diff($primary, $secondary, 90%, -60%);
+-    &:hover { color: scale-color($primary, $lightness: 70%); }
++    &:hover { color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)); }
+     cursor: not-allowed;
+   }
+ }
+ 
+ // Buttons used in admin panel
+ // --------------------------------------------------
+ .btn-admin {
+   text-align:left;
+diff --git a/app/assets/stylesheets/desktop/compose.scss b/app/assets/stylesheets/desktop/compose.scss
+index 4f23d93..829387d 100644
+--- a/app/assets/stylesheets/desktop/compose.scss
++++ b/app/assets/stylesheets/desktop/compose.scss
+@@ -332,17 +332,17 @@
+     top: -19px;
+   }
+ }
+ 
+ .reply-to {
+   margin-bottom: 10px;
+ 
+   i {
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   }
+ }
+ 
+ #reply-control {
+   &.hide-preview {
+     .wmd-controls {
+       .wmd-input {
+         width: 100%;
+diff --git a/app/assets/stylesheets/desktop/header.scss b/app/assets/stylesheets/desktop/header.scss
+index 3caae9f..74416dc 100644
+--- a/app/assets/stylesheets/desktop/header.scss
++++ b/app/assets/stylesheets/desktop/header.scss
+@@ -45,23 +45,23 @@ and (max-width : 570px) {
+     margin-bottom: 2px;
+     .fa {
+       margin-right: 5px;
+     }
+   }
+ }
+ 
+ .search-link .blurb {
+-  color: scale-color($primary, $lightness: 45%);
++  color: dark-light-choose(scale-color($primary, $lightness: 45%), scale-color($secondary, $lightness: 55%));
+   display: block;
+   word-wrap: break-word;
+   font-size: 11px;
+   line-height: 1.3em;
+   .search-highlight {
+-    color: scale-color($primary, $lightness: 25%);
++    color: dark-light-choose(scale-color($primary, $lightness: 25%), scale-color($secondary, $lightness: 75%));
+   }
+ }
+ 
+ .d-dropdown#search-dropdown {
+   width: 540px;
+ }
+ 
+ .d-dropdown .searching {
+diff --git a/app/assets/stylesheets/desktop/login.scss b/app/assets/stylesheets/desktop/login.scss
+index 39c86a7..1bf2a79 100644
+--- a/app/assets/stylesheets/desktop/login.scss
++++ b/app/assets/stylesheets/desktop/login.scss
+@@ -9,17 +9,17 @@
+     }
+   }
+   margin-top: 10px;
+   margin-bottom: 20px;
+ }
+ 
+ #login-form {
+   a {
+-    color: scale-color($primary, $lightness: 35%);
++    color: dark-light-choose(scale-color($primary, $lightness: 35%), scale-color($secondary, $lightness: 65%));
+   }
+ }
+ 
+ // Create account
+ 
+ #new-account-link {
+   cursor: pointer;
+ }
+@@ -40,17 +40,17 @@
+     }
+     .tip {
+       max-width: 340px;
+     }
+   }
+ 
+   tr.instructions {
+     label {
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     }
+   }
+ 
+   .tos-agree {
+     margin-bottom: 12px;
+   }
+ 
+ }
+diff --git a/app/assets/stylesheets/desktop/modal.scss b/app/assets/stylesheets/desktop/modal.scss
+index c9d5b84..77e4ea1 100644
+--- a/app/assets/stylesheets/desktop/modal.scss
++++ b/app/assets/stylesheets/desktop/modal.scss
+@@ -42,34 +42,34 @@
+   float: right;
+ }
+ 
+ .modal-footer .btn-group .btn + .btn {
+   margin-left: -1px;
+ }
+ 
+ .modal-footer span.hint {
+-  color: scale-color($primary, $lightness: 70%);
++  color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+   float: right;
+   line-height: 30px;
+ }
+ 
+ .modal-header {
+   border-bottom: 1px solid dark-light-diff($primary, $secondary, 90%, -60%);
+   h3 {
+     font-size: 1.429em;
+     padding: 10px 15px 7px;
+   }
+   .close {margin: 10px;}
+ }
+ .close {
+   float: right;
+   font-size: 1.429em;
+   text-decoration: none;
+-  color: scale-color($primary, $lightness: 35%);
++  color: dark-light-choose(scale-color($primary, $lightness: 35%), scale-color($secondary, $lightness: 65%));
+   cursor: pointer;
+   &:hover {
+     color: $primary;
+   }
+ }
+ 
+ .modal {
+   .category-combobox {
+@@ -86,17 +86,17 @@
+ }
+ 
+ .flag-modal {
+   max-height: 450px;
+ }
+ 
+ .custom-message-length {
+   margin: -10px 0 10px 20px;
+-  color: scale-color($primary, $lightness: 70%);
++  color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+   font-size: 85%;
+ }
+ 
+ .flag-message {
+   margin-left: 20px;
+   width: 95% !important;
+ }
+ 
+@@ -109,31 +109,31 @@
+   }
+   .secure-category-options {
+     margin: 10px 0 0 16px;
+     .badge-list {
+       margin: 10px 0;
+       li {
+         margin: 0 4px 8px 0;
+         a {
+-          color: scale-color($primary, $lightness: 50%);
++          color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+           cursor: pointer;
+         }
+         a:hover {
+-          color: scale-color($primary, $lightness: 40%);
++          color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+         }
+       }
+     }
+   }
+ 
+   .cannot_delete_reason {
+     float: right;
+     text-align: right;
+     max-width: 380px;
+-    color: scale-color($primary, $lightness: 60%);
++    color: dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%));
+   }
+ }
+ 
+ .topic-bulk-actions-modal {
+   p {
+     margin-top: 0;
+   }
+   &.full .modal-body {
+diff --git a/app/assets/stylesheets/desktop/queued-posts.scss b/app/assets/stylesheets/desktop/queued-posts.scss
+index 1fdf5b3..688e85f 100644
+--- a/app/assets/stylesheets/desktop/queued-posts.scss
++++ b/app/assets/stylesheets/desktop/queued-posts.scss
+@@ -6,17 +6,17 @@
+       width: 70px;
+       float: left;
+     }
+      .post-info  {
+        display: inline-block;
+        float: right;
+        font-size: 0.929em;
+        margin-top: 1px;
+-       span {color: scale-color($primary, $lightness: 50%);}
++       span {color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); }
+      }
+ 
+     .cooked {
+       width: $topic-body-width;
+       float: left;
+ 
+       .wmd-input {
+         width: 98%;
+diff --git a/app/assets/stylesheets/desktop/topic-list.scss b/app/assets/stylesheets/desktop/topic-list.scss
+index 8d3a880..c5391f2 100644
+--- a/app/assets/stylesheets/desktop/topic-list.scss
++++ b/app/assets/stylesheets/desktop/topic-list.scss
+@@ -31,32 +31,32 @@
+ 
+ }
+ 
+ // Base list
+ // --------------------------------------------------
+ 
+ .topic-list {
+   margin: 0 0 10px;
+-  .fa-thumb-tack { color: scale-color($primary, $lightness: 50%); }
+-  .fa-thumb-tack.unpinned { color: scale-color($primary, $lightness: 50%); }
++  .fa-thumb-tack { color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); }
++  .fa-thumb-tack.unpinned { color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); }
+   a.title {color: $primary;}
+-  .fa-bookmark { color: scale-color($primary, $lightness: 50%); }
++  .fa-bookmark { color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); }
+   th,
+   td {
+     padding: 12px 5px;
+     &:first-of-type {
+       padding-left: 10px;
+     }
+     &:last-of-type {
+       padding-right: 10px;
+     }
+   }
+   th {
+-    button i.fa {color: scale-color($primary, $lightness: 50%);}
++    button i.fa {color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); }
+   }
+ 
+   > tbody > tr {
+     &.highlighted {
+         background-color: dark-light-diff($tertiary, $secondary, 85%, -65%);
+     }
+   }
+   button.bulk-select {
+@@ -127,26 +127,26 @@
+   }
+   .posts {
+     width: 65px;
+   }
+ 
+   .post-actions {
+     clear: both;
+     width: auto;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     text-align: left;
+     font-size: 12px;
+     margin-top: 5px;
+     .fa {
+       margin-right: 2px;
+     }
+     a {
+       font-size: 11px;
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+       margin-right: 3px;
+       line-height: 20px;
+     }
+   }
+   .activity {
+     width: 60px;
+     &:lang(zh_CN) {
+       width: 80px;
+@@ -215,21 +215,21 @@
+       color: $primary;
+     }
+   }
+ 
+   .featured-topic {
+     margin: 10px 0 0;
+     /* topic status glyphs */
+     i {
+-      color: scale-color($primary, $lightness: 50%) !important;
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)) !important;
+       font-size: 0.929em;
+     }
+     a.last-posted-at, a.last-posted-at:visited {
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+       font-size: 0.88em;
+     }
+     .badge {
+       font-size: 0.714em;
+       top: -1px;
+     }
+   }
+ }
+diff --git a/app/assets/stylesheets/desktop/topic-post.scss b/app/assets/stylesheets/desktop/topic-post.scss
+index 3e89870..2a97d2d 100644
+--- a/app/assets/stylesheets/desktop/topic-post.scss
++++ b/app/assets/stylesheets/desktop/topic-post.scss
+@@ -26,17 +26,17 @@ h1 .topic-statuses .topic-status i {
+     border-top: none;
+   }
+ 
+   .reply-to-tab {
+     z-index: 400;
+     font-size: 0.929em;
+     float: right;
+     margin: 1px 25px 0 0;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   }
+ 
+   .gutter {
+     .reply-new {
+       .discourse-no-touch & {
+         opacity:0;
+         transition: opacity 0.7s ease-in-out;
+       }
+@@ -73,17 +73,17 @@ nav.post-controls {
+ 
+     .like-count {
+       font-size: inherit;
+       margin-right: -5px;
+     }
+ 
+     padding: 0;
+     .highlight-action {
+-      color: scale-color($primary, $lightness: 60%);
++      color: dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%));
+     }
+     a, button {
+     color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+     margin-right: 2px;
+     display: inline-block;
+   }
+ 
+   a.toggle-likes {
+@@ -105,30 +105,30 @@ nav.post-controls {
+       display: none;
+       overflow: hidden;
+     }
+   }
+ 
+   .show-replies {
+     margin-left: -10px;
+     font-size: inherit;
+-    span.badge-posts {color: scale-color($primary, $lightness: 60%);}
++    span.badge-posts {color: dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%)); }
+     &:hover {
+       background: dark-light-diff($primary, $secondary, 90%, -65%);
+       span.badge-posts {color: $primary;}
+     }
+     i {
+       margin-left: 5px;
+       font-size: 90%;
+     }
+   }
+ 
+   button.create {
+     margin-right: 0;
+-    color: scale-color($primary, $lightness: 20%);
++    color: dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%));
+     margin-left: 10px;
+   }
+ 
+   .create i {
+     margin-right: 5px;
+   }
+ 
+   button {
+@@ -270,33 +270,33 @@ nav.post-controls {
+     margin-left: 56px;
+     width: 701px;
+   }
+   &.top.topic-body {
+     padding-left: 0;
+     padding-right: 0;
+   }
+ 
+-  .post-date { color: scale-color($primary, $lightness: 60%); }
++  .post-date { color: dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%)); }
+   .fa-arrow-up, .fa-arrow-down { margin-left: 5px; }
+   .reply:first-of-type .row { border-top: none; }
+ 
+   .topic-meta-data {
+     position: relative;
+   }
+   .topic-meta-data h5 {
+     position: absolute;
+     z-index: 1;
+     font-size: 0.929em;
+     a {
+       font-weight: bold;
+-      color: scale-color($primary, $lightness: 30%);
++      color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+     }
+   }
+-  .arrow {color: scale-color($primary, $lightness: 60%);}
++  .arrow {color: dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%)); }
+ }
+ 
+ .post-action {
+   .relative-date {
+     margin-left: 5px;
+   }
+   .avatar { margin-right: 2px; }
+ }
+@@ -313,38 +313,38 @@ a.star {
+   border-top: none; // would cause double top border
+ 
+   section {
+     border-top: 1px solid dark-light-diff($primary, $secondary, 90%, -65%);
+   }
+ 
+   h3 {
+     margin-bottom: 4px;
+-    color: scale-color($primary, $lightness: 20%);
++    color: dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%));
+     line-height: 23px;
+     font-weight: normal;
+     font-size: 1em;
+   }
+ 
+   h4 {
+     margin: 1px 0 2px 0;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     font-weight: normal;
+     font-size: 0.857em;
+     line-height: 15px;
+   }
+ 
+   ul {
+     margin: 0;
+     list-style: none;
+   }
+ 
+   span.domain {
+     font-size: 0.714em;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   }
+ 
+   .avatars {
+     > div {
+       float: left;
+       position: relative;
+       margin: 3px 0;
+     }
+@@ -374,17 +374,17 @@ a.star {
+         border-right: 0;
+       }
+       &:nth-child(3) { text-align:center; }
+     }
+     a, .number {
+       line-height: 20px;
+     }
+     .number, i {
+-      color: scale-color($primary, $lightness: 20%);
++      color: dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%));
+       font-size: 130%;
+     }
+     .avatar  a {
+       float: left;
+     }
+   }
+   .avatars,
+   .links,
+@@ -408,17 +408,17 @@ a.star {
+     padding:1px;
+   }
+ 
+   .buttons {
+     float: right;
+     .btn {
+       border: 0;
+       padding: 0 23px;
+-      color: scale-color($primary, $lightness: 60%);
++      color: dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%));
+       background: dark-light-diff($primary, $secondary, 97%, -75%);
+       border-left: 1px solid dark-light-diff($primary, $secondary, 90%, -65%);
+       border-top: 1px solid dark-light-diff($primary, $secondary, 90%, -65%);
+       &:hover {
+         color: $primary;
+         background: dark-light-diff($primary, $secondary, 90%, -80%);
+       }
+ 
+@@ -888,18 +888,18 @@ $topic-avatar-width: 45px;
+       z-index: 490;
+       top: 8px;
+       width: 800px;
+       height: 100px;
+       background-color: $secondary;
+ 
+       button {
+         margin-left: 8px;
+-        background-color: scale-color($primary, $lightness: 70%);
+-        border: 1px solid scale-color($primary, $lightness: 60%);
++        background-color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
++        border: 1px solid dark-light-choose(scale-color($primary, $lightness: 60%), scale-color($secondary, $lightness: 40%));
+         color: $primary;
+       }
+     }
+   }
+ }
+ 
+ a.attachment:before {
+   display: inline-block;
+@@ -933,34 +933,34 @@ a.attachment:before {
+     height: 0;
+  }
+ 
+  .post-info  {
+    display: inline-block;
+    float: right;
+    font-size: 0.929em;
+    margin-top: 1px;
+-   a {color: scale-color($primary, $lightness: 50%);}
++   a {color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); }
+  }
+ 
+ }
+ 
+ .who-liked {
+   margin-top: 20px;
+   margin-bottom: 0px;
+   width: 100%;
+   text-align: right;
+ }
+ 
+ span.highlighted {
+   background-color: dark-light-diff($tertiary, $secondary, 85%, -65%);
+ }
+ 
+ .username.new-user a {
+-  color: scale-color($primary, $lightness: 70%);
++  color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+ }
+ 
+ .read-state {
+   color: scale-color($tertiary, $lightness: 50%);
+   position: absolute;
+   right: -2px;
+   top: 13px;
+   font-size: 0.571em;
+diff --git a/app/assets/stylesheets/desktop/topic.scss b/app/assets/stylesheets/desktop/topic.scss
+index fbec592..11553f5 100644
+--- a/app/assets/stylesheets/desktop/topic.scss
++++ b/app/assets/stylesheets/desktop/topic.scss
+@@ -53,25 +53,25 @@
+     margin-bottom: 2px;
+   }
+   .private-message-glyph { display: none; }
+ 
+ 
+ }
+ 
+ .private-message-glyph {
+-  color: scale-color($primary, $lightness: 75%);
++  color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+   float: left;
+   margin: 0 5px 0 0;
+ }
+ .private_message #topic-title .private-message-glyph { display: inline; }
+ 
+ a.reply-new {
+   margin-top: 3px;
+-  color: scale-color($primary, $lightness: 50%);
++  color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   i {
+     margin-right: 3px;
+     background: $secondary;
+     padding: 1.5px 3px;
+     border-radius: 20px;
+     transition: all linear .15s;
+     margin-left: -20px;
+   }
+diff --git a/app/assets/stylesheets/desktop/upload.scss b/app/assets/stylesheets/desktop/upload.scss
+index 431130b..5dc9fe6 100644
+--- a/app/assets/stylesheets/desktop/upload.scss
++++ b/app/assets/stylesheets/desktop/upload.scss
+@@ -12,17 +12,17 @@
+         width: 90%;
+         margin: 0 0 5px 0;
+       }
+       input[type="file"] {
+         font-size: 1em;
+         line-height: 18px;
+       }
+       .description, .hint {
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+       }
+       .hint {
+         font-style: italic;
+         margin: 5px 0 0 0;
+       }
+     }
+   }
+   .radios:last-child {
+diff --git a/app/assets/stylesheets/desktop/user.scss b/app/assets/stylesheets/desktop/user.scss
+index 2f5af26..5637f8a 100644
+--- a/app/assets/stylesheets/desktop/user.scss
++++ b/app/assets/stylesheets/desktop/user.scss
+@@ -51,17 +51,17 @@
+     display: none;
+   }
+ 
+   .static {
+     color: $primary;
+     display: inline-block;
+   }
+   .instructions {
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     margin-left: 160px;
+     margin-top: 5px;
+     margin-bottom: 10px;
+     font-size: 80%;
+     line-height: 1.4em;
+   }
+   .avatar {
+     margin-left: 3px;
+@@ -165,17 +165,17 @@
+     table {
+       width: 100%;
+       margin-top: 10px;
+ 
+       th {
+         text-align: left;
+         border-bottom: 3px solid dark-light-diff($primary, $secondary, 90%, -60%);
+         padding: 0 0 10px 0;
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+         font-weight: normal;
+       }
+ 
+       td {
+         padding: 10px 0 10px 0;
+         border-bottom: 1px solid dark-light-diff($primary, $secondary, 90%, -60%);
+       }
+     }
+@@ -506,30 +506,30 @@
+       }
+       .time {
+         display: inline-block;
+         margin-left: 10px;
+         float: none;
+       }
+       // common/base/header.scss
+       .fa, .icon {
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+         font-size: 1.714em;
+       }
+     }
+     .group-member-info {
+       .name {
+         display: inline-block;
+         margin-top: 5px;
+-        color: scale-color($primary, $lightness: 30%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+       }
+       .title {
+         display: inline-block;
+         margin-top: 5px;
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+       }
+     }
+   }
+ 
+   .staff-counters {
+     text-align: left;
+     background: $primary;
+     color: $secondary;
+@@ -595,17 +595,17 @@
+     .controls {
+       label {
+         width: auto;
+         text-align: left;
+         font-weight: normal;
+         float: auto;
+       }
+       p {
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+         margin-top: 5px;
+         margin-bottom: 10px;
+         font-size: 80%;
+         line-height: 1.4em;
+       }
+     }
+     clear: both;
+     margin-bottom: 10px;
+diff --git a/app/assets/stylesheets/embed.css.scss b/app/assets/stylesheets/embed.css.scss
+index d7193d5..40eab28 100644
+--- a/app/assets/stylesheets/embed.css.scss
++++ b/app/assets/stylesheets/embed.css.scss
+@@ -81,17 +81,17 @@ article.post {
+   a {
+     color: #5c5c5c
+   }
+   a.staff {
+     background-color: #ffffc2;
+   }
+ 
+   a.new-user {
+-    color: scale-color($primary, $lightness: 70%);
++    color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+   }
+ 
+   span.title {
+     font-weight: normal;
+     color: #999;
+   }
+ }
+ 
+diff --git a/app/assets/stylesheets/mobile/compose.scss b/app/assets/stylesheets/mobile/compose.scss
+index 30725c4..c850e80 100644
+--- a/app/assets/stylesheets/mobile/compose.scss
++++ b/app/assets/stylesheets/mobile/compose.scss
+@@ -28,32 +28,32 @@ display: none !important; // can be removed if inline JS CSS is removed from com
+     margin-right: 8px;
+   }
+   #file-uploading {
+     left: 51%;
+     font-size: 0.857em;
+     color: scale-color($secondary, $lightness: 50%);
+   }
+   #draft-status {
+-    color: scale-color($primary, $lightness: 75%);
++    color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+   }
+   transition: height 0.4s ease;
+   width: 100%;
+   z-index: 1039;
+   height: 0;
+   background-color: dark-light-diff($primary, $secondary, 90%, -60%);
+   bottom: 0;
+   font-size: 1em;
+   position: fixed;
+   .toggler {
+     width: 15px;
+     right: 1px;
+     position: absolute;
+     font-size: 1.071em;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     padding: 0 10px 5px 10px;
+     &:before {
+       font-family: "FontAwesome";
+       content: "\f078";
+     }
+   }
+   a.cancel {
+     padding-left: 7px;
+@@ -160,21 +160,21 @@ display: none !important; // can be removed if inline JS CSS is removed from com
+       #edit-reason {
+         margin: 0;
+         padding: 2px;
+       }
+     }
+     #reply-title {
+       margin-right: 10px;
+       &:disabled {
+-        background-color: scale-color($primary, $lightness: 75%);
++        background-color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+       }
+     }
+     .wmd-input:disabled {
+-      background-color: scale-color($primary, $lightness: 75%);
++      background-color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+     }
+     .wmd-input {
+       color: darken($primary, 40%);
+     }
+     .wmd-input {
+       bottom: 35px;
+     }
+     .submit-panel {
+diff --git a/app/assets/stylesheets/mobile/login.scss b/app/assets/stylesheets/mobile/login.scss
+index 6093849..790d848 100644
+--- a/app/assets/stylesheets/mobile/login.scss
++++ b/app/assets/stylesheets/mobile/login.scss
+@@ -9,17 +9,17 @@
+   button {
+     margin: 0 0 5px 0;
+   }
+   display: inline-block;
+ }
+ 
+ #login-form {
+   a {
+-    color: scale-color($primary, $lightness: 35%);
++    color: dark-light-choose(scale-color($primary, $lightness: 35%), scale-color($secondary, $lightness: 65%));
+   }
+   label { float: left; display: block; }
+   textarea, input, select {font-size: 1.143em; clear: left; margin-top: 0; }
+   td { padding: 4px; }
+ }
+ 
+ a#new-account-link { white-space:nowrap; }
+ 
+@@ -37,17 +37,17 @@ a#forgot-password-link {clear: left; float: left; }
+   input[type=text], input[type=email], input[type=password] {
+     display: inline-block;
+     margin-bottom: 5px;
+     margin-top: 10px;
+   }
+ 
+   tr.instructions {
+     label {
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     }
+   }
+ 
+   tr.input {
+     td.label {
+       padding-right: 5px;
+     }
+   }
+diff --git a/app/assets/stylesheets/mobile/modal.scss b/app/assets/stylesheets/mobile/modal.scss
+index e54ab17..3111b60 100644
+--- a/app/assets/stylesheets/mobile/modal.scss
++++ b/app/assets/stylesheets/mobile/modal.scss
+@@ -94,17 +94,17 @@
+ }
+ 
+ .flag-modal {
+   max-height: 450px;
+ }
+ 
+ .custom-message-length {
+   margin: -10px 0 10px 20px;
+-  color: scale-color($primary, $lightness: 70%);
++  color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));
+   font-size: 85%;
+ }
+ 
+ .flag-message {
+   margin-left: 20px;
+   width: 95% !important;
+ }
+ 
+diff --git a/app/assets/stylesheets/mobile/topic-list.scss b/app/assets/stylesheets/mobile/topic-list.scss
+index 47c6937..6c8c770 100644
+--- a/app/assets/stylesheets/mobile/topic-list.scss
++++ b/app/assets/stylesheets/mobile/topic-list.scss
+@@ -67,17 +67,17 @@
+     &.highlighted {
+       background-color: scale-color($tertiary, $lightness: 85%);
+     }
+   }
+ 
+   th,
+   td {
+     padding: 7px 0;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   }
+ 
+   a.title {color: $primary;}
+ 
+   .badge-notification {
+     position: relative;
+     top: -1px;
+       i {color: $secondary;}
+@@ -87,17 +87,17 @@
+     margin-top: 8px;
+     .category, .num, .last-poster {
+       float: left;
+     }
+     .category a {
+       max-width: 160px;
+     }
+     .num .fa {
+-      color: scale-color($primary, $lightness: 50%);
++      color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     }
+   }
+ 
+   .num.posts {
+     font-weight: bold;
+   }
+ 
+   .age {
+@@ -138,17 +138,17 @@ tr.category-topic-link {
+   }
+   .latest {
+     @include mobile-portrait { width: 150px; }
+     @include mobile-landscape { width: 270px; }
+     @include tablet-landscape { width: 450px; }
+     .featured-topic {
+       margin: 8px 0;
+       a.last-posted-at, a.last-posted-at:visited {
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+       }
+     }
+   }
+   .stats {
+     @include not-tablet-landscape { display: none; }
+     @include tablet-landscape { min-width: 80px; }
+   }
+ }
+@@ -201,17 +201,17 @@ tr.category-topic-link {
+     float: left;
+   }
+   > footer {
+     border-top: 0;
+     padding: 7px 10px;
+     figure {
+       float: left;
+       margin: 3px 7px 0 0;
+-      color: scale-color($primary, $lightness: 10%);
++      color: dark-light-choose(scale-color($primary, $lightness: 10%), scale-color($secondary, $lightness: 90%));
+       font-weight: bold;
+       font-size: 0.857em;
+     }
+     figcaption {
+       display: inline;
+       font-weight: normal;
+     }
+     .btn {
+diff --git a/app/assets/stylesheets/mobile/topic-post.scss b/app/assets/stylesheets/mobile/topic-post.scss
+index fbde092..d69d3b1 100644
+--- a/app/assets/stylesheets/mobile/topic-post.scss
++++ b/app/assets/stylesheets/mobile/topic-post.scss
+@@ -41,17 +41,17 @@ button.like-count {
+ }
+ 
+ button {
+   border: none;
+   font-size: 1.214em;
+   padding: 8px 10px;
+   vertical-align: top;
+   background: transparent;
+-  color: scale-color($primary, $lightness: 50%);
++  color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   float: left;
+   &.hidden {
+     display: none;
+   }
+   &.admin {
+     position: relative;
+   }
+   &.expand-post {
+@@ -143,17 +143,17 @@ button {
+ .post-action .relative-date {
+   margin-left: 5px;
+ }
+ 
+ a.reply-to-tab {
+   position: absolute;
+   z-index: 400;
+   right: 80px;
+-  color: scale-color($primary, $lightness: 50%);
++  color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   span { display: none; }
+ }
+ 
+ a.star {
+   display: inline-block;
+   float: left;
+   font-size: 1.3em;
+ }
+@@ -174,25 +174,25 @@ a.star {
+ 
+   section {
+     border-top: 1px solid dark-light-diff($primary, $secondary, 90%, -65%);
+   }
+ 
+   h3 {
+     margin-bottom: 4px;
+     margin-top: 0;
+-    color: scale-color($primary, $lightness: 20%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     line-height: 23px;
+     font-weight: normal;
+     font-size: 1em;
+   }
+ 
+   h4 {
+     margin: 0 0 3px 0;
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     font-weight: normal;
+     font-size: 0.857em;
+     line-height: 15px;
+   }
+ 
+   .user {
+     float: left;
+     margin-right: 10px;
+@@ -239,17 +239,17 @@ a.star {
+       &:last-of-type {
+         border-right: 0;
+       }
+     }
+     a, .number {
+       line-height: 20px;
+     }
+     .number, i {
+-      color: scale-color($primary, $lightness: 20%);
++      color: dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%));
+       font-size: 110%;
+     }
+ 
+     .avatar + a {
+       float: left;
+     }
+   }
+   li.avatars {
+@@ -262,17 +262,17 @@ a.star {
+     overflow: auto;
+   }
+ 
+   .participants { // PMs //
+     .user {float: left; margin: 0 10px 10px 0;}
+   }
+ 
+   .domain {
+-    color: scale-color($primary, $lightness: 75%);
++    color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%));
+   }
+ 
+   .topic-links {
+     .badge-notification {
+       margin: 1px 5px 2px 0;
+     }
+   }
+ 
+@@ -434,17 +434,17 @@ button.select-post {
+ 
+ 
+ 
+ .deleted {
+   background-color: dark-light-diff(rgba($danger,.7), $secondary, 50%, -60%);
+ }
+ 
+ #show-topic-admin {
+-  color: scale-color($primary, $lightness: 50%);
++  color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   right: 0;
+   border-right: 0;
+   padding-right: 4px;
+   padding-left: 5px;
+ }
+ 
+ .deleted-user-avatar {
+   font-size: 2.571em;
+@@ -490,17 +490,17 @@ span.highlighted {
+     float: right;
+     font-size: 0.929em;
+     margin: 4px 10px 0 0;
+     .edits { margin-right: 5px; }
+   }
+ }
+ 
+ .username.new-user a {
+-  color: scale-color($primary, $lightness: 70%);
++  color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));
+ }
+ 
+ .user-title {
+   color: #aaa;
+   padding-top: 2px;
+   overflow: hidden;
+   margin-right: 50px;
+ }
+diff --git a/app/assets/stylesheets/mobile/topic.scss b/app/assets/stylesheets/mobile/topic.scss
+index 9bc347b..9e0d6e2 100644
+--- a/app/assets/stylesheets/mobile/topic.scss
++++ b/app/assets/stylesheets/mobile/topic.scss
+@@ -26,17 +26,17 @@
+     }
+   }
+   .title-category-wrapper {
+     margin-top:5px;
+   }
+   .private-message-glyph { display: none; }
+ }
+ 
+-.private-message-glyph { color: scale-color($primary, $lightness: 75%); }
++.private-message-glyph { color: dark-light-choose(scale-color($primary, $lightness: 75%), scale-color($secondary, $lightness: 25%)); }
+ .private_message #topic-title .private-message-glyph { display: inline; }
+ 
+ 
+ /* both blocks that appear under the standard post control buttons */
+ .notification-options, .pinned-options {
+   clear: both;
+   float: left;
+   margin-top: 0px;
+diff --git a/app/assets/stylesheets/mobile/upload.scss b/app/assets/stylesheets/mobile/upload.scss
+index d639f20..0079799 100644
+--- a/app/assets/stylesheets/mobile/upload.scss
++++ b/app/assets/stylesheets/mobile/upload.scss
+@@ -2,15 +2,15 @@
+   input[type="text"]{
+     width: 520px;
+   }
+   input[type="file"] {
+     font-size: 1em;
+     line-height: 18px;
+   }
+   .description {
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+   }
+ }
+ 
+ .uploaded-image-preview {
+   height: 150px;
+ }
+diff --git a/app/assets/stylesheets/mobile/user.scss b/app/assets/stylesheets/mobile/user.scss
+index 03ec7fb..f64f925 100644
+--- a/app/assets/stylesheets/mobile/user.scss
++++ b/app/assets/stylesheets/mobile/user.scss
+@@ -107,17 +107,17 @@
+     display: none;
+   }
+ 
+   .static {
+     color: $primary;
+     display: inline-block;
+   }
+   .instructions {
+-    color: scale-color($primary, $lightness: 50%);
++    color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+     margin-top: 5px;
+     margin-bottom: 10px;
+     font-size: 80%;
+     line-height: 1.4em;
+   }
+   .avatar {
+     margin-left: 3px;
+   }
+@@ -481,31 +481,31 @@
+       }
+       .time {
+         display: inline-block;
+         margin-left: 10px;
+         float: none;
+       }
+       // common/base/header.scss
+       .fa, .icon {
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+         font-size: 1.714em;
+       }
+     }
+     .group-member-info {
+       .name {
+         display: inline-block;
+         margin-top: 5px;
+-        color: scale-color($primary, $lightness: 30%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+         vertical-align: inherit;
+       }
+       .title {
+         display: inline-block;
+         margin-top: 5px;
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+       }
+     }
+   }
+ 
+   .staff-counters {
+     text-align: left;
+     background: $primary;
+     padding: 7px 0;
+@@ -572,17 +572,17 @@
+     .controls {
+       label {
+         width: auto;
+         text-align: left;
+         font-weight: normal;
+         float: auto;
+       }
+       p {
+-        color: scale-color($primary, $lightness: 50%);
++        color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));
+         margin-top: 5px;
+         margin-bottom: 10px;
+         font-size: 80%;
+         line-height: 1.4em;
+       }
+     }
+     clear: both;
+     margin-bottom: 10px;

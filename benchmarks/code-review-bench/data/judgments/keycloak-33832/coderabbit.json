@@ -1,0 +1,10 @@
+{
+  "slug": "keycloak-33832",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.95,
+     "reasoning": "Directly matches golden: two ASN1Encoder instances are created and written to but their results are discarded, matching golden's dead-code description exactly."}
+  ]
+}

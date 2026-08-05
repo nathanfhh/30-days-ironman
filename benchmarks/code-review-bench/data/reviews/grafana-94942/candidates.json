@@ -1,0 +1,37 @@
+{
+  "slug": "grafana-94942",
+  "issues": [
+    {"text": "enableSqlExpressions returns false on every path; the feature flag's read result is computed and then discarded.",
+      "zh": "enableSqlExpressions 每條路徑都回傳 false，feature flag 的讀取結果被計算後丟棄",
+      "finding_id": "F-001",
+      "severity": "Critical"},
+    {"text": "The disable guard is only placed on the new parser path; the default path is blocked only by the stub failing, and the resulting error message wrongly blames the user's SQL.",
+      "zh": "停用的 guard 只放在新 parser 路徑上，預設路徑靠 stub 失敗擋下來，錯誤訊息會怪到使用者的 SQL 上",
+      "finding_id": "F-002",
+      "severity": "Suggestion"},
+    {"text": "No test pins down the new 'SQL expressions are disabled' behavior.",
+      "zh": "沒有任何測試釘住「SQL expression 已停用」這個新行為",
+      "finding_id": "F-003",
+      "severity": "Suggestion"},
+    {"text": "enableSqlExpressions: the name promises something the function doesn't do, and it uses an inverted boolean name.",
+      "zh": "enableSqlExpressions：名稱承諾的事情與行為不符，且用了反向命名的布林",
+      "finding_id": "F-004",
+      "severity": "Nit"},
+    {"text": "(*DB).TablesList has no call sites and shares its name with the package-level sql.TablesList.",
+      "zh": "(*DB).TablesList 沒有任何呼叫點，而且與同 package 的 sql.TablesList 同名",
+      "finding_id": "F-005",
+      "severity": "Nit"},
+    {"text": "DuckDB has been removed from the tree, but comments, the feature toggle description, and frontend copy still mention DuckDB.",
+      "zh": "DuckDB 已經從 tree 裡移除，但註解、feature toggle 說明與前端文案還在講 DuckDB",
+      "finding_id": "F-006",
+      "severity": "Nit"}
+  ],
+  "open_questions": [
+    {"text": "Is this disablement permanent, or will it be re-enabled via the sqlExpressions toggle once a replacement SQL engine lands?",
+      "zh": "這次停用是永久的，還是等替代的 SQL 引擎落地後由 sqlExpressions toggle 重新開啟？"},
+    {"text": "After the backend is disabled, the frontend and query type schema still advertise the 'sql' expression type — is that acceptable?",
+      "zh": "後端停用之後，前端與 query type schema 仍然對外宣告 sql 這個 expression type，可以接受嗎？"},
+    {"text": "Is the trimming of go.mod / go.sum / go.work.sum actually clean when a real build is run?",
+      "zh": "go.mod / go.sum / go.work.sum 的裁剪在真正 build 的時候是乾淨的嗎？"}
+  ]
+}

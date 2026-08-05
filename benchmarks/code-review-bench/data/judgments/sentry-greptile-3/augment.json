@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-greptile-3",
+  "tool": "augment",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both say the upsampling eligibility check uses the outer dataset/query instead of the actual scoped_dataset being executed, so upsampling can be skipped/misapplied for dashboard-split subqueries."
+    }
+  ]
+}

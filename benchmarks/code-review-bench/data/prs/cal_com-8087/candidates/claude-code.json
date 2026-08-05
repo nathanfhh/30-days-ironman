@@ -1,0 +1,8 @@
+[
+  "Using forEach(async ...) in 4 locations causes returned promises to be silently discarded since Array.prototype.forEach does not await async callbacks",
+  "Calendar/video deletions are fire-and-forget with no error handling because the surrounding try/catch cannot catch errors from async forEach callbacks",
+  "sendRequestRescheduleEmail executes before deletions complete due to forEach not awaiting async callbacks",
+  "In handleCancelBooking.ts:458, apiDeletes.push(deletedEvent) pushes the resolved value rather than a Promise, so Promise.all(prismaPromises.concat(apiDeletes)) will not wait for the deletions",
+  "Errors from async forEach callbacks become unhandled promise rejections which can crash Node.js process",
+  "Should use for...of or Promise.all with .map() instead of forEach with async callbacks (pattern already correctly applied at handleCancelBooking.ts:474-486 but missed in other locations)"
+]

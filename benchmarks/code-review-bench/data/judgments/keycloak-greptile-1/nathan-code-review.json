@@ -1,0 +1,12 @@
+{
+  "slug": "keycloak-greptile-1",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 13,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.85,
+     "reasoning": "Both identify isConditionalPasskeysEnabled() still being called without the UserModel parameter after the no-arg overload was removed, breaking compilation."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both identify that requiring user != null in isConditionalPasskeysEnabled() means conditional passkey UI is never set up on the initial (user-less) login page."}
+  ]
+}

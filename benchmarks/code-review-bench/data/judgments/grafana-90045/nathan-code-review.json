@@ -1,0 +1,26 @@
+{
+  "slug": "grafana-90045",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 15,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 8,
+      "confidence": 0.95,
+      "reasoning": "Both identify that Delete builds the context from the unenriched d.Log instead of the log enriched with name/kind/method, so those fields are lost."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 3,
+      "confidence": 0.9,
+      "reasoning": "Both identify the swapped duration histograms — storage failures recorded via the legacy recorder and vice versa."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 1,
+      "confidence": 0.8,
+      "reasoning": "Both identify that the object name is passed where the kind label/options.Kind belongs in the metrics call."
+    }
+  ]
+}

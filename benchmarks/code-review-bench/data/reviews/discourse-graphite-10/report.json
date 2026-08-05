@@ -1,0 +1,545 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T09:46:20+00:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "discourse-graphite-10 @ d1c69189 「FEATURE: Can edit category/host relationships for embedding」（base 913c3d6f，diff 由 benchmark 預先產生）",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "本次變更是論壇 embedding 的允許網域清單與後台管理介面（app/models/embeddable_host.rb、app/controllers/admin/embeddable_hosts_controller.rb），資料只有 host 字串與 category_id，沒有任何病歷、身分、就診或檢驗欄位，也沒有 HL7 / FHIR / DICOM 載體。PHI 不在範圍內。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "已檢視 commit message、變更的 i18n 字串、程式碼註解與新增的 spec 描述，沒有任何指向審查流程本身的文字（要求略過檢查、宣稱已核可、改寫結論等）。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "把 embeddable_hosts / embed_category 兩個 site setting 換成 embeddable_hosts 資料表，是為了讓每個來源網域各自對應一個分類——這是舊的單一 site setting 結構上做不到的事，方向合理。"
+    },
+    "right_mr": {
+      "verdict": "doubt",
+      "note": "這個 MR 夾帶了兩塊與 embedding 功能沒有直接關係的變更：(1) app/assets/javascripts/discourse/models/store.js.es6 的 _hydrateEmbedded 擴充成支援 `*_ids` 陣列，連帶改動 test/javascripts/helpers/create-pretender.js.es6 與 test/javascripts/models/store-test.js.es6——這是整個前端 store 的通用行為變更，會影響所有 rest_serializer 的模型，值得獨立的審查注意力（本次也確實在其中找到 F-012）；(2) spec/models/topic_spec.rb 兩處與本功能無關的未使用區域變數清理。第 (1) 項是 EmbeddingSerializer 用 `has_many ... embed: :ids` 的前提，說得過去；第 (2) 項純屬噪音。建議至少把 store 的變更抽成獨立 commit，讓 reviewer 與日後 bisect 能分開看。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "舊的 SiteSetting.allows_embeddable_host? 已經帶著明顯的殘留死碼（app/models/site_setting.rb 舊版本裡有兩段互相覆蓋的 detect），現在一併移除是合適的時機。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "trivy 未安裝（不在 PATH 上），本次未執行相依套件弱點、設定錯誤與憑證外洩掃描。這代表 Gemfile.lock / package.json 的供應鏈風險本次沒有涵蓋。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "opengrep 未安裝，且 NCR_OPENGREP_RULES 指向的 Semgrep 規則目錄不存在（兩者皆缺）。本次沒有任何 SAST 掃描，JavaScript 與 Ruby 的注入類規則完全未跑。"
+    },
+    {
+      "tool": "ruff",
+      "status": "skipped",
+      "exit_code": 0,
+      "artifact": "",
+      "counts": {
+        "in_diff": 0,
+        "outside_diff": 0
+      },
+      "skipped_reason": "ruff 0.15.8 可用、對整個 repo 執行後 exit 0 且 0 筆診斷，但這份 diff 全部是 Ruby / JavaScript(ES6) / Handlebars / YAML，沒有任何 .py 檔。ruff 對本次變更的涵蓋率是 0，因此記為 skipped——這個 exit 0 不得被解讀為「靜態檢查通過」。"
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "ty 未安裝（不在 PATH 上）。即使安裝也無用武之地——本次沒有 Python 檔。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "oxlint 未安裝（不在 PATH 上）。這是本次唯一可能涵蓋 .js.es6 變更的 linter，缺席代表 app/assets/javascripts/ 與 test/javascripts/ 的六個檔案沒有任何自動化檢查。"
+    },
+    {
+      "tool": "rubocop / eslint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本次執行環境沒有安裝任何 gem、沒有 node_modules、也沒有網路，rubocop 與 eslint 皆無法執行；這兩個工具本來也不在本 skill 的工具集內。結論是：這份 diff 的 Ruby 與 JavaScript 變更沒有經過任何 linter，下列所有發現都來自人工閱讀原始碼。"
+    },
+    {
+      "tool": "rspec / qunit",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "沒有安裝 gem、沒有資料庫、沒有網路，spec/ 與 test/javascripts/ 都無法實際執行。所有關於測試行為的判斷（F-008、F-009、F-012）都是靜態閱讀推導，不是跑出來的結果。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "codegraph 未安裝，Phase 3 的呼叫路徑列舉改用 grep 逐一確認（SiteSetting.embeddable_hosts / embed_category / allows_embeddable_host? 的全 repo 搜尋、TopicEmbed.import 與 TopicRetriever 的呼叫端列舉）。"
+    },
+    {
+      "tool": "ncr-fresh-eyes（subagent）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本次執行環境沒有可用的 Agent／Task 工具，無法派出任何 subagent，因此 Phase 3 第 1 步的 fresh-eyes 沒有執行。依 SKILL.md 的規定，這一步不得由主 agent 自行模擬（主 agent 此時已讀過 review-dimensions.md，看到的東西已經被 skill 的分類框架塑形過），所以是如實略過而非以其他方式補上。代價是：這份報告缺少一次未受 skill 框架影響的獨立閱讀，屬於框架盲點的問題本次沒有第二雙眼睛把關。"
+    },
+    {
+      "tool": "ncr-quality-check（subagent）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "同上，無法派出 subagent，Phase 4 第 3 步的報告品質複查沒有執行。作為替代，本次改以機器可驗證的方式自查：report_model.py validate 通過、render_report.py 的本機路徑檢查通過，且報告中每一個 file:line 引用都回到 checkout 逐一核對過行號。但「四條規則」中屬於判斷性的部分（語氣、修復方向是否夠具體）沒有經過第二方複查。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "fail",
+      "note": "EmbeddableHost 的 before_validation 直接對可能為 nil 的 self.host 呼叫 sub!（F-006）；host 格式的正規表示式沒有任何說明且內含數個站不住腳的限制（F-014）；rest.js.es6 的 type.replace('_', '-') 只換第一個底線（F-013）。"
+    },
+    "B": {
+      "verdict": "fail",
+      "note": "存檔路徑整條是死碼（F-009）；兩個 fabricator 檔案內容互換（F-010）；兩個新 controller 重複宣告父類別已有的 before_filter、兩個新 serializer 重複定義 attributes 已經產生的 reader（F-016）；殘留未使用的 i18n key 與 spec let（F-018）。"
+    },
+    "C": {
+      "verdict": "fail",
+      "note": "EmbeddableHost.host_allowed? 是決定 X-Frame-Options: ALLOWALL 是否放行的允許清單，比對邏輯只把 SQL 端轉小寫、Ruby 端沒有（F-004）。已確認這個不對稱是 fail-closed 方向為主，沒有繞過允許清單的路徑：app/controllers/embed_controller.rb:61 與 lib/topic_retriever.rb:16 是僅有的兩個呼叫端，兩者都在 raise 之前呼叫。沒有 SQL 字串拼接進入使用者可控路徑（migration 內的拼接屬 F-002）。"
+    },
+    "D": {
+      "verdict": "fail",
+      "note": "update / destroy 沒有處理查無記錄（F-005）；resources :embeddable_hosts 沒有 only:（F-017）。另外說明一件刻意不列為發現的事：新路由 admin/embeddable_hosts 使用底線而非破折號，形式上牴觸本團隊「URL 一律破折號」的硬性慣例，但這個 repo 的既有後台路由全部是底線（admin/site_customizations、admin/user_fields、admin/site_texts），單獨把這一條改成破折號反而會製造不一致；在這份 codebase 裡它是符合在地慣例的寫法，因此不判為 Critical。"
+    },
+    "E": {
+      "verdict": "pass",
+      "note": "分層合理：比對邏輯放在 EmbeddableHost model、controller 只做取值與 render、serializer 走 ApplicationSerializer 既有的 embed :ids, include: true 慣例。EmbeddingController 用 OpenStruct 包一個沒有實體資料表的偽資源，與 app/controllers/admin/badges_controller.rb:13 的既有做法一致，不是新發明的模式。已確認 has_many ... embed: :ids 的 sideload 行為與 app/serializers/similar_topic_serializer.rb:3 同型，該路徑在既有功能上運作正常。"
+    },
+    "F": {
+      "verdict": "fail",
+      "note": "db/migrate/20150818190757_create_embeddable_hosts.rb 有兩個獨立的阻斷級問題（F-001 遷移會中止、F-002 遷移後資料語意錯誤且原始資料已刪除）；新資料表沒有 host 的唯一性約束（F-015）。create_table 的 force: true 已比對過 db/migrate/ 既有慣例（20150323234856、20150325190959 等多支皆如此），屬本 repo 常態，不列為發現。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "兩支新 controller spec 只斷言繼承關係、沒有任何行為覆蓋（F-007）；topic_spec 的「is false if embeddable_host is blank」在改動後已經完全沒有測到 embeddable host（F-008）；store-test 的 find embedded 要求 id 2 卻斷言 id 1 的資料（F-011）。"
+    },
+    "H": {
+      "verdict": "fail",
+      "note": "本次幾乎整份 diff 都是非 Python 檔，這個維度用來審 Ember / Handlebars 前端與 YAML。store.js.es6 的複數分支對未解析到的 id 沒有過濾、對 null 沒有防護（F-012）；embeddable-host component 的 delete 分支沒有錯誤處理，與同一檔案裡 save 分支使用 popupAjaxError 的做法不一致（F-019）。"
+    },
+    "I": {
+      "verdict": "fail",
+      "note": "TopicEmbed.import 的分類來源從全域 SiteSetting.embed_category 換成「比對到的 EmbeddableHost 的 category_id」，但 Jobs::PollFeed 這個呼叫端並不保證來源網域有對應的 EmbeddableHost 記錄（F-003）。另外已逐一確認被移除的兩個 site setting 沒有殘留呼叫端：全 repo grep `SiteSetting.embeddable_hosts`、`SiteSetting.embed_category`、`allows_embeddable_host` 之後，程式碼中只剩 config/locales/server.*.yml 各語系的說明字串（那是 Transifex 翻譯流程管理的檔案，不視為未清理），app/controllers/embed_controller.rb:61 與 lib/topic_retriever.rb:16 兩個呼叫端都已改成 EmbeddableHost.host_allowed?。這條軸線是乾淨的。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "F",
+      "severity": "Critical",
+      "status": "new",
+      "title": "Migration 對 execute() 的查詢結果沒有取空保護，在絕大多數既有站台上會直接中止",
+      "evidence": [
+        "db/migrate/20150818190757_create_embeddable_hosts.rb:9-11",
+        "db/migrate/20150818190757_create_embeddable_hosts.rb:14-16",
+        "db/migrate/20150818190757_create_embeddable_hosts.rb:18-19",
+        "db/fixtures/001_categories.rb:21-23",
+        "db/migrate/20140715190552_remove_uncategorized_parents.rb:3-6"
+      ],
+      "rationale": "第 9-11 行 `execute(\"SELECT c.id FROM categories AS c INNER JOIN site_settings AS s ON s.value = c.name WHERE s.name = 'embed_category'\")[0]['id']` 假設這個查詢必定回傳至少一列。實際上 site_settings 資料表只存放「被改過」的設定——config/site_settings.yml 裡 embed_category 的預設值是空字串，任何從來沒有設定過 embed_category 的站台在這張表裡根本沒有這一列，join 結果為 0 列，`[0]` 取不到東西，migration 在這裡就爆掉，`rake db:migrate` 整個中止。即使站台設過 embed_category，只要它存的值與任何 categories.name 對不上（分類被改名、被刪除、或大小寫不同），結果一樣是 0 列。第 14-16 行的 fallback `execute(\"SELECT value FROM site_settings WHERE name = 'uncategorized_category_id'\")[0]['value']` 有同樣的問題，而它本身正是為了處理前一個查詢取不到值的情況。\n\n這個結論已經找過反證：(1) 第 18-19 行的第三個查詢作者確實有加保護（`if embeddable_hosts && embeddable_hosts.cmd_tuples > 0`），所以問題不是「這種保護在此不必要」，而是前兩個查詢漏了；(2) 同一個 db/migrate/ 目錄裡處理同一張 site_settings 表的既有 migration 全都明確做空值檢查——20140715190552_remove_uncategorized_parents.rb:4 寫的是 `if uncat && uncat[0] && uncat[0]['value']`，20140711193923_remove_email_in_address_setting.rb 用 `.first` 之後逐一 `if` 判斷。這個 codebase 自己就把「這個查詢可能沒有結果」當成常態。",
+      "fix": "比照 20140715190552_remove_uncategorized_parents.rb 的寫法，把兩個查詢都改成先取結果再判斷，並讓「查不到」有一條明確的預設路徑，例如：\n\n```ruby\ndef fetch_setting(name)\n  r = execute(\"SELECT value FROM site_settings WHERE name = '#{name}'\")\n  r && r.first && r.first['value']\nend\n\ncat = execute(\"SELECT c.id FROM categories AS c\n               INNER JOIN site_settings AS s ON s.value = c.name\n               WHERE s.name = 'embed_category'\")\ncategory_id = (cat && cat.first) ? cat.first['id'].to_i : 0\n\nif category_id == 0\n  category_id = fetch_setting('uncategorized_category_id').to_i\nend\n\n# 連 uncategorized 都取不到就不要硬寫入：category_id 在 schema 上是 null: false\nreturn if category_id == 0\n```\n\n另外建議把 create_table 與資料搬移拆成 `up` / `down` 兩個方法（見 F-002），並在本機用一個「從未設定過 embed_category」的資料庫實際跑一次 `rake db:migrate` 驗證。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-002",
+      "dimension": "F",
+      "severity": "Critical",
+      "status": "new",
+      "title": "Migration 以原始 SQL 寫入舊設定值，跳過了 model 的正規化，遷移後的 host 永遠比對不到；而來源資料在同一支 migration 裡被刪除，無法回頭",
+      "evidence": [
+        "db/migrate/20150818190757_create_embeddable_hosts.rb:22-27",
+        "db/migrate/20150818190757_create_embeddable_hosts.rb:31",
+        "app/models/embeddable_host.rb:5-8",
+        "app/models/embeddable_host.rb:10-18",
+        "spec/controllers/embed_controller_spec.rb:69-70"
+      ],
+      "rationale": "第 25 行 `INSERT INTO embeddable_hosts (host, ...) VALUES ('#{h}', ...)` 把舊 site setting 每一行原封不動寫進去。`h` 來自舊的 embeddable_hosts 設定值，而舊值是允許帶 scheme 的——舊的 SiteSetting.allows_embeddable_host? 明確做過 `h.sub(/^https?\\:\\/\\//, '')`，這份 MR 自己的 spec/controllers/embed_controller_spec.rb:69-70 也還在用 `Fabricate(:embeddable_host, host: 'http://discourse.org')`、`host: 'https://example.com/1234'` 當測試輸入。新的 EmbeddableHost 是靠 before_validation（app/models/embeddable_host.rb:5-8）把 scheme 與路徑剝掉的，但原始 SQL INSERT 完全繞過 ActiveRecord，那個 callback 不會執行。結果是遷移後資料庫裡存著 `http://discourse.org`，而 EmbeddableHost.record_for_host 拿 `URI(host).host` 去比對得到的是 `discourse.org`，`lower(host) = 'discourse.org'` 永遠對不到這一列——舊設定裡帶 scheme 的網域，升級後 embedding 直接停止運作，而且不會有任何錯誤訊息，只會回一個 InvalidAccess。\n\n更嚴重的是第 31 行 `DELETE FROM site_settings WHERE name IN ('embeddable_hosts', 'embed_category')` 在同一支 migration 裡把來源資料刪掉，且整支用的是 `change` 方法、內含 execute，實務上不可逆。一旦跑過，管理員既無法從畫面看出哪些網域壞掉，也拿不回原始清單重跑。\n\n同一行還有第二個問題：`'#{h}'` 是字串直接內插，沒有經過 quote。舊的 embeddable_hosts 是自由文字的 host_list，值裡只要有一個單引號，這個 INSERT 就會是語法錯誤，migration 一樣中止。\n\n反證已找過：這份 diff 裡沒有任何其他地方對遷移進來的資料做後續正規化（沒有補跑的 rake task、沒有第二支 migration、EmbeddableHost 也沒有 after_find 之類的補救），而 record_for_host 的比對確實是完整字串相等，不是 suffix 或 LIKE。",
+      "fix": "在 INSERT 之前先用與 model 相同的規則正規化，並改用參數化寫入；同時把 site_settings 的刪除與資料搬移分開，讓遷移可以安全重跑：\n\n```ruby\nrecords.each do |h|\n  host = h.strip.sub(/\\Ahttps?:\\/\\//, '').sub(/\\/.*\\z/, '').downcase\n  next if host.blank?\n  execute ActiveRecord::Base.send(:sanitize_sql_array, [\n    \"INSERT INTO embeddable_hosts (host, category_id, created_at, updated_at)\n     VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)\", host, category_id])\nend\n```\n\n（`val.split(\"\\n\")` 也請一併 strip，舊值若是 CRLF 換行會留下 `\\r`。）另外建議把 `def change` 改成 `def up` / `def down`，`down` 至少把 site_settings 的兩列寫回去，或退一步——先不要在這支 migration 刪除舊設定，等下一個版本確認遷移無誤後再以獨立 migration 清除（expand → migrate → contract）。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-003",
+      "dimension": "I",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "RSS/Atom feed polling 匯入的主題會靜默掉進 uncategorized，舊的 embed_category 沒有替代路徑",
+      "evidence": [
+        "app/models/topic_embed.rb:36-43",
+        "app/jobs/scheduled/poll_feed.rb:37-39",
+        "db/migrate/20150818190757_create_embeddable_hosts.rb:31",
+        "config/site_settings.yml:761-763"
+      ],
+      "rationale": "TopicEmbed.import 的分類來源改成 `category: eh.try(:category_id)`，`eh` 是 `EmbeddableHost.record_for_host(url)`。這對 embed_controller 那條路徑成立——那裡有 host_allowed? 把關，能走到就代表有對應記錄。但 TopicEmbed.import 還有第二個呼叫端：Jobs::PollFeed（app/jobs/scheduled/poll_feed.rb:39）。這個 job 的觸發條件只有 `SiteSetting.feed_polling_enabled?` 與 `feed_polling_url.present?`（同檔 :16-17），完全沒有經過 EmbeddableHost。也就是說，只開了 feed polling、沒有在後台登記對應網域的站台，`eh` 會是 nil，`category` 傳入 nil，TopicCreator.find_category 拿不到分類（lib/topic_creator.rb:110-120），主題全部落到 uncategorized——而這正是舊 embed_category 設定原本負責的事，且該設定已被 config/site_settings.yml 移除、被 migration 從資料庫刪掉。\n\n這不是「可能」而是必然：已逐一列舉 TopicEmbed.import 的所有呼叫端（app/jobs/scheduled/poll_feed.rb:39、app/models/topic_embed.rb:107 的 import_remote、script/import_scripts/disqus.rb:22），其中只有經由 lib/topic_retriever.rb:16 → import_remote 的那條路徑有 host_allowed? 保護，PollFeed 與 disqus 匯入腳本都沒有。",
+      "fix": "兩個方向擇一：(1) 讓 feed polling 也走 EmbeddableHost——在 PollFeed 匯入前先確認 feed_polling_url 的網域已登記，沒有就記 log 並跳過，讓管理員看得到；(2) 在 EmbeddableHost 找不到時給一個明確的 fallback，例如 `category: eh.try(:category_id) || SiteSetting.uncategorized_category_id`，並在 db/migrate 裡把舊 embed_category 的值搬成「feed_polling_url 對應網域的 EmbeddableHost 記錄」而不是直接丟棄。無論選哪一個，spec/models/topic_embed_spec.rb 需要補一個「沒有對應 EmbeddableHost 時分類為何」的案例——目前該檔只在 :14 加了 `let!(:embeddable_host)`，等於只測了有記錄的那條路。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-004",
+      "dimension": "C",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "record_for_host 只把 SQL 端轉小寫，Ruby 端沒有，允許清單比對大小寫不一致",
+      "evidence": [
+        "app/models/embeddable_host.rb:10-18",
+        "app/models/embeddable_host.rb:2",
+        "app/controllers/embed_controller.rb:61",
+        "lib/topic_retriever.rb:16"
+      ],
+      "rationale": "`where(\"lower(host) = ?\", host)` 把資料庫欄位轉小寫，但參數 `host` 來自 `URI(host).host`，Ruby 的 URI 不會把主機名稱轉小寫（實測 `URI(\"http://EvilTrout.com/x\").host` 回傳 `\"EvilTrout.com\"`）。同時 model 的格式驗證帶 `/i`（:2），所以後台可以存進大小寫混雜的 host，before_validation 也沒有 downcase。結果是比對在兩個方向都不對稱：資料庫存 `EvilTrout.com`、referer 是 `eviltrout.com` 會通過；資料庫存 `eviltrout.com`、referer 是 `EvilTrout.com` 反而不通過。DNS 主機名稱本來就不分大小寫，這裡的行為取決於管理員當初怎麼打字。\n\n呼叫端已列舉完整：app/controllers/embed_controller.rb:61（ensure_embeddable，決定要不要送出 X-Frame-Options: ALLOWALL）與 lib/topic_retriever.rb:16（invalid_host?），兩者都在 raise 之前呼叫，所以失效方向以 fail-closed 為主，不構成繞過允許清單的漏洞；但一個「看起來已經處理大小寫」卻只處理一半的比對，日後很容易被當成已經安全而不再檢查。",
+      "fix": "兩端都正規化。查詢端：`where(\"lower(host) = ?\", host.downcase)`；寫入端在 before_validation 裡一併 `self.host = self.host.downcase`（順手解掉未來加唯一索引時大小寫重複的問題，見 F-015）。並在 spec/models/embeddable_host_spec.rb 補一個大小寫案例：`expect(EmbeddableHost.host_allowed?('http://EvilTrout.com')).to eq(true)`。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-005",
+      "dimension": "D",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "update / destroy 查無記錄時直接對 nil 操作，回 500 而不是 404",
+      "evidence": [
+        "app/controllers/admin/embeddable_hosts_controller.rb:9-18",
+        "app/controllers/admin/permalinks_controller.rb:3",
+        "app/controllers/admin/permalinks_controller.rb:31-33"
+      ],
+      "rationale": "`EmbeddableHost.where(id: params[:id]).first` 在查無記錄時回 nil。`update` 把 nil 交給 `save_host`，第一行 `host.host = ...` 就是 NoMethodError；`destroy` 的 `host.destroy` 同樣是 NoMethodError。兩者都會變成 500。這在前端有實際觸發路徑：admin-embedding.js.es6 的 deleteHost 只是把物件從陣列移除，兩個分頁同時開著、其中一個刪掉某筆之後，另一個分頁再按刪除或儲存就會打到已不存在的 id。\n\n同一個目錄下的 Admin::PermalinksController 用的是 `before_filter :fetch_permalink, only: [:destroy]` 搭配 `Permalink.find(params[:id])`——`find` 找不到會丟 ActiveRecord::RecordNotFound，Rails 的 rescue_responses 會把它對應成 404。這個 codebase 已經有現成的正確做法。",
+      "fix": "比照 Admin::PermalinksController：\n\n```ruby\nbefore_filter :fetch_host, only: [:update, :destroy]\n\ndef update\n  save_host(@host)\nend\n\ndef destroy\n  @host.destroy\n  render json: success_json\nend\n\nprotected\n\ndef fetch_host\n  @host = EmbeddableHost.find(params[:id])\nend\n```",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-006",
+      "dimension": "A",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "before_validation 對可能為 nil 的 host 直接呼叫 sub!，缺欄位時得到 500 而不是驗證錯誤",
+      "evidence": [
+        "app/models/embeddable_host.rb:5-8",
+        "app/controllers/admin/embeddable_hosts_controller.rb:22-23"
+      ],
+      "rationale": "`self.host.sub!(...)` 在 host 為 nil 時是 NoMethodError（已用 ruby 實測確認 `nil.sub!` 拋 NoMethodError）。before_validation 跑在 validates_format_of 之前，所以格式驗證救不了這個情況——validation 根本還沒開始就先炸了。觸發路徑很直接：Admin::EmbeddableHostsController#save_host 的 `host.host = params[:embeddable_host][:host]`，只要請求沒帶 host 欄位（前端 buffered.host 是空的、或有人直接打 API），這裡就寫入 nil，接著 `host.save` 進 before_validation 崩掉，管理員看到的是 500 而不是「host 不能為空」。\n\n次要問題：`sub!` 是原地修改，會連帶改動呼叫端傳進來的字串物件。目前沒有觀察到共用字串的呼叫端，所以不單獨列為發現，但改成非破壞版本可以一併避免。",
+      "fix": "加上 presence 驗證並改用非破壞式寫法：\n\n```ruby\nvalidates_presence_of :host\n\nbefore_validation do\n  self.host = self.host.sub(/\\Ahttps?:\\/\\//, '').sub(/\\/.*\\z/, '').downcase if self.host.present?\nend\n```\n\n（`.downcase` 一併解掉 F-004。）spec/models/embeddable_host_spec.rb 補一個 `EmbeddableHost.new(host: nil)` 不應該拋例外、而應該 `be_invalid` 的案例。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-007",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "兩支新的 controller spec 只斷言繼承關係，沒有任何行為覆蓋",
+      "evidence": [
+        "spec/controllers/admin/embeddable_hosts_controller_spec.rb:5-7",
+        "spec/controllers/admin/embedding_controller_spec.rb:5-7",
+        "app/controllers/admin/embeddable_hosts_controller.rb:22-30"
+      ],
+      "rationale": "兩支 spec 唯一的斷言是 `expect(Admin::XxxController < Admin::AdminController).to eq(true)`——這只檢查了 class 定義的第一行，不會因為 create / update / destroy 的任何行為改變而失敗。實際上這兩支 controller 有數條值得測的分支：save_host 的 `host.category_id = SiteSetting.uncategorized_category_id if host.category_id.blank?` 這個預設值路徑、驗證失敗時的 render_json_error、以及 F-005 提到的查無記錄路徑。以現在的覆蓋率，F-005 與 F-006 兩個問題都不會被測試抓到。",
+      "fix": "至少補三個案例：\n\n```ruby\ncontext '.create' do\n  it 'defaults to uncategorized when no category given' do\n    xhr :post, :create, embeddable_host: { host: 'example.com' }\n    expect(response).to be_success\n    expect(EmbeddableHost.last.category_id).to eq(SiteSetting.uncategorized_category_id)\n  end\n\n  it 'rejects an invalid host' do\n    xhr :post, :create, embeddable_host: { host: 'not a host' }\n    expect(response).not_to be_success\n  end\nend\n\ncontext '.destroy' do\n  it 'returns not found for an unknown id' do\n    xhr :delete, :destroy, id: 0\n    expect(response.status).to eq(404)\n  end\nend\n```\n\nAdmin::EmbeddingController 則應該斷言 show 回傳的 payload 真的含有 embeddable_hosts 而不只是 200。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-008",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "expandable_first_post? 少了一個條件，而宣稱測試它的案例已經測不到任何東西",
+      "evidence": [
+        "app/models/topic.rb:868-870",
+        "spec/models/topic_spec.rb:1403-1405",
+        "config/site_settings.yml:769"
+      ],
+      "rationale": "`expandable_first_post?` 從 `SiteSetting.embeddable_hosts.present? && SiteSetting.embed_truncate? && has_topic_embed?` 變成只剩後兩項，沒有換成 `EmbeddableHost.exists?` 或任何等價條件。這個放寬本身可能是刻意的（有 topic_embed 記錄就代表當初嵌入成功過），但 diff 裡沒有任何說明。\n\n真正的問題在測試：spec/models/topic_spec.rb 保留了「is false if embeddable_host is blank」這個案例，但把原本設定 SiteSetting 的那一行刪掉了，剩下的內容是一個沒有任何 setup 的 `expect(topic.expandable_first_post?).to eq(false)`。它現在會通過，但通過的原因是 `embed_truncate` 預設是 false（config/site_settings.yml:769），而不是「沒有 embeddable host」——這個測試名稱描述的行為完全沒有被驗證，把 EmbeddableHost 全刪掉或全加回去，結果都一樣。這正是「斷言不驗證實際行為」的典型。",
+      "fix": "先確認少掉的條件是不是刻意的。若是刻意放寬，把這個測試改名成反映真實斷言的名字（例如 \"is false when embed_truncate is disabled\"）；若不是，補回條件並讓測試真的能分辨：\n\n```ruby\nit \"is false if there are no embeddable hosts\" do\n  SiteSetting.embed_truncate = true\n  topic.stubs(:has_topic_embed?).returns(true)\n  expect(topic.expandable_first_post?).to eq(false)   # 沒有 Fabricate(:embeddable_host)\nend\n```\n\n這樣寫的話，條件被拿掉時測試會紅。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-009",
+      "dimension": "B",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "整條「儲存」路徑是死碼：前端 action、後端 update、路由三者都沒有人用",
+      "evidence": [
+        "app/assets/javascripts/admin/controllers/admin-embedding.js.es6:5-7",
+        "app/controllers/admin/embedding_controller.rb:9-11",
+        "config/routes.rb:139",
+        "app/assets/javascripts/admin/templates/embedding.hbs:1-15"
+      ],
+      "rationale": "admin-embedding.js.es6 定義了 `saveChanges()`，但 embedding.hbs 從頭到尾只有 `addHost` 一個 action，沒有任何按鈕觸發 saveChanges——已全 repo grep `saveChanges`，其他命中都在 admin-customize-css-html-show、admin-site-text-edit、site-customization 這些無關的檔案。連帶地，`Admin::EmbeddingController#update` 只是把 @embedding 原樣再 render 一次、什麼也沒改，而 `put \"customize/embedding\"` 這條路由的唯一用途就是餵給那個永遠不會被呼叫的 action。\n\n實際的儲存是由 embeddable-host component 逐列 `host.save(props)` 完成的（app/assets/javascripts/admin/components/embeddable-host.js.es6:37），所以這三個東西不是「還沒接上」，是設計上就不需要。留著的成本是：下一個人看到 update 端點會以為那裡應該要有邏輯。",
+      "fix": "把 admin-embedding.js.es6 的 saveChanges action、Admin::EmbeddingController#update、以及 config/routes.rb:139 的 `put \"customize/embedding\"` 一併移除；EmbeddingController 只留 show。若之後確定要做整頁儲存，屆時再連同 UI 一起加回來。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-010",
+      "dimension": "B",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "兩個 fabricator 檔案的內容互換了：category_fabricator.rb 裡是 embeddable_host，embeddable_host_fabricator.rb 裡是全部的 category",
+      "evidence": [
+        "spec/fabricators/category_fabricator.rb:1-3",
+        "spec/fabricators/embeddable_host_fabricator.rb:1-27",
+        "spec/spec_helper.rb:32"
+      ],
+      "rationale": "diff 顯示 spec/fabricators/category_fabricator.rb 的全部內容（Fabricator(:category)、:diff_category、:happy_category、:private_category）被刪掉換成 `Fabricator(:embeddable_host)`，而新檔 spec/fabricators/embeddable_host_fabricator.rb 收的正是那四個 category fabricator。兩個檔名與內容剛好對調，看起來是新增檔案時方向搞反了。\n\n測試不會因此失敗——spec/spec_helper.rb:32 是 `Dir[Rails.root.join(\"spec/fabricators/*.rb\")].each {|f| require f}`，整個目錄無差別載入，Fabrication 又是延遲解析關聯，所以載入順序不影響 `Fabricator(:embeddable_host)` 裡的 `category`。也因為不會失敗，這個錯位會一直留著：下一個要改 category fabricator 的人會先打開 category_fabricator.rb，然後找不到東西。",
+      "fix": "把兩個檔案的內容換回來——category_fabricator.rb 放四個 category fabricator，embeddable_host_fabricator.rb 放 `Fabricator(:embeddable_host)`。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-011",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "store-test 的 'find embedded' 要求 id 2 卻斷言 id 1 的資料，只因為 pretender 忽略 id",
+      "evidence": [
+        "test/javascripts/models/store-test.js.es6:109-120",
+        "test/javascripts/helpers/create-pretender.js.es6:226-229",
+        "test/javascripts/helpers/create-pretender.js.es6:42-44"
+      ],
+      "rationale": "測試改成 `store.find('fruit', 2)`，接著斷言 `fruitCols.length === 2`、`fruitCols[0].id === 1`、`fruitCols[1].id === 2`。但 fixture 裡 id 2 是 banana，它的 `color_ids` 是 `[3]`——長度 1、內容是 3。這些斷言之所以會通過，是因為 pretender 的 `this.get('/fruits/:id')` handler 忽略了 request 參數、無條件回傳 `fruits[0]`（apple，color_ids `[1,2]`）。\n\n也就是說這個測試同時驗證不到兩件事：它沒有驗證 store 有把正確的 id 傳給後端，也沒有驗證 hydration 對「不同筆記錄有不同 color_ids」的處理。任何人日後把 `find('fruit', 2)` 改成別的 id，測試都還是綠的。",
+      "fix": "讓 pretender 真的依 id 查詢，測試的斷言才有意義：\n\n```javascript\nthis.get('/fruits/:id', function(request) {\n  const fruit = fruits.findBy('id', parseInt(request.params.id));\n  return response({ __rest_serializer: \"1\", fruit, farmers, colors });\n});\n```\n\n然後把測試改回 `store.find('fruit', 1)`（斷言 colors 為 [1,2]），或維持 id 2 但把斷言改成 `length === 1`、`id === 3`。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-012",
+      "dimension": "H",
+      "severity": "Nit",
+      "status": "new",
+      "title": "_hydrateEmbedded 的複數分支對解析失敗與 null 的處理與單數分支不一致",
+      "evidence": [
+        "app/assets/javascripts/discourse/models/store.js.es6:196-201",
+        "app/assets/javascripts/discourse/models/store.js.es6:202-208",
+        "app/assets/javascripts/discourse/models/store.js.es6:157-187"
+      ],
+      "rationale": "三個小地方：(1) `obj[self.pluralize(subType)] = hydrated || []`，但 `Array.prototype.map` 一定回傳陣列，`|| []` 這個分支永遠走不到，會讓讀的人誤以為 map 可能回傳 falsy；(2) 單數分支有 `if (hydrated)` 把找不到的情況擋掉、原本的 `*_id` 也保留不刪，複數分支則無條件把整個陣列指派上去並 `delete obj[k]`——而 _lookupSubType 在 root 裡找不到對應 collection 時回傳的是 undefined（:157-187 最後沒有 return），所以只要 sideload 缺了任何一筆，陣列裡就會夾著 undefined，而原始 id 也已經被刪掉、無從補救。以 embedding 這個畫面來說，`{{#each embedding.embeddable_hosts}}` 會拿 undefined 去 render 一列 embeddable-host component；(3) `obj[k].map(...)` 在後端送 `\"color_ids\": null` 時會直接拋例外。",
+      "fix": "讓複數分支與單數分支對齊：\n\n```javascript\nif (m[2]) {\n  const ids = obj[k] || [];\n  const hydrated = ids.map(id => self._lookupSubType(subType, type, id, root))\n                      .filter(x => x);\n  if (hydrated.length === ids.length) {\n    obj[self.pluralize(subType)] = hydrated;\n    delete obj[k];\n  }\n}\n```\n\n（若刻意允許部分解析失敗，至少 filter 掉 undefined 並保留原本的 `*_ids` 以便除錯。）",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-013",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "type.replace('_', '-') 只會替換第一個底線",
+      "evidence": [
+        "app/assets/javascripts/discourse/adapters/rest.js.es6:22",
+        "app/assets/javascripts/discourse/adapters/rest.js.es6:1"
+      ],
+      "rationale": "JavaScript 的 `String.prototype.replace` 傳字串當第一個參數時只換第一個出現的位置。`embeddable_host` 只有一個底線所以現在是對的，但這個轉換是為了比對 ADMIN_MODELS 這個會持續成長的清單——之後只要有人加一個兩段底線的模型（例如 `embeddable_host_group`），basePath 就會回傳 `/` 而不是 `/admin/`，失敗方式是 404 而不是拋錯，很難聯想到這一行。同一個檔案下面 pathFor 用的是 `Ember.String.underscore`，方向上也不一致。",
+      "fix": "改用 Ember 內建的轉換：`if (ADMIN_MODELS.indexOf(Ember.String.dasherize(type)) !== -1)`，或至少讓替換帶上全域旗標，把所有底線都換掉。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-014",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "host 格式驗證的正規表示式沒有說明，且內含幾項站不住腳的限制",
+      "evidence": [
+        "app/models/embeddable_host.rb:2",
+        "app/models/embeddable_host.rb:5-8"
+      ],
+      "rationale": "`/\\A[a-z0-9]+([\\-\\.]{1}[a-z0-9]+)*\\.[a-z]{2,5}(:[0-9]{1,5})?(\\/.*)?\\Z/i` 是一整行沒有註解的密集表示式，實測結果有幾個問題：(1) `[a-z]{2,5}` 把 TLD 限制在 5 字元以內，`example.software`、`a.b.museum` 都會被拒絕，管理員只會看到「格式錯誤」而不知道為什麼；(2) `localhost` 無法通過，開發環境要嵌入本機服務時會卡住（embed_controller.rb:60 對 development 有另一條繞道，但後台仍然存不進去）;(3) 結尾用 `\\Z` 而不是 `\\z`，允許字串尾端多一個換行；(4) `(\\/.*)?` 這段路徑分支是死的——before_validation 已經先把路徑剝掉了，驗證時不可能還有 `/`；同理 `(:[0-9]{1,5})?` 允許帶 port，但 record_for_host 比對的 `URI(...).host` 不含 port，存了帶 port 的 host 就永遠比對不到。",
+      "fix": "把 TLD 長度限制放寬（`[a-z]{2,}`）、`\\Z` 改成 `\\z`、拿掉已經不可能出現的 `(\\/.*)?`，並在上方加一行註解說明「host 在 before_validation 已經去除 scheme 與路徑，這裡只驗證剩下的網域部分」。port 那段要嘛拿掉，要嘛讓 record_for_host 一併比對 `uri.port`。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-015",
+      "dimension": "F",
+      "severity": "Nit",
+      "status": "new",
+      "title": "embeddable_hosts.host 沒有唯一性約束，後台可以重複新增同一個網域",
+      "evidence": [
+        "db/migrate/20150818190757_create_embeddable_hosts.rb:3-7",
+        "app/models/embeddable_host.rb:1-4",
+        "app/models/embeddable_host.rb:10-18"
+      ],
+      "rationale": "migration 只建了 host / category_id 兩個欄位，沒有索引也沒有唯一約束；model 也只有格式驗證。後台把同一個網域加兩次會成功，而 record_for_host 用的是 `.first`——實際生效的是哪一筆取決於資料庫回傳順序，管理員在畫面上會看到兩列不同分類的相同網域，卻無從得知哪一列在運作。這個問題在遷移後更容易發生：F-002 提到 migration 直接寫入原始設定值，`eviltrout.com` 與 `http://eviltrout.com` 會變成兩筆不同的列。",
+      "fix": "在 migration 加 `add_index :embeddable_hosts, :host, unique: true`（配合 F-004 / F-006 統一存小寫），並在 model 加 `validates_uniqueness_of :host`，讓後台重複新增時得到明確的錯誤訊息而不是靜默成功。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-016",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "重複宣告：父類別已有的 before_filter、以及 attributes 已經產生的 serializer reader",
+      "evidence": [
+        "app/controllers/admin/embeddable_hosts_controller.rb:3",
+        "app/controllers/admin/embedding_controller.rb:3",
+        "app/controllers/admin/admin_controller.rb:3-4",
+        "app/serializers/embeddable_host_serializer.rb:1-15",
+        "app/serializers/embedding_serializer.rb:1-8"
+      ],
+      "rationale": "兩支新 controller 都寫了 `before_filter :ensure_logged_in, :ensure_staff`，但它們繼承的 Admin::AdminController 第 3-4 行已經宣告了同樣兩個 filter，所以每個請求會各跑兩次。已比對 app/controllers/admin/ 底下所有其他 controller，沒有任何一支重複宣告，這兩支是唯一的例外。\n\n同樣的情況在 serializer：EmbeddableHostSerializer 寫了 `attributes :id, :host, :category_id`，接著又逐一定義 `def id; object.id; end`、`def host; object.host; end`、`def category_id; object.category_id; end`——這三個方法與 AMS 由 attributes 自動產生的 reader 行為完全相同，是純粹的重複。EmbeddingSerializer 的 `def id` 同理。",
+      "fix": "controller 那兩行 before_filter 直接刪掉（EmbeddingController 保留 `before_filter :fetch_embedding`）；serializer 只留 `attributes` 宣告，把三個（和一個）同義的方法定義刪掉。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-017",
+      "dimension": "D",
+      "severity": "Nit",
+      "status": "new",
+      "title": "resources :embeddable_hosts 開出了四條沒有對應 action 的路由",
+      "evidence": [
+        "config/routes.rb:153",
+        "app/controllers/admin/embeddable_hosts_controller.rb:5-17",
+        "config/routes.rb:160"
+      ],
+      "rationale": "`resources :embeddable_hosts` 產生 index / show / new / edit / create / update / destroy 七條路由，但 controller 只實作了 create / update / destroy 三個 action。剩下四條會走到 AbstractController::ActionNotFound（Rails 會對應成 404，所以不是安全問題，也不是 500），但路由表上多了四條不存在的端點，`rake routes` 的輸出與實際能用的 API 對不上。同一個檔案第 160 行的 `resources :dashboard, only: [:index]` 就是這個 repo 的既有做法。",
+      "fix": "改成 `resources :embeddable_hosts, only: [:create, :update, :destroy], constraints: AdminConstraint.new`。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-018",
+      "dimension": "B",
+      "severity": "Nit",
+      "status": "new",
+      "title": "殘留未使用的 i18n key 與 spec let",
+      "evidence": [
+        "config/locales/client.en.yml:2494-2500",
+        "app/assets/javascripts/admin/templates/components/embeddable-host.hbs:1-19",
+        "spec/controllers/embed_controller_spec.rb:5"
+      ],
+      "rationale": "新增的 `admin.embedding.edit: \"edit\"` 沒有任何地方使用——embeddable-host.hbs 的編輯按鈕是 `{{d-button icon=\"pencil\" action=\"edit\"}}`，只有圖示沒有 label，這個 key 沒有出現在任何 template 或 js 檔。另外 spec/controllers/embed_controller_spec.rb:5 的 `let(:host) { \"eviltrout.com\" }` 在這份 diff 把所有 `SiteSetting.embeddable_hosts = host` 都刪掉之後已經沒有任何引用（該檔其餘 `host` 出現的位置都是 describe 字串或 `Fabricate` 的具名參數）。",
+      "fix": "刪掉 client.en.yml 的 `edit` key（或把它接到 d-button 的 title 上），並刪掉 embed_controller_spec.rb:5 那行 let。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-019",
+      "dimension": "H",
+      "severity": "Nit",
+      "status": "new",
+      "title": "component 的 delete 分支沒有錯誤處理，與同檔 save 分支的做法不一致",
+      "evidence": [
+        "app/assets/javascripts/admin/components/embeddable-host.js.es6:43-51",
+        "app/assets/javascripts/admin/components/embeddable-host.js.es6:30-41"
+      ],
+      "rationale": "同一個檔案裡，save 的 promise 鏈接了 `.catch(popupAjaxError)`，刪除的 `this.get('host').destroyRecord().then(...)` 卻沒有任何 catch。後端刪除失敗時（F-005 提到的查無記錄、或權限/網路問題），`sendAction('deleteHost')` 不會執行，畫面上那一列仍然在、也沒有任何提示，使用者只會覺得按鈕沒反應。另外 `edit()` 讀的是 `host.category.id`，若 sideload 沒有帶回對應 category（見 F-012），categoryId 會是 undefined，儲存時後端會靜默套用 uncategorized，而畫面上的 category-badge 空白——使用者沒有辦法察覺分類被換掉了。",
+      "fix": "把 delete 的 promise 補上與 save 相同的錯誤處理：`.catch(popupAjaxError)`。並在 save 成功後，若 `Discourse.Category.findById(this.get('categoryId'))` 取不到（categoryId 為 null），改用伺服器回傳的 category_id 重新設定，避免畫面與後端狀態不一致。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "F",
+      "question": "既有站台的 embed_category 設定值存的是分類「名稱」還是分類 id？",
+      "context": "migration 第 9-11 行用 `INNER JOIN site_settings AS s ON s.value = c.name` 去對應，等於假設這個設定存的是名稱。但 config/site_settings.yml 舊定義裡 embed_category 只是預設空字串的一般字串設定，沒有型別限制；而消費端 lib/topic_creator.rb:117-120 明確同時支援 `/^\\d+$/` 的 id 與名稱兩種寫法，代表兩種值在實務上都可能存在。如果線上站台存的是 id，這個 join 會 0 列——除了觸發 F-001 的中止之外，就算 F-001 修好、也只會靜默 fallback 到 uncategorized，把管理員原本設定的分類丟掉。這件事無法從這個 repo 判定，取決於實際資料。",
+      "what_would_settle_it": "在一個或多個真實的既有資料庫上跑 `SELECT value FROM site_settings WHERE name = 'embed_category'`，看值是名稱還是數字。若兩種都有，migration 需要同時支援：先試 id，取不到再試名稱。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "H",
+      "question": "新的 admin/customize/embedding 畫面實際上跑得起來嗎？",
+      "context": "這條路徑串了不少新元件：adminEmbedding route 名稱要解析到 admin/templates/embedding.hbs、`store.find('embedding')` 要走到新的 admin/adapters/embedding.js.es6 的 pathFor 覆寫、EmbeddingSerializer 的 `has_many ... embed: :ids` 要 sideload 進 root，前端 _hydrateEmbedded 的新複數分支再把 `embeddable_host_ids` 換成 `embeddable_hosts`。靜態上每一段都對得起來——ApplicationSerializer 已經是 `embed :ids, include: true`，而 app/serializers/similar_topic_serializer.rb:3 用的是同型的寫法且既有功能正常——但本次執行環境沒有安裝任何 gem、沒有 node_modules、沒有網路，rspec 與 qunit 都跑不起來，這條路徑沒有被端到端驗證過，這份 MR 也沒有加任何 acceptance test。",
+      "what_would_settle_it": "在開發環境開啟 admin/customize/embedding 實際新增、編輯、刪除一筆記錄；或補一支 test/javascripts/acceptance/admin-embedding-test.js.es6 走完整流程。"
+    }
+  ],
+  "rereview": null,
+  "conclusion": "Request Changes",
+  "summary": "這份變更把 embedding 的允許網域從單一 site setting 換成 embeddable_hosts 資料表，讓每個來源網域能各自指定分類，方向正確，後端分層與 serializer 的寫法也都貼合這個 repo 的既有慣例（EmbeddingController 用 OpenStruct 包偽資源、has_many embed: :ids 的 sideload，都與既有檔案同型）。舊設定的呼叫端也清乾淨了——全 repo 搜尋之後，SiteSetting.embeddable_hosts 與 embed_category 在程式碼中已無殘留。\n\n擋下這次合併的兩件事都在 db/migrate/20150818190757_create_embeddable_hosts.rb：一是對 `execute(...)` 結果沒有取空保護，在任何沒有設定過 embed_category 的站台（也就是絕大多數）上 `rake db:migrate` 會直接中止——同一支 migration 的第三個查詢作者有加保護，同目錄處理同一張表的既有 migration 也都有，所以這是漏了而不是不需要；二是資料搬移用原始 SQL 直接寫入舊設定值，繞過了 model 剝除 scheme 與路徑的 before_validation，舊值裡帶 `http://` 的網域遷移後永遠比對不到，而來源設定在同一支 migration 裡就被刪掉，遷完之後既看不出壞在哪、也拿不回原始清單。\n\n其餘 Suggestion 集中在三處：TopicEmbed.import 的分類來源改動漏了 Jobs::PollFeed 這個呼叫端（feed 匯入的主題會靜默掉進 uncategorized，而它原本正是 embed_category 負責的事）；controller 對查無記錄與缺欄位都沒有防護，會回 500；以及測試——兩支新 controller spec 只斷言繼承關係，topic_spec 那個宣稱測 embeddable host 的案例改完之後已經測不到任何東西，store-test 則是要求 id 2 卻斷言 id 1 的資料。另外兩個 fabricator 檔案的內容整個對調了，測試不會失敗，但下一個人會找不到 category fabricator。\n\n需要說明本次的掃描涵蓋率：執行環境沒有網路、沒有安裝任何 gem 或 node 相依，trivy / opengrep / oxlint / ty / codegraph 全部缺席，唯一可用的 ruff 是 Python linter 而這份 diff 沒有任何 .py 檔。也就是說這份 diff 的 Ruby 與 JavaScript 沒有經過任何 linter，rspec 與 qunit 也都沒有實際跑過——上面所有發現都來自人工閱讀原始碼與 grep 交叉查證，沒有任何一項是工具跑出來的。\n\n最後一項揭露：本次執行環境沒有可用的 subagent 派送工具，因此 SKILL.md Phase 3 的 ncr-fresh-eyes 與 Phase 4 的 ncr-quality-check 都沒有執行（細節記在「掃描執行狀況」）。這兩步都不適合由主 agent 自行代打——fresh-eyes 的價值就在於它沒有讀過這份 skill 的分類框架，quality-check 的價值在於它不是寫報告的人——所以是如實略過。讀這份報告時請把它當成「一次審查、沒有第二方複核」的結果。"
+}

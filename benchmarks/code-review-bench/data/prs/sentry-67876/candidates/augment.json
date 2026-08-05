@@ -1,0 +1,5 @@
+[
+  "safe_urlopen() and get_user_info() can raise network errors or non-2xx via raise_for_status(), which would 500 the install flow; should catch those exceptions and return the error() page to keep failures user-safe",
+  "OAuth authorize redirect URL is assembled via string interpolation; if redirect_uri or other params contain characters needing escaping, this can produce a malformed URL or unintended query parsing; should use a proper query encoder",
+  "integration.metadata[\"sender\"][\"login\"] assumes the nested keys always exist; if metadata is missing/older/unexpected this will raise and 500 the flow; should treat missing sender/login the same as a mismatch (invalid installation request)"
+]

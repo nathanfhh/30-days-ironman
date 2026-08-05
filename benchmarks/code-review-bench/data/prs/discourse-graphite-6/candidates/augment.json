@@ -1,0 +1,4 @@
+[
+  "In website_name, the logic doesn't cover the case where the instance host is the apex domain (e.g. example.com) but the user website is a subdomain (e.g. www.example.com/user); in that case this branch returns only www.example.com without the path. Subdomains of the instance domain may need to include the path as well.",
+  "The conditional serializer helper is named include_website_name (missing ?) instead of include_website_name? like all other helpers, which means it won't gate serialization as expected and may cause website_name to be emitted unconditionally."
+]

@@ -1,0 +1,5 @@
+[
+  "Authorization logic bug in addGuests.handler.ts:47 - isTeamAdminOrOwner uses && instead of ||, so only team owners pass the check while team admins are incorrectly denied access despite isTeamAdmin already covering both ADMIN and OWNER roles",
+  "sendAddGuestsEmails function does not check eventTypeMetadata.disableStandardEmails, which is inconsistent with other email-sending functions and could result in unwanted emails for event types that have explicitly disabled standard emails",
+  "No tests are included for the new handler or UI components"
+]

@@ -1,0 +1,6 @@
+[
+  "Docstring on line 230 says 'returns a list of DetectorEvaluationResult' but the return type was changed to dict[DetectorGroupKey, DetectorEvaluationResult] - docstring should be updated to match",
+  "MetricAlertDetectorHandler now inherits from StatefulDetectorHandler but implements none of its 4 required abstract methods/properties (counter_names, get_dedupe_value, get_group_key_values, build_occurrence_and_event_data), so Python will raise TypeError on instantiation",
+  "build_mock_occurrence_and_event hardcodes the same id for every call, and IssueOccurrence.__eq__ only compares by id, so all occurrences from this helper compare as equal regardless of fingerprint or group_key, making multi-group test assertions unable to distinguish between occurrences for different groups",
+  "On line 196, the expected occurrence for group_2 is built with value=6 when the data packet has group_2=10 - this only passes because value is never used in occurrence construction"
+]

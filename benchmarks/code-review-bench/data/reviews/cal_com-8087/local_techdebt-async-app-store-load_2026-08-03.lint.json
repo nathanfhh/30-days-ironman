@@ -1,0 +1,20 @@
+{
+  "ruff": {
+    "status": "ok",
+    "exit_code": 0,
+    "skipped_reason": "",
+    "output": []
+  },
+  "ty": {
+    "status": "skipped",
+    "exit_code": null,
+    "skipped_reason": "ty 未安裝（不在 PATH 上）",
+    "output": null
+  },
+  "oxlint": {
+    "status": "skipped",
+    "exit_code": null,
+    "skipped_reason": "oxlint 未安裝（不在 PATH 上）",
+    "output": null
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "slug": "discourse-graphite-4",
+  "tool": "nathan-code-review",
+  "n_golden": 6,
+  "n_candidates": 27,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 10, "confidence": 0.95,
+     "reasoning": "Both flag Kernel#open being called on an unvalidated URL, and the candidate names SSRF explicitly along with the missing scheme validation."},
+    {"golden_index": 1, "candidate_index": 7, "confidence": 0.95,
+     "reasoning": "Both identify the embed.js origin check using substring/indexOf comparison against the Discourse URL, which a merely prefix-matching attacker domain can pass."},
+    {"golden_index": 3, "candidate_index": 14, "confidence": 0.6,
+     "reasoning": "Both object to the same line setting X-Frame-Options: ALLOWALL as the wrong thing to do, though the candidate frames it as a non-standard value rather than as disabled clickjacking protection and never mentions the referer fallback."},
+    {"golden_index": 4, "candidate_index": 11, "confidence": 0.5,
+     "reasoning": "The golden's NoMethodError comes from a nil feed field reaching the string append in import, and this candidate is the only one raising the missing nil guard on remote feed item fields; it does not touch the golden's url-interpolation XSS half."},
+    {"golden_index": 5, "candidate_index": 13, "confidence": 0.9,
+     "reasoning": "Both point at the same `<%- end if %>` in best.html.erb as malformed ERB, disagreeing only on whether it raises immediately or survives by an Erubis quirk."}
+  ]
+}

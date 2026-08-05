@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-greptile-2",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 15,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 8, "confidence": 0.75,
+     "reasoning": "Both say OptimizedCursorPaginator's get_item_key uses the integer-key logic instead of the datetime-appropriate version needed for this endpoint's -datetime ordering, causing failures."}
+  ]
+}

@@ -1,0 +1,11 @@
+[
+  "Switch case declaration in case 413 declares variable maxSizeKB without a block, allowing other cases to erroneously access the declaration - needs to be wrapped in a block for scope safety",
+  "tempfile.size in Ruby won't reflect updated size after OptimizedImage.downsize because Ruby caches the file size - need to reopen or stat the file to get actual new size",
+  "Using the same path for input and output in image processing is risky - if the operation fails mid-write, the original file is lost",
+  "The loop checking tempfile.size may never terminate correctly due to stale cached size",
+  "Line 72 passes wrong size to Upload.create_for because tempfile.size reflects original file size, not downsized size - should use File.size(tempfile.path)",
+  "Duplicate method definition of downsize in OptimizedImage shadows the first version - Ruby does not support method overloading, so the second definition completely shadows the first",
+  "Code calling downsize(from, to, max_width, max_height, opts) will fail because Ruby will try to match the 3-argument signature instead",
+  "Hardcoded max size of 10 MB loses per-type flexibility - previous logic likely resolved max size dynamically based on type (image vs attachment)",
+  "Inline rescue nil swallows all exceptions silently including network errors that might be worth logging"
+]

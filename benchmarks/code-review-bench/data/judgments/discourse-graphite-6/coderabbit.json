@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-6",
+  "tool": "coderabbit",
+  "n_golden": 1,
+  "n_candidates": 1,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Matches the primary half: missing trailing `?` means the predicate is never invoked by ActiveModelSerializers."
+    }
+  ]
+}

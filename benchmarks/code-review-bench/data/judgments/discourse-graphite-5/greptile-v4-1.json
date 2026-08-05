@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-5",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.8,
+      "reasoning": "Matches the float-vs-flexbox half: float on a child of the .small-action flex container is ignored, regressing alignment."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Same issue: -ms-align-items is invalid; -ms-flex-align is the correct property."
+    }
+  ]
+}

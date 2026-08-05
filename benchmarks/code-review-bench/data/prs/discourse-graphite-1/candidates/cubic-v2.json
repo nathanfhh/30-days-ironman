@@ -1,0 +1,5 @@
+[
+  "Second `downsize` definition overrides the width/height version, so existing callers that pass separate max width and height will start raising `ArgumentError`",
+  "Upload validation hardcodes 10 MB and ignores the configured image/attachment size limits from Discourse.SiteSettings",
+  "The new `downsize` overload passes the `dimensions` string directly through to `gifsicle --resize-fit` for animated GIFs, but gifsicle only accepts pixel-based `WxH` geometry and does not support percentage strings, creating inconsistency where downsizing animated GIFs with percentage geometry will fail while static images succeed"
+]

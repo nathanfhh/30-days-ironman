@@ -1,0 +1,5 @@
+[
+  "Django QuerySet does not support negative indexing - queryset[negative:stop] raises AssertionError. This code path will crash at runtime whenever enable_advanced_features=True and cursor.offset < 0. The comment claiming Django handles this automatically is incorrect.",
+  "math.floor and math.ceil will raise TypeError if the key attribute is a datetime. Unlike DateTimePaginator, this method does not convert datetime values to a numeric representation before applying floor/ceil.",
+  "OptimizedCursorPaginator cannot paginate the datetime sort key in organization_auditlogs.py - optimized requests will raise when it tries to floor/ceil an AuditLogEntry.datetime value. Should use DateTimePaginator instead."
+]

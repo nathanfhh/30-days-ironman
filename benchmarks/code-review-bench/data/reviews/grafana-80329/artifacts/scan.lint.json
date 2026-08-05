@@ -1,0 +1,201 @@
+{
+  "ruff": {
+    "status": "ok",
+    "exit_code": 1,
+    "skipped_reason": "",
+    "output": [
+      {
+        "cell": null,
+        "code": "F403",
+        "end_location": {
+          "column": 20,
+          "row": 32
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 1,
+          "row": 32
+        },
+        "message": "`from utils import *` used; unable to detect undefined names",
+        "noqa_row": 32,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 16,
+          "row": 117
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 5,
+          "row": 117
+        },
+        "message": "`extract_zip` may be undefined, or defined from star imports",
+        "noqa_row": 117,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 25,
+          "row": 168
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 17,
+          "row": 168
+        },
+        "message": "`get_nssm` may be undefined, or defined from star imports",
+        "noqa_row": 168,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 16,
+          "row": 171
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 5,
+          "row": 171
+        },
+        "message": "`extract_zip` may be undefined, or defined from star imports",
+        "noqa_row": 171,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 26,
+          "row": 174
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 5,
+          "row": 174
+        },
+        "message": "`generate_firewall_wxs` may be undefined, or defined from star imports",
+        "noqa_row": 174,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 25,
+          "row": 175
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 5,
+          "row": 175
+        },
+        "message": "`generate_service_wxs` may be undefined, or defined from star imports",
+        "noqa_row": 175,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 25,
+          "row": 176
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 5,
+          "row": 176
+        },
+        "message": "`generate_product_wxs` may be undefined, or defined from star imports",
+        "noqa_row": 176,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 22,
+          "row": 178
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 5,
+          "row": 178
+        },
+        "message": "`copy_static_files` may be undefined, or defined from star imports",
+        "noqa_row": 178,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 70,
+          "row": 330
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 56,
+          "row": 330
+        },
+        "message": "`detect_version` may be undefined, or defined from star imports",
+        "noqa_row": 330,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      },
+      {
+        "cell": null,
+        "code": "F405",
+        "end_location": {
+          "column": 27,
+          "row": 355
+        },
+        "filename": "/tmp/claude-0/-home-user-30-days-ironman-PRIVATE/26851421-fdbe-525d-a9c3-6be18bf6d3f1/scratchpad/clones/grafana-80329/scripts/build/ci-msi-build/msigenerator/generator/build.py",
+        "fix": null,
+        "location": {
+          "column": 20,
+          "row": 355
+        },
+        "message": "`get_zip` may be undefined, or defined from star imports",
+        "noqa_row": 355,
+        "severity": "error",
+        "url": "https://docs.astral.sh/ruff/rules/undefined-local-with-import-star-usage"
+      }
+    ]
+  },
+  "ty": {
+    "status": "skipped",
+    "exit_code": null,
+    "skipped_reason": "ty 未安裝（不在 PATH 上）",
+    "output": null
+  },
+  "oxlint": {
+    "status": "skipped",
+    "exit_code": null,
+    "skipped_reason": "oxlint 未安裝（不在 PATH 上）",
+    "output": null
+  }
+}

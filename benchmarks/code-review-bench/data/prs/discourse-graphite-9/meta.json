@@ -1,0 +1,17 @@
+{
+  "slug": "discourse-graphite-9",
+  "source_repo": "discourse-graphite",
+  "language": "Ruby",
+  "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/9",
+  "pr_title": "FEATURE: Localization fallbacks (server-side)",
+  "original_url": "https://github.com/discourse/discourse/commit/ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "fork_repo": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR9__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR9__20260122.git",
+  "base_sha": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "head_sha": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "stat": " app/controllers/application_controller.rb    |  2 ++\n config/cloud/cloud66/files/production.rb     |  5 -----\n config/environments/production.rb            |  4 ----\n config/environments/profile.rb               |  4 ----\n config/initializers/i18n.rb                  | 24 ++++++++++++++++++++++++\n config/initializers/pluralization.rb         |  2 --\n lib/freedom_patches/translate_accelerator.rb |  5 +++++\n 7 files changed, 31 insertions(+), 15 deletions(-)\n",
+  "name_status": "M\tapp/controllers/application_controller.rb\nM\tconfig/cloud/cloud66/files/production.rb\nM\tconfig/environments/production.rb\nM\tconfig/environments/profile.rb\nA\tconfig/initializers/i18n.rb\nD\tconfig/initializers/pluralization.rb\nM\tlib/freedom_patches/translate_accelerator.rb\n",
+  "commits": "ecfa17b5 FEATURE: Localization fallbacks (server-side)\n"
+}

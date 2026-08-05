@@ -1,0 +1,26 @@
+{
+  "slug": "sentry-93824",
+  "tool": "claude-code",
+  "n_golden": 5,
+  "n_candidates": 6,
+  "matches": [
+    {
+      "golden_index": 2,
+      "candidate_index": 0,
+      "confidence": 0.92,
+      "reasoning": "Both explain that isinstance(process, multiprocessing.Process) is false for spawn-context SpawnProcess instances, so hung processes are never killed."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 1,
+      "confidence": 0.88,
+      "reasoning": "Both identify that breaking out of the loop when the deadline elapses skips terminating the remaining flusher processes."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 5,
+      "confidence": 0.9,
+      "reasoning": "Both point to the 'shards' vs 'shard' tag typo causing inconsistent metric tagging on the wait_produce timer."
+    }
+  ]
+}

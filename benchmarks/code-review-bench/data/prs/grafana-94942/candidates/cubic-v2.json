@@ -1,0 +1,5 @@
+[
+  "`enableSqlExpressions` always returns `false` regardless of the feature flag state. Both the `if enabled` branch and the fallthrough return `false`. Additionally, the `!` negation means `enabled` is `true` when the flag is *disabled*, which is semantically inverted. If the intent is to allow SQL expressions when the flag is on, this should be `enabled := h.features.IsEnabledGlobally(...)` with `if enabled { return true }`.",
+  "Switching `TablesList` to the stub DB makes every SQL expression fail as `sql-invalid-sql` instead of returning an explicit 'SQL expressions are disabled' error.",
+  "Returning a generic 'not implemented' error here makes valid SQL expressions look like malformed input instead of a disabled feature."
+]

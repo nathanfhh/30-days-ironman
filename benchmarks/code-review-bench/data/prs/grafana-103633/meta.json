@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-103633",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/103633",
+  "pr_title": "AuthZService: improve authz caching",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR103633__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR103633__20260122.git",
+  "base_sha": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "head_sha": "7562f37880367411a62304bcdcdc178bced23906",
+  "stat": " pkg/services/authz/rbac.go              |  28 ++++--\n pkg/services/authz/rbac/cache.go        |   4 +\n pkg/services/authz/rbac/service.go      |  93 ++++++++++++++++----\n pkg/services/authz/rbac/service_test.go | 148 ++++++++++++++++++++++++++++++--\n 4 files changed, 240 insertions(+), 33 deletions(-)\n",
+  "name_status": "M\tpkg/services/authz/rbac.go\nM\tpkg/services/authz/rbac/cache.go\nM\tpkg/services/authz/rbac/service.go\nM\tpkg/services/authz/rbac/service_test.go\n",
+  "commits": "7562f378 Merge remote-tracking branch 'origin/main' into gabriel-ieva/improve-authz-caching\nc0313566 Re-organize metrics\n2e66be97 Add outdated cache test\n843e142b Add test to list + cache\ne5cd538c Cache tests\nffabbb25 Clean up tests\n44437228 add a permission denial cache, fetch perms if not in either of the caches\n3d214168 remove the use of client side cache for in-proc authz client\n"
+}

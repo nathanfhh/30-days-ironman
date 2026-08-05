@@ -1,0 +1,3 @@
+[
+  "The prisma.workflowReminder.update in the catch block (line 191) is unprotected - if it throws (e.g., the record was already deleted by the deleteMany above, or a DB connection issue), the error propagates out of the for...of loop and halts processing of all remaining reminders. Wrap this update in a nested try-catch or append .catch() to prevent a single failure from stopping the entire cron job."
+]

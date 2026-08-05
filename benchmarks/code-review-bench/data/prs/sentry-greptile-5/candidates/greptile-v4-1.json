@@ -1,0 +1,3 @@
+[
+  "Event data misaligned with error IDs when cache partially hits - nodestore.backend.get_multi is keyed by node_id, not error_id. When some node IDs are cached and others are not, the base get_multi builds items from uncached results then calls items.update(cache_items), appending cached entries at the end \u2014 so events.values() is not in the same order as error_ids. zip(error_ids, events.values()) will then pair each error_id with the wrong event payload."
+]

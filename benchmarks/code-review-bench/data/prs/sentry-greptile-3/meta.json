@@ -1,0 +1,18 @@
+{
+  "slug": "sentry-greptile-3",
+  "source_repo": "sentry-greptile",
+  "language": "Python",
+  "golden_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/3",
+  "pr_title": "feat(upsampling) - Support upsampled error count with performance optimizations",
+  "original_url": "https://github.com/getsentry/sentry/pull/94376",
+  "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR3__20260122.git",
+  "pr_number": 1,
+  "golden_count": 3,
+  "base_rev": "refs/ncr/pr~1",
+  "repo_url": "https://github.com/code-review-benchmark/sentry__sentry-greptile__augment__PR3__20260122.git",
+  "base_sha": "4cb317c5be87a5d1c3df93ed43cf3ee1fe9d17cd",
+  "head_sha": "6ad6fe3899f630ccf922ce7ac681147dc7987435",
+  "stat": " sentry-repo                                        |  1 +\n .../api/endpoints/organization_events_stats.py     | 21 +++++++++-\n src/sentry/api/helpers/error_upsampling.py         | 47 +++++++++++++++++++---\n src/sentry/search/events/datasets/discover.py      |  4 +-\n 4 files changed, 64 insertions(+), 9 deletions(-)\n",
+  "name_status": "A\tsentry-repo\nM\tsrc/sentry/api/endpoints/organization_events_stats.py\nM\tsrc/sentry/api/helpers/error_upsampling.py\nM\tsrc/sentry/search/events/datasets/discover.py\n",
+  "commits": "6ad6fe38 feat(upsampling): Add performance optimizations with caching\n"
+}

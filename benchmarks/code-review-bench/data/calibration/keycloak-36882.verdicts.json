@@ -1,0 +1,176 @@
+{
+  "slug": "keycloak-36882",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "kc-adoc-preview-flag-stale",
+      "evidence": "docs/guides/templates/kc.adoc:50-55",
+      "reason": "The shared `updatecompatibility` macro now emits `--features=rolling-updates` for every rendering (both call sites in update-compatibility.adoc), with no comment or conditional tying it to the preview stage, so it will silently outlive the preview."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "hardcoded-feature-key-string",
+      "evidence": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java:84; quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:44,49",
+      "reason": "printFeatureDisabled() and the test's ENABLE_FEATURE constant and assertion all embed the literal 'rolling-updates', while UpgradeTest.java:115 in the same PR does derive it from Profile.Feature.ROLLING_UPDATES.getKey(); Feature.getKey() is computed from the enum name so a rename would desynchronise message and assertions."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "exit-codes-untested",
+      "evidence": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-108",
+      "reason": "Grepping the whole quarkus tree, the only exit-code assertion for this command is assertEquals(0, result.exitCode()) in testCompatible; testFeatureNotEnabled and testWrongVersions assert stderr strings only, so neither the renumbered 3 nor the new 4 is pinned anywhere."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "preview-feature-release-note",
+      "evidence": "docs/documentation/release_notes/topics/26_2_0.adoc",
+      "reason": "26_2_0.adoc exists and 26_1_0.adoc does carry entries for preview features (e.g. OID4VCI), but recent preview features such as user-event-metrics and passkeys have no release-note entry, so the repo genuinely does not settle it; the project's release-note policy, or a companion docs PR, would."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "update-compatibility-triggers-reaugmentation",
+      "evidence": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/Picocli.java:210-272 (shouldSkipRebuild/requiresReAugmentation); quarkus/dist/src/main/content/bin/kc.sh:52,73,168",
+      "reason": "kc.sh runs a build-and-exit pass unless --optimized is given; shouldSkipRebuild compares the *leaf* command name (asCommandLineList last element is 'metadata'/'check', never 'update-compatibility'), so the skip never fires, and requiresReAugmentation compares all build-time options — the newly mandated build-time --features=rolling-updates differs from the persisted config, so the documented read-only command re-augments and persists the flag into the server's build configuration."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "recreate-exit-code-renumbered",
+      "evidence": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:34; docs/guides/server/update-compatibility.adoc exit-code table",
+      "reason": "RECREATE_UPGRADE_EXIT_CODE really does change 4 -> 3 and the guide documents these codes as the scriptable contract; the breakage risk is limited because the command landed on main only two weeks earlier (588e60e, 2025-01-24) and is unreleased preview, which is why this is Low rather than higher."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "feature-disabled-constant-naming",
+      "evidence": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:32-35",
+      "reason": "The interface holds ROLLING_UPGRADE_EXIT_CODE and RECREATE_UPGRADE_EXIT_CODE next to the new FEATURE_DISABLED, so the new constant breaks the local naming convention and reads as a flag at picocli.exit(CompatibilityResult.FEATURE_DISABLED)."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "duplicated-feature-gate",
+      "evidence": "UpdateCompatibilityCheck.java:46-50 and UpdateCompatibilityMetadata.java:46-50 vs AbstractUpdatesCommand.java:83-85",
+      "reason": "The identical five-line guard is copy-pasted into both run() methods while the shared parent only owns printFeatureDisabled(), so the gate is opt-in for any future subcommand rather than inherited."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "profile-npe",
+      "evidence": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/Picocli.java:128-130; PropertyMappers.java:299-305; Environment.java:239-247",
+      "reason": "parseAndRun calls PropertyMappers.sanitizeDisabledMappers() immediately before cmd.execute(), and that path invokes Environment.getCurrentOrCreateFeatureProfile(), which configures Profile when getInstance() is null — so CURRENT is always set before run(); Profile.configure also puts an entry for every Feature, so the map lookup cannot unbox null either."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "upgradetest-null-strategy-no-feature",
+      "evidence": "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java:102-117, 48-53, 84-100",
+      "reason": "createInitialDeployment returns at `if (updateStrategy == null)` before the FeatureSpec block, and upgradeStrategy() feeds null to testCacheMaxCount, which awaits eventuallyRollingUpgradeStatus; UpgradeTest does not use the custom image either, so that case really does run the rolling path with rolling-updates off."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "kc-adoc-duplicate-features-arg",
+      "evidence": "docs/guides/templates/kc.adoc:50-55; docs/guides/server/update-compatibility.adoc WARNING blocks; ConfigArgsConfigSource.java:117-140",
+      "reason": "The guide tells users to include every configuration option while the macro unconditionally appends a second --features; ConfigArgsConfigSource.parseArguments() does properties.put(key, value) into a HashMap while iterating the arg list, so the appended occurrence wins and the user's own feature set is dropped. (The metadata file itself is version-only today, so the immediate damage is to the effective profile rather than to the stored metadata.)"
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "operator-doc-unimplemented-gate",
+      "evidence": "docs/guides/operator/advanced-configuration.adoc CAUTION block; operator/src/main (no Profile/ROLLING_UPDATES reference); UpgradeLogicFactory.java:34-43; UpgradeTest.java:102-117",
+      "reason": "A grep of operator/src/main finds no reference to Profile or ROLLING_UPDATES at all; UpgradeLogicFactory branches solely on UpdateSpec.findUpdateStrategy, and the PR's own UpgradeTest null-strategy case runs the flow with the feature unset — so the CAUTION that the Operator 'will fail' is not backed by any code in this change."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "picocli-exit-system-exit",
+      "evidence": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/Picocli.java:203-208; UpdateCompatibilityCheck.java:46-57",
+      "reason": "Picocli.exit() only calls System.exit when the code is non-zero and the JVM is not in test launch mode, the surrounding run() already used picocli.exit(result.exitCode()) before this PR, and the new code adds the `return` needed for the test-mode path; the claim also stops at a colon with no stated consequence."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "upgradetest-null-strategy-no-feature",
+      "evidence": "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java:102-117",
+      "reason": "The early return for the default (null) strategy does skip the new FeatureSpec setup, which is the accurate part; the null case still reaches the rolling-upgrade assertion today only because the operator has no feature gate, which is exactly the inconsistency worth flagging."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "exit-code-4-doc-wording",
+      "evidence": "docs/guides/server/update-compatibility.adoc exit-code table (m|4); AbstractUpdatesCommand.java:84",
+      "reason": "The table describes exit 4 as 'Rolling Upgrade is not possible', but the command never performed a check — it printed 'Unable to use this command. The preview feature rolling-updates is not enabled.' and bailed, so the row overstates what the code was determined to be."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "operator-doc-unimplemented-gate",
+      "evidence": "docs/guides/operator/advanced-configuration.adoc CAUTION block; UpgradeLogicFactory.java:34-43; impl/RecreateOnImageChangeUpgradeLogic.java",
+      "reason": "Correct that the `<not set>` default path (RecreateOnImageChangeUpgradeLogic) works with the feature off; in fact no operator path checks the feature, so the CAUTION is broader than the implementation in every branch, not just the default one."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "check-subcommand-gate-untested",
+      "evidence": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-50, 65-68, 71-108",
+      "reason": "testFeatureNotEnabled launches only {update-compatibility, metadata}; every invocation of the check subcommand in the class passes ENABLE_FEATURE, so the copy of the guard in UpdateCompatibilityCheck.run() is never exercised in the disabled state."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "kc-adoc-preview-flag-stale",
+      "evidence": "docs/guides/templates/kc.adoc:50-55",
+      "reason": "Same fact as the macro-staleness point: updatecompatibility is the single generic template for both documented invocations and now carries a preview-only flag with nothing marking it temporary."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "recreate-exit-code-renumbered",
+      "evidence": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:31-35; docs/documentation/release_notes/topics/26_2_0.adoc",
+      "reason": "The renumbering is real and the only explanation added is a comment about picocli's reserved codes; 26_2_0.adoc has no entry for the tool or the exit-code change. Severity stays Low because the command is unreleased preview, so no shipped script depends on the old numbering yet."
+    }
+  ]
+}

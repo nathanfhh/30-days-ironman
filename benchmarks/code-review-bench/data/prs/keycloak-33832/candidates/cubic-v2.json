@@ -1,0 +1,6 @@
+[
+  "Using the same `order()` as the existing built-in crypto providers makes provider selection nondeterministic when multiple implementations are on the classpath. Give Elytron a distinct lower priority so `CryptoIntegration` does not pick it based on service loading order.",
+  "`getBouncyCastleProvider()` returns the default JDK keystore's provider (SUN for JKS), not a BouncyCastle provider. `KeyStore.getInstance(KeyStore.getDefaultType()).getProvider()` gives back whichever provider backs the default keystore type\u2014typically SUN. Callers that depend on BouncyCastle-specific functionality from this method will silently get the wrong provider.",
+  "Initialize crypto with the context class loader here. Passing `AuthzClient.class.getClassLoader()` can hide caller-provided `CryptoProvider` services, so the first `AuthzClient.create(...)` may permanently select the wrong provider for the JVM.",
+  "The two standalone `ASN1Encoder.create().write(...)` calls on the lines before the `return` are dead code\u2014their results are discarded immediately. The actual encoding is performed entirely in the `return` statement. These lines should be removed to avoid confusion."
+]

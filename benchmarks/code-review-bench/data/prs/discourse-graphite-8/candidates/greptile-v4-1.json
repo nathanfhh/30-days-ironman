@@ -1,0 +1,6 @@
+[
+  "Both add_members and remove_member call params.require(:group_id), but the routes put the group's ID in params[:id], not params[:group_id], causing ActionController::ParameterMissing for every real HTTP request",
+  "totalPages formula Math.floor(user_count / limit) + 1 overcounts by one when user_count is exactly divisible by limit, showing a phantom page with empty results",
+  "Wrong HTTP verb in remove_member spec - test calls xhr :put but the route is delete 'members', making the test misleading",
+  "Stray closing </div> tag inside a <table> with no matching opening <div>, which is invalid HTML and may cause browser rendering issues"
+]

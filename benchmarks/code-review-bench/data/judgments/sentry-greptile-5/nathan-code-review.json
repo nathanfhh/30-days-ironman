@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-greptile-5",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 34,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 1, "confidence": 0.9,
+     "reasoning": "Both describe fetch_error_details pairing error_ids with get_multi results by position via zip while get_multi's ordering is not guaranteed, causing misattributed/misaligned event data."}
+  ]
+}

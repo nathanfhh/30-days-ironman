@@ -1,0 +1,7 @@
+[
+  "email_in_restriction_setting? calls value =~ regexp which will raise if value is nil (e.g., missing email param) even though presence validation would already fail - need to guard validate_each / email_in_restriction_setting? against blank/nil values",
+  "BlockedEmail.should_block? mutates state (match_count/last_match_at) and is called from email validation which can run multiple times per request (e.g., user.valid? then user.save), inflating stats and causing extra writes for a single signup attempt",
+  "pushObject(result.values.email) will add null/undefined if the server response omits values.email or returns it blank, leaving a non-string entry in rejectedEmails - should ensure value is present before caching",
+  "The computed property depends on rejectedEmails.@each but @each is mainly for observing per-item properties and can be unreliable for array membership changes with primitive items like strings - may not recompute when pushObject is called depending on Ember version",
+  "Missing regression test covering nil/blank value when whitelist/blacklist settings are present to ensure validation doesn't raise unexpectedly"
+]

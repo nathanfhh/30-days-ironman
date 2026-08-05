@@ -1,0 +1,32 @@
+{
+  "slug": "cal_com-11059",
+  "tool": "greptile-v4-1",
+  "n_golden": 5,
+  "n_candidates": 6,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Both say the fallback persists the literal string 'refresh_token', poisoning the stored credential for later refreshes."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 4,
+      "confidence": 0.9,
+      "reasoning": "Both say the computed Zod keys do not work as intended so the schema does not validate the expiry field."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 2,
+      "confidence": 0.7,
+      "reasoning": "Covers the golden's caller mismatch for GoogleCalendarService, which assumes res.data on what is a fetch Response."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Both say res?.data is undefined on a native Response so token.access_token throws at runtime."
+    }
+  ]
+}

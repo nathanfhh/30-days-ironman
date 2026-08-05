@@ -1,0 +1,17 @@
+{
+  "slug": "sentry-80168",
+  "source_repo": "sentry",
+  "language": "Python",
+  "golden_url": "https://github.com/getsentry/sentry/pull/80168",
+  "pr_title": "feat(workflow_engine): Add in hook for producing occurrences from the stateful detector",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR80168__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR80168__20260122.git",
+  "base_sha": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "head_sha": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "stat": " src/sentry/incidents/grouptype.py                  |  11 +-\n src/sentry/workflow_engine/models/detector.py      |   8 +-\n src/sentry/workflow_engine/processors/detector.py  |  45 ++-\n .../workflow_engine/processors/test_detector.py    | 336 +++++++++++++--------\n 4 files changed, 249 insertions(+), 151 deletions(-)\n",
+  "name_status": "M\tsrc/sentry/incidents/grouptype.py\nM\tsrc/sentry/workflow_engine/models/detector.py\nM\tsrc/sentry/workflow_engine/processors/detector.py\nM\ttests/sentry/workflow_engine/processors/test_detector.py\n",
+  "commits": "8422030e fix typing\n0fc39ce9 feat(workflow_engine): Add in hook for producing occurrences from the stateful detector\n"
+}

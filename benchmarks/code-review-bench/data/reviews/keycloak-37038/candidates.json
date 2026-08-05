@@ -1,0 +1,109 @@
+{
+  "slug": "keycloak-37038",
+  "issues": [
+    {
+      "text": "GroupPermissionsV2.getGroupIdsWithViewPermission() collects groupResource.getId(), the Resource's random UUID, but its callers treat the returned set as group ids (UsersResource puts it into UserModel.GROUPS and passes it to getUsersCount); V1 derives the group id from resource.getName() instead, so the V2 version never returns real group ids.",
+      "zh": "`granted.add(groupResource.getId())` — 回傳集合被塞入 Resource 的 UUID。但呼叫端把它當 group id 用……方法名字與新增的 Javadoc 都寫明是 group id。",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "hasPermission(groupResource.getId(), ...) passes the Resource UUID into a method whose body is resourceStore.findByName(server, groupId), while the resource name is the group id, so the lookup always returns null and every evaluation silently falls back to the all-groups resource instead of the group being checked.",
+      "zh": "`hasPermission(groupResource.getId(), ...)` — `hasPermission(String groupId, ...)` 內部是 `resourceStore.findByName(server, groupId)`。傳進去的是 UUID，而 resource 的 name 是 group id，兩者永遠不相等，因此 `findByName` 必然回 null，接著掉進「all-groups fallback」分支。",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "resourceStore.findByType(server, GROUPS_RESOURCE_TYPE, ...) cannot see per-group resources at all, because AdminPermissionsSchema.getOrCreateResource() creates them without ever calling setType — only the all-resource created during init has a type, unlike V1 which explicitly calls setType(\"Group\") before using findByType.",
+      "zh": "`resourceStore.findByType(server, GROUPS_RESOURCE_TYPE, ...)` 本身就掃不到 group resource……**完全沒有呼叫 `setType`**；只有初始化時建立的 all-resource 才有 `resource.setType(type)`。",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "The no-argument GroupPermissionsV2.canManage() is written as hasPermission(null, VIEW, MANAGE), word for word identical to canView(), so an admin holding only the all-groups view scope passes it; its single caller is POST admin/realms/{realm}/groups, which both creates top-level groups and moves any existing subgroup to top level, letting a read-only admin rewrite the group hierarchy that user permissions are evaluated against. The new Javadoc documents this wrong behaviour as if it were the specification.",
+      "zh": "GroupPermissionsV2.canManage() 把 VIEW scope 當成 manage 權限，只讀 admin 可以建立與搬移群組",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "Moving the ADMIN_FINE_GRAINED_AUTHZ check from inside onEvent to the manager.register(...) call freezes whether the listener exists at session-factory creation time, so tests using @EnableFeature(skipRestart = true) that flip the flag at runtime never get the listener registered and lose the authz cleanup when a role, client or group is deleted.",
+      "zh": "AdminPermissions.registerListener 把 feature 判斷移到註冊時，執行期才開啟 FGAP V1 的情境會失去清理 listener",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "No test exercises all-groups combined with VIEW_MEMBERS / MANAGE_MEMBERS: testCanViewUserByViewGroupMembers and testCanViewUserByManageGroupMembers grant the permission on topGroup, so getGroupIdsWithViewPermission returns an empty set and the wrong-id bug is never observed.",
+      "zh": "**all-groups × VIEW_MEMBERS / MANAGE_MEMBERS**：`testCanViewUserByViewGroupMembers`（:88）與 `testCanViewUserByManageGroupMembers`（:106）都是把權限建在 topGroup 上……所以 F-001 的錯誤 id 從來沒有被觀察到。",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "No test attempts a write after granting only the all-groups VIEW permission: testViewGroups creates that permission but afterwards only reads groups, whereas one groups().add(...) asserting 403 would have caught the canManage() defect.",
+      "zh": "**all-groups × VIEW 之後嘗試寫入**：`testViewGroups`（:247）建立了 all-groups VIEW 權限（:276），但之後只做 `groups().groups()` 讀取，沒有再試一次寫入。",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "testManageGroupMembership has no assertion after joinGroup(topGroup.getId()); it relies on no exception being thrown and cannot distinguish a successful join from a call that succeeded without taking effect.",
+      "zh": "另外 `testManageGroupMembership`（:284）在 `joinGroup(topGroup.getId())` 之後沒有任何斷言，僅仰賴「沒丟例外」。這條測試無法分辨「加入成功」與「呼叫成功但沒生效」。",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The Javadoc on requireManageMembers says it throws ForbiddenException if canManageMembership(GroupModel) returns false, but the implementation delegates to canManageMembers(group); manage-members and manage-membership are two different scopes, so the new documentation is wrong on the two names most easily confused.",
+      "zh": "requireManageMembers 的 Javadoc 指向 canManageMembership，與實作不符",
+      "finding_id": "F-004",
+      "severity": "Nit"
+    },
+    {
+      "text": "The @return tag of getGroupIdsWithViewPermission says 'Stream of IDs' while the method returns Set<String>.",
+      "zh": "`@return Stream of IDs of groups with view permission.` 但回傳型別是 `Set<String>`。",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "That same Javadoc omits the other sources of an empty set (not same-realm, no resource server) and does not state that an empty set means 'apply no group restriction' at the call site, which is the opposite of 'can see no groups'.",
+      "zh": "另外描述只說「`UserPermissionEvaluator#canView()` 為 true 時回空集合」，沒有說「非 same-realm 或沒有 resource server 時同樣回空集合」——而空集合在呼叫端代表「不設 GROUPS 限制」，語意上與「什麼群組都看不到」剛好相反。",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "GroupPermissionsV2.hasPermission lacks the if (permission.getResourceId().equals(resource.getId())) layer that the otherwise line-for-line identical UserPermissionsV2.hasPermission has; it is not exploitable today, but the unexplained difference between twin implementations is where they start to drift.",
+      "zh": "GroupPermissionsV2.hasPermission 少了 UserPermissionsV2 同名方法有的 resourceId 比對",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "GroupResourceTypeEvaluationTest.java:68 ends with a double semicolon: new GroupRepresentation();;",
+      "zh": "GroupResourceTypeEvaluationTest.java:68 結尾是 `new GroupRepresentation();;`（兩個分號）。",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "Three test methods assert the CREATED status with assertThat(response.getStatus(), equalTo(CREATED)) and then call ApiUtil.handleCreatedResponse(response), which asserts the same 201 internally — the status code is asserted twice.",
+      "zh": "`assertThat(response.getStatus(), equalTo(CREATED))` 之後緊接著 `ApiUtil.handleCreatedResponse(response)`，而後者第一件事就是 `Assertions.assertEquals(201, response.getStatus())`。同一個狀態碼斷言了兩次，三個測試方法都是這個寫法。",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "A whitespace-only line at GroupResourceTypeEvaluationTest.java:300 and trailing whitespace at RealmAdminPermissionsConfig.java:34 and GroupPermissionEvaluator.java:86.",
+      "zh": "GroupResourceTypeEvaluationTest.java:300 是一行只有空白的空行；RealmAdminPermissionsConfig.java:34 與 GroupPermissionEvaluator.java:86 行尾有尾隨空白。",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Is it intentional that once a group has its own per-group resource, all-groups permissions stop being evaluated for it at all (override rather than union semantics), since hasPermission only falls back to the all-groups resource when findByName returns null?",
+      "zh": "當一個群組已經有自己的 per-group resource 時，all-groups 權限就完全不會被納入評估——這是刻意的語意嗎？"
+    },
+    {
+      "text": "Will existing realms that already had FGAP V2 enabled before this MR break because they lack the Groups resource and the three new scopes, given that AdminPermissionsSchema.init returns early once the admin-permissions client exists?",
+      "zh": "在這個 MR 之前就已經啟用 FGAP V2 的既有 realm，會不會因為缺少 `Groups` resource 與三個新 scope 而壞掉？"
+    },
+    {
+      "text": "After getOrCreateResource switched to switch (resourceType), a null resourceType now throws NPE instead of the previous IllegalStateException with a message — is that path actually reachable?",
+      "zh": "`getOrCreateResource` 改用 `switch (resourceType)` 之後，resourceType 為 null 會變成 NPE，這條路徑實際到得了嗎？"
+    }
+  ]
+}

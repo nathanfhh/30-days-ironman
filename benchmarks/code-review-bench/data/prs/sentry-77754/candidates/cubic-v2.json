@@ -1,0 +1,4 @@
+[
+  "`timezone.now()` is evaluated once at class definition time, so every instance that relies on the default will share the same stale timestamp. Use `field(default_factory=timezone.now)` to get a fresh value per instance.",
+  "`asdict()` keeps `queued` as a `datetime` object. If this dict is serialized to JSON (e.g., as Celery task kwargs), it will raise `TypeError`. Convert `queued` to an ISO string in `to_dict` and parse it back in `from_dict`."
+]

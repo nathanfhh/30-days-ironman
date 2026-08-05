@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-107534",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/107534",
+  "pr_title": "Advanced Query Processing Architecture",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR107534__20260122.git",
+  "pr_number": 1,
+  "golden_count": 1,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR107534__20260122.git",
+  "base_sha": "d9a8253640464014aa3662c91131278990cfb828",
+  "head_sha": "1cab4143d443c33079566f6ca36931eb8468159f",
+  "stat": " .../plugins/datasource/loki/querySplitting.test.ts | 15 +++++++++\n .../app/plugins/datasource/loki/querySplitting.ts  |  5 ++-\n .../datasource/loki/shardQuerySplitting.test.ts    | 37 +++++++++++++++-------\n .../plugins/datasource/loki/shardQuerySplitting.ts |  6 ++--\n 4 files changed, 48 insertions(+), 15 deletions(-)\n",
+  "name_status": "M\tpublic/app/plugins/datasource/loki/querySplitting.test.ts\nM\tpublic/app/plugins/datasource/loki/querySplitting.ts\nM\tpublic/app/plugins/datasource/loki/shardQuerySplitting.test.ts\nM\tpublic/app/plugins/datasource/loki/shardQuerySplitting.ts\n",
+  "commits": "1cab4143 Update test\n76ffba5f shardQuerySplitting: fix target filtering\n6a92d260 shardQuerySplitting: remove unnecessary call\n60012098 Prettier\na8ced702 Update tests\n2f7eba67 Loki query splitting: interpolate queries before execution\n"
+}

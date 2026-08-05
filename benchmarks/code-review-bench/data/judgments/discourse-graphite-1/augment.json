@@ -1,0 +1,16 @@
+{
+  "slug": "discourse-graphite-1",
+  "tool": "augment",
+  "n_golden": 3,
+  "n_candidates": 7,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 6, "confidence": 0.95,
+     "reasoning": "Both identify the duplicate downsize method definition overriding the original signature and breaking callers passing max_width/max_height."},
+    {"golden_index": 1, "candidate_index": 0, "confidence": 0.85,
+     "reasoning": "Both say the hardcoded 10MB/10*1024 maxSizeKB ignores per-type SiteSettings, causing client/server divergence."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.5,
+     "reasoning": "Points to the same hardcoded limit failing to account for per-type distinctions (attachments vs images), the core concern golden raises about per-type settings being ignored."},
+    {"golden_index": 1, "candidate_index": 3, "confidence": 0.55,
+     "reasoning": "Flags the same hardcoded 10MB constant risking client/server limit drift, matching golden's described divergence outcome."}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-greptile-5",
+  "tool": "cubic-v2",
+  "n_golden": 3,
+  "n_candidates": 4,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 3, "confidence": 0.93,
+     "reasoning": "Both flag that the error response now includes a JSON body instead of the old empty-body response, a breaking change to the API contract that is also inconsistent between branches."}
+  ]
+}

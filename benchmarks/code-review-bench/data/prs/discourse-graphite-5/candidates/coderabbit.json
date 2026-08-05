@@ -1,0 +1,3 @@
+[
+  "Legacy flexbox order off-by-one error: -webkit-box-ordinal-group and -moz-box-ordinal-group use 1-based indexing while modern order uses 0-based indexing, causing mis-ordering in older WebKit and Firefox browsers when passing $val directly to legacy properties"
+]

@@ -1,0 +1,3 @@
+[
+  "isConditionalPasskeysEnabled(UserModel user) requires user != null, which means webauthnAuth.fillContextForm() won't run when the username/password form is the first step and no user is identified yet; since the templates render the #webauth form only when enableWebAuthnConditionalUI is set, this could unintentionally disable conditional passkeys on the initial login page"
+]

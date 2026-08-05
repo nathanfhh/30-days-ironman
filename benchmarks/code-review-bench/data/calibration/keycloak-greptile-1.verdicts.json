@@ -1,0 +1,167 @@
+{
+  "slug": "keycloak-greptile-1",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "High",
+      "cluster": "passkeys-guard-requires-nonnull-user",
+      "evidence": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:136-139,160-162; AbstractUsernameFormAuthenticator.java:105-110 (testInvalidUser)",
+      "reason": "Base guard was `context.getUser() == null && webauthnAuth != null && isPasskeysEnabled()`; head guard is `isConditionalPasskeysEnabled(context.getUser())` which requires `user != null`, so the user-null condition is inverted. An unknown username goes through testInvalidUser -> challenge(...,FIELD_USERNAME) with context.getUser()==null, so fillContextForm is skipped and the rendered error page has no webauthn form, unlike before the PR."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "missing-override-annotation",
+      "evidence": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java:64-66 vs 40-41 and 46-47",
+      "reason": "fillContextForm and createErrorResponse in the same class both carry @Override; the newly added shouldShowWebAuthnAuthenticators, which overrides WebAuthnAuthenticator.shouldShowWebAuthnAuthenticators (WebAuthnAuthenticator.java:147), does not."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.93,
+      "severity": "Critical",
+      "cluster": "passkeys-guard-requires-nonnull-user",
+      "evidence": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:114-117,160-162",
+      "reason": "authenticate() now gates fillContextForm on isConditionalPasskeysEnabled(context.getUser()), which returns false when user is null. On the initial login form no user is set, so ENABLE_WEBAUTHN_CONDITIONAL_UI is never set (WebAuthnConditionalUIAuthenticator.fillContextForm:41-43) and ID-less passkey login on the login page is disabled outright — the opposite of what the PR is for."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "unused-import-passwordcredentialmodel",
+      "evidence": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:35",
+      "reason": "grep for PasswordCredentialModel in that file returns only the import line at 35; no reference in any test body. (The identically named import in PasskeysUsernameFormTest is used, this one is not.)"
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.96,
+      "severity": "Low",
+      "cluster": "unused-import-nosuchelementexception",
+      "evidence": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysOrganizationAuthenticationTest.java:51",
+      "reason": "The PR replaced both Assert.assertThrows(NoSuchElementException.class, ...) calls (diff lines around 199 and 210) with assertThat(...notNullValue()); grep now finds NoSuchElementException only on the import line 51."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "util-browser-package-cycle",
+      "evidence": "services/.../util/AuthenticatorUtils.java:35 (static import of browser.AbstractUsernameFormAuthenticator.USER_SET_BEFORE_USERNAME_PASSWORD_AUTH); services/.../browser/AbstractUsernameFormAuthenticator.java:24,58,222",
+      "reason": "The constant was widened protected -> public at AbstractUsernameFormAuthenticator.java:58 and AuthenticatorUtils now static-imports it from the browser package, while AbstractUsernameFormAuthenticator imports and calls AuthenticatorUtils — the two packages now reference each other, exactly as described."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "misnamed-without-passkey-test",
+      "evidence": "testsuite/.../PasskeysUsernamePasswordFormTest.java:278-286 (setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE)) and the inline comment at 304",
+      "reason": "reauthenticationOfUserWithoutPasskey disables passkeys at the realm level, so it exercises 'realm policy off', while its name and the inline comment at line 304 ('as this user does not have passkey') say otherwise. No test covers realm passkeys enabled + user with no passwordless credential, which is the combination this PR newly reaches. (The method-level comment above the test does state the realm-level intent correctly.)"
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "authnote-interpretation-duplicated",
+      "evidence": "services/.../util/AuthenticatorUtils.java:125-133 vs services/.../browser/AbstractUsernameFormAuthenticator.java:257-260",
+      "reason": "isUserAlreadySetBeforeUsernamePasswordAuth still exists and is still used at lines 129, 139 and 250, while the new util method reads and Boolean.parseBoolean's the same auth note independently; the note's interpretation now lives in two places."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Low",
+      "cluster": "test-element-absence-try-catch",
+      "evidence": "testsuite/.../PasskeysUsernamePasswordFormTest.java:290-295 and 312-317; convention at PasskeysUsernameFormTest.java:202",
+      "reason": "Both absence checks wrap findElement in try/…fail()/catch (Exception nsee). Any WebDriverException other than NoSuchElementException is swallowed and the test passes; the codebase's existing form is Assert.assertThrows(NoSuchElementException.class, ...), which this same PR deleted from the organization test."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "conditionalui-extension-api-compat",
+      "evidence": "services/.../WebAuthnConditionalUIAuthenticator.java:64-66; WebAuthnAuthenticator.java:100-106; call sites UsernamePasswordForm.java:114,136 and OrganizationAuthenticator.java:357-361",
+      "reason": "The mechanics are right — with the override always false, the `authenticators.getAuthenticators().isEmpty() -> return null` branch is unreachable for this class — but every in-repo caller passed a null user before this PR, so no reachable behaviour changed; whether a services-module authenticator class counts as a supported extension point for outside implementors is a Keycloak API-compatibility policy call, which is what would settle this."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.82,
+      "severity": "Low",
+      "cluster": "reauth-triggers-untested",
+      "evidence": "services/.../browser/CookieAuthenticator.java:57-66; services/.../protocol/oidc/OIDCLoginProtocol.java:501-530; SamlProtocol.java:955-957",
+      "reason": "CookieAuthenticator sets the user (context.setUser) and then calls context.attempted() whenever protocol.requireReauthentication is true — which for OIDC is prompt=login OR max_age expiry OR kc_action re-auth, and for SAML ForceAuthn — so all of those reach UsernamePasswordForm.authenticate with a user already set. The three new tests only exercise prompt=login, so the coverage gap the claim points at is real."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "test-element-absence-try-catch",
+      "evidence": "testsuite/.../PasskeysUsernamePasswordFormTest.java:312-317",
+      "reason": "Lines 312-317 in the head file are exactly the second try { findElement...; fail(...) } catch (Exception nsee) block, the same pattern issue as the earlier one; the cited line range matches."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Critical",
+      "cluster": "isconditionalpasskeys-arity-mismatch",
+      "evidence": "services/.../browser/UsernameForm.java:47 calls isConditionalPasskeysEnabled(); only declaration is UsernamePasswordForm.java:160 `protected boolean isConditionalPasskeysEnabled(UserModel user)`",
+      "reason": "A repo-wide grep for isConditionalPasskeysEnabled returns four hits: the declaration taking UserModel, two call sites passing context.getUser(), and UsernameForm:47 calling it with no argument. No no-arg overload exists anywhere in the hierarchy (the second commit, 3214b18, changed the signature without updating this caller), so services does not compile."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "test-element-absence-try-catch",
+      "evidence": "testsuite/.../PasskeysUsernamePasswordFormTest.java:290-295, 312-317",
+      "reason": "Correct on both counts: WebDriver.findElement throws NoSuchElementException rather than returning null, so the assertThat(..., nullValue()) is dead code in the success case, and catch (Exception) also absorbs unrelated WebDriver failures as a pass."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "test-element-absence-try-catch",
+      "evidence": "testsuite/.../PasskeysUsernamePasswordFormTest.java:294, 316 (`} catch (Exception nsee) { // expected`)",
+      "reason": "Same broad-catch problem: only NoSuchElementException means 'element absent'; any other Selenium/runtime exception thrown by findElement is currently treated as the assertion succeeding."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.99,
+      "severity": "Low",
+      "cluster": "typo-succesful",
+      "evidence": "testsuite/.../PasskeysUsernamePasswordFormTest.java:413",
+      "reason": "Line 413 of the head file reads `// Succesful event - password login`; the parallel comment at line 389 spells it `Successful`."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.83,
+      "severity": "Medium",
+      "cluster": "passkey-ui-shown-without-user-credential",
+      "evidence": "services/.../UsernamePasswordForm.java:160-162; WebAuthnConditionalUIAuthenticator.java:41-43,64-66; WebAuthnAuthenticator.java:100-106",
+      "reason": "isConditionalPasskeysEnabled only checks the realm's passwordless passkeys policy and user != null — nothing consults the user's credentials. Because the conditional-UI override makes shouldShowWebAuthnAuthenticators false, the `authenticators.getAuthenticators().isEmpty() -> return null` guard that used to suppress the form for credential-less users is bypassed, so during re-authentication a user with no passwordless WebAuthn credential is still shown the webauth form."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Low",
+      "cluster": "shouldshow-override-npe-precondition",
+      "evidence": "services/.../WebAuthnAuthenticator.java:100-106 and javadoc at 143-147; services/.../forms/login/freemarker/model/WebAuthnAuthenticatorsBean.java:38-40",
+      "reason": "The `user` passed into WebAuthnAuthenticatorsBean is context.getUser() read before the check, and the bean's constructor immediately calls user.credentialManager(), so an override returning true with a null user NPEs. The added javadoc documents only the return meaning and states no such precondition."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "sentry-greptile-3",
+  "tool": "coderabbit",
+  "n_golden": 3,
+  "n_candidates": 8,
+  "matches": [
+    {"golden_index": 1, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both flag Python's hash() being non-deterministic across processes/interpreter sessions, breaking cache key consistency."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.55,
+     "reasoning": "Elaborates on the same hash-based cache key problem and its effect on invalidate_upsampling_cache, the same underlying issue as the golden comment."},
+    {"golden_index": 0, "candidate_index": 3, "confidence": 0.9,
+     "reasoning": "Both point out a truthy check on sample_rate that incorrectly skips a valid 0/0.0 value."}
+  ]
+}

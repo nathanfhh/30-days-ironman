@@ -1,0 +1,141 @@
+{
+  "slug": "keycloak-38446",
+  "issues": [
+    {
+      "text": "Recovery codes stored in user storage are never consumed: BackwardsCompatibilityUserStorage.isValid matches any of the 12 codes with anyMatch and never modifies myUser.recoveryCodes, and getCredentials rebuilds the model from the full original list every time, so remainingCodes stays 12, allCodesUsed() is never true, the login page always asks for code #1, and one code can be reused for unlimited logins — the one-time property of recovery codes is inverted.",
+      "zh": "存在 user storage 的 recovery code 永遠不會被消耗，一組 code 可以無限次重複登入",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "RecoveryAuthnCodesUtils.getCredential can now return a credential built by the user storage provider, but RecoveryAuthnCodesFormAuthenticator still calls credentialManager().removeStoredCredentialById(model.getId()), which only touches Keycloak's local or federated storage and never notifies the provider — a silent no-op once the code counter actually advances.",
+      "zh": "getCredential 可能回傳 user storage 的 credential，但兩個呼叫端仍當成本地 credential 處理",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The model returned for the user storage path has a null id, because RecoveryAuthnCodesCredentialModel.createFromValues never calls setId and getCredentials discards the id generated in updateCredential — the same diff does set the id for OTP, and a null id also makes CredentialDeleteHelper's credentialId comparison never match.",
+      "zh": "getCredentials 用 RecoveryAuthnCodesCredentialModel.createFromValues 建 model，而 createFromValues 從頭到尾沒有呼叫 setId，所以回傳的 model 的 id 是 null——updateCredential 特地用 KeycloakModelUtils.generateId() 產生的 id 在這裡被丟掉了。",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The testsuite provider implements only the write side of CredentialInputUpdater for the new type: disableCredentialType and getDisableableCredentialTypesStream still handle OTP only, so deleting recovery codes returns 204 while the credential stays in user storage — unlike OTP, which has two removal tests in the same file.",
+      "zh": "testsuite provider 對新 credential type 只實作了寫入側，credential 無法被刪除或停用",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "For the recovery-authn-codes type, CredentialInput.getChallengeResponse() carries two completely different shapes — a JSON array of all 12 raw codes when writing via updateCredential, and a single raw code when validating — with no javadoc stating it, and the format is hardcoded independently in server-spi-private (CredentialHelper) and in the testsuite provider, so a third party can only reverse-engineer it and a format change must be made in both modules.",
+      "zh": "recovery codes 在 CredentialInput 上的 payload 格式沒有文件，同一個欄位在寫入與驗證時是兩種形狀",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new test never asserts that a code already used cannot be used a second time, which is exactly why it cannot detect the missing consumption.",
+      "zh": "用過的 code 第二次不能用（這正是 F-001 的內容，也是這條測試現在無法察覺的原因）。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new test never submits an invalid recovery code to check that it is rejected, although the existing OTP test in the same file does exactly that with a wrong OTP and getInputError().",
+      "zh": "錯誤的 code 會被拒絕——既有的 OTP 測試在 :225-230 就有「先送錯的 OTP、確認 getInputError() 非 null」這一段，recovery codes 版本沒有對應段落。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The removal / disable path for recovery codes in user storage has no test at all, while OTP has two in the same file.",
+      "zh": "移除 / 停用路徑完全沒覆蓋，而 OTP 在同一個檔案有 :304-339 與 :341-367 兩條。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Test helper parameters are vestigial: assertUserHasRecoveryKeysCredentialInUserStorage(boolean) is only ever called with true, and setupRecoveryKeysForUserWithRequiredAction's logoutOtherSessions is always true so its if branch is never executed.",
+      "zh": "輔助方法也顯示測試設計還沒收斂：assertUserHasRecoveryKeysCredentialInUserStorage(boolean) 只被以 true 呼叫過一次，參數形同虛設；setupRecoveryKeysForUserWithRequiredAction 的 logoutOtherSessions 參數也永遠是 true，那個 if 分支不會被執行到。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The test ends at appPage.assertCurrent(), which only confirms the page loaded; it does not assert the login event and its credential-type detail the way the existing RecoveryAuthnCodesAuthenticatorTest does.",
+      "zh": "此外 appPage.assertCurrent() 只確認頁面到位，並沒有像既有 RecoveryAuthnCodesAuthenticatorTest 那樣以 events.expectLogin()...assertEvent() 驗證真的產生了登入事件與正確的 credential type detail。",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    },
+    {
+      "text": "configureBrowserFlowWithRecoveryAuthnCodes and enterRecoveryCodes were copied almost verbatim from RecoveryAuthnCodesAuthenticatorTest, dragging along a delay parameter that is always 0 here and a REQUIRED delayed-authenticator execution that serves no purpose in this test (it exists in the original only for the simultaneous-login race test).",
+      "zh": "測試 helper 從 RecoveryAuthnCodesAuthenticatorTest 整段複製，連用不到的 delay 參數與 delayed-authenticator execution 一起帶過來",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "The typo in config.setAlias(\"delayed-suthenticator-config\") was copied along with it, so the misspelling now exists in two files.",
+      "zh": "config.setAlias(\"delayed-suthenticator-config\") 是原始碼裡的錯字（suthenticator → authenticator），複製之後變成兩份。",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "createRecoveryCodesCredential takes both the RecoveryAuthnCodesCredentialModel (hashed) and the List<String> of raw codes, two representations of the same secret where the first is derived from the second, and nothing checks that the caller passes a consistent pair.",
+      "zh": "createRecoveryCodesCredential 同時收下同一份祕密的兩種表述",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "createRecoveryCodesCredential returns void, so the caller cannot tell whether the credential ended up in user storage or the local database, unlike createOTPCredential in the same file which has the identical if/else structure and returns boolean.",
+      "zh": "回傳型別是 void，呼叫端無從得知 credential 最後落在 user storage 還是本地資料庫；同檔案的 createOTPCredential 走的是同一個 if/else 結構，卻回傳 boolean。",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "The recoveryCodeCredentialProvider is fetched at the top of the method but only used in the else branch, so the getProvider call is wasted whenever user storage handles the credential.",
+      "zh": "recoveryCodeCredentialProvider 在方法開頭就取得，但只有 else 分支會用到；user storage 接手時這次 getProvider 呼叫是白做的。",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "The new getCredentials dereferences the result of getMyUser without a null check, while getDisableableCredentialTypesStream, isConfiguredFor and isValid in the same class all guard against null; the method is called on every recovery-code form render and validation.",
+      "zh": "getCredentials 對可能回傳 null 的 getMyUser 直接解參考，與同檔案其他方法不一致",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "The recovery codes JSON is deserialized into a raw List (JsonSerialization.readValue(..., List.class) and a raw List variable in isValid), so the element type is never checked and the comparison lambda operates on Object.",
+      "zh": "以 raw List 反序列化，型別資訊在編譯期就丟失",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "log.error in getCredentials drops the IOException instead of passing it, so the stack trace disappears when deserialization fails.",
+      "zh": "log.error(\"Could not deserialize  credential of type: recovery-codes\") 沒有把 IOException e 傳進去，出問題時 stack trace 直接消失。",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "That same log message names the credential type 'recovery-codes' while the actual TYPE constant is 'recovery-authn-codes', so searching for the string will not find the code.",
+      "zh": "訊息裡的型別名稱寫成 recovery-codes，而 RecoveryAuthnCodesCredentialModel.TYPE 實際是 recovery-authn-codes，照字串搜尋會找不到對應程式碼。",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "Stray double spaces in the new code: inside the log message between 'deserialize' and 'credential', in `}  else {`, and after the assignment operator in CredentialHelper.java:119.",
+      "zh": "「deserialize」與「credential」之間有多餘空白；:341 的 }  else { 多了一個空白；CredentialHelper.java:119 的 recoveryCodesJson =  JsonSerialization... 在等號後多了一個空白。",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "BackwardsCompatibilityUserStorageTest.java:481 calls org.junit.Assert.assertEquals with the fully qualified name although the file already imports org.keycloak.testsuite.Assert, which extends it and is used everywhere else in the file.",
+      "zh": "BackwardsCompatibilityUserStorageTest.java:481 用完整套件名寫 org.junit.Assert.assertEquals(...)。檔案內已 import org.keycloak.testsuite.Assert……直接寫 Assert.assertEquals(...) 即可，與同檔案其他斷言的寫法一致。",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "When user storage takes over creating recovery codes, the user's existing local recovery-authn-codes credential is not removed, leaving two credentials — is that deliberate or an oversight? The same structure already exists for OTP.",
+      "zh": "當 user storage 接手建立 recovery codes 時，使用者原本存在本地資料庫的 recovery-authn-codes credential 不會被清除，這是刻意保留還是漏掉的？"
+    },
+    {
+      "text": "If a user storage provider reports an exhausted recovery-codes credential as isConfiguredFor = true, will the login form return HTTP 500, given that RecoveryAuthnCodeInputLoginBean calls Optional.get() twice and getNextRecoveryAuthnCode() returns empty once all codes are used?",
+      "zh": "user storage provider 回報一組已經用完的 recovery codes credential 為 isConfiguredFor = true 時，登入表單會不會直接 500？"
+    }
+  ]
+}

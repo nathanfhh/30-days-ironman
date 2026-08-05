@@ -1,0 +1,17 @@
+{
+  "slug": "grafana-94942",
+  "source_repo": "grafana",
+  "language": "Go",
+  "golden_url": "https://github.com/grafana/grafana/pull/94942",
+  "pr_title": "Advanced SQL Analytics Framework",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR94942__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/grafana__grafana__augment__PR94942__20260122.git",
+  "base_sha": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head_sha": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "stat": " go.mod                  |  8 --------\n go.sum                  | 15 ---------------\n go.work.sum             | 12 ++++++------\n pkg/expr/reader.go      | 12 ++++++++++++\n pkg/expr/sql/db.go      | 26 ++++++++++++++++++++++++++\n pkg/expr/sql/parser.go  |  3 +--\n pkg/expr/sql_command.go |  5 ++---\n 7 files changed, 47 insertions(+), 34 deletions(-)\n",
+  "name_status": "M\tgo.mod\nM\tgo.sum\nM\tgo.work.sum\nM\tpkg/expr/reader.go\nA\tpkg/expr/sql/db.go\nM\tpkg/expr/sql/parser.go\nM\tpkg/expr/sql_command.go\n",
+  "commits": "f3317b32 Run `make update-workspace`\n6e6ed734 disable sql expressions\n"
+}

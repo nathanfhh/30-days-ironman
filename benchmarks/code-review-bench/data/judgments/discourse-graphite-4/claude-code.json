@@ -1,0 +1,26 @@
+{
+  "slug": "discourse-graphite-4",
+  "tool": "claude-code",
+  "n_golden": 6,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Same issue: indexOf substring origin check accepts non-matching origins; should compare origins strictly."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Matches the XSS half: unescaped url interpolated into the generated HTML in TopicEmbed.import."
+    },
+    {
+      "golden_index": 5,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Same issue: `<%- end if %>` is invalid Ruby and raises SyntaxError when rendering the embed view."
+    }
+  ]
+}

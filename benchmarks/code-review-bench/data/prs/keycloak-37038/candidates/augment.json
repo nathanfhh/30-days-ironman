@@ -1,0 +1,5 @@
+[
+  "getGroupIdsWithViewPermission() uses groupResource.getId() (authz resource id) as if it were the Keycloak group id; hasPermission() also expects an identifier that can be resolved via resourceStore.findByName() (i.e., the resource name). This likely breaks group-scoped user visibility and can populate UserModel.GROUPS with unusable identifiers.",
+  "canManage() falls back to hasPermission(... VIEW, MANAGE), which means a principal with only view on Groups could satisfy auth.groups().requireManage() (e.g., GroupsResource.addTopLevelGroup). That seems to broaden write access beyond manage scope and could allow unintended group modifications.",
+  "In hasPermission, when no group-specific resource exists you call getResourceTypeResource(...) and then immediately policyStore.findByResource(server, resource); if resource is null (schema not initialized / missing resource), this will NPE. Consider handling a missing resource-type resource by returning false."
+]

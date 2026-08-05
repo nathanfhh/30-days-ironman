@@ -1,0 +1,17 @@
+{
+  "slug": "sentry-67876",
+  "source_repo": "sentry",
+  "language": "Python",
+  "golden_url": "https://github.com/getsentry/sentry/pull/67876",
+  "pr_title": "GitHub OAuth Security Enhancement",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR67876__20260122.git",
+  "pr_number": 1,
+  "golden_count": 3,
+  "repo_url": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR67876__20260122.git",
+  "base_sha": "f3b740199ef0b8057c2c68a377fd3b4d42346deb",
+  "head_sha": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "stat": " src/sentry/integrations/github/integration.py      | 159 +++++++++++++++------\n src/sentry/web/frontend/pipeline_advancer.py       |  11 +-\n .../sentry/integrations/github/test_integration.py | 127 +++++++++++++++-\n 3 files changed, 247 insertions(+), 50 deletions(-)\n",
+  "name_status": "M\tsrc/sentry/integrations/github/integration.py\nM\tsrc/sentry/web/frontend/pipeline_advancer.py\nM\ttests/sentry/integrations/github/test_integration.py\n",
+  "commits": "bb75657 add explicit redirect_uri parameter\n8c68d5b refactor errors\n7aa8911 add a critical path test\n0b8cf7c add oauth2 login step in pipeline; check for the user match at the end of pipeline\nb31aefd refactor\n"
+}

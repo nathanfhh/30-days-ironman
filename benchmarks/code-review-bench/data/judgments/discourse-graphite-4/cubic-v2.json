@@ -1,0 +1,32 @@
+{
+  "slug": "discourse-graphite-4",
+  "tool": "cubic-v2",
+  "n_golden": 6,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.8,
+      "reasoning": "Both flag Kernel#open(url) on a user-supplied URL in import_remote as the unsafe fetch primitive."
+    },
+    {
+      "golden_index": 0,
+      "candidate_index": 2,
+      "confidence": 0.6,
+      "reasoning": "Points at the same missing URL validation before the open() fetch in import_remote."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 3,
+      "confidence": 0.85,
+      "reasoning": "Matches the nil-contents half of the golden: `contents <<` crashes when contents is nil."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 4,
+      "confidence": 0.85,
+      "reasoning": "Matches the XSS half of the golden: url interpolated into generated HTML without escaping."
+    }
+  ]
+}

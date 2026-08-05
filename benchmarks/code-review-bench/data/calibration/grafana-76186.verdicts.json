@@ -1,0 +1,149 @@
+{
+  "slug": "grafana-76186",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "traceid-dropped-from-logparams",
+      "evidence": "pkg/infra/tracing/tracing.go:91; pkg/infra/log/log.go:203; pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:57",
+      "reason": "traceID is not lost: tracing.ProvideService registers a ContextualLogProviderFunc that returns {\"traceID\", TraceIDFromContext(ctx,false)}, and ConcreteLogger.FromContext walks every registered provider. The explicit tracing lookup was removed precisely because the new m.logger.FromContext(ctx).Info(...) call picks the same value up automatically."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "middleware-ordering-comment-lost",
+      "evidence": "diff.patch:385-386 (removed comment); pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:12-14; pkg/services/pluginsintegration/pluginsintegration.go:157-161",
+      "reason": "The old InstrumentationMiddleware doc said \"this middleware should live at the top of the middleware stack\" because it enriched the context; that sentence was deleted and the new ContextualLoggerMiddleware doc says nothing about ordering, even though every plugin-identifying field in \"Plugin Request Completed\" now depends on it being registered before NewLoggerMiddleware."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "metrics-middleware-shared-next-race",
+      "evidence": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:96-102 (NewMetricsMiddleware); pkg/plugins/manager/client/decorator.go:34,101-113",
+      "reason": "NewMetricsMiddleware builds one *MetricsMiddleware and its ClientMiddlewareFunc assigns imw.next = next; Decorator calls clientFromMiddlewares on every request, so that field is rewritten per request on a shared instance while other goroutines read it in m.next.QueryData — a genuine data race (the resulting chains are functionally equivalent, so practical impact is low). Pre-existing, as the claim states."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "testlogger-fromcontext-new-instance",
+      "evidence": "pkg/plugins/log/fake.go:45-47; pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:57; pkg/services/pluginsintegration/pipeline/steps_test.go:95-102",
+      "reason": "FromContext returns NewTestLogger(), a zero-valued fake, so LoggerMiddleware's m.logger.FromContext(ctx).Info(...) increments counters on a throwaway object. Existing tests do assert against the instance they hold (e.g. require.Equal(t, fakeLogger.ErrorLogs.Calls, 1)), so that pattern breaks for any code routed through FromContext."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "testlogger-fromcontext-new-instance",
+      "evidence": "pkg/plugins/log/fake.go:45-47",
+      "reason": "Correct that the returned TestLogger has zero counters and is disconnected from the receiver f, so calls made through FromContext never reach the instance a test holds. (\"Silently\" is slightly off — such a test fails loudly with Calls == 0 — but the substance is right.)"
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "contextual-logger-middleware-untested",
+      "evidence": "pkg/services/pluginsintegration/clientmiddleware/ directory listing (no contextual_logger_middleware_test.go, no logger_middleware_test.go)",
+      "reason": "There is no test file for the new middleware, and the accompanying premise holds: after this PR the endpoint/pluginId/dsName/dsUID/uname fields are contributed only by ContextualLoggerMiddleware's instrumentContext, since logger_middleware.go no longer builds them."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "contextual-logger-stream-passthrough",
+      "evidence": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:59-69; pkg/services/pluginsintegration/clientmiddleware/tracing_middleware.go:115-136",
+      "reason": "SubscribeStream/PublishStream/RunStream forward to m.next without calling instrumentContext and carry no comment explaining why, whereas TracingMiddleware wraps all seven endpoints including the three stream ones. The asymmetry is real; it is undocumented rather than obviously wrong (LoggerMiddleware also skips streams)."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "testlogger-fromcontext-new-instance",
+      "evidence": "pkg/plugins/log/fake.go:45-47",
+      "reason": "Same finding as the other FromContext claims: the method returns a brand-new TestLogger rather than f, so nothing logged through it is observable on the fake a test holds a reference to."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "testlogger-fromcontext-new-instance",
+      "evidence": "pkg/plugins/log/fake.go:45-47",
+      "reason": "Accurate, and the suggested fix (return f) is the right one for a recording fake; note the pre-existing New(_ ...any) at line 18 has the same flaw, so a maintainer would likely fix both."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "test-func-name-not-renamed",
+      "evidence": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:21",
+      "reason": "The file was renamed from instrumentation_middleware_test.go to metrics_middleware_test.go but line 21 still reads func TestInstrumentationMiddleware(t *testing.T); it is the only remaining occurrence of \"InstrumentationMiddleware\" in pkg/."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "testlogger-fromcontext-new-instance",
+      "evidence": "pkg/plugins/log/fake.go:45-47",
+      "reason": "Correct including the location: fake.go line 46 is `return NewTestLogger()` inside FromContext (the claim says line 47, off by one), and returning f would make LoggerMiddleware's contextual logging observable to tests."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "logger-interface-breaking-change",
+      "evidence": "pkg/plugins/log/ifaces.go:19-20; pkg/plugins/log/logger.go:46; pkg/plugins/log/fake.go:45",
+      "reason": "The premise is verified — Logger is exported and gained FromContext, and only the two in-repo implementations (grafanaInfraLogWrapper, TestLogger) were updated. Whether downstream consumers such as grafana-enterprise implement this interface cannot be settled from this checkout; a search for implementations of pkg/plugins/log.Logger in grafana-enterprise (or a build of it against this branch) would settle it."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "test-func-name-not-renamed",
+      "evidence": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:21",
+      "reason": "Confirmed: line 21 is func TestInstrumentationMiddleware while the type under test is now MetricsMiddleware and the helper is newMetricsMiddleware (line 78 of the same file)."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "nested-context-duplicate-logparams",
+      "evidence": "pkg/infra/log/log.go:285-291; pkg/plugins/manager/client/client.go:42-49; pkg/services/query/query.go:234,270; pkg/expr/service.go:75-85",
+      "reason": "WithContextualAttributes does append to any existing params, so a second pass would duplicate fields — but I found no re-entrant path. The decorator dispatches only to plugins in the registry, and __expr__ is not one: /api/ds/query routes expression queries straight to expressionService.TransformData, and expr's DSNode is the first (not second) entry into the plugin client for that context. All holders of plugins.Client (query, live, expr, api, legacydata) are invoked from outside a plugin request."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "logger-name-plugin-instrumentation",
+      "evidence": "pkg/services/pluginsintegration/pluginsintegration.go:161",
+      "reason": "log.New(\"plugin.instrumentation\") is still passed to NewLoggerMiddleware, and no type named Instrumentation remains in pkg/ after the rename. Worth flagging even though a maintainer may deliberately keep the name to avoid breaking existing log queries and dashboards."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "contextual-logger-nil-request-panic",
+      "evidence": "pkg/plugins/manager/client/decorator.go:29-31,41,54,63,72; pkg/services/pluginsintegration/clientmiddleware/tracing_middleware.go:83-85; pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:139-146",
+      "reason": "The \"regression\" premise is wrong in both directions: Decorator (and client.Service) return errNilRequest before any middleware runs, and the two middlewares ordered ahead of ContextualLoggerMiddleware — TracingMiddleware and MetricsMiddleware — already dereference req.PluginContext with no nil check, so a nil request never reaches the new code and nothing that previously handled it gracefully was removed."
+    }
+  ]
+}

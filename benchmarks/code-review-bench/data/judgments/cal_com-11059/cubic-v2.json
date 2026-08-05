@@ -1,0 +1,26 @@
+{
+  "slug": "cal_com-11059",
+  "tool": "cubic-v2",
+  "n_golden": 5,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Both say substituting the literal string 'refresh_token' for a missing refresh token clobbers the real token and breaks the next refresh."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 0,
+      "confidence": 0.75,
+      "reasoning": "Both say the credential-sync path returns a fetch Response rather than the axios-shaped object callers assume."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 0,
+      "confidence": 0.85,
+      "reasoning": "Both say .data is read off what is actually a fetch Response and must be normalized first."
+    }
+  ]
+}

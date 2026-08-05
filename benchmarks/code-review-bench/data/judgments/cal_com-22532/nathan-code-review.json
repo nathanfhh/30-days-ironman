@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-22532",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 24,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 22,
+      "confidence": 0.7,
+      "reasoning": "Both concern the same updateMany call with an empty data object and whether Prisma's @updatedAt actually bumps the timestamp; the candidate raises it as an unverified risk rather than an assertion, but it is the same underlying issue on the same line."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 14,
+      "confidence": 0.95,
+      "reasoning": "Both flag the macOS/BSD-only `sed -i ''` syntax in the new shell script failing on GNU sed/Linux."
+    }
+  ]
+}

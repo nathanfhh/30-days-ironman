@@ -1,0 +1,149 @@
+{
+  "slug": "sentry-80528",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "docstring-typo-humam-readible",
+      "evidence": "src/sentry/monitors/logic/incident_occurrence.py:132",
+      "reason": "The docstring of get_failure_reason literally reads \"Builds a humam readible string from a list of failed check-ins.\" — two misspellings, carried into the newly added file."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "incident-opens-below-threshold",
+      "evidence": "src/sentry/monitors/logic/incidents.py:37-53",
+      "reason": "The queryset is sliced with previous_checkins[:failure_issue_threshold] and only the presence of an OK status short-circuits; a monitor whose entire history is one failing check-in yields a 1-element list, no OK is found, and MonitorStatus.ERROR + MonitorIncident are created despite a threshold of N. tests/sentry/monitors/logic/test_mark_failed.py::test_mark_failed_issue_threshold always seeds an OK check-in first, so this case is untested."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "docstring-typo-humam-readible",
+      "evidence": "src/sentry/monitors/logic/incident_occurrence.py:132",
+      "reason": "Same typo, correctly attributed to get_failure_reason's docstring: \"humam readible\" instead of \"human readable\"."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.82,
+      "severity": "Low",
+      "cluster": "new-modules-missing-docstrings",
+      "evidence": "src/sentry/monitors/logic/incidents.py:14-19, src/sentry/monitors/logic/incident_occurrence.py:29-34",
+      "reason": "Neither try_incident_threshold nor create_incident_occurrence has a docstring, and both perform heavy side effects (monitor_env.save, MonitorIncident.objects.get_or_create, produce_occurrence_to_kafka, monitor_environment_failed.send). The only prose describing that behaviour stayed behind on mark_failed in mark_failed.py:19-27 and was not restated in the extracted modules."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "docstring-example-nonexistent-output",
+      "evidence": "src/sentry/monitors/logic/incident_occurrence.py:123-136",
+      "reason": "SINGULAR_HUMAN_FAILURE_MAP only contains \"An error/A missed/A timeout check-in was detected\"; the docstring's third example \"A failed check-in was detected\" is a string the function can never return."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "unclear",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "external-importers-of-renamed-symbols",
+      "evidence": "src/sentry/monitors/logic/incidents.py, src/sentry/monitors/types.py:105",
+      "reason": "Inside this checkout nothing references mark_failed_threshold, create_issue_platform_occurrence, or a SimpleCheckIn imported from mark_failed (the only create_issue_platform_occurrence hits are the unrelated uptime module). Settling it for private dependents such as getsentry needs a grep of a repository I do not have."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "unclear",
+      "confidence": 0.9,
+      "severity": null,
+      "cluster": "test-suite-actually-runs",
+      "evidence": "tests/sentry/monitors/logic/test_mark_failed.py:1-26",
+      "reason": "Statically the tests should be unaffected — they import only mark_failed and patch sentry.issues.producer.produce_occurrence_to_kafka at its source, which still resolves because create_incident_occurrence imports it inside the function body. Confirming an end-to-end pass needs postgres/kafka/redis, which I cannot run."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "not_real",
+      "confidence": 0.78,
+      "severity": null,
+      "cluster": "refetch-checkins-by-id",
+      "evidence": "src/sentry/monitors/logic/incidents.py:93, src/sentry/monitors/logic/incident_occurrence.py:37-83",
+      "reason": "The premise is false: previous_checkins holds SimpleCheckIn dicts with only id/date_added/status (src/sentry/monitors/types.py:105-110), while create_incident_occurrence needs failed_checkin.monitor_environment and failed_checkin.trace_id, so the MonitorCheckIn.objects.filter(id__in=...) fetch is required, not redundant."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "comment-typo-commits",
+      "evidence": "src/sentry/monitors/logic/incidents.py:50-51",
+      "reason": "The comment reads \"within the threshold of / commits\" at exactly line 51; the loop below inspects check-in statuses, so \"commits\" is a stray word."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.76,
+      "severity": "Medium",
+      "cluster": "incident-opens-below-threshold",
+      "evidence": "src/sentry/monitors/logic/incidents.py:48",
+      "reason": "Same defect as c002 stated as the remedy: nothing checks len(previous_checkins) == failure_issue_threshold after the slice, so a short history opens an incident early."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "context-returns-unmodified-config",
+      "evidence": "src/sentry/monitors/logic/incident_occurrence.py:159-171",
+      "reason": "config = monitor.config.copy() is mutated with the schedule_type display value, then the returned dict uses monitor_environment.monitor.config — the shallow copy is discarded, so the monitor context in the occurrence event carries the raw ScheduleType integer and the get_schedule_type_display() call is dead."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "not_real",
+      "confidence": 0.62,
+      "severity": null,
+      "cluster": "empty-status-counts-message",
+      "evidence": "src/sentry/monitors/logic/incidents.py:29-81, src/sentry/monitors/consumers/monitor_consumer.py:877-880",
+      "reason": "The described input cannot arrive: all three mark_failed callers pass a check-in whose status is ERROR, TIMEOUT, or MISSED (monitor_consumer.py:877, clock_tasks/check_timeout.py:106-124, clock_tasks/check_missed.py:170), and that check-in is always present in previous_checkins (either constructed directly or as the newest row of the date_added__lte slice), so status_counts is never empty. The docstring's \"generic fallback\" it cites also does not exist as a code path (see c005)."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "unused-module-loggers",
+      "evidence": "src/sentry/monitors/logic/incidents.py:11, src/sentry/monitors/logic/incident_occurrence.py:25",
+      "reason": "Grepping for \"logger\" in all three modules returns only the three getLogger assignments and no call sites, so the split duplicated an already-dead logger into two new files (mark_failed.py:11 keeps its own, also unused)."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Low",
+      "cluster": "tests-not-split-with-modules",
+      "evidence": "tests/sentry/monitors/logic/test_mark_failed.py",
+      "reason": "tests/sentry/monitors/logic/ contains only test_mark_failed.py and test_mark_ok.py; every test of the extracted incident/occurrence logic (threshold behaviour, muting, kafka occurrences, assignment) still lives in test_mark_failed.py, which no longer names what it covers."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Low",
+      "cluster": "list-keys-index-zero",
+      "evidence": "src/sentry/monitors/logic/incident_occurrence.py:146",
+      "reason": "Line 146 is exactly SINGULAR_HUMAN_FAILURE_MAP[list(status_counts.keys())[0]]; it materialises the whole key view to take one element, where next(iter(status_counts)) is the idiomatic form. Style-only, but accurate."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "docstring-typo-humam-readible",
+      "evidence": "src/sentry/monitors/logic/incident_occurrence.py:132",
+      "reason": "Line 132 of the new file is the docstring line containing \"humam\"; the cited line number matches the file exactly."
+    }
+  ]
+}

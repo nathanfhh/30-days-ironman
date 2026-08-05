@@ -1,0 +1,6 @@
+[
+  "Duplicate `downsize` method in Ruby - the second definition shadows the first, breaking the emoji resizer's call with separate width, height arguments which raises ArgumentError at runtime",
+  "Stale `tempfile.size` after in-place ImageMagick conversion - the Ruby Tempfile object holds an open file descriptor to the original inode, so after the external process replaces the file, tempfile.size still reads the old size, causing the loop to iterate all 5 times regardless of whether target size was reached",
+  "Hardcoded 10 MB limit silently overrides admin setting for non-image uploads - the JS change applies a 10 MB cap to every upload type, overriding the admin-configured max_attachment_size_kb for non-image files",
+  "No early exit when downsize fails to reduce size - if OptimizedImage.downsize fails it returns false and the file size stays the same, but the loop will still run all 5 remaining iterations without making progress"
+]

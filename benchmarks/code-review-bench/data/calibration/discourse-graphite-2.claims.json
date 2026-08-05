@@ -1,0 +1,101 @@
+{
+  "slug": "discourse-graphite-2",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Adding `render :show` to the shared `perform_show_response` method (needed only so the new unsubscribe action has a template) changes the render timing of the existing `topics#show` action and causes its canonical link tag to disappear."
+    },
+    {
+      "claim_id": "c002",
+      "text": "topicUnsubscribe is declared as a top-level route, but the template lives at templates/topic/unsubscribe.hbs (which resolves to topic.unsubscribe), so Ember may not find/render the intended template and the unsubscribe page may render incorrectly or blank"
+    },
+    {
+      "claim_id": "c003",
+      "text": "The unsubscribe action requires ensure_logged_in but the unsubscribe URL is embedded in notification emails - when logged-out users click the link, they are silently redirected to the homepage with no error message and no unsubscribe action taken, making the per-topic email unsubscribe feature non-functional for the most common use case"
+    },
+    {
+      "claim_id": "c004",
+      "text": "After dropdown-button was changed to omit the `<h4 class='title'>` element entirely when title is empty, does this cause any layout shift for existing users of the notifications/pinned buttons?"
+    },
+    {
+      "claim_id": "c005",
+      "text": "Duplicate respond instructions in email template - Line 6 duplicates the respond instructions that already appear at Line 19 when context_posts are present"
+    },
+    {
+      "claim_id": "c006",
+      "text": "Rendering {{title}} inside HTML translation creates an XSS vulnerability on the unsubscribe page because the title is interpolated and inserted with triple-stash without escaping"
+    },
+    {
+      "claim_id": "c007",
+      "text": "Missing trailing comma in multiline filter list - the array passed to skip_before_filter should include a trailing comma after :unsubscribe to match project style and fix lint warning"
+    },
+    {
+      "claim_id": "c008",
+      "text": "The unsubscribe redirect uses a permanent 301 status and doesn't reuse the existing `redirect_to_correct_topic` helper's handling of JSON-format requests."
+    },
+    {
+      "claim_id": "c009",
+      "text": "The new controller action, model method, and two new routes have zero test coverage; the only touched spec merely adds a now-required parameter without asserting anything about the new unsubscribe link or behavior."
+    },
+    {
+      "claim_id": "c010",
+      "text": "The first click only downgrades the notification level to 'regular' (replies and mentions still notify), which contradicts both the email copy and the confirmation-page copy that promise notifications will 'stop'."
+    },
+    {
+      "claim_id": "c011",
+      "text": "The unsubscribe write bypasses `TopicUser.change` and saves directly, leaving `notifications_reason_id` blank; as a result the unsubscribe action gets silently auto-reverted later by `update_last_read`/`TrackedTopicsUpdater` and never broadcasts the change via MessageBus to other open tabs."
+    },
+    {
+      "claim_id": "c012",
+      "text": "The new per-topic unsubscribe endpoint is a GET request that has a state-changing side effect (writes notification_level), giving it no CSRF protection and making it triggerable by mail-client link prefetching or a forged `<img>` tag pointing at it."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Template is named for a nested topic.unsubscribe route, but the router/controller/view use the top-level topicUnsubscribe route, so the new page content will not be picked up unless the template is renamed to match that route"
+    },
+    {
+      "claim_id": "c014",
+      "text": "Header class has leading dot preventing CSS targeting - Line 10 includes '.previous-discussion' instead of 'previous-discussion' in the class attribute"
+    },
+    {
+      "claim_id": "c015",
+      "text": "The unsubscribe link requires the user to be logged in and silently redirects unauthenticated visitors to the homepage with no message or return URL; it also doesn't reuse the repo's existing signed-key unsubscribe mechanism used elsewhere for email links."
+    },
+    {
+      "claim_id": "c016",
+      "text": "The unsubscribe_link i18n string now requires %{unsubscribe_url} interpolation but Email::MessageBuilder provides no default value for it - any plugin using build_email with add_unsubscribe_link: true without providing unsubscribe_url will raise I18n::MissingInterpolationArgument"
+    },
+    {
+      "claim_id": "c017",
+      "text": "Test for List-Unsubscribe header only checks presence but should assert the value uses the provided unsubscribe_url"
+    },
+    {
+      "claim_id": "c018",
+      "text": "Does `add_unsubscribe_link: true` now implicitly require also passing `unsubscribe_url`, and should this new calling contract have an explicit guard against missing it?"
+    },
+    {
+      "claim_id": "c019",
+      "text": "GET request performs a state-mutating action - Both unsubscribe routes are GET but the controller action immediately writes to the database on every visit, allowing email security scanners and link-prefetching services to silently change notification levels without user intent"
+    },
+    {
+      "claim_id": "c020",
+      "text": "logic: Potential nil pointer exception - if no TopicUser record exists, tu will be nil and calling methods on it will crash"
+    },
+    {
+      "claim_id": "c021",
+      "text": "The Ember `topicUnsubscribe` route unconditionally displays a 'notifications stopped' message even when reached via a client-side transition, in which case the server unsubscribe endpoint is never actually called."
+    },
+    {
+      "claim_id": "c022",
+      "text": "State-changing unsubscribe action uses GET request - topics#unsubscribe mutates notification state but is mapped to GET, should use POST/PUT or require a signed token"
+    },
+    {
+      "claim_id": "c023",
+      "text": "List-Unsubscribe header omits the new per-topic URL - The header still only advertises user_preferences_url instead of including the new per-topic unsubscribe URL"
+    },
+    {
+      "claim_id": "c024",
+      "text": "Typo in property name: 'stopNotificiationsText' should be 'stopNotificationsText' (missing 'n' in 'Notifications')"
+    }
+  ]
+}

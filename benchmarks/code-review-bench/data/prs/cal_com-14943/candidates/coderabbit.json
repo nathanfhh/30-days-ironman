@@ -1,0 +1,6 @@
+[
+  "The second OR branch in the deleteMany query is missing a method guard, so it will delete any WorkflowReminder with retryCount > 1, not just SMS reminders - the cleanup should be scoped to SMS only",
+  "Using JavaScript-level addition (reminder.retryCount + 1) instead of Prisma's atomic increment operator creates race conditions when two scheduler instances run concurrently, causing one failure to be lost and weakening the delete after two failures logic",
+  "The Twilio provider API call and database persistence are in a single try-catch, so if Twilio accepts the SMS but the database update fails, the error is treated as a send failure causing duplicate SMS on retry",
+  "After multiple database failures, the reminder row may be deleted leaving orphaned jobs on Twilio with no database reference"
+]

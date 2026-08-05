@@ -1,0 +1,123 @@
+{
+  "slug": "sentry-93824",
+  "issues": [
+    {
+      "text": "After hang detection, the code guards process.kill() with isinstance(process, multiprocessing.Process), but since the flusher uses a spawn context, the actual object is a SpawnProcess which does not inherit from multiprocessing.Process, so the isinstance check is always False in production and the old hung process is never killed; a new process is created for the same shard anyway, and both processes will concurrently non-destructively flush the same shard, producing duplicate segments to the buffered-segments topic. This is independent of the --flusher-processes flag value.",
+      "zh": "hang 偵測後舊 flusher process 不會被 kill，卻已補上新 process，兩者會同時 flush 同一組 shard",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "spans.buffer.max-flush-segments effectively changes meaning from a global per-flush cap to a per-process cap: since each SpansBuffer now only sees 1/N of the shards, flush_segments' ceil(max_flush_segments / len(assigned_shards)) formula results in an aggregate cap across N processes of roughly N × max_flush_segments instead of the original single value.",
+      "zh": "spans.buffer.max-flush-segments 從全域上限變成每 process 上限",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "SpanFlusher's class-level default behavior changed: previously max_processes unset meant one process total; now `max_processes or len(buffer.assigned_shards)` means unset defaults to one process per shard — the highest-resource-usage option — while the CLI default is still pinned to 1, so the two defaults point in opposite directions and any new caller that doesn't set max_processes explicitly could unknowingly spawn many processes.",
+      "zh": "SpanFlusher 的類別預設從「一個 process」變成「每個 shard 一個 process」",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "_create_process_for_shard (singular) is dead code with no callers anywhere in the repo, and its name misleadingly suggests a \"restart just one shard\" capability that doesn't actually exist (it would restart the whole process, interrupting other shards on it too).",
+      "zh": "_create_process_for_shard（單數）是沒有呼叫端的死碼，且它的名字暗示了一個不存在的能力",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "test_basic's newly added time.sleep(0.1) doesn't actually wait, because time.sleep was already monkeypatched to a no-op earlier in the same test, so the comment claiming it gives flusher threads time to process is misleading and the test's flakiness protection has no effect.",
+      "zh": "test_basic 新增的 time.sleep(0.1) 不會產生任何等待，因為 time.sleep 在同一個測試開頭已被換成 no-op",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "test_flusher_processes_limit only asserts bookkeeping fields (process counts, shard-to-process map size) that are trivially true from the constructor logic, but never asserts that the produced `messages` list actually contains all expected segments — so the real risk of this change, whether shards split across multiple processes still get fully flushed without loss or duplication, is completely uncovered, and the heavily-modified _ensure_processes_alive has no test touching it at all (which is why F-001 isn't caught by tests).",
+      "zh": "test_flusher_processes_limit 只驗證帳面數字，沒有驗證「兩個 process 共用四個 shard 仍然不漏資料」",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The new shard_tag used in metrics has unbounded cardinality: it's a comma-joined string of the shards a process owns, which changes on every Kafka rebalance and combination of --flusher-processes, so metrics like spans.buffer.segment_size_bytes (fired per segment) can produce an unbounded number of distinct tag values.",
+      "zh": "新增的 shard metrics tag 是不受控的 cardinality",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The same shard-list value is tagged inconsistently across nearby metrics calls — some use the tag key `shard`, others use `shards` for the identical value — forcing dashboard/query authors to remember two different tag names for the same thing.",
+      "zh": "同一段程式的 tag key 也不一致：flusher.py:185 與 192-196 用 shard，flusher.py:199 用 shards，兩者的值卻是同一個 shard 清單",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "spans.buffer.flusher_unhealthy is now incremented once per shard owned by an unhealthy process instead of once per unhealthy-process event, inflating the counter by a factor of shard-count and breaking the semantics existing dashboards/alerts assume.",
+      "zh": "flusher_unhealthy 的計數語意被放大：把 spans.buffer.flusher_unhealthy 改成對該 process 底下每個 shard 各 incr 一次",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The class docstring's new claim \"Creates one process per shard for parallel processing\" only holds when max_processes is None; the actually deployed process-spans consumer uses the CLI default of 1 (one process for all shards), so the docstring describes the opposite of the real default deployment behavior.",
+      "zh": "class docstring 新增的敘述與實際預設行為相反",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The newly added max_processes constructor parameter is missing from the class's :param documentation block.",
+      "zh": "新增參數未進 :param 區塊",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "join()'s outer deadline check does a `break` out of the loop entirely instead of `continue`, so once the deadline is hit, every remaining process in the list is skipped and never gets terminate() called on it — changing behavior from \"always terminate after waiting\" to \"stop terminating anything once one process times out\".",
+      "zh": "join() 在 deadline 到期時 break，會讓其餘 process 連 terminate() 都被跳過",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    },
+    {
+      "text": "The `if not process: continue` guard at the start of _ensure_processes_alive can never be true, since self.processes only ever holds SpawnProcess or threading.Thread objects (neither defines __bool__/__len__) and is never populated with None.",
+      "zh": "_ensure_processes_alive 開頭的 if not process: continue 永遠不會成立",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "SpanFlusher's constructor requires a full SpansBuffer argument but only ever reads its assigned_shards attribute before discarding it and building N new SpansBuffer instances internally, meaning the signature demands more than the class actually needs and the passed-in buffer creates an extra unused Redis connection in the parent process.",
+      "zh": "SpanFlusher 只從傳入的 buffer 取 assigned_shards 卻要求傳整個 buffer",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "The new --flusher-processes CLI flag has no lower-bound validation: passing 0 falls back (due to Python falsy-0 behavior in `max_processes or len(...)`) to \"one process per shard\", the opposite of what a user passing 0 likely intends and the highest resource usage option; passing a negative value crashes with an opaque KeyError instead of a clear parameter error.",
+      "zh": "--flusher-processes 對 0 與負值沒有防護：0 的效果與使用者意圖相反，負值以 KeyError 收場",
+      "finding_id": "F-012",
+      "severity": "Nit"
+    },
+    {
+      "text": "The diff adds a hasattr/isinstance Python convention example to CLAUDE.md that is unrelated to the span buffer multiprocess change, making it harder to trace via git log why/when that convention was added if bundled into this PR.",
+      "zh": "CLAUDE.md 新增的 hasattr / isinstance 段落與本次 span buffer 變更無關",
+      "finding_id": "F-013",
+      "severity": "Nit"
+    },
+    {
+      "text": "The CLAUDE.md edit leaves an extra blank line before the code fence that wasn't there prior to this change.",
+      "zh": "結尾多了一個空行",
+      "finding_id": "F-013",
+      "severity": "Nit"
+    },
+    {
+      "text": "submit()'s Redis memory check now queries the entire cluster-wide INFO once per SpansBuffer (i.e. once per flusher process) instead of once total, redundantly repeating the same cluster-wide query N times per submit call (though the resulting used/available ratio itself remains correct, and this code path is skipped entirely at the default max-memory-percentage=1.0).",
+      "zh": "submit() 的記憶體檢查對每個 buffer 各查一次整個 Redis cluster 的 INFO",
+      "finding_id": "F-014",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "After scaling --flusher-processes to N, Kafka producer and Redis connection counts roughly multiply by N; does the target cluster have headroom for that, and what value of N is actually planned?",
+      "zh": "把 --flusher-processes 調到 N 之後，Kafka producer 與 Redis 的連線數會變成約 N 倍；目標叢集有這個餘裕嗎？打算把 N 設到多少？"
+    },
+    {
+      "text": "Are the two modified tests in test_consumer.py stable in CI, given they now depend on real threads and Redis and one of them has a no-op'd time.sleep turning the flusher thread into a busy loop?",
+      "zh": "tests/sentry/spans/consumers/process/test_consumer.py 的兩個測試在 CI 上是否穩定？"
+    }
+  ]
+}

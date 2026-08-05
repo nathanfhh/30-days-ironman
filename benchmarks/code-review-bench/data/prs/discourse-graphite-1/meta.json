@@ -1,0 +1,17 @@
+{
+  "slug": "discourse-graphite-1",
+  "source_repo": "discourse-graphite",
+  "language": "Ruby",
+  "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/1",
+  "pr_title": "FEATURE: automatically downsize large images",
+  "original_url": "https://github.com/discourse/discourse/commit/ffbaf8c54269df2ce510de91245760fddce09896",
+  "fork_repo": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR1__20260122.git",
+  "pr_number": 1,
+  "golden_count": 3,
+  "repo_url": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR1__20260122.git",
+  "base_sha": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head_sha": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "stat": " app/assets/javascripts/discourse/lib/utilities.js |  4 ++--\n app/controllers/uploads_controller.rb             | 11 ++++++++++-\n app/models/optimized_image.rb                     | 17 ++++++++---------\n 3 files changed, 20 insertions(+), 12 deletions(-)\n",
+  "name_status": "M\tapp/assets/javascripts/discourse/lib/utilities.js\nM\tapp/controllers/uploads_controller.rb\nM\tapp/models/optimized_image.rb\n",
+  "commits": "ffbaf8c FEATURE: automatically downsize large images\n"
+}

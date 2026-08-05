@@ -1,0 +1,8 @@
+[
+  "Non-atomic count-then-insert allows limit to be exceeded - CountDevices and subsequent INSERT run in separate database sessions with no transaction wrapping them together, allowing concurrent goroutines to both observe count < deviceLimit and both proceed to insert",
+  "Device-limit error blocks anonymous auth entirely for first request, then allows it via cache - when limit is reached, first request returns ErrDeviceLimitReached but subsequent requests from same device within 29 minutes bypass both DB check and guard due to cache-before-write issue in tagDeviceUI",
+  "int64 serializes as 0 when no limit is configured, but TS type is number | undefined - AnonymousDeviceLimit defaults to 0 and will always serialize as 0 in JSON, but TypeScript type implies field could be absent, causing incorrect behavior when checking if limit is set",
+  "ErrDeviceLimitReached returned for expired device, not just unknown device - updateDevice returns ErrDeviceLimitReached when rowsAffected == 0, which covers both never-seen devices and devices last seen more than 30 days ago, conflating two distinct scenarios",
+  "Duplicated anonymousDeviceExpiration constant - constant is defined in both anonstore/database.go and api/api.go, which could cause the API's device listing window and limit-enforcement window to silently disagree if values drift",
+  "Local cache set before DB operation succeeds - localCache.SetDefault is called before CreateOrUpdateDevice, so if DB call returns ErrDeviceLimitReached the device is already cached, allowing subsequent requests to bypass the device limit"
+]

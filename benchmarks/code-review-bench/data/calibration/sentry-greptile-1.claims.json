@@ -1,0 +1,81 @@
+{
+  "slug": "sentry-greptile-1",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "None of the three changes in this PR \u2014 the new paginator class, the new public query parameter, and the change to shared base-class pagination behavior \u2014 have any test coverage."
+    },
+    {
+      "claim_id": "c002",
+      "text": "OptimizedCursorPaginator.value_from_cursor returns cursor.value directly without converting to datetime, breaking build_queryset's comparison logic for datetime fields"
+    },
+    {
+      "claim_id": "c003",
+      "text": "Importing non-existent OptimizedCursorPaginator"
+    },
+    {
+      "claim_id": "c004",
+      "text": "OptimizedCursorPaginator.value_from_cursor returns the raw cursor value (an integer timestamp) instead of converting it back to a datetime, so build_queryset will compare an integer against a DateTimeField on page 2+, causing type mismatch errors. It should convert back using datetime.fromtimestamp() like DateTimePaginator does."
+    },
+    {
+      "claim_id": "c005",
+      "text": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError."
+    },
+    {
+      "claim_id": "c006",
+      "text": "The change to BasePaginator.get_result affects every paginator subclass site-wide, and the negative-offset fix is only half done: the is_prev branch still passes an unclamped negative offset straight into the queryset slice, a nearby elif still compares against the un-clamped offset (risking future desync), and invalid input silently becomes \"return page one\" instead of the explicit error every other paginator in this codebase gives."
+    },
+    {
+      "claim_id": "c007",
+      "text": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope."
+    },
+    {
+      "claim_id": "c008",
+      "text": "What calling pattern and return value was the negative-offset branch meant to support \u2014 reverse pagination (which the codebase already provides via cursor.is_prev) or reading past normal pagination bounds? The comments claim both, but as written the code delivers neither."
+    },
+    {
+      "claim_id": "c009",
+      "text": "OptimizedCursorPaginator.get_result duplicates almost the entire ~60-line body of BasePaginator.get_result, with the only real difference being the negative-offset branch, so future fixes to the base class won't propagate to it."
+    },
+    {
+      "claim_id": "c010",
+      "text": "Date-range filtering silently removed - statsPeriod, start, and end query parameters were removed without replacement, breaking existing callers that rely on date-scoped audit log queries"
+    },
+    {
+      "claim_id": "c011",
+      "text": "value_from_cursor returns a raw integer instead of a datetime - causes SQL WHERE datetime comparison to fail with type mismatch"
+    },
+    {
+      "claim_id": "c012",
+      "text": "Trailing whitespace, a blank line at end-of-file, and three consecutive blank lines are present in the diff and will fail the project's pre-commit checks (black + flake8)."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Multiple comments and docstrings assert safety/ORM-behavior conclusions (\"this is safe because the queryset will handle boundary conditions\", \"Django properly handles negative slicing automatically\", \"safe because permissions are checked at the queryset level\", \"advanced pagination features for authorized administrators\") that do not match what the code actually does."
+    },
+    {
+      "claim_id": "c014",
+      "text": "enable_advanced is not the \"authorized administrators\" check its comment claims: it reads OrganizationMember.has_global_access (defaults to True, never set False anywhere in the repo) and request.user.is_superuser (a raw DB flag, not the codebase's is_active_superuser(request) used two lines away for the same endpoint), so the gate is true for nearly anyone who can reach the handler."
+    },
+    {
+      "claim_id": "c015",
+      "text": "The new optimized_pagination query parameter bypasses the endpoint's existing AuditLogQueryParamSerializer and is compared with a case-sensitive == \"true\", so values like True/1/yes silently fail to enable the feature with no error surfaced to the caller."
+    },
+    {
+      "claim_id": "c016",
+      "text": "Django querysets do not support negative slicing"
+    },
+    {
+      "claim_id": "c017",
+      "text": "No tests cover the new optimized_pagination=true code path, especially around cursor handling"
+    },
+    {
+      "claim_id": "c018",
+      "text": "Misleading comments in Cursor class describe performance optimization for negative offsets but the Cursor class itself doesn't implement any special handling - actual implementation is in OptimizedCursorPaginator"
+    },
+    {
+      "claim_id": "c019",
+      "text": "Which specific slow query is this \"performance optimization\" meant to fix? There is no benchmark, profiling output, issue link, or EXPLAIN in the diff, and the existing DateTimePaginator is already keyset-paginated, so the new offset-based path could plausibly be slower, not faster."
+    }
+  ]
+}

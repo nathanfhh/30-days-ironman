@@ -1,0 +1,4 @@
+[
+  "Changing the CleanUpService ticker from 10 minutes to 1 minute could cause the cleanup loop to run nearly continuously if srv.clean() takes >1 minute (ticks accumulate), increasing load and lock contention",
+  "Cleanup paths log at Error level even when there is no error and include potentially huge ids slices, which could flood logs and create false error signals during normal operation"
+]

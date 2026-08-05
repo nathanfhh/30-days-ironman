@@ -1,0 +1,5 @@
+[
+  "In _get_event_stats, the upsampling decision is computed from the outer dataset and request rather than the scoped_dataset/query actually being executed, causing upsampling to be skipped/applied incorrectly for dashboard-split subqueries",
+  "Hardcoding the replacement to upsampled_count() as count forces the result column name to count, which can cause serialization to look up count() instead and emit 0 for upsampled rows when transformAliasToInputFormat=1 is used",
+  "_set_sample_rate_from_error_sampling sets normalized_data[sample_rate] for any truthy client_sample_rate without validating the range, allowing values like 0, negatives, or >1 to leak into downstream weighting logic"
+]

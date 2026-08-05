@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-7",
+  "tool": "cubic-v2",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.8,
+      "reasoning": "Same issue: the dark-light-choose conversion at desktop/topic-post.scss:291 swapped the light-theme lightness, regressing the existing light value."
+    }
+  ]
+}

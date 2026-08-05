@@ -1,0 +1,329 @@
+{
+  "slug": "discourse-graphite-3",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "errors-response-shape",
+      "evidence": "app/controllers/users_controller.rb:198 vs :154 and :214",
+      "reason": "create now renders `errors: user.errors.to_hash` (a hash keyed by attribute), while the same controller's other JSON responses render `errors: [I18n.t(...)]` — a string array, which spec/controllers/users_controller_spec.rb:783 asserts via json['errors'][0]. Same key, two shapes."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "users-controller-create-specs",
+      "evidence": "app/controllers/users_controller.rb:196-200; spec/controllers/users_controller_spec.rb",
+      "reason": "The diff touches no controller spec, and grepping users_controller_spec.rb for 'values' or for errors assertions on the create failure branch turns up only check_username cases. The frontend (create_account_controller.js:274) reads result.errors.email and result.values.email with nothing pinning that contract."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "email-validator-shortcircuit-untested",
+      "evidence": "lib/validators/email_validator.rb:13; spec/components/validators/email_validator_spec.rb:1-23",
+      "reason": "The new spec only stubs should_block? on a record with no prior errors; nothing exercises the `record.errors[attribute].blank?` guard that suppresses the blocked check when the whitelist/blacklist branch already added an error."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "blocked-email-case-normalization",
+      "evidence": "lib/email.rb:19-22",
+      "reason": "Email.downcase does `email.gsub(/^(.+@{1})([^@]+)$/) { $1 + $2.downcase }`; running it on 'Foo.Bar@Example.COM' yields 'Foo.Bar@example.com', so the local part keeps its case. Using it as the normalizer for the blocked-email lookup would leave the local-part half of the bypass open."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "blocked-email-case-normalization",
+      "evidence": "app/models/blocked_email.rb:12",
+      "reason": "`BlockedEmail.where(email: email).first` is a plain equality lookup on a Postgres text column, and nothing downcases the email on the way in (User has no email normalization — contrast app/models/invite.rb:20). A block on user@example.com is defeated by typing User@Example.com."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "blocked-email-enumeration-disclosure",
+      "evidence": "app/controllers/users_controller.rb:196-199; lib/validators/email_validator.rb:14; config/locales/server.en.yml (user.email.blocked)",
+      "reason": "A blocked signup returns a distinct 'is not allowed.' message for the email field, both in `message` and now field-keyed in `errors`, which is exactly the signal needed to probe whether a given address is on the block list. Whether that disclosure is acceptable is a real design question this change introduces."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "email-validator-missing-newline",
+      "evidence": "lib/validators/email_validator.rb:24",
+      "reason": "The file's last bytes are `\\n  end\\n\\nend` with no terminating newline; the diff also records '\\ No newline at end of file'."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "Low",
+      "cluster": "rejected-email-blank-value",
+      "evidence": "app/assets/javascripts/discourse/controllers/create_account_controller.js:274-276; app/controllers/users_controller.rb:199",
+      "reason": "The guard checks result.errors.email and result.values but never result.values.email, and the server's `user.attributes.slice(...)` always includes an 'email' key whose value is nil when no email was submitted, so a null can be pushed into the cache. Reachability from this form is low (blank email is blocked client-side), which is why this is a robustness nit rather than a live bug."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "rejected-email-duplicates",
+      "evidence": "create_account_controller.js:19-26,69-73; app/assets/javascripts/discourse/views/modal/create_account_view.js:20-24",
+      "reason": "Once an email is in rejectedEmails, emailValidation fails, submitDisabled returns true, and both submit paths (the button's bindAttr disabled and the ENTER handler, which checks submitDisabled === false) refuse to resubmit it — so the same address cannot be rejected twice and no duplicate can accumulate."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "users-controller-create-specs",
+      "evidence": "app/controllers/users_controller.rb:196-200; spec/controllers/users_controller_spec.rb",
+      "reason": "The response body of the create failure branch changed and no controller spec was added or modified in this diff."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "should-block-read-with-side-effects",
+      "evidence": "app/models/blocked_email.rb:11-19",
+      "reason": "The method is named should_block? (not should_block_email? as the claim writes it), but the substance holds: a predicate called from a validator does a read-modify-write of match_count plus a save, which is a lost-update race under concurrent signups and makes the query-shaped name misleading."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "blocked-email-client-message",
+      "evidence": "create_account_controller.js:71; config/locales/server.en.yml (user.email.blocked); config/locales/client.en.yml:216",
+      "reason": "The client shows the generic user.email.invalid for a server-rejected email; a blocked-specific string is the better message. Note the new blocked key was only added to server.en.yml, so acting on this also means adding it to client.en.yml, which currently has only ok/invalid/authenticated under user.email."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "spec-blank-lines-rubocop",
+      "evidence": ".travis.yml (script: rake spec && rake qunit:test); no .rubocop.yml and no rubocop in Gemfile; spec/components/guardian_spec.rb and spec/models/post_spec.rb",
+      "reason": "This repo has no RuboCop config or gem and CI runs only rspec and qunit, so no such rule is enforced. The blank line after `describe X do` and before the final `end` is in fact the surrounding house style (guardian_spec.rb, user_spec.rb, post_spec.rb all do it)."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "should-block-nil-return",
+      "evidence": "app/models/blocked_email.rb:18",
+      "reason": "`record && record.action_type == actions[:block]` evaluates to nil when no row matches. The spec passes only because RSpec's be_false accepts any falsy value."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "rejected-emails-on-prototype",
+      "evidence": "create_account_controller.js:17",
+      "reason": "`rejectedEmails: Em.A([])` is evaluated once at class-definition time inside Discourse.Controller.extend, so the array object sits on the prototype and every instance mutates the same one via pushObject."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "blocked-email-case-normalization",
+      "evidence": "app/models/blocked_email.rb:12",
+      "reason": "Same defect as the case-sensitivity claims: the lookup needs a normalized (downcased) key, since nothing else in the User path normalizes email."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "email-validator-missing-newline",
+      "evidence": "lib/validators/email_validator.rb:24",
+      "reason": "Confirmed at byte level: the file ends with 'end' and no newline."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "blocked-email-case-normalization",
+      "evidence": "app/models/blocked_email.rb:12",
+      "reason": "Correct: the query uses the raw value, so a case change bypasses the block. Normalizing before the query is the fix."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "rejected-emails-on-prototype",
+      "evidence": "create_account_controller.js:17,275",
+      "reason": "Same prototype-sharing issue: the literal array is a class-level property mutated in place, so it is shared and never reset; initializing it in init (or using a computed default) is the standard fix. Practical impact is limited because Ember 1.0-rc controllers are singletons, but the state also persists across every reopen of the modal."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "email-validator-nil-value",
+      "evidence": "lib/validators/email_validator.rb:18-22; ruby: `nil =~ /@(example\\.com)/i` => nil",
+      "reason": "The regression this test is asked to guard does not exist — `value =~ regexp` with nil or \"\" returns nil rather than raising, so there is no unexpected-raise behavior to pin. The whitelist/blacklist paths themselves already have coverage in spec/models/user_spec.rb:488-565."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "email-validator-nil-value",
+      "evidence": "lib/validators/email_validator.rb:21; verified with the repo's ruby: `p(nil =~ /@(example\\.com)/)` prints nil",
+      "reason": "`=~` is defined on Object/NilClass and returns nil for a nil receiver — it does not raise. On top of that, the validator only runs `if: :email_changed?`, and assigning nil over a nil email does not mark the attribute dirty."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "not_real",
+      "confidence": 0.65,
+      "severity": null,
+      "cluster": "errors-hash-leak",
+      "evidence": "app/controllers/users_controller.rb:197-198",
+      "reason": "The same response already returns `user.errors.full_messages.join(\"\\n\")` in `message`, so to_hash exposes the identical strings merely re-keyed by attribute. No internal detail is disclosed that the pre-existing message field did not already disclose."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "not_real",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "rejected-email-client-case",
+      "evidence": "app/models/user.rb:44-48,84-91 (no email normalization); app/controllers/users_controller.rb:199",
+      "reason": "The stated mechanism is wrong: User never downcases email (only Invite and lookup helpers use Email.downcase), so `values.email` echoes back byte-for-byte what the client submitted and the contains() check matches on a resubmit of the same string."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "and-keyword-instead-of-operator",
+      "evidence": "lib/validators/email_validator.rb:13",
+      "reason": "The line reads `if record.errors[attribute].blank? and BlockedEmail.should_block?(value)`. Behavior is identical here, but `&&` is the conventional form for boolean conditions and avoids the precedence trap if the line is later edited."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "domain-regex-unanchored",
+      "evidence": "lib/validators/email_validator.rb:18-22; ruby: 'user@evil.example.com' =~ /@(example\\.com)/i => nil; spec/models/user_spec.rb:507-510",
+      "reason": "The example is backwards. The `@` anchors the start of the domain, so evil.example.com does not match a whitelist entry of example.com — user_spec.rb even has a 'should not reject partial matches' test for that. The regex is unanchored at the *end* instead (user@example.com.evil.com does match), which the claim does not say."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "blocked-email-case-normalization",
+      "evidence": "app/models/blocked_email.rb:3-5; app/models/invite.rb:20",
+      "reason": "The other half of the same normalization gap: rows are stored with whatever case they were inserted with, and the uniqueness validation is case-sensitive too. Invite already uses `before_validation { self.email = Email.downcase(email) }` as precedent."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "email-validator-missing-newline",
+      "evidence": "lib/validators/email_validator.rb:24",
+      "reason": "The missing final newline is real. The 'may trigger linter warnings' half is hedged and does not hold for this repo specifically — there is no Ruby linter configured — but the diff-noise point stands."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "blocked-email-client-message",
+      "evidence": "create_account_controller.js:69-73 vs :272",
+      "reason": "The inline field tip renders I18n.t('user.email.invalid') ('Please enter a valid email address.') while the flash right above it shows the server's actual reason ('Email is not allowed.'), so the two messages disagree about why the same address was rejected."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "blocked-email-no-population-path",
+      "evidence": "db/migrate/20130724201552_create_blocked_emails.rb; no matches for blocked_email in config/routes.rb, app/controllers/admin/, lib/tasks/, or db/fixtures; spec/models/blocked_email_spec.rb:12",
+      "reason": "Grepping the whole app turns up only the model, the validator call site, and the migration — no route, admin controller, rake task or seed writes to the table. The spec's own comment ('If we manually load the table with some emails') confirms manual insertion is the only intended path, which is a fair thing to ask about."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "blocked-email-case-normalization",
+      "evidence": "app/models/blocked_email.rb:12",
+      "reason": "Accurate description of the same defect: `where(email: email)` is a case-sensitive comparison and no callback normalizes either the stored value or the query argument."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "email-format-validation",
+      "evidence": "diff hunk removing User#email_validator (app/models/user.rb); lib/email.rb:9 (Email.is_valid? has no caller in app/ or lib/)",
+      "reason": "There is no regression: the removed User#email_validator only checked the whitelist/blacklist settings and never validated format, so 'sam@sam' was accepted before this change exactly as it is after. Email.is_valid? was never wired into User's validations."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "not_real",
+      "confidence": 0.75,
+      "severity": null,
+      "cluster": "each-dependent-key",
+      "evidence": "app/assets/javascripts/external_development/ember.js:257 (VERSION 1.0.0-rc.6), :10201-10202, :13217-13232, :14184",
+      "reason": "In this Ember version array mutation calls arrayContentWillChange, which materializes the @each proxy when it is watched, and EachProxy#arrayDidChange fires propertyDidChange(content, '@each') — so pushObject does invalidate a CP that depends on 'rejectedEmails.@each'. Ember itself uses bare '.@each' dependent keys (e.g. 'sortProperties.@each')."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "set-defaults-public",
+      "evidence": "app/models/blocked_email.rb:3,21-23",
+      "reason": "set_defaults is only referenced by the before_validation callback but is defined in the public section, so it becomes part of the model's API; the usual convention is to make callback methods private."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "blocked-email-naming-collision",
+      "evidence": "app/models/user.rb:65 (`scope :blocked, -> { where(blocked: true) }`), :646; app/models/admin_dashboard_data.rb:58",
+      "reason": "The codebase already uses 'blocked' for a user-account state (User.blocked, surfaced on the admin dashboard). A BlockedEmail model that means 'address we refuse at signup' overloads that word with a different meaning."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "save-return-ignored",
+      "evidence": "app/models/blocked_email.rb:14-16",
+      "reason": "record.save's boolean result is dropped. Since the model validates email presence and uniqueness, a row that ever fails those checks silently stops accumulating match_count/last_match_at with nothing logged."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "user-model-specs-not-updated",
+      "evidence": "app/models/user.rb:44-48; spec/models/user_spec.rb:488-565",
+      "reason": "The diff changes User's email validations and moves the logic to a new class, but user_spec.rb still carries the whole `describe 'email_validator'` block (whitelist/blacklist coverage) untouched, so that coverage now lives in the wrong file while the new validator spec covers only the blocked branch."
+    }
+  ]
+}

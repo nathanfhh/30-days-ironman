@@ -1,0 +1,329 @@
+{
+  "slug": "keycloak-38446",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.97,
+      "severity": "Low",
+      "cluster": "junit-assert-fully-qualified",
+      "evidence": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:481, :46",
+      "reason": "Line 481 is literally `org.junit.Assert.assertEquals(\"Incorrect code presented to login\", ...)` while line 46 imports org.keycloak.testsuite.Assert, which is `public class Assert extends org.junit.Assert` and is used unqualified on lines 185/230/323/443/462; the RecoveryAuthnCodesAuthenticatorTest original this was copied from uses the plain `Assert`."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "no-removal-test-for-recovery-codes",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:241-269 vs :304-368",
+      "reason": "The only new test is testRecoveryKeysSetupAndLogin (setup + one login); OTP has testOTPSetupAndRemoveThroughAccountMgmtAndLogin and testDisableCredentialsInUserStorage covering removal/disable, and no equivalent exists for recovery codes — which is precisely why the missing disableCredentialType/getDisableableCredentialTypesStream support went unnoticed. Test-only module, so the cost is a coverage gap rather than shipped risk."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "userstorage-codes-never-consumed",
+      "evidence": "BackwardsCompatibilityUserStorage.java:326-340, :231-252; RecoveryAuthnCodesCredentialModel.java:36-45,58-85",
+      "reason": "Every step checks out: isValid ends in `generatedKeys.stream().anyMatch(key -> key.equals(input.getChallengeResponse()))` and never touches myUser.recoveryCodes, and getCredentials re-runs createFromValues over the full stored raw-code list, which resets remainingCodes to 12 and leaves secretData non-empty, so allCodesUsed() is always false and getNextRecoveryAuthnCode() always returns index 0 (label '#1'). Contrast RecoveryAuthnCodesCredentialProvider.isValid, which calls removeRecoveryAuthnCode()+updateStoredCredential. Severity capped below Critical because this class lives in testsuite-providers and never ships — but it is the reference implementation the new test proves the feature against, so the test passes while the one-time property is inverted."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "remove-stored-credential-not-federated",
+      "evidence": "RecoveryAuthnCodesFormAuthenticator.java:80-88; UserCredentialManager.java:82-88, :298-305",
+      "reason": "getCredential() now returns federated (user-storage) models first, but the removal on line 86 goes through UserCredentialManager.removeStoredCredentialById -> getStoreForUser(user) -> userFederatedStorage()/userLocalStorage(), i.e. Keycloak's own credential stores; the UserStorageProvider is never notified (only disableCredentialType routes there). This is production code in `services`, so the blast radius is real once a provider does advance the counter."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "userstorage-codes-never-consumed",
+      "evidence": "BackwardsCompatibilityUserStorage.java:340",
+      "reason": "Line 340 is exactly the anyMatch existence check with no write back to myUser.recoveryCodes, so the code is replayable and the model rebuilt in getCredentials never reaches allCodesUsed(), which is the precondition for the cleanup branch in RecoveryAuthnCodesFormAuthenticator. Same defect as c003/c015/c020/c029; testsuite-providers only."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "stale-local-credential-not-removed",
+      "evidence": "CredentialHelper.java:125-130; RecoveryAuthnCodesCredentialProvider.java:34-42",
+      "reason": "When updateCredential returns true the method only logs; the local provider's createCredential (which deletes any pre-existing local recovery-authn-codes credential first) is skipped, so a user who previously had a local credential keeps it alongside the user-storage one, and SubjectCredentialManager.getCredentials() concatenates both. createOTPCredential above has exactly the same shape, so the claim's 'same structure already exists for OTP' is accurate too."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "stale-local-credential-not-removed",
+      "evidence": "CredentialHelper.java:125-131",
+      "reason": "Same finding as c006 pointed at the line: the userStorageCreated branch (125-127) does nothing but log, leaving any pre-existing local recovery-authn-codes row in the DB. Line number is off by one from the `if` but unambiguously identifies the branch."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "getcredentials-npe-no-null-check",
+      "evidence": "BackwardsCompatibilityUserStorage.java:231-235 vs :258-259, :270-271, :285-286",
+      "reason": "getCredentials does `var myUser = getMyUser(user); ... if (myUser.recoveryCodes != null)` with no guard, while getDisableableCredentialTypesStream, isConfiguredFor and isValid all null-check first; getMyUser is a plain `users.get(...)` on an in-memory map, so a federated user whose entry is gone (server restart, removed user) NPEs. Same issue as c022. testsuite-providers only."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "optional-get-without-ispresent",
+      "evidence": "RecoveryAuthnCodeInputLoginBean.java:17-19; BackwardsCompatibilityUserStorage.java:238, :332-334",
+      "reason": "Both halves check out: the bean calls credentialModelOpt.get() with no isPresent(), and the provider deserializes into a raw `List.class`/`List generatedKeys`. The .get() risk existed before the change, but the change widens it — isConfiguredFor now answers from the provider while getCredential answers from getCredentials, and getCredentials swallows IOException and returns empty, so the two can disagree and produce NoSuchElementException on the login form."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "federated-credential-model-missing-id",
+      "evidence": "BackwardsCompatibilityUserStorage.java:237-241, :195; RecoveryAuthnCodesCredentialModel.java:58-85; CredentialDeleteHelper.java:64",
+      "reason": "updateCredential assigns the stored model an id (KeycloakModelUtils.generateId(), line 195) but getCredentials rebuilds via createFromValues, which never calls setId, so the returned model's getId() is null — unlike the OTP branch, which returns myUser.getOtp() with its id intact. CredentialDeleteHelper matches federated credentials by `credentialId.equals(c.getId())`, so a null id makes the credential unaddressable. Distinct from c004: setting the id is necessary but not sufficient."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.87,
+      "severity": "Medium",
+      "cluster": "disable-credential-type-recovery-missing",
+      "evidence": "BackwardsCompatibilityUserStorage.java:216-224, :254-264; CredentialDeleteHelper.java:73-78",
+      "reason": "updateCredential/isValid/isConfiguredFor/getCredentials all gained a recovery-authn-codes branch but disableCredentialType still only handles isOTPType and just logs otherwise. Traced the delete path: the '<type>-id' fallback in CredentialDeleteHelper calls disableCredentialType and returns null, so the REST layer answers 204 while myUser.recoveryCodes is untouched — the claim's 204 assertion holds. testsuite-providers only."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Medium",
+      "cluster": "federated-credential-format-contract",
+      "evidence": "RecoveryAuthnCodesUtils.java:56-62; RecoveryAuthnCodesFormAuthenticator.java:83-84; RecoveryAuthnCodeInputLoginBean.java:19; RecoveryAuthnCodesCredentialModel.java:87-106",
+      "reason": "The mechanism is real: getCredential() now sources from CredentialInputUpdater#getCredentials, and both callers feed the result straight into createFromCredentialModel, which readValue()s credentialData and secretData and rethrows IOException as RuntimeException — with nothing in the SPI requiring a provider to produce that shape. No in-tree provider actually trips it (LDAPStorageProvider.getCredentials returns a password-type model that the type filter drops, and the testsuite provider goes through createFromValues, which populates both fields), so this is a contract hazard for third-party providers rather than a live crash — hence the lower confidence."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "provider-lookup-eager",
+      "evidence": "CredentialHelper.java:116, :129",
+      "reason": "`var recoveryCodeCredentialProvider = session.getProvider(CredentialProvider.class, \"keycloak-recovery-authn-codes\")` is on line 116 and its only use is line 129 inside the else branch, so the lookup is wasted on every user-storage write. Trivial, but factually correct."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "remove-stored-credential-not-federated",
+      "evidence": "RecoveryAuthnCodesFormAuthenticator.java:86-87; UserCredentialManager.java:82-88, :298-305",
+      "reason": "Same defect as c004 stated more tersely: removeStoredCredentialById resolves to userLocalStorage()/userFederatedStorage() via getStoreForUser, never to the UserStorageProvider, so exhausted-credential cleanup silently does nothing for a credential that came out of user storage."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.93,
+      "severity": "High",
+      "cluster": "userstorage-codes-never-consumed",
+      "evidence": "BackwardsCompatibilityUserStorage.java:340; RecoveryAuthnCodesCredentialProvider.java:99-115",
+      "reason": "Confirmed against the canonical implementation: RecoveryAuthnCodesCredentialProvider.isValid only ever compares against getNextRecoveryAuthnCode() (index 0) and then removes it, whereas the new user-storage branch accepts any of the 12 via anyMatch. Same fix as c003/c005/c020/c029, so same cluster. testsuite-providers only."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "delayed-authenticator-alias-typo",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:135",
+      "reason": "`config.setAlias(\"delayed-suthenticator-config\")` — the string is verbatim in the new code. It is a copy of the pre-existing typo at RecoveryAuthnCodesAuthenticatorTest.java:137, and there is no checkstyle/spotless/formatter plugin in the root pom, so nothing mechanical catches it."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.83,
+      "severity": "Low",
+      "cluster": "logout-without-completelogin",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:255-264; TestAppHelper.java:69-73, :101-107",
+      "reason": "The testAppHelper instantiated on line 255 only ever gets startLogin(); completeLogin() — the sole assignment of TestAppHelper.refreshToken — is never called before logout(), so `oauth.doLogout(null)` runs and the RuntimeException catch turns it into `return false`, which the test then ignores (no assertTrue, unlike every other test in the file). The session is left standing."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "remove-stored-credential-not-federated",
+      "evidence": "RecoveryAuthnCodesFormAuthenticator.java:80-92; RecoveryAuthnCodesUtils.java:56-62",
+      "reason": "Both halves hold: the removal targets local/federated storage rather than the provider (see c004), and getCredential() prefers the federated hit over the local one, so when both exist — a state c006/c007 shows this PR can create — the authenticator evaluates allCodesUsed() on the federated model while removeStoredCredentialById would delete the local row."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "redundant-model-and-raw-codes-params",
+      "evidence": "CredentialHelper.java:115-123; RecoveryAuthnCodesAction.java:110-112",
+      "reason": "The signature does take both credentialModel and generatedCodes, and at the only call site credentialModel is createFromValues(generatedCodes, ...), i.e. the hashed derivation of the same list; the method serialises the raw list for user storage and persists the hashed model locally, with no assertion that the two agree. A caller passing a mismatched pair would write different secrets to the two backends."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.93,
+      "severity": "High",
+      "cluster": "userstorage-codes-never-consumed",
+      "evidence": "BackwardsCompatibilityUserStorage.java:326-340",
+      "reason": "The recovery-codes branch of isValid reads the stored list, compares, and returns — myUser.recoveryCodes is never reassigned anywhere except updateCredential — so the same code authenticates indefinitely. Same fix as c003/c005/c015/c029; testsuite-providers only."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "test-no-code-reuse-assertion",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:241-269",
+      "reason": "testRecoveryKeysSetupAndLogin logs in exactly once with recoveryKeys.get(0) and never attempts a second login with the same code, so the non-consumption bug in c003/c020 passes the suite unnoticed. Correctly diagnoses why the new test is vacuous on the property that matters."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.87,
+      "severity": "Medium",
+      "cluster": "getcredentials-npe-no-null-check",
+      "evidence": "BackwardsCompatibilityUserStorage.java:231-235; UserCredentialManager.java:130-145; RecoveryAuthnCodeInputLoginBean.java:17",
+      "reason": "Same NPE as c008, with the call-frequency claim checked: getCredentials is reached through SubjectCredentialManager.getFederatedCredentialsStream, which RecoveryAuthnCodesUtils.getCredential calls on both the login-form bean and the post-validation path in the authenticator. Sibling methods at 258, 270 and 285 all guard against null."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "log-error-drops-exception",
+      "evidence": "BackwardsCompatibilityUserStorage.java:243-245",
+      "reason": "`catch (IOException e) { log.error(\"Could not deserialize  credential of type: recovery-codes\"); }` — the caught exception is never passed to the two-arg log.error overload, so the stack trace is lost and the method silently returns an empty stream (which then surfaces as a NoSuchElementException in the login bean rather than as the real cause)."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.88,
+      "severity": "Medium",
+      "cluster": "disableable-types-stream-recovery-missing",
+      "evidence": "BackwardsCompatibilityUserStorage.java:254-264",
+      "reason": "getDisableableCredentialTypesStream still adds only CredentialModel.OTP; recovery-authn-codes never appears, so UserRepresentation.getDisableableCredentialTypes omits it and the admin/account UI offers no delete affordance. Different method and different fix from disableCredentialType (c026/c011), hence a separate cluster. testsuite-providers only."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "copied-flow-helper-vestigial-delay",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:123-141, :476-483 vs RecoveryAuthnCodesAuthenticatorTest.java:123-147, :299-306",
+      "reason": "Diffed both: the helpers are near-verbatim copies (only UsernamePasswordFormFactory replacing the UsernameForm+PasswordForm pair, and org.junit.Assert replacing Assert). The `delay` parameter is passed 0 at the single call site (line 243), and the REQUIRED delayed-authenticator execution exists in the original only to serve test06AuthenticateRecoveryAuthnCodesSimultaneous, which passes 1000."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "disable-credential-type-recovery-missing",
+      "evidence": "BackwardsCompatibilityUserStorage.java:216-224",
+      "reason": "disableCredentialType handles only isOTPType and falls through to `log.infof(\"Unsupported to disable credential of type: %s\", ...)`; myUser.recoveryCodes is never cleared, so the credential survives every delete path. testsuite-providers only, but it is the write/read asymmetry the PR introduces."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "create-recovery-codes-returns-void",
+      "evidence": "CredentialHelper.java:115-131 vs :92-110; RecoveryAuthnCodesAction.java:110-112",
+      "reason": "The structural observation is correct — identical if/else shape, void return, and the caller in RecoveryAuthnCodesAction discards any outcome. Docked confidence because the parallel it draws is loose: createOTPCredential's boolean is the HOTP isValid result, not a 'where did it land' signal, so the sibling method does not actually expose the information the claim wants."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.82,
+      "severity": "Medium",
+      "cluster": "challenge-response-format-undocumented",
+      "evidence": "CredentialHelper.java:117-123; UserCredentialModel.java:130-136, :153-155; BackwardsCompatibilityUserStorage.java:197, :334",
+      "reason": "Verified both shapes: the write path builds `new UserCredentialModel(\"\", type, recoveryCodesJson)` where the value is the serialised 12-element array, and the validate path builds it via buildFromBackupAuthnCode(singleRawCode); getChallengeResponse() returns whichever was set. The serialise/deserialise pair is duplicated across server-spi-private and testsuite-providers with no javadoc on createRecoveryCodesCredential or on the SPI stating the encoding."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.93,
+      "severity": "High",
+      "cluster": "userstorage-codes-never-consumed",
+      "evidence": "BackwardsCompatibilityUserStorage.java:326-340; RecoveryAuthnCodesCredentialProvider.java:99-115",
+      "reason": "States both halves of the same defect — accepts any stored code, never consumes — and both check out against the local provider's sequential-plus-remove behaviour. Same fix as c003/c005/c015/c020. testsuite-providers only."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "federated-consumption-contract-unspecified",
+      "evidence": "CredentialHelper.java:115-131; CredentialInputValidator.java / CredentialInputUpdater.java; UserCredentialManager.java:57-78",
+      "reason": "Accurate about the SPI: CredentialInputValidator.isValid carries no obligation to consume, and this change routes recovery-code persistence and validation through that generic path, so the one-time property becomes a per-provider promise rather than something Keycloak enforces. Distinct from the testsuite-provider cluster — this one is about the production design in server-spi-private, and fixing the test double would not close it."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "test-no-invalid-code-assertion",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:241-269 vs :225-230",
+      "reason": "testOTPUpdateAndLogin does submit a bad OTP (\"7123456\") and asserts loginTotpPage.getInputError() is non-null; the new recovery-codes test submits only the valid code and never exercises the failureChallenge branch of RecoveryAuthnCodesFormAuthenticator."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Low",
+      "cluster": "log-message-wrong-type-name",
+      "evidence": "BackwardsCompatibilityUserStorage.java:244; RecoveryAuthnCodesCredentialModel.java:21",
+      "reason": "The log string says 'recovery-codes' while RecoveryAuthnCodesCredentialModel.TYPE is \"recovery-authn-codes\"; the sibling message on line 336 avoids the constant too but at least says 'recovery keys'. Grepping the logged type string finds nothing."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.92,
+      "severity": "Low",
+      "cluster": "delayed-authenticator-alias-typo",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:135; RecoveryAuthnCodesAuthenticatorTest.java:137",
+      "reason": "Confirmed by grep: 'delayed-suthenticator-config' now occurs in exactly two files, the pre-existing one and the copy this PR adds. Same underlying nit as c016, so same cluster — one rename fixes both occurrences."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "vestigial-test-helper-params",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:249, :253, :410, :423-425, :456",
+      "reason": "Both parameters checked against their call sites: assertUserHasRecoveryKeysCredentialInUserStorage has one caller (line 253, `true`) and setupRecoveryKeysForUserWithRequiredAction has one caller (line 249, `true`), so the `if (!logoutOtherSessions)` uncheck branch is dead. The OTP equivalents earn their parameters — assertUserHasOTPCredentialInUserStorage(false) and setupOTPForUserWithRequiredAction(userId, false) both appear."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "stray-double-spaces",
+      "evidence": "BackwardsCompatibilityUserStorage.java:244, :341; CredentialHelper.java:119",
+      "reason": "All three located verbatim: `\"Could not deserialize  credential of type\"`, `}  else {` on line 341, and `recoveryCodesJson =  JsonSerialization.writeValueAsString(...)` on CredentialHelper.java line 119 — the cited line number is exact. Note this is a pure style nit: the root pom declares no checkstyle, spotless or formatter plugin, so no build step rejects it."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "test-no-event-assertion",
+      "evidence": "BackwardsCompatibilityUserStorageTest.java:260-264; RecoveryAuthnCodesAuthenticatorTest.java:183, :235, :267, :361",
+      "reason": "The new test does stop at appPage.assertCurrent() with no event assertion, and the class has no AssertEvents rule at all; RecoveryAuthnCodesAuthenticatorTest asserts both expectLogin() (line 361) and Details.CREDENTIAL_TYPE on UPDATE_CREDENTIAL (183/235/267), so the comparison holds. Slightly overstated in that the login assertions there carry USERNAME rather than credential-type, and no other test in this file asserts events either."
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  "dark-light-choose returns its first argument for light themes, so the change alters light-theme color from scale-color($primary, $lightness: 30%) to scale-color($primary, $lightness: 70%), which is a big possibly unintended contrast shift",
+  "dark-light-choose changes .group-member-info .name in light mode from scale-color($primary, $lightness: 30%) to scale-color($primary, $lightness: 50%), which is inconsistent with the keep light theme, adjust dark theme pattern elsewhere",
+  "dark-light-choose appears to swap the light-theme value from scale-color($primary, $lightness: 70%) to scale-color($primary, $lightness: 30%) and vice-versa for dark in mobile/modal.scss",
+  "dark-light-choose changes the light-theme h3 color from scale-color($primary, $lightness: 20%) to scale-color($primary, $lightness: 50%) which may be unintentional"
+]

@@ -1,0 +1,153 @@
+{
+  "slug": "cal_com-11059",
+  "issues": [
+    {
+      "text": "Google Calendar's token refresh writes the safeParse envelope ({success, data}) into credential.key instead of the parsed data, so the next googleCredentialSchema.parse(credential.key) throws a ZodError and the user's Google Calendar breaks until they re-authorize.",
+      "zh": "Google Calendar token refresh 把 safeParse 的外層信封當成 credential.key 寫進資料庫",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "salesforce/lib/CalendarService.ts calls prisma.credential.update but never imports prisma; it only resolves at runtime through the dev-only globalThis.prisma assignment, so in production it throws a TypeError on every SalesforceCalendarService construction.",
+      "zh": "Salesforce CalendarService 使用了未 import 的 prisma，production 會在每次建構 service 時炸掉",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "The credential sync webhook indexes appStoreMetadata with app.slug, but that map is keyed by dirName, so apps whose slug differs from dirName (google-calendar, office365-calendar, msteams) always get a misleading 404 'App not found. Ensure that you have the correct app slug'.",
+      "zh": "credential sync webhook 用 app.slug 索引以 dirName 為鍵的 appStoreMetadata，Google Calendar 等 app 一律 404",
+      "finding_id": "F-003",
+      "severity": "Critical"
+    },
+    {
+      "text": "parseRefreshTokenResponse substitutes the literal string \"refresh_token\" when the provider's response omits refresh_token; that placeholder is then spread over and overwrites the stored real refresh token, silently destroying working credentials (Office 365 declares refresh_token optional, so this path is reachable).",
+      "zh": "parseRefreshTokenResponse 會把字串 \"refresh_token\" 當成真正的 refresh token 寫回憑證",
+      "finding_id": "F-004",
+      "severity": "Critical"
+    },
+    {
+      "text": "In minimumTokenResponseSchema both computed keys evaluate to the string \"[object Object]\" (ZodType has no toString override), so the schema really only validates access_token, the second key overwrites the first, and z.object's default strip drops expiry, refresh_token and scope from the parsed data.",
+      "zh": "minimumTokenResponseSchema 的兩個 computed key 都算成 \"[object Object]\"，實際只驗 access_token 並丟掉其餘欄位",
+      "finding_id": "F-005",
+      "severity": "Critical"
+    },
+    {
+      "text": "zoho-bigin passes credential.id where refreshOAuthTokens expects userId (it is sent as calcomUserId), unlike the eight other call sites which pass credential.userId; sync fails for zoho-bigin, and if the self-hoster's endpoint looks the integer up as a user id it can return another user's tokens.",
+      "zh": "zoho-bigin 把 credential.id 當成 userId 傳給 refreshOAuthTokens",
+      "finding_id": "F-006",
+      "severity": "Critical"
+    },
+    {
+      "text": "refreshOAuthTokens returns a raw fetch Response on the sync branch but the provider-specific shape on the fallback branch, with refreshFunction typed as () => any; callers that read res.data (googlecalendar, zoho-bigin, zohocrm) therefore throw TypeErrors as soon as credential sync is enabled.",
+      "zh": "refreshOAuthTokens 兩個分支回傳的形狀不同，啟用 credential sync 後 google / zoho-bigin / zohocrm 會丟 TypeError",
+      "finding_id": "F-007",
+      "severity": "Critical"
+    },
+    {
+      "text": "The new webhook handler never checks req.method, so any HTTP verb reaches the body parsing; the repo's other app-store handlers return 405 for the wrong verb.",
+      "zh": "webhook 缺 HTTP method 檢查",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The handler uses schema.parse rather than the repo's safeParse-then-400 convention, and neither symmetricDecrypt nor JSON.parse is wrapped in error handling, so malformed or tampered input surfaces as a 500 with a stack trace instead of a 400.",
+      "zh": "用 schema.parse 與未保護的解密／JSON.parse，壞請求會變成帶 stack trace 的 500",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The decrypted keys are JSON.parse'd into an any value and written straight into credential.key on both the update and create paths with no schema validation, so a malformed payload only fails much later when the app's own key schema reads it.",
+      "zh": "解密後的 keys 未經任何 schema 驗證就寫進 credential.key",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "APP_CREDENTIAL_SHARING_ENABLED is defined with && over two env vars, so its type is string | undefined and its value is the encryption key itself; the _ENABLED name invites someone to log or serialize it and leak the key.",
+      "zh": "APP_CREDENTIAL_SHARING_ENABLED 名稱是布林語意，實際值是加密金鑰的字串",
+      "finding_id": "F-010",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Salesforce refreshes the OAuth token inside getClient(), which the constructor calls unconditionally and with no expiry check (unlike office365/zoho-bigin/zoom), so every availability query or booking operation hits Salesforce's token endpoint and writes to the DB again.",
+      "zh": "Salesforce 每次建構 service 都無條件重新 refresh token",
+      "finding_id": "F-011",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "After refreshing, the jsforce.Connection is still built with credentialKey.access_token — the stale token read before the refresh — so the refresh has no effect on the current request.",
+      "zh": "且之後仍用舊的 access_token 建連線",
+      "finding_id": "F-011",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The Salesforce refresh is a read-modify-write of credential.key with no transaction or concurrency guard, so two concurrent requests for the same user each refresh and overwrite one another.",
+      "zh": "這是一個 read-modify-write：讀 credential.key、向外部換 token、寫回 credential，中間沒有交易也沒有並行保護。",
+      "finding_id": "F-011",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The promise started in the constructor (this.getClient(credential).then(...)) has no catch, so a failed refresh becomes an unhandled rejection.",
+      "zh": "constructor 裡 `this.getClient(credential).then(c => c)` 產生的 promise 也沒有 catch，一旦 refresh 失敗會是 unhandled rejection。",
+      "finding_id": "F-011",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Salesforce decides success with response.statusText !== \"OK\"; the reason phrase was removed in HTTP/2 and undici returns an empty string there, so a successful 200 can be turned into a 400 with an empty message, while a non-2xx response whose statusText happens to be \"OK\" passes — response.ok is the correct check.",
+      "zh": "Salesforce 用 response.statusText !== \"OK\" 判斷成敗，應該用 response.ok",
+      "finding_id": "F-012",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The MR adds four files (including a public webhook endpoint and two helpers shared by nine apps) and changes nine token-refresh paths with no tests at all; several of the Critical defects would have been caught by a minimal unit test.",
+      "zh": "整個 MR 沒有任何測試，而找到的多個 Critical 是最小 unit test 就會擋下的",
+      "finding_id": "F-013",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "In office365 the `tokenResponse.success &&` guard is now dead code because parseRefreshTokenResponse throws on failure, so success is always true; it just suggests a branch that no longer exists.",
+      "zh": "office365 的 tokenResponse.success 判斷已成死碼",
+      "finding_id": "F-014",
+      "severity": "Nit"
+    },
+    {
+      "text": "The change removed the console.error that logged the zod error and Microsoft's raw response on parse failure, so the thrown 'Invalid refreshed tokens were returned' error now carries no diagnostic information.",
+      "zh": "且移除了原本的診斷輸出",
+      "finding_id": "F-014",
+      "severity": "Nit"
+    },
+    {
+      "text": "zoho-bigin/api/add.ts replaces `${appConfig.slug}` in the redirectUri with the hardcoded string \"zoho-bigin\", a reversal unrelated to this MR that will silently drift if the config slug ever changes (appConfig is still imported and used elsewhere in the file).",
+      "zh": "zoho-bigin/api/add.ts 把 ${appConfig.slug} 改回硬編字串，與本 MR 目的無關",
+      "finding_id": "F-015",
+      "severity": "Nit"
+    },
+    {
+      "text": "The resulting string has no interpolation left but still uses a template literal, which most lint configs flag.",
+      "zh": "改完後的字串已經沒有任何插值，卻仍用 template literal，一般 lint 設定會提示改用一般引號。",
+      "finding_id": "F-015",
+      "severity": "Nit"
+    },
+    {
+      "text": "In turbo.json's globalEnv list CALCOM_WEBHOOK_SECRET was inserted after CALENDSO_ENCRYPTION_KEY, breaking the alphabetical ordering the rest of the list follows.",
+      "zh": "turbo.json 的 globalEnv 清單插入位置破壞了字母序",
+      "finding_id": "F-016",
+      "severity": "Nit"
+    },
+    {
+      "text": "An empty /** */ JSDoc block sits above the webhook handler, the MR's only public entry point, where a description of the caller, the payload encryption and the failure responses belongs.",
+      "zh": "webhook handler 上方留了一個空的 JSDoc 區塊",
+      "finding_id": "F-017",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Cal.com's outbound call to CALCOM_CREDENTIAL_SYNC_ENDPOINT carries no authentication at all while the inbound webhook requires a shared secret — is that asymmetry deliberate (assuming an internal-network endpoint) or an omission? Anyone who can reach the endpoint could request tokens for an arbitrary calcomUserId.",
+      "zh": "Cal.com 對外呼叫 CALCOM_CREDENTIAL_SYNC_ENDPOINT 時完全沒有帶任何認證，而反方向的 webhook 卻要求 shared secret。這個不對稱是刻意的，還是漏了？"
+    },
+    {
+      "text": "CALCOM_WEBHOOK_HEADER_NAME must be lowercase or the webhook silently returns 403 (Next.js lowercases header keys); is that documented anywhere users will see, beyond the single .env.example comment?",
+      "zh": "CALCOM_WEBHOOK_HEADER_NAME 必須是小寫，否則整個 webhook 會靜默回 403。除了 .env.example 的一行註解之外，這件事有在使用者看得到的文件裡說明嗎？"
+    }
+  ]
+}

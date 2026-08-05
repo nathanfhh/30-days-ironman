@@ -1,0 +1,455 @@
+{
+  "slug": "cal_com-11059",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "zoho-bigin-useless-template-literal",
+      "evidence": "packages/app-store/zoho-bigin/api/add.ts:17",
+      "reason": "The line is now WEBAPP_URL + `/api/integrations/zoho-bigin/callback` — a template literal with no interpolation left, a genuine nit. The 'most lint configs flag it' rationale does not hold for this repo: packages/config/eslint-preset.js enables no quotes/no-useless-template-literal rule and @typescript-eslint 'recommended' does not include one."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "no-tests",
+      "evidence": "diff.patch (no *.test.ts / *.spec.ts added)",
+      "reason": "The diff adds apps/web/pages/api/webhook/app-credential.ts plus two _utils/oauth helpers and rewires nine refresh paths without a single test file; the google-persists-wrapper and zoho-bigin userId defects are both trivially unit-testable."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "webhook-appstoremetadata-slug-vs-dirname",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:50; packages/app-store/apps.metadata.generated.ts:76-145",
+      "reason": "appStoreMetadata is keyed by dirName (googlecalendar, office365calendar, office365video, zoomvideo, larkcalendar) while App.slug in prisma/schema.prisma holds the slug (google-calendar, office365-calendar, msteams, zoom, lark-calendar), so appStoreMetadata[app.slug] is undefined and the handler 404s for exactly the apps this PR wires up."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "salesforce-stale-token-in-connection",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:96-107",
+      "reason": "After persisting accessTokenParsed.data, the returned jsforce.Connection is still built from credentialKey.instance_url / credentialKey.access_token, the values read before the refresh."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "app-credential-sharing-not-boolean",
+      "evidence": "packages/lib/constants.ts:103-104",
+      "reason": "`process.env.CALCOM_WEBHOOK_SECRET && process.env.CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY` yields string | undefined, not boolean; the exported constant is only used in truthiness checks today, but the name and type invite misuse."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "webhook-header-name-case",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:24-29; .env.example:19",
+      "reason": "Node lowercases incoming header keys, so a mixed-case CALCOM_WEBHOOK_HEADER_NAME makes the lookup undefined and every request 403s with 'Invalid webhook secret'; the only warning is the one-line .env.example comment, as the claim states."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "refresh-oauth-tokens-no-error-handling",
+      "evidence": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15",
+      "reason": "The new outbound fetch to the sync endpoint has no try/catch; a network failure rejects and propagates. 'Unhandled' overstates it (google/hubspot/zohocrm/lark wrap their calls), but the gap is real for a newly introduced dependency."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Critical",
+      "cluster": "salesforce-missing-prisma-import",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:1-20,96",
+      "reason": "The file calls prisma.credential.update but has no `import prisma from \"@calcom/prisma\"`; the bare identifier only type-checks because packages/prisma/index.ts has `declare global { var prisma }`."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Critical",
+      "cluster": "refresh-token-placeholder-string",
+      "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25-27",
+      "reason": "When the parsed data has no refresh_token the code writes the literal string \"refresh_token\"; on the sync path minimumTokenResponseSchema strips everything but access_token, so this always fires and office365 then merges it over the real refresh token (CalendarService.ts:264) before persisting."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "parse-schema-switch-ignores-sync-path",
+      "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:15-19 vs refreshOAuthTokens.ts:5",
+      "reason": "refreshOAuthTokens only uses the sync endpoint when userId is truthy, but parseRefreshTokenResponse switches schema on the env vars alone, so team credentials (userId null) get a genuine provider response parsed by minimumTokenResponseSchema, which strips every field except access_token."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "zoho-bigin-credential-id-as-userid",
+      "evidence": "packages/app-store/zoho-bigin/lib/CalendarService.ts:53,85-94",
+      "reason": "`const credentialId = credential.id` is passed as refreshOAuthTokens' third argument (userId), which is POSTed as calcomUserId; the line number cited is off by a few but the call site and the defect are exactly as described."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "webhook-credential-race-duplicate",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:61-88; packages/prisma/schema.prisma model Credential",
+      "reason": "findFirst-then-create with no unique constraint on (userId, appId) — the Credential model only has @@index([userId]) and @@index([appId]) — so two concurrent webhook calls can both miss and both insert."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "salesforce-stale-token-in-connection",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:96-107",
+      "reason": "Same defect: the DB is updated with the fresh token but the Connection handed back to the caller carries credentialKey.access_token from before the refresh."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "minimum-token-schema-computed-keys",
+      "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11",
+      "reason": "The line is genuinely broken and must be fixed, but not for the stated reason: `z.string().toString()` is legal JS and evaluates to \"[object Object]\", so both computed keys collide on one meaningless property and the schema silently degrades to `{ access_token: string }` — there is no runtime error and Zod accepts it."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "office365-dead-success-guard",
+      "evidence": "packages/app-store/office365calendar/lib/CalendarService.ts:263-264",
+      "reason": "parseRefreshTokenResponse throws when success is false, so `tokenResponse.success && tokenResponse.data` can only ever take the truthy branch — leftover from the old safeParse call."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "webhook-empty-jsdoc",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:16",
+      "reason": "An empty `/** */` sits directly above the only new public entry point; compare the documented handler in apps/web/pages/api/sync/helpscout/index.ts."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "webhook-no-method-check",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:17-31; apps/web/pages/api/sync/helpscout/index.ts:25",
+      "reason": "No req.method guard anywhere in the handler, while the repo's comparable webhook and app-store add/callback handlers open with `if (req.method !== \"POST\"/\"GET\") return res.status(405)`."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "refresh-oauth-tokens-no-timeout",
+      "evidence": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-14",
+      "reason": "The fetch to CALCOM_CREDENTIAL_SYNC_ENDPOINT passes no AbortSignal/timeout, and this call sits inside the booking/availability path."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "salesforce-bypasses-refresh-oauth-tokens",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:20,74-84",
+      "reason": "Salesforce imports only parseRefreshTokenResponse and calls login.salesforce.com directly; every other adapter touched by this PR routes through refreshOAuthTokens, so salesforce silently opts out of credential sync."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "webhook-parse-throws-500",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:31",
+      "reason": "`.parse(req.body)` throws a ZodError out of an unwrapped Next.js API handler, which Next turns into a 500; the repo convention (helpscout webhook) is safeParse then `res.status(400)`."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "sync-endpoint-outbound-unauthenticated",
+      "evidence": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-14 vs apps/web/pages/api/webhook/app-credential.ts:24-29",
+      "reason": "The outbound POST carries only calcomUserId and appSlug — no shared secret, no header — while the inbound webhook enforces CALCOM_WEBHOOK_SECRET; the asymmetry is verifiable in the code even if the intent (internal-network endpoint) is not."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "office365-lost-parse-diagnostics",
+      "evidence": "packages/app-store/office365calendar/lib/CalendarService.ts:263 (removed console.error in diff.patch)",
+      "reason": "The diff deletes the console.error that dumped tokenResponse.error and the raw MS response; the replacement path throws a bare `new Error(\"Invalid refreshed tokens were returned\")` from parseRefreshTokenResponse.ts:22 with no context."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "office365-persists-stale-on-parse-failure",
+      "evidence": "packages/app-store/office365calendar/lib/CalendarService.ts:263-272; parseRefreshTokenResponse.ts:21-23",
+      "reason": "Inverted: this was the pre-change behaviour. parseRefreshTokenResponse now throws on parse failure, so prisma.credential.update on line 265 is never reached — nothing stale is persisted."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "salesforce-stale-token-in-connection",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:96-107",
+      "reason": "Same defect, stated most precisely: the Connection uses credentialKey.access_token / credentialKey.instance_url rather than accessTokenParsed.data."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "webhook-header-array",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:24-29",
+      "reason": "Node does not array-ify arbitrary duplicate headers (only set-cookie); duplicates of a custom header are joined with \", \". And even if an array arrived, `array !== string` is true, which 403s the request — the opposite of the claimed auth bypass."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "webhook-decrypt-json-throws-500",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:57-59; packages/lib/crypto.ts:30-42",
+      "reason": "symmetricDecrypt calls crypto.createDecipheriv and decipher.final, both of which throw synchronously on a bad key length or bad ciphertext, and the result is fed straight to JSON.parse — neither is wrapped, so tampered input yields a 500."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Medium",
+      "cluster": "salesforce-constructor-unhandled-rejection",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:57,74-99",
+      "reason": "`this.conn = this.getClient(credential).then((c) => c)` attaches no rejection handler, and this PR makes getClient reject far more often (network fetch, HttpError on statusText, Promise.reject on parse failure) before any consumer awaits this.conn."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "sync-path-returns-raw-response",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:86-96; refreshOAuthTokens.ts:15",
+      "reason": "On the sync path refreshOAuthTokens returns the raw fetch Response, so `res?.data` is undefined and `token.access_token` throws a TypeError (swallowed by the surrounding catch, leaving the refresh a silent no-op)."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "zoho-bigin-credential-id-as-userid",
+      "evidence": "packages/app-store/zoho-bigin/lib/CalendarService.ts:53,94",
+      "reason": "Same defect: credential.id is handed to the userId parameter and sent as calcomUserId."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "sync-path-returns-raw-response",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:94; packages/app-store/hubspot/lib/CalendarService.ts:177-193",
+      "reason": "Both call sites are as described — google reads res?.data, hubspot annotates the result `HubspotToken` and immediately reads hubspotRefreshToken.expiresIn — while refreshOAuthTokens returns a Response on the sync path."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "refresh-function-any-type",
+      "evidence": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:3",
+      "reason": "`refreshFunction: () => any` erases the return type at every one of the nine call sites, which is precisely why the Response-vs-token-object mismatch compiles."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Critical",
+      "cluster": "salesforce-missing-prisma-import",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:96; packages/prisma/index.ts:6-9,57-61",
+      "reason": "Confirmed both halves: `declare global { var prisma }` makes the bare identifier type-check, and `globalThis.prisma = prisma` is guarded by `if (process.env.NODE_ENV !== \"production\")`, so in production the reference is undefined and getClient throws a TypeError."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "refresh-oauth-tokens-no-status-check",
+      "evidence": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15",
+      "reason": "The Response is returned without checking response.ok or inspecting the body, so a 4xx/5xx or an HTML error page from the self-hoster's endpoint is passed on to callers as if it were a token response."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "zoho-bigin-credential-id-as-userid",
+      "evidence": "packages/app-store/zoho-bigin/lib/CalendarService.ts:94; refreshOAuthTokens.ts:3,11",
+      "reason": "Same defect stated from the helper's side: the third parameter is userId and is serialised as calcomUserId."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "webhook-no-method-check",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:17-31",
+      "reason": "Correct: no method guard, and for a GET req.body is undefined so the zod .parse on line 31 throws and Next returns 500."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "webhook-decrypted-keys-unvalidated",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:57-59,74-86",
+      "reason": "The JSON.parse result is untyped and written straight into credential.key on both the update and create branches with no per-app key-schema validation, so a bad payload only surfaces later when an adapter parses the credential."
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "webhook-no-method-check",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:17; apps/web/pages/api/sync/helpscout/index.ts:25",
+      "reason": "Same issue; the cited convention exists — the helpscout webhook returns `405 Method not allowed` for anything but POST."
+    },
+    {
+      "claim_id": "c038",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "webhook-parse-throws-500",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:17,31,57",
+      "reason": "Both halves check out: the schema parse (and the later JSON.parse) throw into Next's default 500 handler, and there is no method guard."
+    },
+    {
+      "claim_id": "c039",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "webhook-decrypt-json-throws-500",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:57-59; packages/lib/crypto.ts:30-42",
+      "reason": "Same as c026 — createDecipheriv/final and JSON.parse are all unguarded, so malformed keys produce a 500."
+    },
+    {
+      "claim_id": "c040",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "salesforce-refresh-write-race",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:74-99",
+      "reason": "getClient reads credential.key, refreshes, and writes the new key with no transaction or version check; because it runs on every construction (see c044) concurrent requests for the same credential do interleave read-modify-write."
+    },
+    {
+      "claim_id": "c041",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "zoho-bigin-credential-id-as-userid",
+      "evidence": "packages/app-store/zoho-bigin/lib/CalendarService.ts:53,94",
+      "reason": "The count is right: google, hubspot, lark, office365calendar, office365video, webex, zohocrm and zoomvideo all pass credential.userId; only zoho-bigin passes credential.id, so an integer that is a valid other user's id can be sent as calcomUserId."
+    },
+    {
+      "claim_id": "c042",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "webhook-parse-throws-500",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:31,57-59; apps/web/pages/api/sync/helpscout/index.ts:32-35",
+      "reason": "Accurate on all three points: .parse instead of the repo's safeParse-then-400 pattern, and neither symmetricDecrypt nor JSON.parse is wrapped."
+    },
+    {
+      "claim_id": "c043",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "app-credential-sharing-not-boolean",
+      "evidence": "packages/lib/constants.ts:103-104",
+      "reason": "Confirmed: with both env vars set the constant's value is the literal CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY string, exported under an _ENABLED name from a widely imported module."
+    },
+    {
+      "claim_id": "c044",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "salesforce-refresh-every-construction",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:56-57,74-99",
+      "reason": "The constructor calls getClient unconditionally and getClient always POSTs to the token endpoint and writes the credential row — there is no isExpired/isTokenValid guard like office365calendar:236, zoho-bigin:55 or zoomvideo."
+    },
+    {
+      "claim_id": "c045",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "salesforce-statustext-check",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:86",
+      "reason": "Using the reason phrase as the success test is wrong — response.ok is the correct check, and the thrown HttpError message is whatever statusText happens to be. The HTTP/2 rationale is shaky though: Node's fetch (undici) speaks HTTP/1.1 and does populate statusText, so the 'successful 200 becomes a 400' failure does not occur today."
+    },
+    {
+      "claim_id": "c046",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Critical",
+      "cluster": "google-persists-safeparse-wrapper",
+      "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:97-101; parseRefreshTokenResponse.ts:29",
+      "reason": "parseRefreshTokenResponse returns the safeParse result and google assigns it straight to `key` in prisma.credential.update, so credential.key becomes { success: true, data: {...} } and every later googleCredentialSchema.parse of that credential fails."
+    },
+    {
+      "claim_id": "c047",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "turbo-env-ordering",
+      "evidence": "turbo.json:206-207",
+      "reason": "CALCOM_WEBHOOK_SECRET sits after CALENDSO_ENCRYPTION_KEY; the three sibling additions were placed alphabetically, so this one is the odd entry out."
+    },
+    {
+      "claim_id": "c048",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "webhook-header-name-case",
+      "evidence": "apps/web/pages/api/webhook/app-credential.ts:24-26",
+      "reason": "req.headers keys are lowercased by Node, so an env var set in mixed case makes the lookup undefined and the secret check always fails; no .toLowerCase() is applied to the configured name."
+    },
+    {
+      "claim_id": "c049",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "High",
+      "cluster": "salesforce-stale-token-in-connection",
+      "evidence": "packages/app-store/salesforce/lib/CalendarService.ts:101-107",
+      "reason": "Same defect: accessToken comes from credentialKey, read at line 72 before the refresh, so the current request still uses the old token."
+    },
+    {
+      "claim_id": "c050",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "zoho-bigin-hardcoded-slug",
+      "evidence": "packages/app-store/zoho-bigin/api/add.ts:8,12,17,23",
+      "reason": "Confirmed: the redirectUri now hardcodes \"zoho-bigin\" while appConfig is still imported and used two lines above (getAppKeysFromSlug(appConfig.slug)) and below (appConfig.scope); the change is unrelated to credential sync."
+    }
+  ]
+}

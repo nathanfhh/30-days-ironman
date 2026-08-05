@@ -1,0 +1,1222 @@
+diff --git a/app/assets/javascripts/admin/adapters/embedding.js.es6 b/app/assets/javascripts/admin/adapters/embedding.js.es6
+new file mode 100644
+index 0000000..c8985cf
+--- /dev/null
++++ b/app/assets/javascripts/admin/adapters/embedding.js.es6
+@@ -0,0 +1,7 @@
++import RestAdapter from 'discourse/adapters/rest';
++
++export default RestAdapter.extend({
++  pathFor() {
++    return "/admin/customize/embedding";
++  }
++});
+diff --git a/app/assets/javascripts/admin/components/embeddable-host.js.es6 b/app/assets/javascripts/admin/components/embeddable-host.js.es6
+new file mode 100644
+index 0000000..f33c750
+--- /dev/null
++++ b/app/assets/javascripts/admin/components/embeddable-host.js.es6
+@@ -0,0 +1,63 @@
++import { bufferedProperty } from 'discourse/mixins/buffered-content';
++import computed from 'ember-addons/ember-computed-decorators';
++import { on, observes } from 'ember-addons/ember-computed-decorators';
++import { popupAjaxError } from 'discourse/lib/ajax-error';
++
++export default Ember.Component.extend(bufferedProperty('host'), {
++  editToggled: false,
++  tagName: 'tr',
++  categoryId: null,
++
++  editing: Ember.computed.or('host.isNew', 'editToggled'),
++
++  @on('didInsertElement')
++  @observes('editing')
++  _focusOnInput() {
++    Ember.run.schedule('afterRender', () => { this.$('.host-name').focus(); });
++  },
++
++  @computed('buffered.host', 'host.isSaving')
++  cantSave(host, isSaving) {
++    return isSaving || Ember.isEmpty(host);
++  },
++
++  actions: {
++    edit() {
++      this.set('categoryId', this.get('host.category.id'));
++      this.set('editToggled', true);
++    },
++
++    save() {
++      if (this.get('cantSave')) { return; }
++
++      const props = this.get('buffered').getProperties('host');
++      props.category_id = this.get('categoryId');
++
++      const host = this.get('host');
++      host.save(props).then(() => {
++        host.set('category', Discourse.Category.findById(this.get('categoryId')));
++        this.set('editToggled', false);
++      }).catch(popupAjaxError);
++    },
++
++    delete() {
++      bootbox.confirm(I18n.t('admin.embedding.confirm_delete'), (result) => {
++        if (result) {
++          this.get('host').destroyRecord().then(() => {
++            this.sendAction('deleteHost', this.get('host'));
++          });
++        }
++      });
++    },
++
++    cancel() {
++      const host = this.get('host');
++      if (host.get('isNew')) {
++        this.sendAction('deleteHost', host);
++      } else {
++        this.rollbackBuffer();
++        this.set('editToggled', false);
++      }
++    }
++  }
++});
+diff --git a/app/assets/javascripts/admin/controllers/admin-embedding.js.es6 b/app/assets/javascripts/admin/controllers/admin-embedding.js.es6
+new file mode 100644
+index 0000000..d0e5548
+--- /dev/null
++++ b/app/assets/javascripts/admin/controllers/admin-embedding.js.es6
+@@ -0,0 +1,18 @@
++export default Ember.Controller.extend({
++  embedding: null,
++
++  actions: {
++    saveChanges() {
++      this.get('embedding').update({});
++    },
++
++    addHost() {
++      const host = this.store.createRecord('embeddable-host');
++      this.get('embedding.embeddable_hosts').pushObject(host);
++    },
++
++    deleteHost(host) {
++      this.get('embedding.embeddable_hosts').removeObject(host);
++    }
++  }
++});
+diff --git a/app/assets/javascripts/admin/routes/admin-embedding.js.es6 b/app/assets/javascripts/admin/routes/admin-embedding.js.es6
+new file mode 100644
+index 0000000..d9a249c
+--- /dev/null
++++ b/app/assets/javascripts/admin/routes/admin-embedding.js.es6
+@@ -0,0 +1,9 @@
++export default Ember.Route.extend({
++  model() {
++    return this.store.find('embedding');
++  },
++
++  setupController(controller, model) {
++    controller.set('embedding', model);
++  }
++});
+diff --git a/app/assets/javascripts/admin/routes/admin-route-map.js.es6 b/app/assets/javascripts/admin/routes/admin-route-map.js.es6
+index 047e5d5..e01d0f8 100644
+--- a/app/assets/javascripts/admin/routes/admin-route-map.js.es6
++++ b/app/assets/javascripts/admin/routes/admin-route-map.js.es6
+@@ -22,16 +22,17 @@ export default {
+       });
+ 
+       this.resource('adminSiteText', { path: '/site_texts' }, function() {
+         this.route('edit', {path: '/:text_type'});
+       });
+       this.resource('adminUserFields', { path: '/user_fields' });
+       this.resource('adminEmojis', { path: '/emojis' });
+       this.resource('adminPermalinks', { path: '/permalinks' });
++      this.resource('adminEmbedding', { path: '/embedding' });
+     });
+     this.route('api');
+ 
+     this.resource('admin.backups', { path: '/backups' }, function() {
+       this.route('logs');
+     });
+ 
+     this.resource('adminReports', { path: '/reports/:type' });
+diff --git a/app/assets/javascripts/admin/templates/components/embeddable-host.hbs b/app/assets/javascripts/admin/templates/components/embeddable-host.hbs
+new file mode 100644
+index 0000000..c35d40e
+--- /dev/null
++++ b/app/assets/javascripts/admin/templates/components/embeddable-host.hbs
+@@ -0,0 +1,19 @@
++{{#if editing}}
++  <td>
++    {{input value=buffered.host placeholder="example.com" enter="save" class="host-name"}}
++  </td>
++  <td>
++    {{category-chooser value=categoryId}}
++  </td>
++  <td>
++    {{d-button icon="check" action="save" class="btn-primary" disabled=cantSave}}
++    {{d-button icon="times" action="cancel" class="btn-danger" disabled=host.isSaving}}
++  </td>
++{{else}}
++  <td>{{host.host}}</td>
++  <td>{{category-badge host.category}}</td>
++  <td>
++    {{d-button icon="pencil" action="edit"}}
++    {{d-button icon="trash-o" action="delete" class='btn-danger'}}
++  </td>
++{{/if}}
+diff --git a/app/assets/javascripts/admin/templates/customize.hbs b/app/assets/javascripts/admin/templates/customize.hbs
+index 130b75e..8ab4c66 100644
+--- a/app/assets/javascripts/admin/templates/customize.hbs
++++ b/app/assets/javascripts/admin/templates/customize.hbs
+@@ -1,12 +1,13 @@
+ {{#admin-nav}}
+   {{nav-item route='adminCustomize.colors' label='admin.customize.colors.title'}}
+   {{nav-item route='adminCustomizeCssHtml.index' label='admin.customize.css_html.title'}}
+   {{nav-item route='adminSiteText' label='admin.site_text.title'}}
+   {{nav-item route='adminUserFields' label='admin.user_fields.title'}}
+   {{nav-item route='adminEmojis' label='admin.emoji.title'}}
+   {{nav-item route='adminPermalinks' label='admin.permalink.title'}}
++  {{nav-item route='adminEmbedding' label='admin.embedding.title'}}
+ {{/admin-nav}}
+ 
+ <div class="admin-container">
+   {{outlet}}
+ </div>
+diff --git a/app/assets/javascripts/admin/templates/embedding.hbs b/app/assets/javascripts/admin/templates/embedding.hbs
+new file mode 100644
+index 0000000..838e3e8
+--- /dev/null
++++ b/app/assets/javascripts/admin/templates/embedding.hbs
+@@ -0,0 +1,15 @@
++{{#if embedding.embeddable_hosts}}
++  <table>
++    <tr>
++      <th style='width: 50%'>{{i18n "admin.embedding.host"}}</th>
++      <th style='width: 30%'>{{i18n "admin.embedding.category"}}</th>
++      <th style='width: 20%'>&nbsp;</th>
++    </tr>
++    {{#each embedding.embeddable_hosts as |host|}}
++      {{embeddable-host host=host deleteHost="deleteHost"}}
++    {{/each}}
++  </table>
++{{/if}}
++
++{{d-button label="admin.embedding.add_host" action="addHost" icon="plus" class="btn-primary"}}
++
+diff --git a/app/assets/javascripts/discourse/adapters/rest.js.es6 b/app/assets/javascripts/discourse/adapters/rest.js.es6
+index 5e427a8..1a9fa03 100644
+--- a/app/assets/javascripts/discourse/adapters/rest.js.es6
++++ b/app/assets/javascripts/discourse/adapters/rest.js.es6
+@@ -1,9 +1,9 @@
+-const ADMIN_MODELS = ['plugin', 'site-customization'];
++const ADMIN_MODELS = ['plugin', 'site-customization', 'embeddable-host'];
+ 
+ export function Result(payload, responseJson) {
+   this.payload = payload;
+   this.responseJson = responseJson;
+   this.target = null;
+ }
+ 
+ const ajax = Discourse.ajax;
+@@ -14,17 +14,17 @@ function rethrow(error) {
+     throw "404: " + error.responseText;
+   }
+   throw(error);
+ }
+ 
+ export default Ember.Object.extend({
+ 
+   basePath(store, type) {
+-    if (ADMIN_MODELS.indexOf(type) !== -1) { return "/admin/"; }
++    if (ADMIN_MODELS.indexOf(type.replace('_', '-')) !== -1) { return "/admin/"; }
+     return "/";
+   },
+ 
+   pathFor(store, type, findArgs) {
+     let path = this.basePath(store, type, findArgs) + Ember.String.underscore(store.pluralize(type));
+ 
+     if (findArgs) {
+       if (typeof findArgs === "object") {
+diff --git a/app/assets/javascripts/discourse/models/store.js.es6 b/app/assets/javascripts/discourse/models/store.js.es6
+index a9aa86f..dc6acae 100644
+--- a/app/assets/javascripts/discourse/models/store.js.es6
++++ b/app/assets/javascripts/discourse/models/store.js.es6
+@@ -184,24 +184,34 @@ export default Ember.Object.extend({
+         return hydrated;
+       }
+     }
+   },
+ 
+   _hydrateEmbedded(type, obj, root) {
+     const self = this;
+     Object.keys(obj).forEach(function(k) {
+-      const m = /(.+)\_id$/.exec(k);
++      const m = /(.+)\_id(s?)$/.exec(k);
+       if (m) {
+         const subType = m[1];
+-        const hydrated = self._lookupSubType(subType, type, obj[k], root);
+-        if (hydrated) {
+-          obj[subType] = hydrated;
++
++        if (m[2]) {
++          const hydrated = obj[k].map(function(id) {
++            return self._lookupSubType(subType, type, id, root);
++          });
++          obj[self.pluralize(subType)] = hydrated || [];
+           delete obj[k];
++        } else {
++          const hydrated = self._lookupSubType(subType, type, obj[k], root);
++          if (hydrated) {
++            obj[subType] = hydrated;
++            delete obj[k];
++          }
+         }
++
+       }
+     });
+   },
+ 
+   _hydrate(type, obj, root) {
+     if (!obj) { throw "Can't hydrate " + type + " of `null`"; }
+     if (!obj.id) { throw "Can't hydrate " + type + " without an `id`"; }
+ 
+diff --git a/app/controllers/admin/embeddable_hosts_controller.rb b/app/controllers/admin/embeddable_hosts_controller.rb
+new file mode 100644
+index 0000000..2d90d46
+--- /dev/null
++++ b/app/controllers/admin/embeddable_hosts_controller.rb
+@@ -0,0 +1,34 @@
++class Admin::EmbeddableHostsController < Admin::AdminController
++
++  before_filter :ensure_logged_in, :ensure_staff
++
++  def create
++    save_host(EmbeddableHost.new)
++  end
++
++  def update
++    host = EmbeddableHost.where(id: params[:id]).first
++    save_host(host)
++  end
++
++  def destroy
++    host = EmbeddableHost.where(id: params[:id]).first
++    host.destroy
++    render json: success_json
++  end
++
++  protected
++
++    def save_host(host)
++      host.host = params[:embeddable_host][:host]
++      host.category_id = params[:embeddable_host][:category_id]
++      host.category_id = SiteSetting.uncategorized_category_id if host.category_id.blank?
++
++      if host.save
++        render_serialized(host, EmbeddableHostSerializer, root: 'embeddable_host', rest_serializer: true)
++      else
++        render_json_error(host)
++      end
++    end
++
++end
+diff --git a/app/controllers/admin/embedding_controller.rb b/app/controllers/admin/embedding_controller.rb
+new file mode 100644
+index 0000000..656ff25
+--- /dev/null
++++ b/app/controllers/admin/embedding_controller.rb
+@@ -0,0 +1,21 @@
++class Admin::EmbeddingController < Admin::AdminController
++
++  before_filter :ensure_logged_in, :ensure_staff, :fetch_embedding
++
++  def show
++    render_serialized(@embedding, EmbeddingSerializer, root: 'embedding', rest_serializer: true)
++  end
++
++  def update
++    render_serialized(@embedding, EmbeddingSerializer, root: 'embedding', rest_serializer: true)
++  end
++
++  protected
++
++    def fetch_embedding
++      @embedding = OpenStruct.new({
++        id: 'default',
++        embeddable_hosts: EmbeddableHost.all.order(:host)
++      })
++    end
++end
+diff --git a/app/controllers/embed_controller.rb b/app/controllers/embed_controller.rb
+index f296998..e309776 100644
+--- a/app/controllers/embed_controller.rb
++++ b/app/controllers/embed_controller.rb
+@@ -53,18 +53,17 @@ class EmbedController < ApplicationController
+     render json: {counts: by_url}, callback: params[:callback]
+   end
+ 
+   private
+ 
+     def ensure_embeddable
+ 
+       if !(Rails.env.development? && current_user.try(:admin?))
+-        raise Discourse::InvalidAccess.new('embeddable hosts not set') if SiteSetting.embeddable_hosts.blank?
+-        raise Discourse::InvalidAccess.new('invalid referer host') unless SiteSetting.allows_embeddable_host?(request.referer)
++        raise Discourse::InvalidAccess.new('invalid referer host') unless EmbeddableHost.host_allowed?(request.referer)
+       end
+ 
+       response.headers['X-Frame-Options'] = "ALLOWALL"
+     rescue URI::InvalidURIError
+       raise Discourse::InvalidAccess.new('invalid referer host')
+     end
+ 
+ 
+diff --git a/app/models/embeddable_host.rb b/app/models/embeddable_host.rb
+new file mode 100644
+index 0000000..1fdda54
+--- /dev/null
++++ b/app/models/embeddable_host.rb
+@@ -0,0 +1,24 @@
++class EmbeddableHost < ActiveRecord::Base
++  validates_format_of :host, :with => /\A[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?\Z/i
++  belongs_to :category
++
++  before_validation do
++    self.host.sub!(/^https?:\/\//, '')
++    self.host.sub!(/\/.*$/, '')
++  end
++
++  def self.record_for_host(host)
++    uri = URI(host) rescue nil
++    return false unless uri.present?
++
++    host = uri.host
++    return false unless host.present?
++
++    where("lower(host) = ?", host).first
++  end
++
++  def self.host_allowed?(host)
++    record_for_host(host).present?
++  end
++
++end
+diff --git a/app/models/site_setting.rb b/app/models/site_setting.rb
+index 4c46e52..ff1d17c 100644
+--- a/app/models/site_setting.rb
++++ b/app/models/site_setting.rb
+@@ -63,30 +63,16 @@ class SiteSetting < ActiveRecord::Base
+   def self.homepage
+     top_menu_items[0].name
+   end
+ 
+   def self.anonymous_menu_items
+     @anonymous_menu_items ||= Set.new Discourse.anonymous_filters.map(&:to_s)
+   end
+ 
+-  def self.allows_embeddable_host?(host)
+-    return false if embeddable_hosts.blank?
+-    uri = URI(host) rescue nil
+-    return false unless uri.present?
+-
+-    host = uri.host
+-    return false unless host.present?
+-
+-    !!embeddable_hosts.split("\n").detect {|h| h.sub(/^https?\:\/\//, '') == host }
+-
+-    hosts = embeddable_hosts.split("\n").map {|h| (URI(h).host rescue nil) || h  }
+-    !!hosts.detect {|h| h == host}
+-  end
+-
+   def self.anonymous_homepage
+     top_menu_items.map { |item| item.name }
+                   .select { |item| anonymous_menu_items.include?(item) }
+                   .first
+   end
+ 
+   def self.should_download_images?(src)
+     setting = disabled_image_download_domains
+diff --git a/app/models/topic.rb b/app/models/topic.rb
+index 297f840..442fb43 100644
+--- a/app/models/topic.rb
++++ b/app/models/topic.rb
+@@ -861,17 +861,17 @@ class Topic < ActiveRecord::Base
+     end
+   end
+ 
+   def has_topic_embed?
+     TopicEmbed.where(topic_id: id).exists?
+   end
+ 
+   def expandable_first_post?
+-    SiteSetting.embeddable_hosts.present? && SiteSetting.embed_truncate? && has_topic_embed?
++    SiteSetting.embed_truncate? && has_topic_embed?
+   end
+ 
+   TIME_TO_FIRST_RESPONSE_SQL ||= <<-SQL
+     SELECT AVG(t.hours)::float AS "hours", t.created_at AS "date"
+     FROM (
+       SELECT t.id, t.created_at::date AS created_at, EXTRACT(EPOCH FROM MIN(p.created_at) - t.created_at)::float / 3600.0 AS "hours"
+       FROM topics t
+       LEFT JOIN posts p ON p.topic_id = t.id
+diff --git a/app/models/topic_embed.rb b/app/models/topic_embed.rb
+index 823ce54..461695e 100644
+--- a/app/models/topic_embed.rb
++++ b/app/models/topic_embed.rb
+@@ -28,22 +28,24 @@ class TopicEmbed < ActiveRecord::Base
+ 
+     embed = TopicEmbed.find_by("lower(embed_url) = ?", url)
+     content_sha1 = Digest::SHA1.hexdigest(contents)
+     post = nil
+ 
+     # If there is no embed, create a topic, post and the embed.
+     if embed.blank?
+       Topic.transaction do
++        eh = EmbeddableHost.record_for_host(url)
++
+         creator = PostCreator.new(user,
+                                   title: title,
+                                   raw: absolutize_urls(url, contents),
+                                   skip_validations: true,
+                                   cook_method: Post.cook_methods[:raw_html],
+-                                  category: SiteSetting.embed_category)
++                                  category: eh.try(:category_id))
+         post = creator.create
+         if post.present?
+           TopicEmbed.create!(topic_id: post.topic_id,
+                              embed_url: url,
+                              content_sha1: content_sha1,
+                              post_id: post.id)
+         end
+       end
+diff --git a/app/serializers/embeddable_host_serializer.rb b/app/serializers/embeddable_host_serializer.rb
+new file mode 100644
+index 0000000..f5de82a
+--- /dev/null
++++ b/app/serializers/embeddable_host_serializer.rb
+@@ -0,0 +1,16 @@
++class EmbeddableHostSerializer < ApplicationSerializer
++  attributes :id, :host, :category_id
++
++  def id
++    object.id
++  end
++
++  def host
++    object.host
++  end
++
++  def category_id
++    object.category_id
++  end
++end
++
+diff --git a/app/serializers/embedding_serializer.rb b/app/serializers/embedding_serializer.rb
+new file mode 100644
+index 0000000..0413573
+--- /dev/null
++++ b/app/serializers/embedding_serializer.rb
+@@ -0,0 +1,8 @@
++class EmbeddingSerializer < ApplicationSerializer
++  attributes :id
++  has_many :embeddable_hosts, serializer: EmbeddableHostSerializer, embed: :ids
++
++  def id
++    object.id
++  end
++end
+diff --git a/config/locales/client.en.yml b/config/locales/client.en.yml
+index b60cb7a..5ff7e91 100644
+--- a/config/locales/client.en.yml
++++ b/config/locales/client.en.yml
+@@ -2486,16 +2486,24 @@ en:
+       emoji:
+         title: "Emoji"
+         help: "Add new emoji that will be available to everyone. (PROTIP: drag & drop multiple files at once)"
+         add: "Add New Emoji"
+         name: "Name"
+         image: "Image"
+         delete_confirm: "Are you sure you want to delete the :%{name}: emoji?"
+ 
++      embedding:
++        confirm_delete: "Are you sure you want to delete that host?"
++        title: "Embedding"
++        host: "Allowed Hosts"
++        edit: "edit"
++        category: "Post to Category"
++        add_host: "Add Host"
++
+       permalink:
+         title: "Permalinks"
+         url: "URL"
+         topic_id: "Topic ID"
+         topic_title: "Topic"
+         post_id: "Post ID"
+         post_title: "Post"
+         category_id: "Category ID"
+diff --git a/config/locales/server.en.yml b/config/locales/server.en.yml
+index 0589365..429fe03 100644
+--- a/config/locales/server.en.yml
++++ b/config/locales/server.en.yml
+@@ -1159,23 +1159,21 @@ en:
+     show_time_gap_days: "If two posts are made this many days apart, display the time gap in the topic."
+     invites_per_page: "Default invites shown on the user page."
+     short_progress_text_threshold: "After the number of posts in a topic goes above this number, the progress bar will only show the current post number. If you change the progress bar's width, you may need to change this value."
+     default_code_lang: "Default programming language syntax highlighting applied to GitHub code blocks (lang-auto, ruby, python etc.)"
+     warn_reviving_old_topic_age: "When someone starts replying to a topic where the last reply is older than this many days, a warning will be displayed. Disable by setting to 0."
+     autohighlight_all_code: "Force apply code highlighting to all preformatted code blocks even when they didn't explicitly specify the language."
+     highlighted_languages: "Included syntax highlighting rules. (Warning: including too many langauges may impact performance) see: https://highlightjs.org/static/demo/ for a demo"
+ 
+-    embeddable_hosts: "Host(s) that can embed the comments from this Discourse forum. Hostname only, do not begin with http://"
+     feed_polling_enabled: "EMBEDDING ONLY: Whether to embed a RSS/ATOM feed as posts."
+     feed_polling_url: "EMBEDDING ONLY: URL of RSS/ATOM feed to embed."
+     embed_by_username: "Discourse username of the user who creates the embedded topics."
+     embed_username_key_from_feed: "Key to pull discourse username from feed."
+     embed_truncate: "Truncate the embedded posts."
+-    embed_category: "Category of embedded topics."
+     embed_post_limit: "Maximum number of posts to embed."
+     embed_whitelist_selector: "CSS selector for elements that are allowed in embeds."
+     embed_blacklist_selector: "CSS selector for elements that are removed from embeds."
+     notify_about_flags_after: "If there are flags that haven't been handled after this many hours, send an email to the contact_email. Set to 0 to disable."
+     enable_cdn_js_debugging: "Allow /logs to display proper errors by adding crossorigin permissions on all js includes."
+     show_create_topics_notice: "If the site has fewer than 5 public topics, show a notice asking admins to create some topics."
+ 
+     delete_drafts_older_than_n_days: Delete drafts older than (n) days.
+diff --git a/config/routes.rb b/config/routes.rb
+index d4f87ce..9b0e6cc 100644
+--- a/config/routes.rb
++++ b/config/routes.rb
+@@ -130,29 +130,32 @@ Discourse::Application.routes.draw do
+ 
+     get "/logs" => "staff_action_logs#index"
+ 
+     get "customize" => "color_schemes#index", constraints: AdminConstraint.new
+     get "customize/css_html" => "site_customizations#index", constraints: AdminConstraint.new
+     get "customize/css_html/:id/:section" => "site_customizations#index", constraints: AdminConstraint.new
+     get "customize/colors" => "color_schemes#index", constraints: AdminConstraint.new
+     get "customize/permalinks" => "permalinks#index", constraints: AdminConstraint.new
++    get "customize/embedding" => "embedding#show", constraints: AdminConstraint.new
++    put "customize/embedding" => "embedding#update", constraints: AdminConstraint.new
+     get "flags" => "flags#index"
+     get "flags/:filter" => "flags#index"
+     post "flags/agree/:id" => "flags#agree"
+     post "flags/disagree/:id" => "flags#disagree"
+     post "flags/defer/:id" => "flags#defer"
+     resources :site_customizations, constraints: AdminConstraint.new
+     scope "/customize" do
+       resources :site_texts, constraints: AdminConstraint.new
+       resources :site_text_types, constraints: AdminConstraint.new
+       resources :user_fields, constraints: AdminConstraint.new
+       resources :emojis, constraints: AdminConstraint.new
+     end
+ 
++    resources :embeddable_hosts, constraints: AdminConstraint.new
+     resources :color_schemes, constraints: AdminConstraint.new
+ 
+     resources :permalinks, constraints: AdminConstraint.new
+ 
+     get "version_check" => "versions#show"
+ 
+     resources :dashboard, only: [:index] do
+       collection do
+diff --git a/config/site_settings.yml b/config/site_settings.yml
+index e1ff85b..4e5b60d 100644
+--- a/config/site_settings.yml
++++ b/config/site_settings.yml
+@@ -754,26 +754,22 @@ developer:
+   verbose_localization:
+     default: false
+     client: true
+   migrate_to_new_scheme:
+     hidden: true
+     default: false
+ 
+ embedding:
+-  embeddable_hosts:
+-    default: ''
+-    type: host_list
+   feed_polling_enabled: false
+   feed_polling_url: ''
+   embed_by_username:
+     default: ''
+     type: username
+   embed_username_key_from_feed: ''
+-  embed_category: ''
+   embed_post_limit: 100
+   embed_truncate: false
+   embed_whitelist_selector: ''
+   embed_blacklist_selector: ''
+ 
+ legal:
+   tos_url:
+     client: true
+diff --git a/db/migrate/20150818190757_create_embeddable_hosts.rb b/db/migrate/20150818190757_create_embeddable_hosts.rb
+new file mode 100644
+index 0000000..a0293d3
+--- /dev/null
++++ b/db/migrate/20150818190757_create_embeddable_hosts.rb
+@@ -0,0 +1,33 @@
++class CreateEmbeddableHosts < ActiveRecord::Migration
++  def change
++    create_table :embeddable_hosts, force: true do |t|
++      t.string :host, null: false
++      t.integer :category_id, null: false
++      t.timestamps
++    end
++
++    category_id = execute("SELECT c.id FROM categories AS c
++                        INNER JOIN site_settings AS s ON s.value = c.name
++                        WHERE s.name = 'embed_category'")[0]['id'].to_i
++
++
++    if category_id == 0
++      category_id = execute("SELECT value FROM site_settings WHERE name = 'uncategorized_category_id'")[0]['value'].to_i
++    end
++
++    embeddable_hosts = execute("SELECT value FROM site_settings WHERE name = 'embeddable_hosts'")
++    if embeddable_hosts && embeddable_hosts.cmd_tuples > 0
++      val = embeddable_hosts[0]['value']
++      if val.present?
++        records = val.split("\n")
++        if records.present?
++          records.each do |h|
++            execute "INSERT INTO embeddable_hosts (host, category_id, created_at, updated_at) VALUES ('#{h}', #{category_id}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
++          end
++        end
++      end
++    end
++
++    execute "DELETE FROM site_settings WHERE name IN ('embeddable_hosts', 'embed_category')"
++  end
++end
+diff --git a/lib/topic_retriever.rb b/lib/topic_retriever.rb
+index 090ad62..2af8401 100644
+--- a/lib/topic_retriever.rb
++++ b/lib/topic_retriever.rb
+@@ -8,17 +8,17 @@ class TopicRetriever
+ 
+   def retrieve
+     perform_retrieve unless (invalid_host? || retrieved_recently?)
+   end
+ 
+   private
+ 
+     def invalid_host?
+-      !SiteSetting.allows_embeddable_host?(@embed_url)
++      !EmbeddableHost.host_allowed?(@embed_url)
+     end
+ 
+     def retrieved_recently?
+       # We can disable the throttle for some users, such as staff
+       return false if @opts[:no_throttle]
+ 
+       # Throttle other users to once every 60 seconds
+       retrieved_key = "retrieved:#{@embed_url}"
+diff --git a/spec/controllers/admin/embeddable_hosts_controller_spec.rb b/spec/controllers/admin/embeddable_hosts_controller_spec.rb
+new file mode 100644
+index 0000000..d3d83ca
+--- /dev/null
++++ b/spec/controllers/admin/embeddable_hosts_controller_spec.rb
+@@ -0,0 +1,9 @@
++require 'spec_helper'
++
++describe Admin::EmbeddableHostsController do
++
++  it "is a subclass of AdminController" do
++    expect(Admin::EmbeddableHostsController < Admin::AdminController).to eq(true)
++  end
++
++end
+diff --git a/spec/controllers/admin/embedding_controller_spec.rb b/spec/controllers/admin/embedding_controller_spec.rb
+new file mode 100644
+index 0000000..5913e9f
+--- /dev/null
++++ b/spec/controllers/admin/embedding_controller_spec.rb
+@@ -0,0 +1,9 @@
++require 'spec_helper'
++
++describe Admin::EmbeddingController do
++
++  it "is a subclass of AdminController" do
++    expect(Admin::EmbeddingController < Admin::AdminController).to eq(true)
++  end
++
++end
+diff --git a/spec/controllers/embed_controller_spec.rb b/spec/controllers/embed_controller_spec.rb
+index ee91d6c..316c9a6 100644
+--- a/spec/controllers/embed_controller_spec.rb
++++ b/spec/controllers/embed_controller_spec.rb
+@@ -6,39 +6,36 @@ describe EmbedController do
+   let(:embed_url) { "http://eviltrout.com/2013/02/10/why-discourse-uses-emberjs.html" }
+ 
+   it "is 404 without an embed_url" do
+     get :comments
+     expect(response).not_to be_success
+   end
+ 
+   it "raises an error with a missing host" do
+-    SiteSetting.embeddable_hosts = nil
+     get :comments, embed_url: embed_url
+     expect(response).not_to be_success
+   end
+ 
+   context "by topic id" do
+ 
+     before do
+-      SiteSetting.embeddable_hosts = host
++      Fabricate(:embeddable_host)
+       controller.request.stubs(:referer).returns('http://eviltrout.com/some-page')
+     end
+ 
+     it "allows a topic to be embedded by id" do
+       topic = Fabricate(:topic)
+       get :comments, topic_id: topic.id
+       expect(response).to be_success
+     end
+   end
+ 
+   context "with a host" do
+-    before do
+-      SiteSetting.embeddable_hosts = host
+-    end
++    let!(:embeddable_host) { Fabricate(:embeddable_host) }
+ 
+     it "raises an error with no referer" do
+       get :comments, embed_url: embed_url
+       expect(response).not_to be_success
+     end
+ 
+     context "success" do
+       before do
+@@ -63,17 +60,19 @@ describe EmbedController do
+         TopicView.expects(:new).with(123, nil, {limit: 100, exclude_first: true, exclude_deleted_users: true})
+         get :comments, embed_url: embed_url
+       end
+     end
+   end
+ 
+   context "with multiple hosts" do
+     before do
+-      SiteSetting.embeddable_hosts = "#{host}\nhttp://discourse.org\nhttps://example.com/1234"
++      Fabricate(:embeddable_host)
++      Fabricate(:embeddable_host, host: 'http://discourse.org')
++      Fabricate(:embeddable_host, host: 'https://example.com/1234')
+     end
+ 
+     context "success" do
+       it "works with the first host" do
+         controller.request.stubs(:referer).returns("http://eviltrout.com/wat/1-2-3.html")
+         get :comments, embed_url: embed_url
+         expect(response).to be_success
+       end
+diff --git a/spec/fabricators/category_fabricator.rb b/spec/fabricators/category_fabricator.rb
+index a37f5b4..0c66857 100644
+--- a/spec/fabricators/category_fabricator.rb
++++ b/spec/fabricators/category_fabricator.rb
+@@ -1,27 +1,4 @@
+-Fabricator(:category) do
+-  name { sequence(:name) { |n| "Amazing Category #{n}" } }
+-  user
+-end
+-
+-Fabricator(:diff_category, from: :category) do
+-  name "Different Category"
+-  user
+-end
+-
+-Fabricator(:happy_category, from: :category) do
+-  name 'Happy Category'
+-  slug 'happy'
+-  user
+-end
+-
+-Fabricator(:private_category, from: :category) do
+-  transient :group
+-
+-  name 'Private Category'
+-  slug 'private'
+-  user
+-  after_build do |cat, transients|
+-    cat.update!(read_restricted: true)
+-    cat.category_groups.build(group_id: transients[:group].id, permission_type: CategoryGroup.permission_types[:full])
+-  end
++Fabricator(:embeddable_host) do
++  host "eviltrout.com"
++  category
+ end
+diff --git a/spec/fabricators/embeddable_host_fabricator.rb b/spec/fabricators/embeddable_host_fabricator.rb
+new file mode 100644
+index 0000000..a37f5b4
+--- /dev/null
++++ b/spec/fabricators/embeddable_host_fabricator.rb
+@@ -0,0 +1,27 @@
++Fabricator(:category) do
++  name { sequence(:name) { |n| "Amazing Category #{n}" } }
++  user
++end
++
++Fabricator(:diff_category, from: :category) do
++  name "Different Category"
++  user
++end
++
++Fabricator(:happy_category, from: :category) do
++  name 'Happy Category'
++  slug 'happy'
++  user
++end
++
++Fabricator(:private_category, from: :category) do
++  transient :group
++
++  name 'Private Category'
++  slug 'private'
++  user
++  after_build do |cat, transients|
++    cat.update!(read_restricted: true)
++    cat.category_groups.build(group_id: transients[:group].id, permission_type: CategoryGroup.permission_types[:full])
++  end
++end
+diff --git a/spec/models/embeddable_host_spec.rb b/spec/models/embeddable_host_spec.rb
+new file mode 100644
+index 0000000..8304310
+--- /dev/null
++++ b/spec/models/embeddable_host_spec.rb
+@@ -0,0 +1,40 @@
++require 'spec_helper'
++
++describe EmbeddableHost do
++
++  it "trims http" do
++    eh = EmbeddableHost.new(host: 'http://example.com')
++    expect(eh).to be_valid
++    expect(eh.host).to eq('example.com')
++  end
++
++  it "trims https" do
++    eh = EmbeddableHost.new(host: 'https://example.com')
++    expect(eh).to be_valid
++    expect(eh.host).to eq('example.com')
++  end
++
++  it "trims paths" do
++    eh = EmbeddableHost.new(host: 'https://example.com/1234/45')
++    expect(eh).to be_valid
++    expect(eh.host).to eq('example.com')
++  end
++
++  describe "allows_embeddable_host" do
++    let!(:host) { Fabricate(:embeddable_host) }
++
++    it 'works as expected' do
++      expect(EmbeddableHost.host_allowed?('http://eviltrout.com')).to eq(true)
++      expect(EmbeddableHost.host_allowed?('https://eviltrout.com')).to eq(true)
++      expect(EmbeddableHost.host_allowed?('https://not-eviltrout.com')).to eq(false)
++    end
++
++    it 'works with multiple hosts' do
++      Fabricate(:embeddable_host, host: 'discourse.org')
++      expect(EmbeddableHost.host_allowed?('http://eviltrout.com')).to eq(true)
++      expect(EmbeddableHost.host_allowed?('http://discourse.org')).to eq(true)
++    end
++
++  end
++
++end
+diff --git a/spec/models/site_setting_spec.rb b/spec/models/site_setting_spec.rb
+index a4ca870..444bd6f 100644
+--- a/spec/models/site_setting_spec.rb
++++ b/spec/models/site_setting_spec.rb
+@@ -1,44 +1,14 @@
+ require 'spec_helper'
+ require_dependency 'site_setting'
+ require_dependency 'site_setting_extension'
+ 
+ describe SiteSetting do
+ 
+-  describe "allows_embeddable_host" do
+-    it 'works as expected' do
+-      SiteSetting.embeddable_hosts = 'eviltrout.com'
+-      expect(SiteSetting.allows_embeddable_host?('http://eviltrout.com')).to eq(true)
+-      expect(SiteSetting.allows_embeddable_host?('https://eviltrout.com')).to eq(true)
+-      expect(SiteSetting.allows_embeddable_host?('https://not-eviltrout.com')).to eq(false)
+-    end
+-
+-    it 'works with a http host' do
+-      SiteSetting.embeddable_hosts = 'http://eviltrout.com'
+-      expect(SiteSetting.allows_embeddable_host?('http://eviltrout.com')).to eq(true)
+-      expect(SiteSetting.allows_embeddable_host?('https://eviltrout.com')).to eq(true)
+-      expect(SiteSetting.allows_embeddable_host?('https://not-eviltrout.com')).to eq(false)
+-    end
+-
+-    it 'works with a https host' do
+-      SiteSetting.embeddable_hosts = 'https://eviltrout.com'
+-      expect(SiteSetting.allows_embeddable_host?('http://eviltrout.com')).to eq(true)
+-      expect(SiteSetting.allows_embeddable_host?('https://eviltrout.com')).to eq(true)
+-      expect(SiteSetting.allows_embeddable_host?('https://not-eviltrout.com')).to eq(false)
+-    end
+-
+-    it 'works with multiple hosts' do
+-      SiteSetting.embeddable_hosts = "https://eviltrout.com\nhttps://discourse.org"
+-      expect(SiteSetting.allows_embeddable_host?('http://eviltrout.com')).to eq(true)
+-      expect(SiteSetting.allows_embeddable_host?('http://discourse.org')).to eq(true)
+-    end
+-
+-  end
+-
+   describe 'topic_title_length' do
+     it 'returns a range of min/max topic title length' do
+       expect(SiteSetting.topic_title_length).to eq(
+         (SiteSetting.defaults[:min_topic_title_length]..SiteSetting.defaults[:max_topic_title_length])
+       )
+     end
+   end
+ 
+diff --git a/spec/models/topic_embed_spec.rb b/spec/models/topic_embed_spec.rb
+index c1bf49c..8c9b340 100644
+--- a/spec/models/topic_embed_spec.rb
++++ b/spec/models/topic_embed_spec.rb
+@@ -7,16 +7,17 @@ describe TopicEmbed do
+   it { is_expected.to validate_presence_of :embed_url }
+ 
+   context '.import' do
+ 
+     let(:user) { Fabricate(:user) }
+     let(:title) { "How to turn a fish from good to evil in 30 seconds" }
+     let(:url) { 'http://eviltrout.com/123' }
+     let(:contents) { "hello world new post <a href='/hello'>hello</a> <img src='/images/wat.jpg'>" }
++    let!(:embeddable_host) { Fabricate(:embeddable_host) }
+ 
+     it "returns nil when the URL is malformed" do
+       expect(TopicEmbed.import(user, "invalid url", title, contents)).to eq(nil)
+       expect(TopicEmbed.count).to eq(0)
+     end
+ 
+     context 'creation of a post' do
+       let!(:post) { TopicEmbed.import(user, url, title, contents) }
+@@ -28,16 +29,18 @@ describe TopicEmbed do
+         expect(post.cook_method).to eq(Post.cook_methods[:raw_html])
+         expect(post.cooked).to eq(post.raw)
+ 
+         # It converts relative URLs to absolute
+         expect(post.cooked.start_with?("hello world new post <a href=\"http://eviltrout.com/hello\">hello</a> <img src=\"http://eviltrout.com/images/wat.jpg\">")).to eq(true)
+ 
+         expect(post.topic.has_topic_embed?).to eq(true)
+         expect(TopicEmbed.where(topic_id: post.topic_id)).to be_present
++
++        expect(post.topic.category).to eq(embeddable_host.category)
+       end
+ 
+       it "Supports updating the post" do
+         post = TopicEmbed.import(user, url, title, "muhahaha new contents!")
+         expect(post.cooked).to match(/new contents/)
+       end
+ 
+       it "Should leave uppercase Feed Entry URL untouched in content" do
+diff --git a/spec/models/topic_spec.rb b/spec/models/topic_spec.rb
+index ff971fa..7471c5c 100644
+--- a/spec/models/topic_spec.rb
++++ b/spec/models/topic_spec.rb
+@@ -1233,26 +1233,26 @@ describe Topic do
+     it "returns regular topics" do
+       topic = Fabricate(:topic)
+       expect(Topic.for_digest(user, 1.year.ago, top_order: true)).to eq([topic])
+     end
+ 
+     it "doesn't return topics from muted categories" do
+       user = Fabricate(:user)
+       category = Fabricate(:category)
+-      topic = Fabricate(:topic, category: category)
++      Fabricate(:topic, category: category)
+ 
+       CategoryUser.set_notification_level_for_category(user, CategoryUser.notification_levels[:muted], category.id)
+ 
+       expect(Topic.for_digest(user, 1.year.ago, top_order: true)).to be_blank
+     end
+ 
+     it "doesn't return topics from TL0 users" do
+       new_user = Fabricate(:user, trust_level: 0)
+-      topic = Fabricate(:topic, user_id: new_user.id)
++      Fabricate(:topic, user_id: new_user.id)
+ 
+       expect(Topic.for_digest(user, 1.year.ago, top_order: true)).to be_blank
+     end
+ 
+   end
+ 
+   describe 'secured' do
+     it 'can remove secure groups' do
+@@ -1392,42 +1392,44 @@ describe Topic do
+   describe "calculate_avg_time" do
+     it "does not explode" do
+       Topic.calculate_avg_time
+       Topic.calculate_avg_time(1.day.ago)
+     end
+   end
+ 
+   describe "expandable_first_post?" do
+-    let(:topic) { Fabricate.build(:topic) }
+-
+-    before do
+-      SiteSetting.embeddable_hosts = "http://eviltrout.com"
+-      SiteSetting.embed_truncate = true
+-      topic.stubs(:has_topic_embed?).returns(true)
+-    end
+ 
+-    it "is true with the correct settings and topic_embed" do
+-      expect(topic.expandable_first_post?).to eq(true)
+-    end
++    let(:topic) { Fabricate.build(:topic) }
+ 
+     it "is false if embeddable_host is blank" do
+-      SiteSetting.embeddable_hosts = nil
+       expect(topic.expandable_first_post?).to eq(false)
+     end
+ 
+-    it "is false if embed_truncate? is false" do
+-      SiteSetting.embed_truncate = false
+-      expect(topic.expandable_first_post?).to eq(false)
+-    end
++    describe 'with an emeddable host' do
++      before do
++        Fabricate(:embeddable_host)
++        SiteSetting.embed_truncate = true
++        topic.stubs(:has_topic_embed?).returns(true)
++      end
+ 
+-    it "is false if has_topic_embed? is false" do
+-      topic.stubs(:has_topic_embed?).returns(false)
+-      expect(topic.expandable_first_post?).to eq(false)
++      it "is true with the correct settings and topic_embed" do
++        expect(topic.expandable_first_post?).to eq(true)
++      end
++      it "is false if embed_truncate? is false" do
++        SiteSetting.embed_truncate = false
++        expect(topic.expandable_first_post?).to eq(false)
++      end
++
++      it "is false if has_topic_embed? is false" do
++        topic.stubs(:has_topic_embed?).returns(false)
++        expect(topic.expandable_first_post?).to eq(false)
++      end
+     end
++
+   end
+ 
+   it "has custom fields" do
+     topic = Fabricate(:topic)
+     expect(topic.custom_fields["a"]).to eq(nil)
+ 
+     topic.custom_fields["bob"] = "marley"
+     topic.custom_fields["jack"] = "black"
+diff --git a/test/javascripts/helpers/create-pretender.js.es6 b/test/javascripts/helpers/create-pretender.js.es6
+index fe00b48..f747f15 100644
+--- a/test/javascripts/helpers/create-pretender.js.es6
++++ b/test/javascripts/helpers/create-pretender.js.es6
+@@ -34,23 +34,27 @@ const _widgets = [
+   {id: 124, name: 'Evil Repellant'}
+ ];
+ 
+ const _moreWidgets = [
+   {id: 223, name: 'Bass Lure'},
+   {id: 224, name: 'Good Repellant'}
+ ];
+ 
+-const fruits = [{id: 1, name: 'apple', farmer_id: 1, category_id: 4},
+-                {id: 2, name: 'banana', farmer_id: 1, category_id: 3},
+-                {id: 3, name: 'grape', farmer_id: 2, category_id: 5}];
++const fruits = [{id: 1, name: 'apple', farmer_id: 1, color_ids: [1,2], category_id: 4},
++                {id: 2, name: 'banana', farmer_id: 1, color_ids: [3], category_id: 3},
++                {id: 3, name: 'grape', farmer_id: 2, color_ids: [2], category_id: 5}];
+ 
+ const farmers = [{id: 1, name: 'Old MacDonald'},
+                  {id: 2, name: 'Luke Skywalker'}];
+ 
++const colors = [{id: 1, name: 'Red'},
++                {id: 2, name: 'Green'},
++                {id: 3, name: 'Yellow'}];
++
+ function loggedIn() {
+   return !!Discourse.User.current();
+ }
+ 
+ export default function() {
+ 
+   const server = new Pretender(function() {
+ 
+@@ -216,22 +220,21 @@ export default function() {
+         success: true,
+         action: 'create_post',
+         post: {id: 12345, topic_id: 280, topic_slug: 'internationalization-localization'}
+       });
+     });
+ 
+     this.get('/fruits/:id', function() {
+       const fruit = fruits[0];
+-
+-      return response({ __rest_serializer: "1", fruit, farmers: [farmers[0]] });
++      return response({ __rest_serializer: "1", fruit, farmers, colors });
+     });
+ 
+     this.get('/fruits', function() {
+-      return response({ __rest_serializer: "1", fruits, farmers });
++      return response({ __rest_serializer: "1", fruits, farmers, colors });
+     });
+ 
+     this.get('/widgets/:widget_id', function(request) {
+       const w = _widgets.findBy('id', parseInt(request.params.widget_id));
+       if (w) {
+         return response({widget: w});
+       } else {
+         return response(404);
+diff --git a/test/javascripts/models/store-test.js.es6 b/test/javascripts/models/store-test.js.es6
+index 46585ce..266eb06 100644
+--- a/test/javascripts/models/store-test.js.es6
++++ b/test/javascripts/models/store-test.js.es6
+@@ -101,24 +101,36 @@ test('destroyRecord when new', function(assert) {
+   const store = createStore();
+   const w = store.createRecord('widget', {name: 'hello'});
+   store.destroyRecord('widget', w).then(function(result) {
+     assert.ok(result);
+   });
+ });
+ 
+ 
+-test('find embedded', function() {
++test('find embedded', function(assert) {
+   const store = createStore();
+-  return store.find('fruit', 1).then(function(f) {
+-    ok(f.get('farmer'), 'it has the embedded object');
+-    ok(f.get('category'), 'categories are found automatically');
++  return store.find('fruit', 2).then(function(f) {
++    assert.ok(f.get('farmer'), 'it has the embedded object');
++
++    const fruitCols = f.get('colors');
++    assert.equal(fruitCols.length, 2);
++    assert.equal(fruitCols[0].get('id'), 1);
++    assert.equal(fruitCols[1].get('id'), 2);
++
++    assert.ok(f.get('category'), 'categories are found automatically');
+   });
+ });
+ 
+-test('findAll embedded', function() {
++test('findAll embedded', function(assert) {
+   const store = createStore();
+   return store.findAll('fruit').then(function(fruits) {
+-    equal(fruits.objectAt(0).get('farmer.name'), 'Old MacDonald');
+-    equal(fruits.objectAt(0).get('farmer'), fruits.objectAt(1).get('farmer'), 'points at the same object');
+-    equal(fruits.objectAt(2).get('farmer.name'), 'Luke Skywalker');
++    assert.equal(fruits.objectAt(0).get('farmer.name'), 'Old MacDonald');
++    assert.equal(fruits.objectAt(0).get('farmer'), fruits.objectAt(1).get('farmer'), 'points at the same object');
++
++    const fruitCols = fruits.objectAt(0).get('colors');
++    assert.equal(fruitCols.length, 2);
++    assert.equal(fruitCols[0].get('id'), 1);
++    assert.equal(fruitCols[1].get('id'), 2);
++
++    assert.equal(fruits.objectAt(2).get('farmer.name'), 'Luke Skywalker');
+   });
+ });

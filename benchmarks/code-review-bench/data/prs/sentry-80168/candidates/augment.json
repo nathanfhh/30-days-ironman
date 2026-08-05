@@ -1,0 +1,5 @@
+[
+  "MetricAlertDetectorHandler subclasses StatefulDetectorHandler but doesn't implement its abstract methods (get_dedupe_value, get_group_key_values, build_occurrence_and_event_data), causing TypeError when instantiating MetricAlertFire.detector_handler",
+  "Docstring for evaluate method incorrectly states it returns a list of DetectorEvaluationResult when it actually returns a dict keyed by DetectorGroupKey",
+  "In test_state_results_multi_group, the second occurrence is built with value=6 even though group_2 has a value of 10 in the data packet, so the test won't catch regressions in how value is threaded into build_occurrence_and_event_data"
+]

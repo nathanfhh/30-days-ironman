@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-95633",
+  "tool": "nathan-code-review",
+  "n_golden": 3,
+  "n_candidates": 20,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 13, "confidence": 0.85,
+     "reasoning": "Both say test_thread_queue_parallel_error_handling's docstring does not match what the test actually implements/asserts."}
+  ]
+}

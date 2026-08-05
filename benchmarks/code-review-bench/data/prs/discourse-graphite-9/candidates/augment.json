@@ -1,0 +1,5 @@
+[
+  "Calling I18n.fallbacks.ensure_loaded! in set_locale only makes fallbacks work for controller requests, but jobs/mailers that use I18n may not pass through set_locale and therefore may still not have fallback locales loaded",
+  "Changing the site default locale at runtime could change fallback results, but TranslateAccelerator caches I18n.translate by config.locale only, which might keep serving cached fallback strings from the previous default locale until I18n.reload!/cache reset occurs",
+  "@loaded_locales tracking is sensitive to whether callers pass locales as strings vs symbols (e.g., 'en' vs :en), which can lead to duplicate entries and repeated loads - should normalize locale to a single type before checking/adding"
+]

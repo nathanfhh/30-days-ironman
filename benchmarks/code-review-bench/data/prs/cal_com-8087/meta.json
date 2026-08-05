@@ -1,0 +1,17 @@
+{
+  "slug": "cal_com-8087",
+  "source_repo": "cal.com",
+  "language": "TypeScript",
+  "golden_url": "https://github.com/calcom/cal.com/pull/8087",
+  "pr_title": "Async import of the appStore packages",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR8087__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/cal_dot_com__cal.com__augment__PR8087__20260122.git",
+  "base_sha": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+  "head_sha": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+  "stat": " packages/app-store/_utils/getCalendar.ts           |  4 +-\n packages/app-store/index.ts                        | 88 +++++++---------------\n packages/app-store/vital/lib/reschedule.ts         |  4 +-\n .../app-store/wipemycalother/lib/reschedule.ts     |  4 +-\n packages/core/CalendarManager.ts                   | 15 ++--\n packages/core/EventManager.ts                      |  3 +-\n packages/core/videoClient.ts                       | 36 +++++----\n .../features/bookings/lib/handleCancelBooking.ts   | 23 +++---\n packages/features/bookings/lib/handleNewBooking.ts |  2 +-\n packages/lib/payment/deletePayment.ts              |  2 +-\n packages/lib/payment/handlePayment.ts              |  2 +-\n packages/trpc/server/routers/viewer/bookings.tsx   |  6 +-\n 12 files changed, 82 insertions(+), 107 deletions(-)\n",
+  "name_status": "M\tpackages/app-store/_utils/getCalendar.ts\nM\tpackages/app-store/index.ts\nM\tpackages/app-store/vital/lib/reschedule.ts\nM\tpackages/app-store/wipemycalother/lib/reschedule.ts\nM\tpackages/core/CalendarManager.ts\nM\tpackages/core/EventManager.ts\nM\tpackages/core/videoClient.ts\nM\tpackages/features/bookings/lib/handleCancelBooking.ts\nM\tpackages/features/bookings/lib/handleNewBooking.ts\nM\tpackages/lib/payment/deletePayment.ts\nM\tpackages/lib/payment/handlePayment.ts\nM\tpackages/trpc/server/routers/viewer/bookings.tsx\n",
+  "commits": "820d7fa Merge branch 'main' into techdebt/async-app-store-load\n3811970 Async import of the appStore packages\n"
+}

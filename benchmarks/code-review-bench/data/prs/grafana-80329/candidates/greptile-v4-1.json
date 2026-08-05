@@ -1,0 +1,7 @@
+[
+  "log.Error used for normal-path informational messages - successful cleanup batches emit error-level log entries even when everything is working correctly, flooding error logs",
+  "The err field will be nil on the happy path, making these look like misformatted error events",
+  "Ticker interval reduced from 10 minutes to 1 minute, likely a debugging artifact that causes cleanup jobs to fire 10\u00d7 more frequently than intended",
+  "New cleanup cycle scheduled every minute but each cycle can run for up to 9 minutes, causing overlapping annotation-cleanup sweeps and 10\u00d7 increase in database load",
+  "Logging all IDs with 'ids', ids in every batch log call produces very large log entries at scale - with batch size up to 32,767, a single log entry could contain tens of thousands of int64 values"
+]

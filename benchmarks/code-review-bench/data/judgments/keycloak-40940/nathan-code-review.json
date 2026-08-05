@@ -1,0 +1,20 @@
+{
+  "slug": "keycloak-40940",
+  "tool": "nathan-code-review",
+  "n_golden": 2,
+  "n_candidates": 12,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.97,
+      "reasoning": "Both state that returning null from getSubGroupsCount() breaks the GroupModel javadoc contract of never returning null and will NPE in callers."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Both describe the new test setting deletedAll and asserting immediately without joining the reader thread, so a late failure from the reader is missed — a race that makes the test unreliable."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-8",
+  "tool": "claude-code",
+  "n_golden": 3,
+  "n_candidates": 2,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.85,
+      "reasoning": "Same off-by-one: totalPages formula lets users navigate to an empty page on exact multiples."
+    }
+  ]
+}

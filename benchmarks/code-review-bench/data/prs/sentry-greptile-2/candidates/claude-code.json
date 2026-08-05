@@ -1,0 +1,7 @@
+[
+  "OptimizedCursorPaginator.get_item_key calls math.floor()/math.ceil() directly on datetime objects from AuditLogEntry, which raises TypeError since math.floor() doesn't work on datetime objects",
+  "OptimizedCursorPaginator.value_from_cursor returns raw cursor value without converting back to datetime, causing invalid SQL when comparing a number to a DateTimeField on subsequent pages",
+  "OptimizedCursorPaginator passes negative cursor.offset directly to Django queryset slicing, but Django raises AssertionError for negative slice indices despite the comment claiming Django handles negative slicing",
+  "The comment about negative offset handling being for 'authorized administrators' is misleading since has_global_access defaults to True for all org members, exposing the buggy paginator to more users than intended",
+  "Users with org:write scope can trigger a 500 error by crafting a cursor with negative offset (e.g., '0:-5:0'), creating a denial-of-service vector for the audit logs feature"
+]

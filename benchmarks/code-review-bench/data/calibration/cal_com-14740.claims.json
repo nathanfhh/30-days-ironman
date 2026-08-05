@@ -1,0 +1,161 @@
+{
+  "slug": "cal_com-14740",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "The dialog declares a local ZAddGuestsInputSchema that collides by name with the server-side export while having a different shape (an email array vs. an object with bookingId and guests)."
+    },
+    {
+      "claim_id": "c002",
+      "text": "The catch around the email send discards the error (console.log(\"Error sending AddGuestsEmails\") without err), so failures leave no diagnostic detail."
+    },
+    {
+      "claim_id": "c003",
+      "text": "The findFirst read and the createMany write are not in a transaction and Attendee has no @@unique([bookingId, email]), so two concurrent requests adding the same address both pass the in-memory check and each insert a row."
+    },
+    {
+      "claim_id": "c004",
+      "text": "MultiEmailLazy copies PhoneInputLazy's comment '/** These are like 40kb that not every user needs */', which is simply false here: this component is under 100 lines with no third-party dependency."
+    },
+    {
+      "claim_id": "c005",
+      "text": "The logic for checking team admin/owner permissions is incorrect. This condition uses AND (&&) which requires both isTeamAdmin AND isTeamOwner to be true, but it should use OR (||) since a user needs to be either an admin OR an owner to have permission."
+    },
+    {
+      "claim_id": "c006",
+      "text": "In onError, message is always a non-empty string (often starting with undefined:), so the unable_to_add_guests fallback will never be used and the toast can be confusing"
+    },
+    {
+      "claim_id": "c007",
+      "text": "Schema recreated on every render - ZAddGuestsInputSchema is defined inside the component body, so a new Zod schema object is allocated on every render instead of being at module scope"
+    },
+    {
+      "claim_id": "c008",
+      "text": "No tests are included for the new handler or UI components"
+    },
+    {
+      "claim_id": "c009",
+      "text": "The MR adds a four-branch authorization decision, dedupe logic, a shared UI component and two email templates with no tests at all, even though three data-testid hooks (add_members, add-another-email, add-emails) were already added with no test using them and apps/web/playwright/bookings-list.e2e.ts is an available landing spot."
+    },
+    {
+      "claim_id": "c010",
+      "text": "sendAddGuestsEmails ignores disableStandardEmails flags and forwards calendarEvent unchanged, which can send emails when they're disabled"
+    },
+    {
+      "claim_id": "c011",
+      "text": "Empty fragment <></> in MultiEmail can be simplified by restructuring the conditional"
+    },
+    {
+      "claim_id": "c012",
+      "text": "packages/ui/form/MultiEmail.tsx is a near-verbatim copy of the form-builder multiemail factory (down to the inputClassName string) but the original was not switched over and its '//TODO: Make it a ui component' comment remains, leaving two copies that will drift apart."
+    },
+    {
+      "claim_id": "c013",
+      "text": "Invalid email banner remains visible even after user edits the email input to valid values - banner only clears when clicking Cancel or attempting to add again"
+    },
+    {
+      "claim_id": "c014",
+      "text": "The handler never checks booking.status, so guests can be added to a CANCELLED or REJECTED booking, which then sends those recipients a 'guests added' notification with a CONFIRMED, METHOD:REQUEST ICS for a meeting that no longer exists."
+    },
+    {
+      "claim_id": "c015",
+      "text": "multiEmailValue is likewise not reset when the dialog is dismissed with the X, so half-typed email addresses survive into the next opening."
+    },
+    {
+      "claim_id": "c016",
+      "text": "Error is silently swallowed - the caught err is never logged, making email-delivery failures invisible in production logs"
+    },
+    {
+      "claim_id": "c017",
+      "text": "uniqueGuests filters out existing attendees and blacklisted emails but does not deduplicate duplicates within the input; createMany can insert duplicate attendee rows if the client submits repeated emails."
+    },
+    {
+      "claim_id": "c018",
+      "text": "MultiEmail renders the editable input list with key={index} while removal uses splice, so deleting a middle row makes React reuse DOM nodes and the caret, IME composition state and focus jump to the wrong row."
+    },
+    {
+      "claim_id": "c019",
+      "text": "isInvalidEmail is only reset by the Cancel button; after a successful submit or when the dialog is closed via the X, Esc or the overlay, the red validation error persists into the next time the dialog is opened (the component never unmounts)."
+    },
+    {
+      "claim_id": "c020",
+      "text": "This calls the email sender with the original guests, so existing attendees included in the input will be treated as new when sending notifications, leading to incorrect emails."
+    },
+    {
+      "claim_id": "c021",
+      "text": "MultiEmail imports Button, EmailField, Icon and Tooltip from \"@calcom/ui\" \u2014 its own package barrel, which also exports MultiEmail \u2014 creating a cycle that only survives because MultiEmailLazy defers it via next/dynamic; the sibling AddressInput uses relative imports."
+    },
+    {
+      "claim_id": "c022",
+      "text": "MultiEmail.tsx imports primitives from @calcom/ui while living inside packages/ui, which risks circular imports now that @calcom/ui also exports MultiEmail"
+    },
+    {
+      "claim_id": "c023",
+      "text": "onSuccess resets multiEmailValue but not isInvalidEmail, so reopening the dialog after a previous validation failure can immediately show the error state again"
+    },
+    {
+      "claim_id": "c024",
+      "text": "Starting with an array containing an empty string may cause validation issues. Consider starting with an empty array [] and handling the empty state in the MultiEmail component instead."
+    },
+    {
+      "claim_id": "c025",
+      "text": "sendAddGuestsEmails function does not check eventTypeMetadata.disableStandardEmails, which is inconsistent with other email-sending functions and could result in unwanted emails for event types that have explicitly disabled standard emails"
+    },
+    {
+      "claim_id": "c026",
+      "text": "Case sensitivity bypass in email blacklist"
+    },
+    {
+      "claim_id": "c027",
+      "text": "Seat bookings need seat-level scoping, but this new action updates by `bookingId` only. On seats events it can add guests to the shared booking instead of the current seat."
+    },
+    {
+      "claim_id": "c028",
+      "text": "Using array index as key in MultiEmail can cause issues when items are removed from the middle of the list"
+    },
+    {
+      "claim_id": "c029",
+      "text": "That schema is declared inside the component body, so a new zod schema is rebuilt on every render even though it depends on no props or state."
+    },
+    {
+      "claim_id": "c030",
+      "text": "The handler never checks eventType.disableGuests, so guests can still be added to an event type where the organizer explicitly disabled guests (and the menu item is not hidden for such event types either)."
+    },
+    {
+      "claim_id": "c031",
+      "text": "`booking.eventType?.teamId ?? 0` is written twice and uses 0 as a sentinel team id to query membership; short-circuiting on a missing teamId would be clearer and would save a database query."
+    },
+    {
+      "claim_id": "c032",
+      "text": "The guests array has no length limit (z.array(z.string().email()) with no .max()), so a single authenticated request can make the system send mail from the organizer's address to an arbitrary number of recipients."
+    },
+    {
+      "claim_id": "c033",
+      "text": "For seats events, adding an Attendee row directly without a corresponding BookingSeat may break individual seat cancellation (cancelAttendeeSeat relies on bookingSeat) or the seatsShowAttendees view \u2014 should seats events be excluded from this feature?"
+    },
+    {
+      "claim_id": "c034",
+      "text": "Newly added guests are never written back to booking.responses.guests; would a later reschedule or edit of the booking drop them?"
+    },
+    {
+      "claim_id": "c035",
+      "text": "addGuests uses authedProcedure plus hand-written checks instead of the router's existing bookingsProcedure, and the isAttendee branch widens authorization to any logged-in user whose email appears on the booking, letting an attendee permanently modify the organizer's booking, update their calendar event and send mail in their name."
+    },
+    {
+      "claim_id": "c036",
+      "text": "Email uniqueness check in ZAddGuestsInputSchema is case-sensitive, so User@x.com and user@x.com pass as unique"
+    },
+    {
+      "claim_id": "c037",
+      "text": "Spread `props` before the fixed template props, otherwise callers can override this email's subject, title, and header."
+    },
+    {
+      "claim_id": "c038",
+      "text": "sendAddGuestsEmails can leak hidden notes to attendees by not respecting hideCalendarNotes setting"
+    },
+    {
+      "claim_id": "c039",
+      "text": "Reassigning function parameter 'value' in MultiEmail component is a code smell"
+    }
+  ]
+}

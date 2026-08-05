@@ -1,0 +1,226 @@
+{
+  "slug": "sentry-67876",
+  "claims": [
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 5,
+      "text": "OAuthLoginView never calls pipeline.bind_state(\"subdomain\", ...) the way OAuth2LoginView does, so PipelineAdvancerView's existing customer-domain restoration branch is permanently a no-op for the GitHub install flow \u2014 a user starting from a customer subdomain won't be routed back to it after the GitHub OAuth round trip.",
+      "claim_id": "c001"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 0,
+      "text": "safe_urlopen() and get_user_info() can raise network errors or non-2xx via raise_for_status(), which would 500 the install flow; should catch those exceptions and return the error() page to keep failures user-safe",
+      "claim_id": "c002"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 12,
+      "text": "One test asserts against responses.calls[2] by positional index, which will silently start validating the wrong HTTP call the moment another stub request is inserted earlier in the flow.",
+      "claim_id": "c003"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 17,
+      "text": "Whether, for organizations with customer domains enabled, the pipeline session and active-organization resolution still work correctly after the round trip through GitHub lands back on the main domain.",
+      "claim_id": "c004"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 2,
+      "text": "The token exchange request at lines 427-431 is missing redirect_uri, but the authorize URL at line 408 explicitly includes it, violating RFC 6749 Section 4.1.3 which requires redirect_uri to be included in the token exchange request with an identical value if it was included in the authorization request",
+      "claim_id": "c005"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "greptile-v4-1",
+      "candidate_index": 1,
+      "text": "`get_user_info` calls `resp.raise_for_status()` internally which raises HTTPError for non-2xx GitHub API responses (401, 429, 5xx), but the call is not wrapped in try/except, causing a 500 instead of rendering the error page",
+      "claim_id": "c006"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 3,
+      "text": "The calls to get_user_info() and safe_urlopen() in the new OAuth flow have no exception handling, so a non-2xx response from GitHub or a connection error surfaces as an unhandled exception (HTTP 500) instead of the intended github-integration-failed.html error page, unlike the existing OAuth2CallbackView which handles these cases.",
+      "claim_id": "c007"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 1,
+      "text": "Test uses mismatched state which triggers state check failure instead of exercising the installation-not-found 404 path as intended",
+      "claim_id": "c008"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 16,
+      "text": "Whether an attacker can reliably win the race against GitHub's installation.created webhook landing before the pipeline completes, which determines whether the unchecked Integration.DoesNotExist path (F-003) is practically exploitable.",
+      "claim_id": "c009"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "claude-code",
+      "candidate_index": 1,
+      "text": "OAuthLoginView.dispatch() accepts installation_id from GET params unconditionally at lines 397-399, even during the OAuth callback phase, allowing an attacker to craft a callback URL containing their own installation_id, code, and the predictable state value to overwrite both sides of the sender comparison and bypass sender verification",
+      "claim_id": "c010"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 2,
+      "text": "The new identity check only covers the case where the Integration already exists; the Integration.DoesNotExist branch (the first-install path, before the installation.created webhook lands) returns pipeline.next_step() directly with no identity check at all, so this path can bind an installation to an organization without any verification of who owns it.",
+      "claim_id": "c011"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 6,
+      "text": "test_installation_not_found passes a state value that doesn't match pipeline.signature, so the request is now rejected at the state-comparison step and never reaches the 404-installation-not-found code path its name and original assertion claim to test.",
+      "claim_id": "c012"
+    },
+    {
+      "source": "golden",
+      "golden_index": 2,
+      "tool": null,
+      "text": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+      "claim_id": "c013"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 11,
+      "text": "The hardcoded OAuth state value is duplicated as a literal string across five places in the test file, so any change to the pipeline view composition requires updating all five occurrences with no clear failure message pointing at the real cause.",
+      "claim_id": "c014"
+    },
+    {
+      "source": "golden",
+      "golden_index": 1,
+      "tool": null,
+      "text": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+      "claim_id": "c015"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 4,
+      "text": "The `redirect_uri` should be URL-encoded before being included in the query string. Use `urllib.parse.quote()` to properly encode the URL.",
+      "claim_id": "c016"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 14,
+      "text": "Adding a view to the pipeline changes Pipeline.signature, so at deploy time every GitHub install session already in progress becomes invalid and the user is bounced back to the start.",
+      "claim_id": "c017"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 7,
+      "text": "_(error_short) applies gettext to a variable instead of a literal string, so Django's makemessages (which only scans literal strings) can no longer extract these three user-facing messages into the translation catalog, and they silently fall back to English at runtime.",
+      "claim_id": "c018"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 13,
+      "text": "Multiple tests assign resp = self.client.get(...) and then immediately overwrite that variable with a second call before the first response is ever read or asserted on.",
+      "claim_id": "c019"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 8,
+      "text": "The identity comparison uses the mutable GitHub login instead of the immutable sender id that's already available from the webhook payload and the /user response, so a renamed account can be locked out of its own re-install, and if the old login is later claimed by a third party, that party's login can match the stored value.",
+      "claim_id": "c020"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "augment",
+      "candidate_index": 1,
+      "text": "OAuth authorize redirect URL is assembled via string interpolation; if redirect_uri or other params contain characters needing escaping, this can produce a malformed URL or unintended query parsing; should use a proper query encoder",
+      "claim_id": "c021"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 9,
+      "text": "The same Integration row is queried twice within the same request (once to check installations_exist, once with a status filter to get the object) with no write in between.",
+      "claim_id": "c022"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 15,
+      "text": "pipeline_advancer.py has a pre-existing ruff E402 (import not at top of file) that is now trivial to fix since this change moved away the code block that used to sit above it.",
+      "claim_id": "c023"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "cubic-v2",
+      "candidate_index": 3,
+      "text": "Test uses an invalid OAuth state, so the test never reaches the installation 404 path it is meant to cover.",
+      "claim_id": "c024"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 4,
+      "text": "The GitHub authorize URL is built by string concatenation/f-string instead of urlencode, so redirect_uri is not percent-encoded, and the test suite locks in the unencoded string as the expected value.",
+      "claim_id": "c025"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "coderabbit",
+      "candidate_index": 2,
+      "text": "Broad exception catch when parsing OAuth token response can mask unexpected failures - catching Exception is too general, and parse_qsl() with default parameters won't raise ValueError as expected",
+      "claim_id": "c026"
+    },
+    {
+      "source": "golden",
+      "golden_index": 0,
+      "tool": null,
+      "text": "Null reference if github_authenticated_user state is missing",
+      "claim_id": "c027"
+    },
+    {
+      "source": "candidate",
+      "golden_index": null,
+      "tool": "nathan-code-review",
+      "candidate_index": 10,
+      "text": "The new error(), get_document_origin(), and OAuthLoginView.dispatch functions lack type annotations, unlike the existing functions in the same file.",
+      "claim_id": "c028"
+    }
+  ]
+}

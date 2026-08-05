@@ -1,0 +1,32 @@
+{
+  "slug": "grafana-90045",
+  "tool": "greptile-v4-1",
+  "n_golden": 3,
+  "n_candidates": 6,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 4,
+      "confidence": 0.97,
+      "reasoning": "Enriched logger not stored in context; klog.NewContext called with base d.Log."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Create storage failure calls recordLegacyDuration instead of recordStorageDuration."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.75,
+      "reasoning": "Same wrong-recorder-on-storage-failure issue; golden text does not restrict itself to the Create path."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 5,
+      "confidence": 0.95,
+      "reasoning": "name passed instead of options.Kind to the metric recorder in Delete."
+    }
+  ]
+}

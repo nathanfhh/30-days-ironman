@@ -1,0 +1,17 @@
+{
+  "slug": "sentry-77754",
+  "source_repo": "sentry",
+  "language": "Python",
+  "golden_url": "https://github.com/getsentry/sentry/pull/77754",
+  "pr_title": "feat(ecosystem): Implement cross-system issue synchronization",
+  "original_url": null,
+  "fork_repo": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR77754__20260122.git",
+  "pr_number": 1,
+  "golden_count": 4,
+  "repo_url": "https://github.com/code-review-benchmark/sentry__sentry__augment__PR77754__20260122.git",
+  "base_sha": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "head_sha": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "stat": " src/sentry/integrations/mixins/issues.py           | 21 +++++-\n .../integrations/services/assignment_source.py     | 35 ++++++++++\n .../integrations/tasks/sync_assignee_outbound.py   | 19 +++++-\n src/sentry/integrations/utils/sync.py              | 29 +++++++--\n src/sentry/models/groupassignee.py                 | 11 +++-\n .../services/test_assignment_source.py             | 38 +++++++++++\n tests/sentry/models/test_groupassignee.py          | 74 +++++++++++++++++++++-\n 7 files changed, 212 insertions(+), 15 deletions(-)\n",
+  "name_status": "M\tsrc/sentry/integrations/mixins/issues.py\nA\tsrc/sentry/integrations/services/assignment_source.py\nM\tsrc/sentry/integrations/tasks/sync_assignee_outbound.py\nM\tsrc/sentry/integrations/utils/sync.py\nM\tsrc/sentry/models/groupassignee.py\nA\ttests/sentry/integrations/services/test_assignment_source.py\nM\ttests/sentry/models/test_groupassignee.py\n",
+  "commits": "9501091c Fixes tests, adds new test for sync loop checks\ncc67c4cd More typing fixes\ncb2b4176 Fix typing for optional assignment_source\n40cfb76a Removes minor change made to sync utils, adds test for assignment loop\n6eb81dcb Converts from JSON to dictionaries instead\n94578b82 removes SourceType enum\nf665d925 Passes JSON instead of classes when queueing task\n0cf53eaf fix(ecosystem): Breaks issue sync cycles\n"
+}

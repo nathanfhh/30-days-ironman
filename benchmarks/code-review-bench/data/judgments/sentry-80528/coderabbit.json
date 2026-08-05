@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-80528",
+  "tool": "coderabbit",
+  "n_golden": 2,
+  "n_candidates": 4,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 2, "confidence": 0.92,
+     "reasoning": "Both identify that the modified config copy is computed but the function still returns the original monitor.config."}
+  ]
+}

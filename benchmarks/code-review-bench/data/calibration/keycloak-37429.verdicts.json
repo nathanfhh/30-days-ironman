@@ -1,0 +1,338 @@
+{
+  "slug": "keycloak-37429",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "anchor-error-message-lacks-context",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:157",
+      "reason": "messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string\") carries neither key nor file, unlike the sibling messages at lines 111 and 194 which both include the file; ThemeVerifierMojo concatenates all messages from all scanned files into one MojoFailureException, so there is nothing to localise it by."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "multivalued-i18next-placeholders",
+      "evidence": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties:187; js/libs/ui-shared/src/user-profile/utils.ts:65-86",
+      "reason": "Both console bundles changed from {{0}}/{{1}}/{{2}} to MessageFormat {0}/{1}/{2} plus {2,choice,...}; setUserProfileServerError feeds the server's params into i18next t() as keys \"0\",\"1\",\"2\", and both i18n instances (admin-ui/src/i18n/i18n.ts, account-ui i18n.ts) use default {{ }} interpolation, so single braces are emitted verbatim."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "anchor-error-message-lacks-context",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150-157",
+      "reason": "santizeAnchors(String key, ...) never references `key` in its body, and the message it emits names neither the key nor the file; the mojo scans every messages_*.properties across themes/ and js/ (168 such files in the tree) into a single aggregated failure."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "diff-substring-bounds",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:102-111",
+      "reason": "The two loops bound `start` and `end` independently by min(len(value), len(sanitized)) with no combined bound, so start+end can exceed a string's length and substring(begin,end) gets begin>end (e.g. value=\"aab\", sanitized=\"ab\" yields start=1, end=2 and sanitized.substring(1,0) throws), aborting verify() with a raw StringIndexOutOfBoundsException instead of the intended message."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "runtimeexception-vs-mojoexecutionexception",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:52-53 vs 70 and 79",
+      "reason": "verify() wraps IOException in MojoExecutionException(\"Can not read file\"), but verifySafeHtml() throws new RuntimeException for both the target-file and the derived English-file read failures; the inconsistency is exactly as described."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "commons-text-version-bump",
+      "evidence": "misc/theme-verifier/pom.xml:80-85; git log head date 2025-02-18",
+      "reason": "commons-text 1.13.0 was the current release when this change was authored (Feb 2025); the suggested 1.15.0 did not exist then, so \"outdated, update to 1.15.0\" is not a true statement about this change."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "unclear",
+      "confidence": 0.6,
+      "severity": null,
+      "cluster": "does-check-pass-full-corpus",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java:35-58",
+      "reason": "The mojo does run over every messages_*.properties under each module's resource roots and fails the build if any message is produced, so the answer is decidable only by running `mvn install` on themes/ and js/ — which needs a Maven repository and network this environment does not have."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "anchor-loop-breaks-early",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:153-160",
+      "reason": "The while loop adds one message and then `break`s, so only the first mismatching anchor in a value is ever reported; remaining anchors in that same value are silently skipped."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "hardcoded-dependency-versions",
+      "evidence": "misc/theme-verifier/pom.xml:75-85; pom.xml:119 and 559-561",
+      "reason": "Both new dependencies pin literal versions, and the root pom already centralises the same artifact as <owasp.html.sanitizer.version>20240325.1</owasp.html.sanitizer.version> with a dependencyManagement entry — this module has no <parent>, so the value is now duplicated in two places and can drift."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "owasp-sanitizer-version-bump",
+      "evidence": "misc/theme-verifier/pom.xml:75-79; pom.xml:119; git log head date 2025-02-18",
+      "reason": "20240325.1 is the version the whole repository already standardises on in the root pom property, and it was the newest release at the time of this change; the proposed \"20260313.1\" is dated more than a year after the commit and did not exist."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Low",
+      "cluster": "diff-substring-bounds",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:106-111",
+      "reason": "Same missing combined bound as described: the suffix loop can run far enough that start exceeds length-end and the substring calls throw. (The stated threshold is off by one — equality yields an empty string, only strict excess throws — but the defect it points at is present.)"
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "not_real",
+      "confidence": 0.8,
+      "severity": null,
+      "cluster": "anchor-extra-tags-unvalidated",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:153-159",
+      "reason": "The guard it says is missing is there: `if (englishMatcher.find() && Objects.equals(...))` — when the translation has more anchors than English, englishMatcher.find() returns false and the else branch records \"Didn't find anchor tag\". Extra anchors are the one case this method does handle correctly."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "english-path-derivation",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74-80; diff renames duplicate_keys.properties -> duplicateKeys_en.properties",
+      "reason": "The English path is two unchecked replaceAll calls with no existence check, and a miss becomes a raw RuntimeException. The fixture rename in this same MR is the proof: \"duplicate_keys.properties\" would derive \"duplicate_en.properties\", which does not exist."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "ka-br-spacing",
+      "evidence": "themes/src/main/resources-community/theme/base/login/messages/messages_ka.properties:172,174,451,452",
+      "reason": "Those four lines are exactly the ones this change touched and they read `<br />{0}` with no space, while the same four keys in en, sk, th, tr, uk, ko, zh_CN and zh_TW all read `<br /> {0}`. Pre-existing, but it is on lines the change rewrote."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "multivalued-i18next-placeholders",
+      "evidence": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138; js/apps/admin-ui/src/i18n/i18n.ts:13-18; js/libs/ui-shared/src/user-profile/utils.ts:65-86",
+      "reason": "Correctly scoped: the two JS-console bundles are loaded by i18next (default {{ }} interpolation) and the params arrive via t(key, {0:...,1:...,2:...}); there is no MessageFormat step for these bundles, so {0}/{1}/{2} and the {2,choice,...} expression render literally. The server-side themes/src/main/resources base bundles, which are MessageFormat, are legitimately changed the same way."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "exempted-keys-runtime-sanitization",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:118-127",
+      "reason": "The premise is accurate — the exemptions key off the key name only, and `\\{[0-9]+,choice,[^}]*}` swallows arbitrary tag-bearing content for error-invalid-multivalued-size and linkExpirationFormatter.timePeriodUnit* — but whether that is actually exploitable needs an audit of every render path for those keys (FreeMarker msg()/kcSanitize in login and email templates, MessageFormat in LinkExpirationFormatterMethod, React rendering in the consoles) plus a decision on the threat model for in-repo translations. That audit and the resulting product call are what would settle it."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "not_real",
+      "confidence": 0.85,
+      "severity": null,
+      "cluster": "properties-encoding",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:67-68; misc/theme-verifier/pom.xml:32-33",
+      "reason": "Since Java 9 PropertyResourceBundle(InputStream) reads UTF-8 by default and only falls back to ISO-8859-1 on a malformed-input exception; this module compiles and runs on 17. The non-Latin bundles (ka, uk, zh_*, th, fa) are read correctly."
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "policy-fields-not-static-final",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58,63,139 vs 145",
+      "reason": "All three are declared with no modifiers (package-private instance fields) while ANCHOR_PATTERN on line 145 is `private static final`; the mojo constructs a new VerifyMessageProperties per file, so two PolicyFactory builds and a Pattern.compile happen per file scanned."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "runtimeexception-vs-mojoexecutionexception",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:70,79",
+      "reason": "Same finding as c005 — the two `throw new RuntimeException(\"unable to read file\", e)` sites in verifySafeHtml escape the MojoExecutionException convention the enclosing verify() establishes."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "byte-identical-sanitizer-comparison",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99,95,97,117-127; diff.patch",
+      "reason": "Every factual component checks out: the test is `!Objects.equals(sanitized, value)`; the compensations (unescapeHtml4 on both sides, stripping \"<!-- -->\", per-key normalizeValue exemptions) are all there; and the <br/> -> <br /> churn is exactly 76 added lines across 19 files by my count of the diff. The {n,choice,...} exemptions do apply by key name regardless of the English source, so a new pluralised key would fail with an \"Illegal HTML\" message."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "runtimeexception-vs-mojoexecutionexception",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:76-80 vs 52-54",
+      "reason": "Correct on substance — the failure to open the derived English file becomes a raw RuntimeException while verify() wraps the equivalent IO failure in MojoExecutionException. (Strictly it is the read of the derived path that fails, not the derivation itself.)"
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "policy-fields-not-static-final",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:139",
+      "reason": "`Pattern HTML_TAGS = Pattern.compile(...)` is an instance field, so it is recompiled for each of the per-file VerifyMessageProperties instances the mojo creates; the same fix covers the two PolicyFactory fields."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "not_real",
+      "confidence": 0.7,
+      "severity": null,
+      "cluster": "totpstep1-link-removal",
+      "evidence": "themes/src/main/resources/theme/base/account/messages/messages_en.properties:150; themes/src/main/resources/theme/base/login/messages/messages_en.properties:128",
+      "reason": "The English source already reads \"Install one of the following applications on your mobile:\" with no links — that product decision predates this MR. The touched locales are stale translations being brought in line with English (the fi/sk/sv replacements are faithful translations of that sentence), so no link content is being lost incidentally here."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "policy-fields-not-static-final",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58,63,139",
+      "reason": "Confirmed by reading the declarations: UPPER_SNAKE_CASE names with no static/final/visibility modifiers."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.5,
+      "severity": "Low",
+      "cluster": "normalizevalue-per-key-exemptions",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:117-137",
+      "reason": "Accurately describes the code — five hardcoded carve-outs (templateHelp, optimizeLookupHelp, linkExpirationFormatter.timePeriodUnit*, error-invalid-multivalued-size, the email RTL style strip) that skip part of the check. It stops short of naming a concrete defect, but the hardcoded key list in a security-shaped check is something a maintainer would want raised."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "no-clean-file-test",
+      "evidence": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:30-52",
+      "reason": "All four tests are `Matchers.hasItem(containsString(...))` on an expected error; nothing asserts an empty result for a well-formed bundle. noHtml_en.properties exists only as the English source for noHtml_de, it is never verified on its own."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 1.0,
+      "severity": "Low",
+      "cluster": "santizeanchors-typo",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:88,150",
+      "reason": "The method is spelled `santizeAnchors` at both the declaration and the single call site."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "policy-fields-not-static-final",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58-63",
+      "reason": "Both PolicyFactory fields are instance fields; each new VerifyMessageProperties runs HtmlPolicyBuilder twice. Same one-line fix as the HTML_TAGS field."
+    },
+    {
+      "claim_id": "c029",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "policy-fields-not-static-final",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58,63,139; ThemeVerifierMojo.java:52",
+      "reason": "The cost claim is accurate: ThemeVerifierMojo does `new VerifyMessageProperties(file)` inside the per-file loop, so the two policy builds and the Pattern.compile are repeated for every bundle."
+    },
+    {
+      "claim_id": "c030",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "zh-cn-traditional-chinese",
+      "evidence": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties (totpStep1)",
+      "reason": "The new value \"在您的手機上安裝以下應用程式之一：\" uses Traditional forms (手機, 應用程式, 安裝) in the Simplified Chinese bundle; the surrounding lines in the same file are Simplified (手机, 应用, 安装)."
+    },
+    {
+      "claim_id": "c031",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "anchor-check-misses-dropped-links",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151-161",
+      "reason": "The loop is driven by `matcher` over the translation only; if the translation has no anchors the body never runs and englishMatcher is never consulted, so an English value with two <a> tags and a translation with none passes silently. Nothing downstream compares anchor counts either."
+    },
+    {
+      "claim_id": "c032",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "test-assertion-relaxed",
+      "evidence": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:31-34",
+      "reason": "The diff changes Matchers.contains(...) to Matchers.hasItem(...) in verifyDuplicateKeysDetected; contains() asserted the list held exactly that one element, hasItem() no longer constrains what else is emitted."
+    },
+    {
+      "claim_id": "c033",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "italian-in-lithuanian",
+      "evidence": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties (totpStep1); themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71",
+      "reason": "Both Lithuanian bundles received \"Installa una delle seguenti applicazioni sul tuo cellulare:\" — Italian, evidently copied from messages_it.properties:92 — while every surrounding line is Lithuanian."
+    },
+    {
+      "claim_id": "c034",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Medium",
+      "cluster": "italian-in-lithuanian",
+      "evidence": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71",
+      "reason": "Line 71 of the checked-out file is exactly `loginTotpStep1=Installa una delle seguenti applicazioni sul tuo cellulare:` — the location and language are both correct as stated."
+    },
+    {
+      "claim_id": "c035",
+      "verdict": "not_real",
+      "confidence": 0.65,
+      "severity": null,
+      "cluster": "replacefirst-while-iterating",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:151-161",
+      "reason": "The Matcher was built over the original String and Strings are immutable, so reassigning `value` does not disturb the iteration; and for repeated identical anchors each replaceFirst removes the leftmost surviving copy, which is the already-consumed one, so the net result is correct. I could not construct a case where repeated identical anchors misbehave."
+    },
+    {
+      "claim_id": "c036",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "multivalued-i18next-placeholders",
+      "evidence": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138; js/apps/admin-ui/src/i18n/i18n.ts:13-18",
+      "reason": "Same defect as c002/c015 stated for the Admin UI: the createInstance config leaves interpolation at i18next's {{ }} default, so the new {0} and {2,choice,...} forms are not substituted."
+    },
+    {
+      "claim_id": "c037",
+      "verdict": "real",
+      "confidence": 0.65,
+      "severity": "Low",
+      "cluster": "diff-substring-bounds",
+      "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:102-111",
+      "reason": "The structural diagnosis is right — two independent counters, each bounded only by min(len), nothing prevents start+end from overrunning, and the result is StringIndexOutOfBoundsException rather than a readable message. The suggested repro is not one: for value=\"Some <b>HTML\" the sanitizer's auto-closed \"</b>\" is pure suffix growth, giving start=len(value), end=0 and no throw."
+    }
+  ]
+}

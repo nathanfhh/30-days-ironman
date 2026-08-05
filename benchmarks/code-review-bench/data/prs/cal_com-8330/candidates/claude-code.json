@@ -1,0 +1,6 @@
+[
+  "Line 114 uses === to compare two dayjs objects, which is reference equality and will always be false -- zero-length overrides (blocked days) are never detected. Use .isSame() instead.",
+  "Line 123 uses strict isAfter for the end boundary but the start boundary (lines 117-120) uses isBefore || isSame; a slot starting exactly at the override end time passes the check and is incorrectly marked available. Add || slotStartTime.isSame(...) to line 123 for consistency.",
+  "Line 142 computes end from slotStartTime instead of slotEndTime, making start and end identical. This means the working hours boundary check end > workingHour.endTime only validates the slot start, not the slot end \u2014 so a slot starting within working hours but extending past them will incorrectly be allowed.",
+  "When a slot falls within a date override window, checkIfIsAvailable returns true at line 134 without checking the busy array, allowing double bookings during date override periods. The fix: remove the early return true at line 134 and let execution fall through to the busy.every() check at line 153."
+]

@@ -1,0 +1,3 @@
+[
+  "enableSqlExpressions function contains dead-code logic where both branches of the if statement return false, making the feature flag never consulted. The misleading variable name and inverted flag check (!IsEnabledGlobally) make this look like an accidental bug, and a future developer may try to 'fix' the unreachable code, inadvertently re-introducing the RCE/LFI vulnerability. The function should be simplified to return false with an explicit comment."
+]

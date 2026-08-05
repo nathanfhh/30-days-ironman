@@ -1,0 +1,77 @@
+{
+  "slug": "keycloak-greptile-1",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "The challenge() method inverts the original condition - original guard was context.getUser() == null && webauthnAuth != null && webauthnAuth.isPasskeysEnabled(), but new guard isConditionalPasskeysEnabled(context.getUser()) is true only when user != null, so users who submit bad username will see error page without WebAuthn form"
+    },
+    {
+      "claim_id": "c002",
+      "text": "The new override method shouldShowWebAuthnAuthenticators is missing the @Override annotation, unlike its sibling overrides in the same file."
+    },
+    {
+      "claim_id": "c003",
+      "text": "With isConditionalPasskeysEnabled(UserModel user) requiring user != null, authenticate(...) will not call webauthnAuth.fillContextForm(context) on the initial login page where context.getUser() is still null, so conditional passkey UI will not be set up for first-time passkey login. Consider whether this should also be enabled when no user has been selected yet so ID-less passkey authentication on the initial login form continues to work."
+    },
+    {
+      "claim_id": "c004",
+      "text": "PasskeysUsernamePasswordFormTest has an unused import of PasswordCredentialModel that is never referenced anywhere in the file."
+    },
+    {
+      "claim_id": "c005",
+      "text": "PasskeysOrganizationAuthenticationTest is left with an orphaned unused import of NoSuchElementException after this PR removed the two assertThrows(NoSuchElementException...) call sites that used it."
+    },
+    {
+      "claim_id": "c006",
+      "text": "To share the constant used above, it was widened from protected to public and the authenticators.util package now imports from authenticators.browser, which itself already imports from util, creating a bidirectional dependency between the two packages."
+    },
+    {
+      "claim_id": "c007",
+      "text": "The test reauthenticationOfUserWithoutPasskey actually tests 'passkeys disabled for the realm', not 'user has no passkey' as its name and comment claim; the realm-enabled-but-user-has-no-passkey combination that this PR newly opens up is left untested."
+    },
+    {
+      "claim_id": "c008",
+      "text": "The USER_SET_BEFORE_USERNAME_PASSWORD_AUTH auth note now has two separate places that independently read and interpret it \u2014 AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError duplicates logic already present in AbstractUsernameFormAuthenticator.isUserAlreadySetBeforeUsernamePasswordAuth \u2014 so a future change to how it's interpreted has to be made in two places."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Two test assertions use a try/findElement/fail()/catch(Exception) pattern to assert an element doesn't exist, which swallows any unrelated WebDriver exception as a false pass, instead of using the project's existing assertThrows(NoSuchElementException.class, ...) convention."
+    },
+    {
+      "claim_id": "c010",
+      "text": "Whether WebAuthnConditionalUIAuthenticator is considered an extensible API outside this repository, since making shouldShowWebAuthnAuthenticators always return false changes fillContextForm's null-return behavior in a way external extenders might depend on."
+    },
+    {
+      "claim_id": "c011",
+      "text": "Whether re-authentication triggers other than prompt=login (e.g. max_age, required actions, account console re-auth) also flow through the same UsernamePasswordForm.authenticate path with an already-set user, since only prompt=login is covered by the new tests."
+    },
+    {
+      "claim_id": "c012",
+      "text": "Same element absence check issue at lines 312-317 - try/catch pattern should be replaced with Assert.assertThrows(NoSuchElementException.class, ...)"
+    },
+    {
+      "claim_id": "c013",
+      "text": "ConditionalPasskeysEnabled() called without UserModel parameter"
+    },
+    {
+      "claim_id": "c014",
+      "text": "findElement throws NoSuchElementException when element doesn't exist (doesn't return null), and catching generic Exception is too broad - should use Assert.assertThrows(NoSuchElementException.class, ...) instead"
+    },
+    {
+      "claim_id": "c015",
+      "text": "Catch `NoSuchElementException` instead of `Exception` so unexpected Selenium/runtime failures do not get treated as successful assertions"
+    },
+    {
+      "claim_id": "c016",
+      "text": "Typo 'Succesful' should be 'Successful' at line 413"
+    },
+    {
+      "claim_id": "c017",
+      "text": "Now that re-authentication knows exactly who the user is, the passkey conditional UI is still shown purely based on realm-level policy without checking whether that specific user actually has a passwordless WebAuthn credential, so a user without one gets a passkey button that is guaranteed to fail."
+    },
+    {
+      "claim_id": "c018",
+      "text": "The new shouldShowWebAuthnAuthenticators extension point has an undocumented implicit precondition \u2014 any override returning true must guarantee context.getUser() is non-null, or WebAuthnAuthenticatorsBean's constructor will NPE \u2014 and the javadoc doesn't state this."
+    }
+  ]
+}

@@ -1,0 +1,416 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T09:38:29+00:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "cal_com-14740 — git diff refs/ncr/base..refs/ncr/pr（分支 issue#14691，新增 booking 的「加入 guest」功能）",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "這是排程 / 預約產品。本次改動觸及的資料是 attendee 的姓名、email、時區與會議連結（packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:83-90、packages/prisma/schema.prisma:526-539），屬於 PII 而非 PHI；沒有病歷號、身分證字號、診斷、檢驗或 HL7/FHIR/DICOM 內容出現在這條資料路徑上。因此 PHI 相關的嚴重度升級規則本次不適用。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "已逐檔檢查 diff 內的註解與字串常值。唯一接近的是 packages/trpc/server/routers/viewer/bookings/_router.tsx:86 的 `// Unreachable code but required for type safety`，那是對 TypeScript 型別收斂的說明，且是從同檔案既有 handler 複製過來的既有慣例，不是指向審查流程的文字。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "「預約成立後補加 guest」是既有 booking 管理選單（reschedule / edit location / reassign）明顯缺的一塊，補上合理。分支名 issue#14691 也對應到一個既有需求。"
+    },
+    "right_mr": {
+      "verdict": "doubt",
+      "note": "這個 MR 同時做了兩件事：(1) 新增 addGuests 功能；(2) 把 packages/features/form-builder/Components.tsx:231-314 的 multiemail factory 幾乎逐字複製成新的共用元件 packages/ui/form/MultiEmail.tsx。第 (2) 件只做了一半——原處的實作沒有被換掉，`//TODO: Make it a ui component` 也還留著，結果是 repo 裡多了一份會各自漂移的副本。要嘛在這個 MR 一併把 form-builder 換過去（那 diff 會變大但方向正確），要嘛先讓元件留在 apps/web 本地，等第三個使用者出現再抽。這個取捨應該由人決定，不該由審查代決。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "沒有看到相依的未完成前置工作；base 是剛 merge 過 main 的 commit（92f44dce Merge branch 'main' into issue#14691）。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "trivy 不在 PATH 上。相依套件漏洞、設定錯誤與 secret 掃描本次完全沒有執行。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "opengrep 不在 PATH 上，且 NCR_OPENGREP_RULES 指向的規則目錄（預設是 HOME 底下的 semgrep-rules）不存在——兩個條件都缺。本次 diff 全是 .ts/.tsx/.json，等於整份改動沒有任何 SAST 覆蓋。"
+    },
+    {
+      "tool": "ruff",
+      "status": "skipped",
+      "exit_code": 0,
+      "artifact": "",
+      "counts": {
+        "in_diff": 0,
+        "outside_diff": 0
+      },
+      "skipped_reason": "ruff 有安裝且實際執行完成（exit 0、0 筆診斷），但整個 repo 內 0 個 .py 檔，本次 diff 也全是 .ts/.tsx/.json——沒有任何檔案進入檢查。照 scanners.md 對 oxlint「無檔可 lint」的處理原則記為 skipped：記成 ok 會等同宣稱一次乾淨的掃描，而這次根本沒有東西被掃到。"
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "ty 不在 PATH 上；即使有，repo 內也沒有 Python 可檢查。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "oxlint 不在 PATH 上。這是本次工具箱裡唯一能覆蓋 .ts/.tsx 的靜態檢查器，缺席代表整份 TypeScript 改動沒有任何自動化 lint。"
+    },
+    {
+      "tool": "tsc / next lint / vitest / playwright",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "checkout 內沒有 node_modules，且執行環境無網路，無法安裝相依。型別檢查、單元測試與 e2e 一律沒有執行過。下面所有結論都是純讀原始碼得到的，沒有任何一項被編譯器或測試證實過。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "codegraph 未安裝。Phase 3 的呼叫路徑列舉與完整性確認全部改用 grep 於 checkout 上進行。"
+    },
+    {
+      "tool": "ncr-fresh-eyes（subagent）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本次執行環境沒有任何可派送 subagent 的工具（Task/Agent 皆不存在，ToolSearch 也查不到）。Phase 3 第 1 步的無框架初讀因此完全沒有發生，也沒有在主流程裡自行模擬——skill 明確禁止那樣做，因為主 agent 讀完 review-dimensions.md 之後的「初讀」已經被清單塑形過了。這代表「清單沒有寫到的問題」這一類的覆蓋在本次是缺的。"
+    },
+    {
+      "tool": "ncr-quality-check（subagent）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "同上，無法派送 subagent。Phase 4 第 3 步的獨立品質複核沒有執行，這份報告只經過 report_model.py 的機械驗證（結論與 findings 一致、每條 finding 有 fix、Critical 安全項有 POC/blast radius/treatment、九個維度都有結論），沒有經過第二雙眼睛檢查用詞、證據強度與嚴重度校準。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "pass",
+      "note": "命名與函式長度大致跟得上同目錄既有 handler 的水準。唯一問題是 F-010（AddGuestsDialog 內部宣告的 ZAddGuestsInputSchema 與 server 端同名 export 撞名），屬 Nit，不足以讓這個維度失守。"
+    },
+    "B": {
+      "verdict": "fail",
+      "note": "F-006：packages/ui/form/MultiEmail.tsx 與 packages/features/form-builder/Components.tsx:231-314 的 multiemail factory 幾乎逐字重複（連 inputClassName 字串都一樣），抽出後沒有取代原處。"
+    },
+    "C": {
+      "verdict": "fail",
+      "note": "F-001：BLACKLISTED_GUEST_EMAILS 的比對只把黑名單那一側轉小寫、也沒有走 extractBaseEmail，與 repo 內其他三處用法不一致，這條路徑上的反濫用控制可被直接繞過；guests 陣列也沒有長度上限。"
+    },
+    "D": {
+      "verdict": "fail",
+      "note": "F-002 / F-003 / F-004：新 endpoint 用 authedProcedure 加手寫檢查，而同檔案的 editLocation 用的是 bookingsProcedure；團隊權限判斷用了 && 而不是 ||；booking.status 與 eventType.disableGuests 都沒有檢查。"
+    },
+    "E": {
+      "verdict": "pass",
+      "note": "handler 的職責切分與同目錄的 editLocation.handler.ts 一致，email 組裝也確實留在 packages/emails。唯一問題是 F-011（packages/ui 的元件反過來 import 自己的 barrel），屬 Nit。"
+    },
+    "F": {
+      "verdict": "fail",
+      "note": "F-005：uniqueGuests 只排除「已經是 attendee」與黑名單，沒有排除輸入陣列自己的重複；而且 findFirst 讀、update 寫之間沒有交易或唯一約束保護（packages/prisma/schema.prisma:526-539 的 Attendee 沒有 (bookingId, email) 唯一鍵）。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "F-009：diff 內 0 個測試檔。新增了一個帶權限判斷的 tRPC mutation、一個共用 UI 元件與兩個 email template，而 apps/web/playwright/bookings-list.e2e.ts 是現成的落點。"
+    },
+    "H": {
+      "verdict": "fail",
+      "note": "整份 diff 都是非 Python 檔，此維度適用。F-008：AddGuestsDialog 的錯誤狀態沒有在成功送出與非 Cancel 關閉時重設。F-012：MultiEmail 對可編輯輸入用 key={index} 搭配 splice 移除。"
+    },
+    "I": {
+      "verdict": "fail",
+      "note": "沒有既有函式簽章被改動（新增的都是新檔案與新 export；packages/ui/index.tsx:153 的 MultiEmail 名稱先前不存在，grep 確認無衝突）。但 F-007 命中隱含輸入契約這一軸：sendAddGuestsEmails 的第二參數叫 newGuests，呼叫端傳的卻是未經過濾的原始 input。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "C",
+      "severity": "Critical",
+      "status": "new",
+      "title": "BLACKLISTED_GUEST_EMAILS 比對只正規化單邊，這條路徑上的黑名單可被大小寫或 plus-address 直接繞過",
+      "evidence": [
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-78",
+        "packages/features/bookings/lib/handleNewBooking.ts:736-751",
+        "packages/features/bookings/lib/handleNewBooking/checkIfBookerEmailIsBlocked.ts:12-19",
+        "packages/lib/extract-base-email.ts:2-6",
+        "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6"
+      ],
+      "rationale": "第 71 行把黑名單那一側 `.map((email) => email.toLowerCase())`，第 77 行卻拿未經處理的 `guest` 去 `includes()`。email 的 local part 在實務上大小寫不敏感，所以 `Blocked@Example.com` 不會等於 `blocked@example.com`，比對必然落空。repo 內另外三處用法都是兩側一起正規化：handleNewBooking.ts:742 用 `extractBaseEmail(guest).toLowerCase()` 對上 `blacklistedGuestEmails.some((e) => e.toLowerCase() === ...)`，checkIfBookerEmailIsBlocked.ts:18 也是 `guestEmail.toLowerCase() === baseEmail.toLowerCase()`。這裡少了 extractBaseEmail，連 `blocked+anything@example.com` 這種 plus-address 繞法也一併放行。\n\n我有找過反證：(a) addGuests.schema.ts:3-6 只有 `z.string().email()`，zod 不做小寫正規化；(b) AddGuestsDialog.tsx:26-29 的前端 schema 也沒有；(c) 整條路徑上沒有任何 middleware 會先把 email 轉小寫（addGuests 用的是 authedProcedure，_router.tsx:79）。所以上游沒有任何一層擋得住。\n\n嚴重度定在 Critical 而不是 Suggestion，是因為這不是「少做一個檢查」，而是「一個已經存在、部署方相信它有效的控制在這條新路徑上靜默失效」——控制看起來還在（程式碼讀起來像在做黑名單），實際上不會攔下任何東西，而失效本身沒有任何 log 或訊號。搭配 guests 陣列沒有長度上限（schema.ts:5 的 `z.array(z.string().email())` 沒有 `.max()`），單次呼叫就能讓系統以 organizer 的 from address 對任意數量的地址寄信。",
+      "fix": "把兩側對齊到 repo 既有寫法，並補上長度上限：\n\n```ts\n// addGuests.handler.ts\nimport { extractBaseEmail } from \"@calcom/lib/extract-base-email\";\n\nconst blacklistedGuestEmails = process.env.BLACKLISTED_GUEST_EMAILS\n  ? process.env.BLACKLISTED_GUEST_EMAILS.split(\",\").map((e) => extractBaseEmail(e).toLowerCase())\n  : [];\n\nconst uniqueGuests = guests.filter(\n  (guest) =>\n    !booking.attendees.some((attendee) => attendee.email.toLowerCase() === guest.toLowerCase()) &&\n    !blacklistedGuestEmails.includes(extractBaseEmail(guest).toLowerCase())\n);\n```\n\n```ts\n// addGuests.schema.ts\nguests: z.array(z.string().email()).min(1).max(10),\n```\n\n更好的做法是把 handleNewBooking.ts:736-751 那段抽成一個共用 helper（例如 `filterBlacklistedGuests`），讓這兩條路徑不可能再各自漂移——目前是第三處各寫一次同一段邏輯。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": {
+        "poc": "以任一在該 booking 上的 attendee 身分登入（或直接用 organizer 帳號），對自架站台送出：\n\n```bash\ncurl -X POST 'https://cal.example.com/api/trpc/bookings/addGuests?batch=1' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Cookie: next-auth.session-token=<session>' \\\n  -d '{\"0\":{\"json\":{\"bookingId\":123,\"guests\":[\"Blocked@Example.COM\",\"blocked+x@example.com\"]}}}'\n```\n\n前提是站台設定了 `BLACKLISTED_GUEST_EMAILS=blocked@example.com`。預期行為是兩個地址都被過濾掉、回 400 `emails_must_be_unique_valid`；實際行為是兩個都通過 addGuests.handler.ts:74-78 的過濾，被寫進 Attendee 表（:92-106），並在 :168 收到 AttendeeScheduledEmail（內含會議連結、地點與 videoCallData 的 meetingPassword，見 :149-155）。把 guests 換成 500 個地址即可觀察到沒有長度上限。",
+        "blast_radius": "被站台明確列入黑名單的地址仍可被加進任何一場預約，並收到含會議連結與 video meeting password 的信；黑名單在 handleNewBooking 那條路徑上有效、在這條新路徑上無效，所以站台管理者從既有行為推不出這個缺口。加上 guests 陣列無上限，單一已登入使用者可用一次請求觸發任意數量的外寄信（每封的 from 是 organizer 名義、replyTo 指向 organizer email，organizer-add-guests-email.ts:23-25），對寄信網域的信譽是直接風險。本次不涉及 PHI（見 meta.phi_trigger），外洩內容為會議標題、時間、地點與參與者 email 等 PII。",
+        "treatment": "Mitigate",
+        "fix_reference": "addGuests.handler.ts:70-78 兩側一起走 extractBaseEmail(...).toLowerCase()；addGuests.schema.ts:5 加 .min(1).max(10)"
+      },
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-002",
+      "dimension": "D",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "addGuests 用 authedProcedure 加手寫檢查，讓任何 attendee 都能改動別人的 booking；同檔案的 editLocation 走的是 bookingsProcedure",
+      "evidence": [
+        "packages/trpc/server/routers/viewer/bookings/_router.tsx:79-96",
+        "packages/trpc/server/routers/viewer/bookings/_router.tsx:62-77",
+        "packages/trpc/server/routers/viewer/bookings/util.ts:19-63",
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:26-56"
+      ],
+      "rationale": "util.ts:19-63 的 bookingsProcedure 是這個 router 對「誰能動這筆 booking」的既有答案：organizer（`userId: ctx.user.id`）或 COLLECTIVE 事件的共同主持人，兩者皆非就丟 UNAUTHORIZED。editLocation 用它（_router.tsx:62）。新的 addGuests 改用 authedProcedure（:79）並在 handler 內自己寫一組判斷，其中 :52 的 `isAttendee` 把授權範圍擴到「email 出現在這筆 booking 的 attendee 列表上的任何已登入使用者」。\n\n這代表一個受邀者（不是主辦人）可以永久修改主辦人的 booking 記錄、把任意地址寫進 Attendee 表、觸發 eventManager.updateCalendarAttendees(:165) 去改主辦人日曆上的事件，並以主辦人名義發信。主辦人沒有任何否決或知情以外的手段。\n\n這也許是刻意的產品決策——「讓與會者自己拉人進來」本身是合理需求——但它讓這個 router 對授權有了兩套互相矛盾的答案，而 diff 裡沒有任何註解或測試說明是刻意的。dimension D 的第 4 條正是這件事：authedProcedure 確立了「你是誰」，它沒有回答「你可不可以動這一筆」。\n\n反證我查過了：:54 的檢查確實存在且會擋掉完全無關的使用者，所以這不是「沒有授權檢查」；問題是檢查的範圍。另外 :165 用的是 `ctx.user` 的 credentials 而非主辦人的，我原本以為會導致日曆更新用錯憑證，但 EventManager.updateAllCalendarEvents（packages/core/EventManager.ts:845-860）在找不到對應 credential 時會退回資料庫查，所以那條不成立，不列為 finding。",
+      "fix": "先把「attendee 可以加 guest 嗎」當成明確的產品決策寫下來。如果答案是否定的，直接改用 bookingsProcedure，handler 內的三段判斷就都可以刪掉：\n\n```ts\n// _router.tsx\naddGuests: bookingsProcedure.input(ZAddGuestsInputSchema).mutation(...)\n```\n\n如果答案是肯定的，至少要 (a) 在 :46-56 上方留一段註解說明為什麼這裡刻意比 bookingsProcedure 寬，(b) 補一個 e2e case 釘住「attendee 可以、無關使用者不行」，避免下一次有人「順手統一」成 bookingsProcedure 時把功能改壞。",
+      "counter_evidence_checked": true,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-003",
+      "dimension": "D",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "isTeamAdminOrOwner 用 && 串接，實際語意是「只有 OWNER」，team ADMIN 被排除在外",
+      "evidence": [
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48",
+        "packages/lib/server/queries/teams/index.ts:264-284",
+        "packages/lib/server/queries/teams/index.ts:286-295"
+      ],
+      "rationale": "變數名叫 `isTeamAdminOrOwner`，但寫的是 `isTeamAdmin(...) && isTeamOwner(...)`。查兩個函式的定義：isTeamAdmin（teams/index.ts:264-284）本身就是 `role IN (ADMIN, OWNER)`，isTeamOwner（:286-295）是 `role === OWNER`。兩者取交集等於 OWNER。所以名字承諾的是「admin 或 owner」，行為是「只有 owner」——dimension A 第 4 條說的「名字承諾的比行為多」，而且它決定的是一條授權分支。\n\n實際影響是 team ADMIN 在自己團隊的 booking 上拿不到這個權限（除非他剛好也是 organizer 或 attendee，那另外兩個條件會接住他）。這是 fail-closed，所以不是安全風險，但它是一個功能缺口，而且是那種要等使用者回報才會被發現的缺口。\n\n另外 :47-48 兩次都寫 `booking.eventType?.teamId ?? 0`：teamId 為 null 時（個人事件）會拿 0 去查 membership，查不到、回 false，行為正確，但用 0 當哨兵值不如直接短路。",
+      "fix": "```ts\nconst teamId = booking.eventType?.teamId;\n// isTeamAdmin 已涵蓋 ADMIN 與 OWNER，不需要再與 isTeamOwner 交集\nconst isTeamAdminOrOwner = teamId ? !!(await isTeamAdmin(user.id, teamId)) : false;\n```\n\n順帶省掉一次資料庫查詢，也省掉 `?? 0` 這個哨兵值。",
+      "counter_evidence_checked": true,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-004",
+      "dimension": "D",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "handler 沒有檢查 booking.status 與 eventType.disableGuests，前置條件比呼叫它的 UI 還寬",
+      "evidence": [
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:26-56",
+        "apps/web/components/booking/BookingListItem.tsx:544-554",
+        "apps/web/components/booking/BookingListItem.tsx:193-200",
+        "packages/prisma/schema.prisma:110",
+        "packages/features/bookings/lib/getCalEventResponses.ts:49-52"
+      ],
+      "rationale": "兩個前置條件只存在於 UI，不存在於 endpoint：\n\n**booking.status。** BookingListItem.tsx:544-554 只在 `isUpcoming && !isCancelled && isConfirmed`、或 `isBookingInPast && (isConfirmed || isPending)` 時才渲染含這個選項的 TableActions。handler 從 :26 讀 booking 到 :56 通過授權為止，完全沒有讀 `booking.status`。tRPC mutation 是可以直接呼叫的，所以對一筆 CANCELLED 或 REJECTED 的 booking 加 guest 會成功：寫進 Attendee 表、對已取消的會議寄出 `guests_added_event_type_subject` 通知，並附上 `status: \"CONFIRMED\"`、`method: \"REQUEST\"` 的 ICS（attendee-add-guests-email.ts:6-13），等於對收件人宣告一場已被取消的會議是有效的。\n\n**eventType.disableGuests。** schema.prisma:110 有這個欄位，語意是「這個事件類型不接受 guest」；getCalEventResponses.ts:49-52 的註解確認它就是用來讓 guests 欄位消失的。addGuests 這條路徑完全沒有讀它，所以主辦人明確關掉 guest 的事件類型，事後仍可被加進 guest。\n\n反證查過：grep 過整個 handler 與 _router.tsx 的 addGuests 區段，沒有任何 middleware 補上這兩項；authedProcedure 只做登入檢查。BookingListItem 那層的過濾也不是 trust boundary（dimension C：前端驗證不豁免後端）。\n\n嚴重度是 Suggestion 而非 Critical：要觸發需要先通過 :54 的授權檢查，也就是必須已經是這筆 booking 的關係人，不是任意人可達。",
+      "fix": "在授權檢查之後、寫入之前補兩道：\n\n```ts\nif (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.REJECTED) {\n  throw new TRPCError({ code: \"BAD_REQUEST\", message: \"booking_not_active\" });\n}\nif (booking.eventType?.disableGuests) {\n  throw new TRPCError({ code: \"FORBIDDEN\", message: \"guests_not_allowed_for_event_type\" });\n}\n```\n\n`disableGuests` 為 true 時，BookingListItem.tsx:193-200 那個選單項目也應該一併不要放進 editBookingActions，否則使用者看得到卻按不動。",
+      "counter_evidence_checked": true,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-005",
+      "dimension": "F",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "uniqueGuests 沒有排除輸入陣列自己的重複，且 read-modify-write 之間沒有交易或唯一約束",
+      "evidence": [
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78",
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:92-106",
+        "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6",
+        "apps/web/components/dialog/AddGuestsDialog.tsx:26-29",
+        "packages/prisma/schema.prisma:526-539"
+      ],
+      "rationale": "變數叫 `uniqueGuests`，但它的過濾條件只有兩個：不在既有 attendees 裡、不在黑名單裡。輸入陣列自己的重複沒有被處理，所以 `guests: [\"a@b.c\", \"a@b.c\"]` 會原封不動流到 :101 的 `createMany`，在 Attendee 表產生兩列。schema.prisma:526-539 的 Attendee 沒有 `@@unique([bookingId, email])`，資料庫不會擋。\n\n去重目前只做在前端：AddGuestsDialog.tsx:26-29 的 `.refine` 檢查 Set size。但 addGuests.schema.ts:3-6 的 server schema 沒有這個 refine——前端不是 trust boundary，直接打 tRPC 就能繞過。\n\n第二層是併發：:26 的 findFirst 讀出 attendees、:74 在記憶體裡比對、:92 才寫入，中間沒有交易也沒有唯一約束。兩個同時送出相同 email 的請求都會通過 :76 的比對，然後各寫一列。這條路徑現在的觸發者不只 organizer（見 F-002），同一場會議可能有多個人同時操作。\n\n重複的 attendee 之後會一路帶進 :108-120 的 attendeesList、evt.attendees，最後在 email-manager.ts:539-547 讓同一個地址收到兩封信；`seatsShowAttendees` 開啟時也會在頁面上重複顯示。",
+      "fix": "server schema 補上與前端相同的 refine，並在寫入層加上唯一約束：\n\n```ts\n// addGuests.schema.ts\nguests: z\n  .array(z.string().email())\n  .min(1)\n  .max(10)\n  .refine((emails) => new Set(emails.map((e) => e.toLowerCase())).size === emails.length, {\n    message: \"emails_must_be_unique_valid\",\n  }),\n```\n\n併發那一層真正的修法是資料庫層：在 Attendee 上加 `@@unique([bookingId, email])`（需要一支先清理既有重複資料的 migration），或把 :26 的讀取與 :92 的寫入包進 `prisma.$transaction`。若判斷這個 race 的實務發生率不值得一支 migration，至少在 :74 上方留一句註解說明是刻意接受。",
+      "counter_evidence_checked": true,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-006",
+      "dimension": "B",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "MultiEmail 是 form-builder multiemail factory 的逐字複製，抽出來了卻沒有取代原處，變成兩份會各自漂移的副本",
+      "evidence": [
+        "packages/ui/form/MultiEmail.tsx:12-96",
+        "packages/features/form-builder/Components.tsx:231-314",
+        "packages/features/form-builder/Components.tsx:233",
+        "packages/ui/index.tsx:153"
+      ],
+      "rationale": "兩份實作放在一起看幾乎逐行相同：同一個 `value = value || []` 開頭、同一串 `inputClassName`（`dark:placeholder:text-muted focus:border-emphasis ...` 一字不差）、同樣的 `<ul>/<li key={index}>` 結構、同樣的 `Tooltip content=\"Remove email\"` 與 `Icon name=\"x\" width={12}`、同樣的兩顆 Button 分支。差異只有 `htmlFor`（guests → emails）、`data-testid`（add-another-guest → add-another-email、add-guests → add-emails）與 className 的 `mb-1` / `my-2` 微調。\n\n最能說明問題的是 Components.tsx:233 那行 `//TODO: Make it a ui component`——這個 MR 做了那件事的前半段（建立 packages/ui/form/MultiEmail.tsx，並在 index.tsx:153 export），卻沒有做後半段（把 form-builder 換過去、刪掉 TODO）。結果 repo 現在有兩份同樣的 multi-email 實作、兩組不同的 data-testid，而 TODO 還在原地，讀起來像沒人動過。下一個修 multi-email bug 的人只會改到其中一份。\n\nKISS > DRY 在這裡不構成豁免：兩份都存在的狀態既不 simple 也不 DRY，它是兩者都輸的那個選項。",
+      "fix": "二選一，不要停在中間：\n\n1. **抽取到底**（建議）——把 Components.tsx:231-314 的 factory 換成引用新元件，保留原本的 `data-testid`（add-another-guest / add-guests）以免打壞既有 e2e，把 testid 做成 prop：\n   ```tsx\n   multiemail: {\n     propsType: propsTypes.multiemail,\n     factory: (props) => <MultiEmail {...props} testIdPrefix=\"guest\" />,\n   },\n   ```\n   然後刪掉 :233 的 TODO。\n2. **先不抽**——把元件留在 `apps/web/components/dialog/` 底下，等第三個使用者出現再談抽取（Rule of Three），並在 MR 描述說明為什麼暫時接受這份重複。",
+      "counter_evidence_checked": true,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-007",
+      "dimension": "I",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "sendAddGuestsEmails 的參數叫 newGuests，呼叫端傳的卻是未過濾的原始輸入，導致既有 attendee 可能收到「新預約成立」的信",
+      "evidence": [
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168",
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78",
+        "packages/emails/email-manager.ts:525",
+        "packages/emails/email-manager.ts:539-547"
+      ],
+      "rationale": "email-manager.ts:525 的簽章是 `(calEvent: CalendarEvent, newGuests: string[])`，:539-547 用它決定每個 attendee 收哪一種信：在 `newGuests` 裡的收 `AttendeeScheduledEmail`（新預約確認），不在的收 `AttendeeAddGuestsEmail`（有人被加進來了）。這個分支的正確性完全取決於 `newGuests` 真的只包含這次新加的人。\n\nhandler :168 傳的是 `guests`，也就是 input 的原始陣列，不是 :74-78 過濾後的 `uniqueGuests`。兩者在一種情況下會不同：使用者送出一個已經是 attendee 的 email。:76 會把它從 `uniqueGuests` 剔除（不會重複建立），但它仍留在 `guests` 裡，於是 :541 的 `newGuests.includes(...)` 命中，那位早就在這場會議裡的既有 attendee 會收到一封「你的預約已確認」的 AttendeeScheduledEmail——內容看起來像一場新成立的預約，而他其實什麼都沒變。\n\n這正是 dimension I 第 3 條的形狀：值滿足了簽章（都是 string[]），卻違反了函式對這個參數的實際假設。反證我查過：:80 的 `uniqueGuests.length === 0` 只在「全部都被過濾掉」時擋下請求，只要有一個新 email 混在裡面，整批 `guests` 就會照原樣傳下去。前端也不會擋——AddGuestsDialog 完全不知道哪些人已經是 attendee。",
+      "fix": "傳過濾後的陣列，並讓型別把這件事講清楚：\n\n```ts\n// addGuests.handler.ts:168\nawait sendAddGuestsEmails(evt, uniqueGuests);\n```\n\n順帶一提，:169-171 的 `catch (err) { console.log(\"Error sending AddGuestsEmails\"); }` 把 `err` 丟掉了——這是從 editLocation.handler.ts:139-141 複製過來的既有慣例，所以不另外列為 finding，但既然這個檔案是新寫的，把 `err` 帶進 log 幾乎不花成本：`console.error(\"Error sending AddGuestsEmails\", err)`。",
+      "counter_evidence_checked": true,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-008",
+      "dimension": "H",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "AddGuestsDialog 的 isInvalidEmail 只在按 Cancel 時重設，成功送出與從右上角關閉都會把紅色錯誤留到下次開啟",
+      "evidence": [
+        "apps/web/components/dialog/AddGuestsDialog.tsx:33",
+        "apps/web/components/dialog/AddGuestsDialog.tsx:36-41",
+        "apps/web/components/dialog/AddGuestsDialog.tsx:61",
+        "apps/web/components/dialog/AddGuestsDialog.tsx:88-97",
+        "apps/web/components/booking/BookingListItem.tsx:357-361"
+      ],
+      "rationale": "`isInvalidEmail` 有三條離開 dialog 的路徑，只有一條重設它：\n\n- Cancel 按鈕（:89-93）：`setMultiEmailValue([\"\"])` + `setIsInvalidEmail(false)` + 關閉。正確。\n- 送出成功（:36-41）：重設了 `multiEmailValue`，沒有重設 `isInvalidEmail`。\n- `onOpenChange`（:61）直接接 `setIsOpenDialog`，所以右上角 X、按 Esc、點 overlay 關閉都不會重設任何狀態。\n\n這個元件掛在 BookingListItem.tsx:357-361，是常駐渲染、只靠 `isOpenDialog` 控制顯示，不會在關閉時 unmount，所以 state 會一直留著。實際重現：輸入一個格式錯誤的 email → 按 Add → 出現「Emails must be unique and valid」→ 改成正確的 email → 按 Add → 成功、dialog 關閉 → 再開一次同一筆 booking 的這個 dialog → 欄位是空的，但紅色錯誤訊息還在。\n\n同一條路徑上 `multiEmailValue` 在 X 關閉時也不會重設，所以打到一半的 email 會殘留到下一次開啟。",
+      "fix": "把重設集中到一個地方，讓三條路徑共用：\n\n```tsx\nconst resetAndClose = () => {\n  setMultiEmailValue([\"\"]);\n  setIsInvalidEmail(false);\n  setIsOpenDialog(false);\n};\n\n<Dialog open={isOpenDialog} onOpenChange={(open) => (open ? setIsOpenDialog(true) : resetAndClose())}>\n```\n\n然後 onSuccess 與 Cancel 都改叫 `resetAndClose()`。另外 handleAdd（:53-57）在驗證通過那一支也該補 `setIsInvalidEmail(false)`，否則使用者修好之後、送出失敗回到 dialog 時，錯誤訊息會停留在上一輪的狀態。",
+      "counter_evidence_checked": true,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-009",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "整個 MR 沒有任何測試，但已經先鋪好了三個 data-testid",
+      "evidence": [
+        "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-56",
+        "apps/web/components/dialog/AddGuestsDialog.tsx:98",
+        "packages/ui/form/MultiEmail.tsx:38",
+        "packages/ui/form/MultiEmail.tsx:62",
+        "apps/web/playwright/bookings-list.e2e.ts:1"
+      ],
+      "rationale": "diff 的 12 個檔案裡沒有一個是測試。這個 MR 新增的是：一組四路分支的授權判斷（handler:46-56：team owner / organizer / attendee / 其他）、一段有兩層過濾的去重邏輯（:74-78）、一個共用 UI 元件、以及兩個會寄出真實郵件的 email template。這些都是行為會靜默改變的東西。\n\n諷刺的是測試的鉤子已經寫好了——AddGuestsDialog.tsx:98 的 `data-testid=\"add_members\"`、MultiEmail.tsx:38 的 `add-another-email`、:62 的 `add-emails`——但沒有任何測試在用它們。data-testid 存在的唯一理由就是被測試選取，三個都沒有使用者，這是很強的訊號說測試本來在計畫裡、後來沒寫。\n\n落點也是現成的：apps/web/playwright/ 底下已經有 bookings-list.e2e.ts。F-001 到 F-005 那幾條裡，至少 F-003（team ADMIN 拿不到權限）與 F-005（重複 email）是一個 e2e case 就會當場撞出來的。\n\n嚴重度是 Suggestion 而非 Critical：cal.com 的 e2e 需要完整環境，不是每個 PR 都必然附測試，這是團隊慣例的問題而非硬性阻擋條件。",
+      "fix": "以 apps/web/playwright/bookings-list.e2e.ts 為落點補三個 case，用已經存在的 testid：\n\n1. organizer 開啟 `add_members` → 用 `add-emails` / `add-another-email` 加兩個地址 → 斷言 attendee 列表變成 N+2，且兩封信各寄給誰（不是只斷言 mutation 有回應）。\n2. 送出一個重複的 email → 斷言 attendee 數量不變、回 400（這條會直接抓到 F-005）。\n3. 一個與該 booking 完全無關的使用者呼叫 `viewer.bookings.addGuests` → 斷言 FORBIDDEN。\n\n如果團隊決定這個 MR 不附 e2e，至少在描述裡寫明哪一個後續 issue 會補，讓 testid 不會無限期懸空。",
+      "counter_evidence_checked": true,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-010",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "AddGuestsDialog 內宣告的 ZAddGuestsInputSchema 與 server 端同名 export 撞名但語意不同，且每次 render 重建",
+      "evidence": [
+        "apps/web/components/dialog/AddGuestsDialog.tsx:26-29",
+        "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6"
+      ],
+      "rationale": "同一個名字 `ZAddGuestsInputSchema` 指向兩個不同的東西：server 端（addGuests.schema.ts:3-6）是 `z.object({ bookingId, guests })`，dialog 內（:26-29）是 `z.array(z.string().email()).refine(...)`。兩者都叫 input schema，形狀卻不同，之後任何人想「統一用同一個 schema」時都會先踩一次。\n\n它還宣告在元件函式本體內（:26），所以每次 render 都會重建一個 zod schema——單一 dialog 的成本可以忽略，但這是沒有理由的：schema 不依賴任何 props 或 state。",
+      "fix": "移到模組層級並改個講得清楚的名字：\n\n```tsx\nconst guestEmailsSchema = z\n  .array(z.string().email())\n  .refine((emails) => new Set(emails).size === emails.length);\n\nexport const AddGuestsDialog = (props: IAddGuestsDialog) => { ... };\n```\n\n更好的方向是等 F-005 把 refine 補進 addGuests.schema.ts 之後，前端直接引用 `ZAddGuestsInputSchema.shape.guests`，兩邊就不可能再各自漂移。",
+      "counter_evidence_checked": false,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-011",
+      "dimension": "E",
+      "severity": "Nit",
+      "status": "new",
+      "title": "packages/ui 內的元件反過來 import 自己套件的 barrel，同目錄的 AddressInput 用的是相對路徑",
+      "evidence": [
+        "packages/ui/form/MultiEmail.tsx:2",
+        "packages/ui/form/AddressInput.tsx:1-3",
+        "packages/ui/index.tsx:153",
+        "packages/ui/form/MultiEmailLazy.tsx:3"
+      ],
+      "rationale": "MultiEmail.tsx:2 寫 `import { Button, EmailField, Icon, Tooltip } from \"@calcom/ui\"`，而 `@calcom/ui` 就是 packages/ui/index.tsx，index.tsx:153 又 export 了 MultiEmail——形成 index → MultiEmailLazy → MultiEmail → index 的循環。同目錄的 AddressInput.tsx:1-3 走的是相對路徑（`from \"..\"` 與 `from \"../components/form\"`），這是這個目錄的既有慣例。\n\n實務上大概不會爆炸，因為 MultiEmailLazy.tsx:3 用 `next/dynamic` 把 import 延後了，循環在 module evaluation 時被打斷。但這正是它值得改的理由：它現在能動是靠一層 lazy 的巧合，哪天有人把 MultiEmail 改成直接 export（或某個 bundler 的處理方式變了），循環就會變成執行期的 undefined。\n\n另外 MultiEmailLazy.tsx:3 把 PhoneInputLazy.tsx:3 的註解 `/** These are like 40kb that not every user needs */` 一起抄過來了，但這個元件不到 100 行、沒有任何第三方相依（PhoneInput 依賴的是 react-phone-input-2，那才是 40kb 的來源）。這句註解在這裡是錯的資訊。",
+      "fix": "改成與 AddressInput 一致的相對匯入，並修掉那句註解：\n\n```tsx\n// packages/ui/form/MultiEmail.tsx\nimport { Icon, Tooltip } from \"..\";\nimport { Button } from \"../components/button\";\nimport { EmailField } from \"../components/form\";\n```\n\n如果這個元件其實沒有 lazy 的必要（它沒有重相依），也可以直接刪掉 MultiEmailLazy.tsx，讓 index.tsx:153 指向 `./form/MultiEmail`。",
+      "counter_evidence_checked": false,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-012",
+      "dimension": "H",
+      "severity": "Nit",
+      "status": "new",
+      "title": "MultiEmail 對可編輯的 input 清單用 key={index}，搭配 splice 移除會讓 DOM 狀態錯位",
+      "evidence": [
+        "packages/ui/form/MultiEmail.tsx:26",
+        "packages/ui/form/MultiEmail.tsx:38-42",
+        "packages/features/form-builder/Components.tsx:249"
+      ],
+      "rationale": "`<li key={index}>`（:26）配上 `updatedValue.splice(index, 1)`（:39-41）：刪掉中間那一筆時，後面每一筆的 index 都往前移一格，React 因此認為「第 i 個 li 還是同一個 li，只是內容變了」，會沿用原本的 DOM 節點。因為 EmailField 的 value 是受控的（:19 `value={field}`），顯示的文字會是對的，所以這不是資料錯誤；錯位的是 DOM 綁著的非受控狀態——游標位置、輸入法組字中的內容、瀏覽器的驗證氣泡、`:focus`。使用者刪掉中間一列時會看到焦點跳到別列。\n\n這是從 Components.tsx:249 一起複製過來的既有寫法，所以不是這個 MR 引入的新問題；但既然是新檔案，順手用穩定的 key 幾乎不花成本。列 Nit 而不是 Suggestion，因為症狀限於互動細節，不影響送出的資料。",
+      "fix": "改用不隨位置變動的 key。最小的做法是讓 value 從 `string[]` 變成 `{ id: string; email: string }[]`；如果不想動型別，退而求其次可以用 `key={`${index}-${field}`}`，至少在內容不同時能區分。並且無論如何都不要沿用 index 當 key 又同時支援中間刪除。",
+      "counter_evidence_checked": false,
+      "source": "dimension",
+      "scanner": "",
+      "security": null,
+      "accepted_risk": ""
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "F",
+      "question": "對 seats event（eventType.seatsPerTimeSlot 不為 null）直接新增 Attendee 而不建立對應的 BookingSeat，會不會破壞取消座位或 seatsShowAttendees 的流程？",
+      "context": "addGuests.handler.ts:92-106 直接對 booking.attendees 做 createMany，沒有碰 BookingSeat；schema.prisma:534 的 `bookingSeat BookingSeat?` 是可選的，所以資料庫允許。我先查了會不會超賣：不會——packages/trpc/server/routers/viewer/slots/util.ts:549-555 算剩餘座位用的是 `_count: { select: { seatsReferences: true } }` 而不是 attendees，所以沒有 BookingSeat 的 attendee 不佔容量，這條反證成立、不列為 finding。但反過來的問題我沒能settle：packages/features/bookings/lib/handleSeats/cancel/cancelAttendeeSeat.ts:52 是靠 bookingSeat 來取消個別座位的，一個沒有座位的 attendee 走到那條路徑會如何，需要實際跑起來才知道。而 evt 裡又確實帶了 seatsPerTimeSlot / seatsShowAttendees（handler:145-146），代表作者知道 seats event 會經過這裡。",
+      "what_would_settle_it": "在有 seats 的事件上跑一次 apps/web/playwright/booking-seats.e2e.ts 的情境，然後對該 booking 呼叫 addGuests，再嘗試 (a) 讓新 guest 從 /booking/[uid] 取消自己的座位、(b) 開啟 seatsShowAttendees 檢視與會者列表。或者請作者說明 seats event 是否刻意不在這個功能的範圍內——若是，handler 應該明確擋掉 `booking.eventType?.seatsPerTimeSlot`。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "I",
+      "question": "新加入的 guest 沒有被寫回 booking.responses.guests，事後 reschedule 或編輯這筆 booking 時會不會把他們洗掉？",
+      "context": "handler 只新增 Attendee 列（:92-106），沒有更新 booking.responses。packages/features/bookings/lib/getCalEventResponses.ts:49-52 的註解說「若 guests 欄位被隱藏就不要從 attendees 反推 guests」，反過來讀意味著平常是會從 attendees 反推的——若真是如此，responses 與 attendees 的不一致會被自動吸收，這條就不成立。但那段程式碼我只讀到反推的意圖，沒有讀到完整的 reschedule 寫回路徑（handleNewBooking.ts 在重排時如何重建 attendees），而那條路徑長到無法在這次審查裡窮盡，環境也跑不起來。",
+      "what_would_settle_it": "跑一次完整流程：建立 booking → 用 addGuests 加兩個 guest → 由 organizer 對這筆 booking 送出 reschedule → 檢查新 booking 的 attendees 是否仍包含那兩個 guest。或者由熟悉 booking responses 生命週期的維護者直接回答 responses.guests 是否為權威來源。"
+    }
+  ],
+  "conclusion": "Request Changes",
+  "summary": "這個 MR 補上一個確實缺了的功能（預約成立後補加 guest），整體架構也貼著同目錄 editLocation.handler.ts 的既有形狀走，方向是對的。擋下來的原因集中在 addGuests.handler.ts 這個新 endpoint 的前置檢查：BLACKLISTED_GUEST_EMAILS 的比對只正規化了黑名單那一側（:70-78），與 repo 內其他三處用法都不同，導致這條路徑上的黑名單靜默失效——控制看起來還在，實際上攔不下任何東西，而 guests 陣列又沒有長度上限，這是 F-001 定為 Critical 的理由。\n\n另外四條 Suggestion 也都落在同一段程式碼：授權範圍與同 router 的 bookingsProcedure 不一致（F-002）、isTeamAdminOrOwner 用 && 串接使 team ADMIN 被排除（F-003）、booking.status 與 eventType.disableGuests 只在 UI 擋、endpoint 沒擋（F-004）、uniqueGuests 沒有排除輸入自己的重複（F-005）。這幾條的共同形狀是：檢查存在，但範圍比作者以為的窄或寬。\n\n值得單獨提的是 F-006：packages/ui/form/MultiEmail.tsx 是 form-builder 那份 multiemail factory 的逐字複製，而原處的 `//TODO: Make it a ui component` 還留著。抽取做了一半，比完全不抽更糟——這件事屬於產品/技術債的取捨，已記在 intent_check.right_mr。\n\n最後要說清楚本次審查的覆蓋範圍：checkout 沒有 node_modules 也沒有網路，tsc、eslint、vitest、playwright 一律沒有執行；trivy、opengrep、ty、oxlint、codegraph 都不在這台機器上；唯一有安裝的 ruff 掃到 0 個 .py 檔（repo 內根本沒有 Python）。也就是說整份 TypeScript 改動沒有經過任何自動化檢查，以下每一條結論都只來自閱讀原始碼，沒有一條被編譯器或測試證實過。\n\n流程上還缺兩個環節，一併說明：這個環境沒有任何可派送 subagent 的工具，所以 Phase 3 的 ncr-fresh-eyes（無框架初讀）與 Phase 4 的 ncr-quality-check（獨立品質複核）都沒有執行，也沒有由主 agent 自行代打。前者的缺席意味著「九個維度的清單沒有寫到的問題」可能整類漏掉；後者的缺席意味著這份報告的嚴重度校準沒有被第二雙眼睛檢查過。兩者都記在掃描執行狀況裡。"
+}

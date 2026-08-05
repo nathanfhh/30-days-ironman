@@ -1,0 +1,7 @@
+[
+  "FallbackLocaleList class inherits from Hash but only implements [] and ensure_loaded!, meaning other Hash methods could return unexpected results if called by the i18n framework internally",
+  "ensure_loaded! call happens on every request, which has performance implications",
+  "Use of send(:include) to monkey-patch backend classes is fragile across gem upgrades",
+  "No test files are included in the diff for the new i18n fallback system",
+  "The translate_accelerator.rb freedom patch has its own locale loading logic, and the new ensure_loaded! method adds another entry point that should be verified for race conditions or double-loading issues"
+]

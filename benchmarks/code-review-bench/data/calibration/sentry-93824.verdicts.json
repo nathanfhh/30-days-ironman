@@ -1,0 +1,257 @@
+{
+  "slug": "sentry-93824",
+  "verdicts": [
+    {
+      "claim_id": "c001",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "docstring-missing-max-processes-param",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:30-41",
+      "reason": "The class docstring's :param block lists only `topic` (which is not even a parameter) and `produce_to_pipe`; the newly added `max_processes` argument at line 47 is not documented there."
+    },
+    {
+      "claim_id": "c002",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "dead-create-process-for-shard",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:127-132",
+      "reason": "A repo-wide grep for `_create_process_for_shard\\b` returns only its definition; `_ensure_processes_alive` (line 259) calls `_create_process_for_shards(process_index, shards)` directly, so the singular method is an uncalled leftover."
+    },
+    {
+      "claim_id": "c003",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "flusher-unhealthy-metric-per-shard",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:241-245",
+      "reason": "Pre-PR the diff shows a single `metrics.incr(\"spans.buffer.flusher_unhealthy\", tags={\"cause\": cause})` per unhealthy detection; the new code loops `for shard in shards` and increments once per shard, so the counter is multiplied by the number of shards the process owns and gains a new `shard` dimension."
+    },
+    {
+      "claim_id": "c004",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "dead-create-process-for-shard",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:127-132",
+      "reason": "Same verified fact as c002: the method exists at lines 127-132, has no callers anywhere in the checkout, and only delegates to `_create_process_for_shards`."
+    },
+    {
+      "claim_id": "c005",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "join-deadline-break-skips-terminate",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:337-347",
+      "reason": "In `join`, once `remaining_time <= 0` the loop `break`s, so every process after the current index never reaches the `terminate()` call at line 347 — exactly the scenario (a slow shutdown) where termination matters most."
+    },
+    {
+      "claim_id": "c006",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "max-flush-segments-per-process",
+      "evidence": "src/sentry/spans/buffer.py:382-390",
+      "reason": "`max_segments_per_shard = ceil(max_flush_segments / len(assigned_shards))` is computed per SpansBuffer; with N flusher processes each buffer now sees S/N shards, so each process's aggregate cap stays ~max_flush_segments and the system-wide cap becomes ~N x max_flush_segments instead of one global value."
+    },
+    {
+      "claim_id": "c007",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "docstring-one-process-per-shard",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:32; src/sentry/consumers/__init__.py:432-438",
+      "reason": "The docstring asserts \"Creates one process per shard\", but the only production caller is the process-spans consumer whose `--flusher-processes` option has `default=1`, which flows to `max_processes=1` and yields a single process handling all shards."
+    },
+    {
+      "claim_id": "c008",
+      "verdict": "unclear",
+      "confidence": 0.55,
+      "severity": null,
+      "cluster": "resource-scaling-capacity",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:93,155-158",
+      "reason": "The mechanical half is confirmed — each process builds its own `SpansBuffer` (own Redis client) and its own `KafkaProducer` — but whether the Kafka/Redis clusters have headroom and what N is planned needs the production capacity config and a rollout decision that are not in this repo."
+    },
+    {
+      "claim_id": "c009",
+      "verdict": "real",
+      "confidence": 0.95,
+      "severity": "Low",
+      "cluster": "dead-create-process-for-shard",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:127",
+      "reason": "Confirmed by grep across the checkout: `_create_process_for_shard` (singular) appears exactly once, at its definition on line 127."
+    },
+    {
+      "claim_id": "c010",
+      "verdict": "real",
+      "confidence": 0.6,
+      "severity": "Low",
+      "cluster": "buffer-arg-only-needs-shards",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:51,60,64; src/sentry/spans/buffer.py:153-163",
+      "reason": "The core assertion holds: `self.buffer` was removed and the constructor now reads only `buffer.assigned_shards` (three times) before building N fresh SpansBuffers, so `list[int]` would suffice. The trailing sub-claim is wrong though — `SpansBuffer.client` is a `cached_property` so construction opens no connection, and the passed-in buffer is separately used by `process_batch` in the parent (factory.py:80,90)."
+    },
+    {
+      "claim_id": "c011",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Medium",
+      "cluster": "default-divergence-cli-vs-class",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:51; src/sentry/consumers/__init__.py:434",
+      "reason": "`max_processes or len(buffer.assigned_shards)` makes the in-code default one process per shard, while the CLI option defaults to 1; any caller constructing SpanFlusher directly (e.g. tests/sentry/spans/consumers/process/test_flusher.py:29) gets the per-shard behaviour implicitly."
+    },
+    {
+      "claim_id": "c012",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "High",
+      "cluster": "isinstance-spawnprocess-kill",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:53,254-255",
+      "reason": "Verified on CPython 3.11: `multiprocessing.get_context('spawn').Process(...)` is a `multiprocessing.context.SpawnProcess` whose MRO is (SpawnProcess, BaseProcess, object), so `isinstance(p, multiprocessing.Process)` is False. The guard makes `process.kill()` unreachable, and a replacement is spawned for the same shards while the hung one keeps running."
+    },
+    {
+      "claim_id": "c013",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "test-only-asserts-bookkeeping",
+      "evidence": "tests/sentry/spans/consumers/process/test_consumer.py:113-123",
+      "reason": "The new test asserts only `len(flusher.processes)`, `max_processes`, `num_processes` and the shard-map total — all direct restatements of the constructor arithmetic — and never inspects `messages`, so multi-process flush correctness is untested. The parenthetical that `_ensure_processes_alive` is untouched is slightly overstated (test_basic's `step.submit` reaches it), but its restart/kill branch has no coverage."
+    },
+    {
+      "claim_id": "c014",
+      "verdict": "unclear",
+      "confidence": 0.5,
+      "severity": null,
+      "cluster": "test-ci-stability",
+      "evidence": "tests/sentry/spans/consumers/process/test_consumer.py:12,15,84,88",
+      "reason": "The cited facts check out (both tests now use `django_db(transaction=True)`, run the flusher as real threads via `produce_to_pipe`, need Redis, and the monkeypatched `time.sleep` turns the flusher's `time.sleep(1)` into a busy loop — though that busy loop predates this PR). Whether they are actually flaky needs repeated CI runs against the real Postgres/Redis setup."
+    },
+    {
+      "claim_id": "c015",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "claudemd-trailing-blank-line",
+      "evidence": "CLAUDE.md:458-459",
+      "reason": "`cat -A` on the region shows an empty line immediately before the closing ``` fence; the diff's pre-image had the fence directly after `organizations.prefetch_related('projects')`."
+    },
+    {
+      "claim_id": "c016",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "High",
+      "cluster": "isinstance-spawnprocess-kill",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:253-259",
+      "reason": "The diff shows the pre-PR code calling `self.process.kill()` unconditionally; the new code wraps it in `isinstance(process, multiprocessing.Process)`, which is always False for spawn-context processes, so the kill is now a no-op in production — a genuine behavioural regression."
+    },
+    {
+      "claim_id": "c017",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Medium",
+      "cluster": "test-sleep-noop",
+      "evidence": "tests/sentry/spans/consumers/process/test_consumer.py:1,15,62",
+      "reason": "The test does `import time` and calls `time.sleep(0.1)` at line 62, after `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 replaced the attribute on the module object — so the added wait does nothing. (test_flusher.py avoids this by using `from time import sleep`.)"
+    },
+    {
+      "claim_id": "c018",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "dead-create-process-for-shard",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:86,127",
+      "reason": "`_create_process_for_shards` and `_create_process_for_shard` differ by a single trailing 's' and sit 40 lines apart; the same fix (deleting the dead singular one) resolves this."
+    },
+    {
+      "claim_id": "c019",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "flusher-processes-no-lower-bound",
+      "evidence": "src/sentry/consumers/__init__.py:432-438; src/sentry/spans/consumers/process/flusher.py:51-66",
+      "reason": "The click.Option uses bare `type=int` with no IntRange. I reproduced the constructor arithmetic: max_processes=-1 gives num_processes=-1, `range(-1)` yields an empty process_to_shards_map, and `i % -1 == 0` then raises KeyError: 0 at startup."
+    },
+    {
+      "claim_id": "c020",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "claudemd-unrelated-change",
+      "evidence": "CLAUDE.md:449-457",
+      "reason": "The hasattr/isinstance guidance is a general Python convention with no connection to the span flusher multiprocessing work that constitutes the rest of the diff."
+    },
+    {
+      "claim_id": "c021",
+      "verdict": "real",
+      "confidence": 0.8,
+      "severity": "Low",
+      "cluster": "redundant-cluster-memory-query",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:299-304; src/sentry/spans/buffer.py:375-376; src/sentry/processing/backpressure/memory.py:80-103",
+      "reason": "`get_memory_info` calls `iter_cluster_memory_usage(self.client)`, which issues a cluster-wide INFO independent of assigned shards, so looping over N buffers repeats the identical query N times. The claim's own caveats are also right: used and available scale together so the ratio is unchanged, and the default `spans.buffer.max-memory-percentage` is 1.0 (options/defaults.py:2725-2729), so the block is normally skipped."
+    },
+    {
+      "claim_id": "c022",
+      "verdict": "not_real",
+      "confidence": 0.55,
+      "severity": null,
+      "cluster": "default-divergence-cli-vs-class",
+      "evidence": "src/sentry/consumers/__init__.py:434; src/sentry/spans/consumers/process/flusher.py:51",
+      "reason": "There is no pre-existing SpanFlusher default to fall back to — `max_processes or len(buffer.assigned_shards)` is introduced by this same diff, and pre-PR the flusher always ran exactly one process. `default=1` therefore preserves current production behaviour rather than 'forcing it back'; adopting the suggestion would silently multiply flusher processes on deploy."
+    },
+    {
+      "claim_id": "c023",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "metric-tag-shard-vs-shards",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:185,195,199",
+      "reason": "Lines 185 and 195 tag the same `shard_tag` value as `\"shard\"` while line 199 tags it as `\"shards\"`, so the wait_produce timer is keyed differently from the other two."
+    },
+    {
+      "claim_id": "c024",
+      "verdict": "real",
+      "confidence": 0.9,
+      "severity": "Low",
+      "cluster": "dead-process-truthiness-guard",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:68,124,222-223",
+      "reason": "`self.processes` is only ever assigned a started SpawnProcess or Thread at line 124, and I confirmed `bool()` is True for both (neither BaseProcess nor Thread defines __bool__/__len__), so `if not process: continue` can never fire."
+    },
+    {
+      "claim_id": "c025",
+      "verdict": "real",
+      "confidence": 0.7,
+      "severity": "Low",
+      "cluster": "test-sleep-noop",
+      "evidence": "tests/sentry/spans/consumers/process/test_consumer.py:61-62",
+      "reason": "A bare `time.sleep(0.1)` as the synchronisation point between the drift bump and `step.join()` is a timing-based wait; waiting on a condition (e.g. polling `messages`) is the correct fix, and it is the same fix that resolves the no-op problem in c017."
+    },
+    {
+      "claim_id": "c026",
+      "verdict": "real",
+      "confidence": 0.75,
+      "severity": "Medium",
+      "cluster": "shard-tag-cardinality",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:144,192-196",
+      "reason": "`shard_tag = \",\".join(map(str, shards))` is the comma-joined shard set of the process, and it is attached to `spans.buffer.segment_size_bytes`, which fires once per produced segment. The set of distinct values depends on the partition assignment and the `--flusher-processes` value, so it changes on every rebalance."
+    },
+    {
+      "claim_id": "c027",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Medium",
+      "cluster": "flusher-processes-no-lower-bound",
+      "evidence": "src/sentry/consumers/__init__.py:432-438; src/sentry/spans/consumers/process/flusher.py:51",
+      "reason": "Both branches reproduced against the constructor logic: 0 is falsy so `max_processes or len(...)` yields one process per shard, and -1 produces an empty process map followed by KeyError: 0. The option is declared with plain `type=int`, no IntRange."
+    },
+    {
+      "claim_id": "c028",
+      "verdict": "real",
+      "confidence": 0.85,
+      "severity": "Low",
+      "cluster": "dead-create-process-for-shard",
+      "evidence": "src/sentry/spans/consumers/process/flusher.py:127-132",
+      "reason": "Dead-code half confirmed by grep. The naming half is also right: the body looks up the owning process and restarts it wholesale via `_create_process_for_shards`, so it would disrupt every other shard mapped to that process, not just the one named."
+    }
+  ]
+}

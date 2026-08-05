@@ -1,0 +1,4 @@
+[
+  "TestLogger.FromContext returns a new disconnected TestLogger via NewTestLogger() instead of returning the receiver (f), causing any test using TestLogger to assert on LoggerMiddleware logging behavior to see zero calls since logs go to a throwaway instance - fix by changing 'return NewTestLogger()' to 'return f' on line 47",
+  "Test function on line 21 is still named TestInstrumentationMiddleware but the struct was renamed to MetricsMiddleware - should be TestMetricsMiddleware for consistency with the rest of the rename"
+]

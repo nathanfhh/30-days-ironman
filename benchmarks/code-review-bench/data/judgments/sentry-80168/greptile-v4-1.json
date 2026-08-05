@@ -1,0 +1,20 @@
+{
+  "slug": "sentry-80168",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both say MetricAlertDetectorHandler fails to implement the required abstract methods, making it uninstantiable / raising TypeError."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.85,
+      "reasoning": "Both flag the docstring still describing a list return type when the method now returns a dict."
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+[
+  "`externalId` is never forwarded to the provider create call, so multi-host creates still target the first destination calendar instead of each host's calendar",
+  "`mainHostDestinationCalendar` will be `undefined` when `evt.destinationCalendar` is `null` or an empty array (the `?? []` fallback produces `[]`, and destructuring yields `undefined`). Accessing `.integration` on it throws a `TypeError`. Add a guard before dereferencing",
+  "The fallback compares every calendar ID to `externalCalendarId`, so when that argument is missing updates stop targeting the event's destination calendar"
+]

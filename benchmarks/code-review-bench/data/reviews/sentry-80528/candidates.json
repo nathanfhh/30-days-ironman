@@ -1,0 +1,51 @@
+{
+  "slug": "sentry-80528",
+  "issues": [
+    {
+      "text": "Both new modules (incidents.py and incident_occurrence.py) each create a `logger = logging.getLogger(__name__)` that is never actually used anywhere in the file — a leftover from mark_failed.py, where the same unused logger already existed before the split.",
+      "zh": "兩個新模組各建了一個從未使用的 logger",
+      "finding_id": "F-001",
+      "severity": "Nit"
+    },
+    {
+      "text": "get_monitor_environment_context computes a copy of monitor.config with schedule_type converted to a human-readable display string, but the returned dict's \"config\" key uses the original monitor_environment.monitor.config instead of the computed copy, so the readable-string conversion has no effect and the raw integer schedule_type is what actually gets sent (confirmed by an existing test that asserts the raw integer value).",
+      "zh": "get_monitor_environment_context 算好的 config 副本被丟棄，送出去的仍是原始 config",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "After splitting the logic into three modules (mark_failed.py, incidents.py, incident_occurrence.py), the tests for all of them remain in a single test_mark_failed.py with no corresponding test_incidents.py or test_incident_occurrence.py, so the test file and its filename no longer match what it actually covers.",
+      "zh": "程式碼拆成三個模組，測試整批留在 test_mark_failed.py",
+      "finding_id": "F-003",
+      "severity": "Nit"
+    },
+    {
+      "text": "get_failure_reason's docstring contains typos: \"humam readible\" instead of \"human readable\".",
+      "zh": "第 132 行寫的是「Builds a humam readible string」，humam / readible 兩個字都拼錯",
+      "finding_id": "F-004",
+      "severity": "Nit"
+    },
+    {
+      "text": "get_failure_reason's docstring example output (\"A failed check-in was detected\") doesn't correspond to any actual output the function can produce, since SINGULAR_HUMAN_FAILURE_MAP only has error/missed/timeout entries and no \"failed\" case.",
+      "zh": "第 136 行的範例輸出「A failed check-in was detected」在程式裡不存在：單筆的字串來自 SINGULAR_HUMAN_FAILURE_MAP，只有 error / missed / timeout 三種，沒有 failed 這一種",
+      "finding_id": "F-004",
+      "severity": "Nit"
+    },
+    {
+      "text": "try_incident_threshold and create_incident_occurrence have no docstrings, and their names don't reveal that they have significant side effects (writing MonitorEnvironment.status, creating a MonitorIncident, emitting issue occurrences to Kafka, firing a signal) — a description that existed for this behavior in the old mark_failed.py docstring wasn't carried over to the new modules.",
+      "zh": "try_incident_threshold / create_incident_occurrence 沒有 docstring，函式名也沒有透露副作用",
+      "finding_id": "F-005",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Outside this repo, is there any code that still imports the old symbol paths mark_failed_threshold, create_issue_platform_occurrence, or SimpleCheckIn (e.g. from getsentry or other private dependents)?",
+      "zh": "sentry 這個 repo 之外，是否還有程式碼從舊路徑 import mark_failed_threshold / create_issue_platform_occurrence / SimpleCheckIn？"
+    },
+    {
+      "text": "Does the test suite in tests/sentry/monitors/logic/test_mark_failed.py actually pass end-to-end after this move, given the reviewer's environment lacked the postgres/kafka/redis services needed to run it?",
+      "zh": "tests/sentry/monitors/logic/test_mark_failed.py 這一批測試在這次搬移後實際跑起來是全綠的嗎？"
+    }
+  ]
+}

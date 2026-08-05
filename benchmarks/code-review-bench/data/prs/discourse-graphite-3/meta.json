@@ -1,0 +1,17 @@
+{
+  "slug": "discourse-graphite-3",
+  "source_repo": "discourse-graphite",
+  "language": "Ruby",
+  "golden_url": "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/3",
+  "pr_title": "Add comprehensive email validation for blocked users",
+  "original_url": "https://github.com/discourse/discourse/commit/5f8a130277dbddc95d133cd2832be639baf89213",
+  "fork_repo": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR3__20260122.git",
+  "pr_number": 1,
+  "golden_count": 2,
+  "repo_url": "https://github.com/code-review-benchmark/discourse__discourse-graphite__augment__PR3__20260122.git",
+  "base_sha": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "head_sha": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "stat": " .../controllers/create_account_controller.js       | 14 ++++++-\n app/controllers/users_controller.rb                |  4 +-\n app/models/blocked_email.rb                        | 25 +++++++++++\n app/models/user.rb                                 | 23 +----------\n config/locales/server.en.yml                       |  1 +\n db/migrate/20130724201552_create_blocked_emails.rb | 12 ++++++\n lib/validators/email_validator.rb                  | 24 +++++++++++\n spec/components/validators/email_validator_spec.rb | 23 +++++++++++\n spec/fabricators/blocked_email_fabricator.rb       |  4 ++\n spec/models/blocked_email_spec.rb                  | 48 ++++++++++++++++++++++\n 10 files changed, 155 insertions(+), 23 deletions(-)\n",
+  "name_status": "M\tapp/assets/javascripts/discourse/controllers/create_account_controller.js\nM\tapp/controllers/users_controller.rb\nA\tapp/models/blocked_email.rb\nM\tapp/models/user.rb\nM\tconfig/locales/server.en.yml\nA\tdb/migrate/20130724201552_create_blocked_emails.rb\nA\tlib/validators/email_validator.rb\nA\tspec/components/validators/email_validator_spec.rb\nA\tspec/fabricators/blocked_email_fabricator.rb\nA\tspec/models/blocked_email_spec.rb\n",
+  "commits": "5f8a130 Add BlockedEmail, to block signups based on email. Track stats of how many times each email address is blocked, and last time it was blocked. Move email validation out of User model and into EmailValidator. Signup form remembers which email addresses have failed and shows validation error on email field.\n"
+}

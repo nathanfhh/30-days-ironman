@@ -1,0 +1,4 @@
+[
+  "A failed fetch unconditionally overwrites the cache with nil (entryPointAssetsCache = result on line 73). If the asset read fails, result is nil and this stomps a previously valid cache entry. Guard the assignment so that a nil result does not overwrite an existing good value.",
+  "Incomplete double-checked locking: after acquiring the write lock, the code should re-check entryPointAssetsCache before proceeding to fetch. Between RUnlock() and Lock(), another goroutine could have already populated the cache, causing redundant (and potentially expensive) asset fetches."
+]

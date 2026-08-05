@@ -1,0 +1,135 @@
+{
+  "slug": "cal_com-14740",
+  "issues": [
+    {
+      "text": "The BLACKLISTED_GUEST_EMAILS check lowercases only the blacklist side and never calls extractBaseEmail, unlike the other three usages in the repo, so a blocked address passes as Blocked@Example.com or blocked+x@example.com and the anti-abuse control silently does nothing on this path.",
+      "zh": "BLACKLISTED_GUEST_EMAILS 比對只正規化單邊，這條路徑上的黑名單可被大小寫或 plus-address 直接繞過",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "The guests array has no length limit (z.array(z.string().email()) with no .max()), so a single authenticated request can make the system send mail from the organizer's address to an arbitrary number of recipients.",
+      "zh": "guests 陣列也沒有長度上限",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "addGuests uses authedProcedure plus hand-written checks instead of the router's existing bookingsProcedure, and the isAttendee branch widens authorization to any logged-in user whose email appears on the booking, letting an attendee permanently modify the organizer's booking, update their calendar event and send mail in their name.",
+      "zh": "addGuests 用 authedProcedure 加手寫檢查，讓任何 attendee 都能改動別人的 booking；同檔案的 editLocation 走的是 bookingsProcedure",
+      "finding_id": "F-002",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "isTeamAdminOrOwner is computed as isTeamAdmin(...) && isTeamOwner(...), and since isTeamAdmin already covers ADMIN and OWNER the intersection is OWNER only, so team ADMINs are excluded despite what the name promises.",
+      "zh": "isTeamAdminOrOwner 用 && 串接，實際語意是「只有 OWNER」，team ADMIN 被排除在外",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "`booking.eventType?.teamId ?? 0` is written twice and uses 0 as a sentinel team id to query membership; short-circuiting on a missing teamId would be clearer and would save a database query.",
+      "zh": "另外 :47-48 兩次都寫 `booking.eventType?.teamId ?? 0`：用 0 當哨兵值不如直接短路。",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The handler never checks booking.status, so guests can be added to a CANCELLED or REJECTED booking, which then sends those recipients a 'guests added' notification with a CONFIRMED, METHOD:REQUEST ICS for a meeting that no longer exists.",
+      "zh": "handler 沒有檢查 booking.status",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The handler never checks eventType.disableGuests, so guests can still be added to an event type where the organizer explicitly disabled guests (and the menu item is not hidden for such event types either).",
+      "zh": "handler 沒有檢查 eventType.disableGuests，前置條件比呼叫它的 UI 還寬",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "uniqueGuests only filters out existing attendees and blacklisted addresses, not duplicates within the input array itself; the dedupe refine exists only in the frontend schema, so calling the tRPC mutation directly creates two Attendee rows for the same email and sends that address two emails.",
+      "zh": "uniqueGuests 沒有排除輸入陣列自己的重複",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The findFirst read and the createMany write are not in a transaction and Attendee has no @@unique([bookingId, email]), so two concurrent requests adding the same address both pass the in-memory check and each insert a row.",
+      "zh": "read-modify-write 之間沒有交易或唯一約束",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "packages/ui/form/MultiEmail.tsx is a near-verbatim copy of the form-builder multiemail factory (down to the inputClassName string) but the original was not switched over and its '//TODO: Make it a ui component' comment remains, leaving two copies that will drift apart.",
+      "zh": "MultiEmail 是 form-builder multiemail factory 的逐字複製，抽出來了卻沒有取代原處，變成兩份會各自漂移的副本",
+      "finding_id": "F-006",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "sendAddGuestsEmails is called with the raw input array instead of the filtered uniqueGuests, so an address that is already an attendee still counts as a 'new guest' and receives an AttendeeScheduledEmail announcing a booking confirmation even though nothing changed for them.",
+      "zh": "sendAddGuestsEmails 的參數叫 newGuests，呼叫端傳的卻是未過濾的原始輸入，導致既有 attendee 可能收到「新預約成立」的信",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The catch around the email send discards the error (console.log(\"Error sending AddGuestsEmails\") without err), so failures leave no diagnostic detail.",
+      "zh": ":169-171 的 `catch (err) { console.log(\"Error sending AddGuestsEmails\"); }` 把 `err` 丟掉了",
+      "finding_id": "F-007",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "isInvalidEmail is only reset by the Cancel button; after a successful submit or when the dialog is closed via the X, Esc or the overlay, the red validation error persists into the next time the dialog is opened (the component never unmounts).",
+      "zh": "AddGuestsDialog 的 isInvalidEmail 只在按 Cancel 時重設，成功送出與從右上角關閉都會把紅色錯誤留到下次開啟",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "multiEmailValue is likewise not reset when the dialog is dismissed with the X, so half-typed email addresses survive into the next opening.",
+      "zh": "同一條路徑上 `multiEmailValue` 在 X 關閉時也不會重設，所以打到一半的 email 會殘留到下一次開啟。",
+      "finding_id": "F-008",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The MR adds a four-branch authorization decision, dedupe logic, a shared UI component and two email templates with no tests at all, even though three data-testid hooks (add_members, add-another-email, add-emails) were already added with no test using them and apps/web/playwright/bookings-list.e2e.ts is an available landing spot.",
+      "zh": "整個 MR 沒有任何測試，但已經先鋪好了三個 data-testid",
+      "finding_id": "F-009",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "The dialog declares a local ZAddGuestsInputSchema that collides by name with the server-side export while having a different shape (an email array vs. an object with bookingId and guests).",
+      "zh": "AddGuestsDialog 內宣告的 ZAddGuestsInputSchema 與 server 端同名 export 撞名但語意不同",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "That schema is declared inside the component body, so a new zod schema is rebuilt on every render even though it depends on no props or state.",
+      "zh": "且每次 render 重建",
+      "finding_id": "F-010",
+      "severity": "Nit"
+    },
+    {
+      "text": "MultiEmail imports Button, EmailField, Icon and Tooltip from \"@calcom/ui\" — its own package barrel, which also exports MultiEmail — creating a cycle that only survives because MultiEmailLazy defers it via next/dynamic; the sibling AddressInput uses relative imports.",
+      "zh": "packages/ui 內的元件反過來 import 自己套件的 barrel，同目錄的 AddressInput 用的是相對路徑",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "MultiEmailLazy copies PhoneInputLazy's comment '/** These are like 40kb that not every user needs */', which is simply false here: this component is under 100 lines with no third-party dependency.",
+      "zh": "MultiEmailLazy.tsx:3 把 PhoneInputLazy 的註解一起抄過來了，但這個元件不到 100 行、沒有任何第三方相依，這句註解在這裡是錯的資訊。",
+      "finding_id": "F-011",
+      "severity": "Nit"
+    },
+    {
+      "text": "MultiEmail renders the editable input list with key={index} while removal uses splice, so deleting a middle row makes React reuse DOM nodes and the caret, IME composition state and focus jump to the wrong row.",
+      "zh": "MultiEmail 對可編輯的 input 清單用 key={index}，搭配 splice 移除會讓 DOM 狀態錯位",
+      "finding_id": "F-012",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "For seats events, adding an Attendee row directly without a corresponding BookingSeat may break individual seat cancellation (cancelAttendeeSeat relies on bookingSeat) or the seatsShowAttendees view — should seats events be excluded from this feature?",
+      "zh": "對 seats event（eventType.seatsPerTimeSlot 不為 null）直接新增 Attendee 而不建立對應的 BookingSeat，會不會破壞取消座位或 seatsShowAttendees 的流程？"
+    },
+    {
+      "text": "Newly added guests are never written back to booking.responses.guests; would a later reschedule or edit of the booking drop them?",
+      "zh": "新加入的 guest 沒有被寫回 booking.responses.guests，事後 reschedule 或編輯這筆 booking 時會不會把他們洗掉？"
+    }
+  ]
+}

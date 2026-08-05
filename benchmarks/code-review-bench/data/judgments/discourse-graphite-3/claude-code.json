@@ -1,0 +1,14 @@
+{
+  "slug": "discourse-graphite-3",
+  "tool": "claude-code",
+  "n_golden": 2,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 1,
+      "confidence": 0.85,
+      "reasoning": "Both flag should_block? doing a DB write (match_count/last_match_at) from inside a validation/read path."
+    }
+  ]
+}

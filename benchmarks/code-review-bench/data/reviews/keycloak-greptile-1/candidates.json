@@ -1,0 +1,81 @@
+{
+  "slug": "keycloak-greptile-1",
+  "issues": [
+    {
+      "text": "UsernameForm still calls isConditionalPasskeysEnabled() with no arguments after its no-arg overload was removed from UsernamePasswordForm, so the services module fails to compile.",
+      "zh": "UsernameForm 仍以無參數形式呼叫 isConditionalPasskeysEnabled()，services 模組無法編譯。",
+      "finding_id": "F-001",
+      "severity": "Critical"
+    },
+    {
+      "text": "The new user != null condition added to isConditionalPasskeysEnabled() inverts the intended fix's semantics: passkeys/conditional UI now only appear once a user is already identified, so they disappear entirely from the initial (unidentified) login page — the primary passwordless use case for passkeys — and the PR's own new tests would fail against this behavior.",
+      "zh": "isConditionalPasskeysEnabled 新增的 user != null 條件把判斷反轉，一般登入頁不再出現 passkeys。",
+      "finding_id": "F-002",
+      "severity": "Critical"
+    },
+    {
+      "text": "The test reauthenticationOfUserWithoutPasskey actually tests 'passkeys disabled for the realm', not 'user has no passkey' as its name and comment claim; the realm-enabled-but-user-has-no-passkey combination that this PR newly opens up is left untested.",
+      "zh": "reauthenticationOfUserWithoutPasskey 測的是 realm 關閉 passkeys，不是使用者沒有 passkey。",
+      "finding_id": "F-003",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Two test assertions use a try/findElement/fail()/catch(Exception) pattern to assert an element doesn't exist, which swallows any unrelated WebDriver exception as a false pass, instead of using the project's existing assertThrows(NoSuchElementException.class, ...) convention.",
+      "zh": "以 try / fail / catch (Exception) 判斷元素不存在，會吞掉非預期的例外。",
+      "finding_id": "F-004",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "Now that re-authentication knows exactly who the user is, the passkey conditional UI is still shown purely based on realm-level policy without checking whether that specific user actually has a passwordless WebAuthn credential, so a user without one gets a passkey button that is guaranteed to fail.",
+      "zh": "re-authentication 時已知使用者是誰，卻仍只用 realm 層級條件決定是否顯示 passkey 操作。",
+      "finding_id": "F-005",
+      "severity": "Suggestion"
+    },
+    {
+      "text": "PasskeysUsernamePasswordFormTest has an unused import of PasswordCredentialModel that is never referenced anywhere in the file.",
+      "zh": "PasskeysUsernamePasswordFormTest 新增了 import org.keycloak.models.credential.PasswordCredentialModel，但整個檔案沒有再出現這個型別。",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "PasskeysOrganizationAuthenticationTest is left with an orphaned unused import of NoSuchElementException after this PR removed the two assertThrows(NoSuchElementException...) call sites that used it.",
+      "zh": "PasskeysOrganizationAuthenticationTest 移除了兩處 Assert.assertThrows(NoSuchElementException.class, ...)，import org.openqa.selenium.NoSuchElementException 就此變成孤兒。",
+      "finding_id": "F-006",
+      "severity": "Nit"
+    },
+    {
+      "text": "The USER_SET_BEFORE_USERNAME_PASSWORD_AUTH auth note now has two separate places that independently read and interpret it — AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError duplicates logic already present in AbstractUsernameFormAuthenticator.isUserAlreadySetBeforeUsernamePasswordAuth — so a future change to how it's interpreted has to be made in two places.",
+      "zh": "同一個 auth note 出現兩份判讀實作。",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "To share the constant used above, it was widened from protected to public and the authenticators.util package now imports from authenticators.browser, which itself already imports from util, creating a bidirectional dependency between the two packages.",
+      "zh": "常數被從 protected 放寬成 public，並讓 authenticators.util 反過來 import authenticators.browser，兩個套件從此互相依賴。",
+      "finding_id": "F-007",
+      "severity": "Nit"
+    },
+    {
+      "text": "The new override method shouldShowWebAuthnAuthenticators is missing the @Override annotation, unlike its sibling overrides in the same file.",
+      "zh": "新增的覆寫方法 shouldShowWebAuthnAuthenticators 缺少 @Override。",
+      "finding_id": "F-008",
+      "severity": "Nit"
+    },
+    {
+      "text": "The new shouldShowWebAuthnAuthenticators extension point has an undocumented implicit precondition — any override returning true must guarantee context.getUser() is non-null, or WebAuthnAuthenticatorsBean's constructor will NPE — and the javadoc doesn't state this.",
+      "zh": "新的 shouldShowWebAuthnAuthenticators 擴充點有隱含前提，javadoc 沒有寫出來。",
+      "finding_id": "F-009",
+      "severity": "Nit"
+    }
+  ],
+  "open_questions": [
+    {
+      "text": "Whether WebAuthnConditionalUIAuthenticator is considered an extensible API outside this repository, since making shouldShowWebAuthnAuthenticators always return false changes fillContextForm's null-return behavior in a way external extenders might depend on.",
+      "zh": "WebAuthnConditionalUIAuthenticator 是否被視為 Keycloak 之外的擴充可以直接使用的 API？把 shouldShowWebAuthnAuthenticators 固定成 false 之後，這個行為變化會不會影響 repository 之外的使用者？"
+    },
+    {
+      "text": "Whether re-authentication triggers other than prompt=login (e.g. max_age, required actions, account console re-auth) also flow through the same UsernamePasswordForm.authenticate path with an already-set user, since only prompt=login is covered by the new tests.",
+      "zh": "prompt=login 之外的 re-authentication 觸發路徑（max_age、required action 觸發的重新認證、account console 的 re-auth）是否也走到同一段 UsernamePasswordForm.authenticate？"
+    }
+  ]
+}

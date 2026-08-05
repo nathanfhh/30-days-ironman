@@ -1,0 +1,26 @@
+{
+  "slug": "sentry-greptile-3",
+  "tool": "greptile-v4-1",
+  "n_golden": 3,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 0,
+      "confidence": 0.85,
+      "reasoning": "Both say Python's hash() is process-seed-dependent so cache keys built from it differ across worker processes."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 1,
+      "confidence": 0.8,
+      "reasoning": "Golden explicitly ties the same hash() non-determinism to invalidate_upsampling_cache failing to delete keys, which this candidate restates as invalidation being a no-op across workers."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 2,
+      "confidence": 0.85,
+      "reasoning": "Both say the eligibility check uses the outer/closure dataset instead of the actual scoped_dataset being queried, mis-applying or skipping upsampling."
+    }
+  ]
+}

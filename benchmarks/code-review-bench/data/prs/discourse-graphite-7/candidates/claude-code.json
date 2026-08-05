@@ -1,0 +1,6 @@
+[
+  "desktop/topic-post.scss: .topic-meta-data h5 a light-theme value changed from $primary 30% to 70% lightness, causing visual regression on light themes",
+  "mobile/modal.scss: .custom-message-length light-theme value changed from $primary 70% to 30% lightness, inconsistent with desktop equivalent which correctly keeps 70%",
+  "mobile/topic-post.scss: h3 light-theme value changed from $primary 20% to 50% lightness, while desktop keeps 20%",
+  "desktop/user.scss and mobile/user.scss: .group-member-info .name changed from $primary 30% to 50% lightness, altering light-theme appearance"
+]

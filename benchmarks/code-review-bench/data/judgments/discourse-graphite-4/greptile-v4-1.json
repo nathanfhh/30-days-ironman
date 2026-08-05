@@ -1,0 +1,20 @@
+{
+  "slug": "discourse-graphite-4",
+  "tool": "greptile-v4-1",
+  "n_golden": 6,
+  "n_candidates": 5,
+  "matches": [
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Same issue: origin check uses substring matching instead of exact comparison and can be bypassed."
+    },
+    {
+      "golden_index": 5,
+      "candidate_index": 1,
+      "confidence": 0.95,
+      "reasoning": "Same issue: `end if` in the ERB template is invalid Ruby and raises at render."
+    }
+  ]
+}

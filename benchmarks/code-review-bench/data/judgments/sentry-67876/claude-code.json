@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-67876",
+  "tool": "claude-code",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 0, "confidence": 0.95,
+     "reasoning": "Both identify that integration.metadata['sender']['login'] raises a KeyError for integrations where the sender key was not set during creation."}
+  ]
+}

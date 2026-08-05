@@ -1,0 +1,14 @@
+{
+  "slug": "grafana-80329",
+  "tool": "nathan-code-review",
+  "n_golden": 1,
+  "n_candidates": 11,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.9,
+      "reasoning": "Both flag that the cleanup path logs debugging information at Error level, polluting error logs."
+    }
+  ]
+}

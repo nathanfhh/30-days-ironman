@@ -1,0 +1,365 @@
+{
+  "meta": {
+    "skill_version": "2026.08.02.05",
+    "reviewed_at": "2026-08-03T10:20:00+00:00",
+    "round": 1,
+    "mode": "local_branch",
+    "target": "keycloak-37429 · refs/ncr/pr · 「Add a HTML sanitizer for translated message resources」（Closes #37428）",
+    "phi_trigger": {
+      "triggered": false,
+      "evidence": [],
+      "note": "本次變更是 Keycloak 的 theme 訊息資源與一個 build-time Maven plugin，資料路徑不觸及任何病人身分或臨床內容，PHI 不在範圍內。"
+    },
+    "process_directed_text": {
+      "detected": false,
+      "evidence": [],
+      "note": "已檢視 commit message、Java 註解、以及 diff 中新增的訊息字串與測試 fixture（含 misc/theme-verifier/src/test/resources/changedAnchor_de.properties 的 http://malicious.com，那是刻意的負向測試資料）。沒有任何文字是指向審查流程本身的。"
+    },
+    "blind_pass": false
+  },
+  "mr": null,
+  "intent_check": {
+    "should_do": {
+      "verdict": "ok",
+      "note": "在 build 階段擋下「翻譯檔偷渡英文原文沒有的 HTML」是有價值的第二道防線。執行期已有 kcSanitize（themes/src/main/resources/theme/base/login/error.ftl:4），但那擋不住一個惡意 PR 把 anchor 換成別的網址——santizeAnchors 正是針對這一點。"
+    },
+    "right_mr": {
+      "verdict": "doubt",
+      "note": "這個 MR 混了三件可以拆開的事：(1) 新的 theme-verifier 檢查本體；(2) 為了讓既有資料通過檢查而做的全庫正規化（19 個檔、76 行只是把 <br/> 改成 <br />）；(3) 與 HTML 安全完全無關的 error-invalid-multivalued-size 訊息格式變更（加上 {n,choice,...} 複數形，並把 {{n}} 改成 {n}）。F-001 這個 Critical 就出在第三件事上——它被埋在 1400 行的翻譯 diff 裡，任何 reviewer 都很難注意到。建議把 (3) 拆成獨立 MR。"
+    },
+    "right_timing": {
+      "verdict": "ok",
+      "note": "沒有看到時機上的疑慮；misc/theme-verifier 模組已存在（verifyNoDuplicateKeys），這是在既有機制上加一項檢查。"
+    }
+  },
+  "scans": [
+    {
+      "tool": "ruff",
+      "status": "ok",
+      "exit_code": 1,
+      "artifact": "",
+      "counts": {
+        "total": 6,
+        "attributed_to_diff": 0,
+        "pre_existing": 6
+      },
+      "skipped_reason": ""
+    },
+    {
+      "tool": "trivy",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "未安裝（preflight 確認）。因此本次沒有對新增的兩個相依套件（owasp-java-html-sanitizer 20240325.1、commons-text 1.13.0）做 CVE 掃描，也沒有做 secret 掃描。"
+    },
+    {
+      "tool": "opengrep",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "未安裝（preflight 確認），且沒有本地 semgrep-rules 目錄。SAST 未執行。"
+    },
+    {
+      "tool": "ty",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "未安裝（preflight 確認）；且本 diff 沒有 Python 檔案，即使安裝也無事可做。"
+    },
+    {
+      "tool": "oxlint",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "未安裝（preflight 確認）。本 diff 沒有 .js/.ts/.tsx 檔案被修改，但 F-001 的驗證有讀 js/ 底下的既有 TypeScript，那部分是人工閱讀而非 lint。"
+    },
+    {
+      "tool": "codegraph",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "未安裝（preflight 確認）。導覽全部改用 grep 與逐檔閱讀；『每個 key 都有對應的 _en 來源檔』這類完整性問題另外用一次性腳本窮舉 162 個 bundle 驗證。"
+    },
+    {
+      "tool": "maven (javac / surefire)",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "審查環境沒有 Maven 中央倉庫的網路存取，misc/theme-verifier 無法編譯，新增的四個 JUnit 測試也無法執行。這是本次覆蓋度最大的缺口：所有關於 Java 端行為的判斷（F-004、F-005）都是靜態閱讀推導，沒有實際執行過。見 Q-001。"
+    },
+    {
+      "tool": "Java 靜態分析（無可用工具）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本機只有 ruff（Python）與 git。沒有任何適用於 Java 的 linter / SAST（無 SpotBugs、PMD、Error Prone、semgrep java rules）。本 diff 的核心是一個新的 Java class，等於掃描階段對它的覆蓋率為零。"
+    },
+    {
+      "tool": "ncr-fresh-eyes（subagent）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "本次執行環境沒有可派工的 Agent/Task 工具，subagent 無法派出。依 SKILL.md Phase 3 的規定，不得在主 agent 內自行模擬 fresh eyes（此時已讀過 review-dimensions.md，框架已經套上去了），因此據實記為未執行。代價是：本報告全部的 finding 都是走 checklist 得到的，缺少一次未被框架塑形的閱讀。"
+    },
+    {
+      "tool": "ncr-quality-check（subagent）",
+      "status": "skipped",
+      "exit_code": null,
+      "artifact": "",
+      "counts": {},
+      "skipped_reason": "同上，無法派出 subagent。報告 JSON 只經過 report_model.py 的機械驗證（結論一致性、每個 finding 有 fix、每個 dimension 有 verdict），沒有經過獨立的品質複核。"
+    }
+  ],
+  "dimensions": {
+    "A": {
+      "verdict": "fail",
+      "note": "新 class 的常數宣告方式與同檔案內其他常數不一致，另有拼字與未使用參數；見 F-008、F-009。皆為 Nit。"
+    },
+    "B": {
+      "verdict": "pass",
+      "note": "沒有重複邏輯、沒有為不存在的需求造機器、沒有留下死程式碼或死 import。normalizeValue 的三個 key 特例雖然醜，但那是設計取捨問題，歸在 E。"
+    },
+    "C": {
+      "verdict": "pass",
+      "note": "這個變更是在加防禦而不是開洞。執行期的主要控制（kcSanitize + ?no_esc，themes/src/main/resources/theme/base/login/error.ftl:4）沒有被動到；新增的兩個相依套件只進 maven-plugin 專案（misc/theme-verifier/pom.xml，packaging=maven-plugin），不會被打包進 server runtime。注意 trivy 未安裝，所以這兩個套件本身的 CVE 狀態本次未經掃描。normalizeValue 的豁免規則會讓部分內容不受檢查，但那是新防線的覆蓋率缺口而非新的攻擊面，已寫在 F-006 與 Q-002。"
+    },
+    "D": {
+      "verdict": "na",
+      "note": "沒有動到任何 HTTP endpoint、URL、request/response schema 或驗證 schema。"
+    },
+    "E": {
+      "verdict": "fail",
+      "note": "檢查機制採用「sanitizer 輸出必須與原字串完全相等」，把 sanitizer 的排版慣例變成了整個 repo 的資料格式規範；見 F-006。"
+    },
+    "F": {
+      "verdict": "na",
+      "note": "沒有資料庫、ORM、migration 或任何共享狀態的讀寫；VerifyMessageProperties 只讀本機檔案，且是 build 期單次執行。"
+    },
+    "G": {
+      "verdict": "fail",
+      "note": "四個測試全部只斷言「會產生某則訊息」，沒有任何一個斷言「乾淨的檔案不會產生訊息」；同時 verifyDuplicateKeysDetected 從 Matchers.contains 放寬成 Matchers.hasItem。見 F-007。"
+    },
+    "H": {
+      "verdict": "fail",
+      "note": "本 diff 全部是非 Python 檔（.java / .xml / .properties）。翻譯資料出現語言錯置（F-002、F-003），新 Java 程式有一個會丟例外的邊界（F-004）與一處錯誤處理不一致（F-005）。"
+    },
+    "I": {
+      "verdict": "fail",
+      "note": "error-invalid-multivalued-size 是既有訊息、既有消費端。改成 MessageFormat 語法之後，account console / admin console 的 i18next 消費端不再相容；見 F-001。"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "dimension": "I",
+      "severity": "Critical",
+      "status": "new",
+      "title": "account / admin console 的 error-invalid-multivalued-size 改成 MessageFormat 語法，i18next 不會做代換，畫面會直接印出 {0} {1} {2} 與 choice 運算式",
+      "evidence": [
+        "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties:188",
+        "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138",
+        "js/apps/account-ui/src/i18n.ts:27",
+        "js/apps/admin-ui/src/i18n/i18n.ts:16",
+        "js/libs/ui-shared/src/user-profile/utils.ts:74"
+      ],
+      "rationale": "這兩個檔案是 React 版 account console（keycloak.v3）與 admin console（keycloak.v2）的訊息 bundle，由伺服器以原始 Properties 形式送出（services/src/main/java/org/keycloak/services/resources/account/AccountRestService.java:275 直接回 theme.getMessages(locale)，沒有經過 MessageFormat），再由前端 i18next 內插。i18next 的 interpolation 前後綴預設是 {{ 與 }}，而這兩份設定只覆寫了 escapeValue，沒有改 prefix/suffix。參數是在 js/libs/ui-shared/src/user-profile/utils.ts:74 由 Object.assign({}, e.params?.map(...)) 組出來的，key 是字串 \"0\" / \"1\" / \"2\"，正好對應 {{0}} {{1}} {{2}}。\n\n反證搜尋：(a) 同一個 messages_en.properties 裡還有 25 個 key 使用 {{0}}（含相鄰的 error-invalid-date:2991、error-user-attribute-required:3006），這些是已知能運作的，證明伺服器端沒有替 JS bundle 跑 MessageFormat；(b) 找過 admin-ui 與 account-ui 的 i18n 設定，都沒有自訂 interpolation.prefix/suffix；(c) 找過 services/ 底下對 admin 訊息做 MessageFormat.format 的地方（UserResource.java:240、ValidationResult.getAllLocalizedErrorsAsString），那是 password policy 與 client 驗證的路徑，user profile 的 multivalued 錯誤走的是 ErrorRepresentation → JSON → 前端 setUserProfileServerError。三條反證都不成立。\n\n實際結果：使用者會看到「Attribute {0} must have at least {1} and at most {2} {2,choice,0#values|1#value|1<values}.」原封不動印在欄位錯誤訊息上。此外 {2,choice,...} 是 java.text.MessageFormat 的語法，i18next 完全不認識，就算把大括號改回去也不會變成複數形。\n\n附帶一提，這段修改與本 MR 的主題（HTML sanitizer）沒有關係。原本的 {{0}} 從來不會被 sanitizer 判定為問題。",
+      "fix": "把這兩個 JS bundle 的 error-invalid-multivalued-size 還原成 i18next 語法，複數形交給 i18next 的 plural 機制而不是 MessageFormat：\n\n  # js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties\n  # js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties\n  error-invalid-multivalued-size=Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).\n\n{n,choice,...} 只保留在真正由 MessageFormat 算繪的 bundle，也就是 themes/src/main/resources/theme/base/admin/messages/messages_en.properties 與 themes/src/main/resources/theme/base/login/messages/messages_en.properties——那兩處在本 MR 中的改法是對的。如果確實想在 React console 也做複數形，那應該是另一個 MR，用 i18next 的 _one / _other 後綴 key，並且要同步 setUserProfileServerError 傳入 count。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-002",
+      "dimension": "H",
+      "severity": "Critical",
+      "status": "new",
+      "title": "立陶宛文檔案被填入義大利文：messages_lt.properties 的 totpStep1",
+      "evidence": [
+        "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101",
+        "themes/src/main/resources-community/theme/base/account/messages/messages_it.properties:138",
+        "themes/src/main/resources/theme/base/account/messages/messages_en.properties:150"
+      ],
+      "rationale": "這一行被改成 totpStep1=Installa una delle seguenti applicazioni sul tuo cellulare:，那是義大利文，不是立陶宛文。同檔案上下文（totpStep2 「Atidarykite programėlę...」、totpStep3）都還是立陶宛文，所以不是整檔語言標錯，是這一行單獨錯了。旁邊的 messages_it.properties:138 是 Installa una delle seguenti applicazioni sul tuo dispositivo mobile，用詞高度相似，看起來是從義大利檔複製時挑錯了來源。\n\n反證搜尋：檢查了本 MR 一起更新的另外三個語系（fi、sk、sv），內容都與各自語言相符，所以不是「這批全部照抄英文原文」的刻意設計；也確認英文來源 messages_en.properties:150 已經是 Install one of the following applications on your mobile:（不含 anchor），所以拿掉 FreeOTP 連結本身是對的，錯的只有替換進去的文字語言。",
+      "fix": "把該行換成立陶宛文，語意對齊英文來源，例如：\n\n  totpStep1=Įdiekite vieną iš šių programėlių savo mobiliajame telefone:\n\n（實際措辭建議請立陶宛語系的 community translator 確認。）另外建議在合併前把這五個檔的替換來源再對一次，避免同一種複製錯誤還藏在別處。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-003",
+      "dimension": "H",
+      "severity": "Critical",
+      "status": "new",
+      "title": "簡體中文檔案被填入繁體中文：messages_zh_CN.properties 的 totpStep1",
+      "evidence": [
+        "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112",
+        "themes/src/main/resources-community/theme/base/account/messages/messages_zh_TW.properties:150"
+      ],
+      "rationale": "新值是「在您的手機上安裝以下應用程式之一：」。「手機」「應用程式」是繁體字形與台灣用語，簡體中文應為「手机」「应用程序」。同檔案相鄰的行（totpStep2「打开应用扫描二维码输入验证码」、missingUsernameMessage「请指定用户名」）全是簡體，所以這一行在檔案內是孤立的。它也不等於既有的 messages_zh_TW.properties:150（「在您的手機中安裝下列程式 (擇一)」），因此不是單純複製 zh_TW，而是一次獨立的繁體翻譯落錯檔案。\n\n反證搜尋：確認過 Keycloak 沒有把 zh_CN 當作 zh_TW 的 fallback 或反之（兩者是各自獨立的 resources-community bundle），所以不存在「放繁體也會被正確覆寫」的路徑。",
+      "fix": "改成簡體中文，並與檔案其餘部分的用語一致：\n\n  totpStep1=在您的手机上安装以下应用程序之一：\n\n（同樣建議請 zh-CN community translator 複核措辭。）",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-004",
+      "dimension": "H",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "產生差異訊息的前後綴裁切會丟 StringIndexOutOfBoundsException，把一則可讀的驗證錯誤變成看不懂的 build 崩潰",
+      "evidence": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:103",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:107",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:111"
+      ],
+      "rationale": "start 迴圈與 end 迴圈各自獨立計數，兩邊都只用 min(value.length(), sanitized.length()) 當上界，沒有任何機制保證 start + end 不會超過其中一個字串的長度。一旦超過，第 111 行的 substring 的 begin 會大於 end，直接丟 StringIndexOutOfBoundsException。\n\n具體可重現的一組值：翻譯字串結尾是未閉合的 <b>（英文來源含 HTML，所以套用 POLICY_SOME_HTML）。OWASP sanitizer 會補上閉合標籤，於是 value=\"<b>\"、sanitized=\"<b></b>\"。start 迴圈把 '<','b','>' 三個字元都比對成功 → start=3；end 迴圈從尾端比 '>'、'b' 也成功、第三個字元 '<' vs '/' 不同而停 → end=2。接著執行 value.substring(3, 3-2) 也就是 substring(3, 1) → 例外。\n\n這條路徑只有在「已經有違規」時才會走到，所以 build 本來就會失敗；差別在於作者拿到的是 org.apache.maven.plugin.MojoFailureException: Validation errors: [Illegal HTML in key ...]（能直接看出哪個 key 哪個標籤），還是一個從 forEachRemaining lambda 裡冒出來的 StringIndexOutOfBoundsException（verify() 的 try 只 catch IOException，所以會一路穿出去變成 Maven internal error）。這個檢查的價值有一半在訊息品質上，所以值得修。",
+      "fix": "在算完 start 之後把 end 夾在合法範圍內，例如：\n\n  int maxEnd = Math.min(value.length(), sanitized.length()) - start;\n  int end = 0;\n  while (end < maxEnd\n          && value.charAt(value.length() - end - 1) == sanitized.charAt(sanitized.length() - end - 1)) {\n      end++;\n  }\n\n並補一個單元測試把上面那組值釘住（fixture：英文來源含 <b>text</b>，翻譯結尾是未閉合的 <b>），確認拿到的是 Illegal HTML 訊息而不是例外。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-005",
+      "dimension": "H",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "英文來源檔的路徑用字串取代硬推，推不到時丟裸 RuntimeException，與同檔案既有的錯誤處理慣例不一致",
+      "evidence": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:78",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:52",
+        "misc/theme-verifier/src/test/resources/duplicateKeys_en.properties:17"
+      ],
+      "rationale": "同一個 verify() 方法裡，讀檔失敗的既有慣例是包成 MojoExecutionException(\"Can not read file \" + file, e)（第 52-54 行），Maven 會印出乾淨的訊息。新增的 verifySafeHtml 則在第 70 行與第 78 行改丟 new RuntimeException(...)，Maven 會當成 plugin internal error，堆疊比訊息長。\n\n英文檔路徑是靠兩次 replaceAll 從被檢查檔的絕對路徑推出來的，推導規則沒有寫在任何地方，而且對「檔名不是 xxx_<locale>.properties 形狀」的輸入會推出不存在的路徑。這不是假想：本 MR 自己就把測試 fixture 從 duplicate_keys.properties 改名成 duplicateKeys_en.properties，正是因為舊檔名會被推成 duplicate_en.properties 而炸掉。\n\n反證搜尋：我窮舉了 themes 與 js 兩邊共六個 resource 目錄（themes/src/main/resources、themes/src/main/resources-community，以及 account-ui 與 admin-ui 各自的 maven-resources 與 maven-resources-community）下全部 162 個 messages_*.properties，套用同樣的推導規則，目前 0 個推不到英文檔。所以這在目前的 tree 上不會壞——它是「新增一個沒有英文對應的 locale 檔，或搬動目錄結構」時會壞，而且壞掉的樣子不會讓人聯想到原因。因此列 Suggestion 而不是 Critical。",
+      "fix": "兩件小事：\n\n1. 把兩處 RuntimeException 換成 MojoExecutionException，讓 verifySafeHtml() 宣告 throws MojoExecutionException（verify() 已經宣告了，呼叫端不用改）。\n2. 英文來源檔不存在時，明確處理而不是讓 FileInputStream 丟 FileNotFoundException：要嘛 messages.add(\"No English source bundle found for \" + file + \" (expected \" + englishFile + \")\")，要嘛用空 bundle 略過 HTML 檢查——但要在訊息裡講清楚是哪一種。順便把推導規則寫成一句註解（「同層 resources 目錄下的 _en 檔」），下一個人才不用逆推 regex。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-006",
+      "dimension": "E",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "以「sanitizer 輸出必須與原字串逐字相等」當判準，等於把 sanitizer 的排版慣例升格成全庫資料格式規範",
+      "evidence": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:95",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:97",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:117",
+        "themes/src/main/resources/theme/base/login/messages/messages_en.properties:487"
+      ],
+      "rationale": "判準是 !Objects.equals(sanitized, value)，也就是 sanitizer 的輸出格式化決定就是驗收標準。這個選擇的代價在本 MR 裡看得很清楚：\n\n1. <br/> 與 <br /> 在 HTML 上完全等價，但 sanitizer 只輸出後者，於是這個 MR 有 19 個檔案、76 行純粹是為了改這個空格。這不是一次性成本——之後每個寫 <br/> 的翻譯貢獻者都會被擋，而錯誤訊息會說 Illegal HTML，看起來像是安全問題。\n2. 為了繞開格式化差異，程式碼在第 95 行 unescapeHtml4、第 97 行拿掉 <!-- -->、第 117-127 行對三組 key 做特例。這些補丁彼此獨立而且只能靠踩到才發現。\n3. normalizeValue 的特例是用 key 名稱比對、且對所有語系無條件生效。第 124 行把 error-invalid-multivalued-size 與 linkExpirationFormatter.timePeriodUnit* 底下的 {n,choice,...} 整段換成 \"...\"，代表這些 key 的 choice 內容完全不經檢查。而 themes/src/main/resources/theme/base/email/messages/messages_en.properties:56 的註解明白鼓勵譯者「在需要複數形的語言可以自行改寫 choice」——今天全庫的 choice 恰好都落在這兩組 key（已窮舉確認），但下一個譯者在第三個 key 加複數形，build 就會以 Illegal HTML 的名義失敗，訊息指向錯誤的方向。\n\n（第 3 點的安全面：執行期還有 kcSanitize + ?no_esc 這道主要控制，所以 choice 內容不受檢查不等於現成的 XSS 洞；這裡談的是新防線的覆蓋率與可維護性。相關的未決問題見 Q-002。）",
+      "fix": "把比較從「字串相等」換成「語意相等」，讓工具吸收格式差異而不是要求資料遷就工具。最小的一步：兩邊都先過同一個正規化再比，也就是把 value 也丟進 POLICY_SOME_HTML 之外的一次 sanitize/re-serialize，或用 policy.sanitize(policy.sanitize(value)) 的不動點當基準，這樣 <br/> 與 <br /> 自然收斂成同一個值，19 個檔的資料變更就不必發生。\n\n進一步的作法是不比字串，改成比「標籤與屬性的集合」：抽出 value 與 englishValue 各自的 (tagName, attributes) 多重集合，判斷 value 的集合是否被 englishValue 的集合加上白名單所涵蓋。這樣 choice 特例、<!-- --> 特例、unescapeHtml4 特例都可以一起拿掉，錯誤訊息也能直接說「這裡出現了英文原文沒有的 <div>」而不是印兩段字串要人自己對。\n\n若決定維持現行作法，至少把 normalizeValue 的三個特例改成資料驅動（一張 key → 允許樣式的表，放在檔案頂端或外部設定），並在錯誤訊息裡區分「HTML 不合法」與「格式與正規化規則不符」這兩種完全不同的失敗。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-007",
+      "dimension": "G",
+      "severity": "Suggestion",
+      "status": "new",
+      "title": "四個測試全部只驗「會報錯」，沒有任何一個驗「乾淨的檔案不會報錯」",
+      "evidence": [
+        "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:31",
+        "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:36",
+        "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:42",
+        "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:48"
+      ],
+      "rationale": "新增的三個測試（verifyIllegalHtmlTagDetected、verifyNoHtmlAllowed、verifyNoChangedAnchors）加上既有的 verifyDuplicateKeysDetected，斷言都是 hasItem(containsString(...))，也就是「訊息清單裡至少有一則長這樣」。沒有任何一個測試斷言合法輸入會得到空清單。\n\n這個缺口對這支工具特別關鍵，因為它的失敗模式是 false positive：它要跑在 162 個既有 bundle 上，而這個 MR 本身就必須修改 19 個檔案才讓它們通過。誤判會直接擋住整條 build，卻沒有任何測試在守這一面。具體沒被覆蓋的正向情境包括：翻譯保留了與英文完全相同的 anchor（santizeAnchors 的成功分支）、翻譯含有 <b> 而英文來源也含 HTML、含 {n,choice,...} 的 key、含 &amp; 之類 HTML entity 的值。\n\n另外 verifyDuplicateKeysDetected 這次從 Matchers.contains 放寬成 Matchers.hasItem。contains 會要求清單「剛好只有這一則」，hasItem 不會。我讀了 duplicateKeys_en.properties，它的內容（key=value 重複兩次）不會觸發 HTML 檢查，所以放寬並非必要，代價是這個測試從此不會發現多出來的雜訊訊息。",
+      "fix": "補一個正向測試，並把放寬的斷言收回去：\n\n  @Test\n  void verifyCleanFileProducesNoMessages() throws MojoExecutionException {\n      MatcherAssert.assertThat(getFile(\"clean_de.properties\").verify(), Matchers.empty());\n  }\n\n對應的 fixture（clean_en.properties / clean_de.properties）建議一次涵蓋四種目前沒被守住的正向樣態：相同的 anchor、允許的 <b>/<p>/<br />、{0,choice,0#a|1#b} 複數形、HTML entity。\n\n另外把 verifyDuplicateKeysDetected 改回 Matchers.contains(...)，讓它繼續守住「只該有這一則」。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": true,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-008",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "POLICY_SOME_HTML / POLICY_NO_HTML / HTML_TAGS 用常數命名，實際上是 package-private 的可變 instance 欄位",
+      "evidence": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:63",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:139",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:145"
+      ],
+      "rationale": "三個欄位都是 UPPER_SNAKE 命名但沒有 static、沒有 final、也沒有 private，任何同 package 的程式碼都能改掉它們。同一個檔案第 145 行的 ANCHOR_PATTERN 就寫成 private static final Pattern，所以這是檔案內部的不一致而不是專案慣例。附帶的成本是 ThemeVerifierMojo 每個檔案都 new 一個 VerifyMessageProperties（ThemeVerifierMojo.java:51），於是 PolicyFactory 與 Pattern 會被重建 162 次。這是 build 期工具，效能無所謂，但重建本身是那個宣告方式的直接後果。",
+      "fix": "與 ANCHOR_PATTERN 對齊：\n\n  private static final PolicyFactory POLICY_SOME_HTML = new HtmlPolicyBuilder().allowElements(\"br\", \"p\", \"strong\", \"b\").toFactory();\n  private static final PolicyFactory POLICY_NO_HTML = new HtmlPolicyBuilder().toFactory();\n  private static final Pattern HTML_TAGS = Pattern.compile(\"<[a-z]+[^>]*>\");\n\n順手把第 58、63、95、130 行的 org.owasp.html.HtmlPolicyBuilder 與 org.apache.commons.text.StringEscapeUtils 全名改成 import，檔案頂端已經 import 了 org.owasp.html.PolicyFactory，混用兩種寫法讀起來會停頓。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": false,
+      "security": null,
+      "accepted_risk": ""
+    },
+    {
+      "id": "F-009",
+      "dimension": "A",
+      "severity": "Nit",
+      "status": "new",
+      "title": "santizeAnchors：方法名拼錯、參數 key 沒用到、第一個不符就 break 讓後面的 anchor 不再檢查",
+      "evidence": [
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:150",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:157",
+        "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:158"
+      ],
+      "rationale": "三件小事：(1) santizeAnchors 少了一個 i，應是 sanitizeAnchors；這個名字會被之後每一次 grep 錯過。(2) 參數 key 從頭到尾沒被使用——但它其實有用武之地，見下面的修法。(3) 第 158 行的 break 讓迴圈在第一個不符的 anchor 就停下，同一個值裡後面還有幾個被竄改的 anchor 就不會被列出來，作者得修一個跑一次 build 才知道還有下一個。\n\n另外第 157 行的訊息「Didn't find anchor tag <a href=\"...\"> in original string」沒有講是哪個檔案哪個 key，而同檔案第 111 行的 Illegal HTML 訊息是有帶 key 與 file 的。ThemeVerifierMojo.java:55 會把所有訊息串成一行丟出來，沒有檔名的那則在 162 個檔案的輸出裡幾乎無法定位。",
+      "fix": "改名為 sanitizeAnchors；把 break 換成 continue（或先蒐集完再一次回報）；並用上那個 key 參數把訊息補完整：\n\n  messages.add(\"Didn't find anchor tag \" + matcher.group() + \" in original string for key \" + key + \" in file \" + file);\n\n如果保留 break 是刻意的（避免同一個 key 洗版），那值得加一行註解說明，因為現在看不出來是設計還是漏寫。",
+      "source": "dimension",
+      "scanner": "",
+      "counter_evidence_checked": false,
+      "security": null,
+      "accepted_risk": ""
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-001",
+      "dimension": "G",
+      "question": "這個新檢查跑過全部 162 個 messages_*.properties 都會通過嗎？還是只有作者手動注意到的那幾個被修掉了？",
+      "context": "審查環境沒有 Maven 中央倉庫的網路存取，misc/theme-verifier 無法編譯，也就無法對 themes/ 與 js/ 實跑 verify-theme。我用純文字方式做了兩項近似檢查：(a) 窮舉 162 個 bundle 的英文來源檔推導，0 個推不到；(b) 掃出所有非白名單標籤形狀的字串，結果全部落在 normalizeValue 已經特例化的 {n,choice,...}、CLAIM.<NAME>、<Extensions> 三類，沒有漏網的。這兩項都通過，但它們不能取代實跑——OWASP sanitizer 對屬性順序、引號、entity 的正規化行為，是純文字檢查看不到的，而 F-006 說明了這類差異正是誤判的主要來源（本 MR 光是 <br/> 就改了 19 個檔）。",
+      "what_would_settle_it": "在有網路的環境跑 mvn -pl misc/theme-verifier install 之後執行 mvn -pl themes -am verify 與 mvn -pl js/apps/account-ui,js/apps/admin-ui verify（含 -DskipCommunityTranslations=false），或直接看這個 PR 的 CI 結果。只要 verify-theme 在完整 tree 上綠燈就結案。"
+    },
+    {
+      "id": "Q-002",
+      "dimension": "C",
+      "question": "normalizeValue 依 key 名稱、對所有語系無條件豁免內容（{n,choice,...} 整段、CLAIM.<...>、<Extensions>），這些豁免區塊在執行期是否也同樣受 kcSanitize 保護？",
+      "context": "第 117-127 行的豁免是以 key 名稱判斷、不看英文來源是否真的含有該構造，所以一個惡意的翻譯 PR 可以把標記藏進 error-invalid-multivalued-size 或 linkExpirationFormatter.timePeriodUnit* 的 choice 內容裡，逃過這個 build 檢查。我確認了 login 與 email 的 .ftl 樣板普遍走 ${kcSanitize(msg(...))?no_esc}（themes/src/main/resources/theme/base/login/error.ftl:4、themes/src/main/resources/theme/base/email/html/identity-provider-link.ftl:3），也就是執行期仍有主要控制，因此這不是現成的 XSS。但我沒有逐一走完所有引用這幾個 key 的樣板與 React 元件，無法斷言每一條輸出路徑都被 kcSanitize 蓋到，所以不列為 finding。",
+      "what_would_settle_it": "列出 error-invalid-multivalued-size 與 linkExpirationFormatter.timePeriodUnit* 的全部輸出點（FreeMarker 樣板、以及 js/libs/ui-shared 裡對應的 React 錯誤顯示元件），逐一確認是走 kcSanitize/?no_esc 或 React 的預設文字跳脫。若確認全數被蓋到，這個豁免就只是 F-006 的可維護性問題；若有任何一條沒被蓋到，它會升級成安全 finding。"
+    },
+    {
+      "id": "Q-003",
+      "dimension": "H",
+      "question": "本 MR 移除了 fi / lt / sk / sv / zh_CN 的 totpStep1 裡指向 freeotp.github.io 與 Google Play 的連結，這是刻意的產品決定嗎？",
+      "context": "英文來源 themes/src/main/resources/theme/base/account/messages/messages_en.properties:150 現在是 Install one of the following applications on your mobile:，本身沒有連結，所以就新的 anchor 規則（翻譯只能保留英文原文也有的 anchor）而言，移除是必然的結果。其他 20 幾個語系早就是無連結版本，所以這是把落後的五個語系補齊，方向一致。列在這裡只是因為它是使用者可見的內容減損，而這件事該由 product / UX 拍板而不是由一個 build 檢查順帶決定。",
+      "what_would_settle_it": "確認 issue #37428 或既有的 account console 設計是否明確要求 totpStep1 不含連結（英文來源已經是這樣，等於已經拍過板了）。若答案是肯定，這題直接關掉。"
+    }
+  ],
+  "rereview": null,
+  "conclusion": "Request Changes",
+  "summary": "這個 MR 的主體——在 build 期用 OWASP sanitizer 擋下翻譯檔偷渡英文原文沒有的 HTML——方向正確，santizeAnchors 針對 anchor 竄改的處理尤其切中要害。擋下合併的不是這個機制，而是搭在同一個 MR 裡的兩類資料變更：一是把 account / admin console 的 error-invalid-multivalued-size 改成 MessageFormat 語法，而那兩個 console 是用 i18next 的 {{n}} 內插，改完之後使用者會看到未代換的 {0} {1} {2} 與整串 choice 運算式（F-001）；二是更新五個語系的 totpStep1 時，立陶宛文檔案被填入義大利文、簡體中文檔案被填入繁體中文（F-002、F-003）。三者都與 HTML 安全無關，也都埋在 1400 行的翻譯 diff 裡，這正是建議把非 sanitizer 的部分拆成獨立 MR 的原因。\n\n檢查機制本身有兩處值得在合併前處理：產生差異訊息的前後綴裁切在特定輸入下會丟 StringIndexOutOfBoundsException，把可讀的驗證錯誤變成 Maven internal error（F-004）；以及採用「sanitizer 輸出必須逐字相等」當判準，讓 <br/> 這種語意上完全等價的寫法變成 build 失敗，本 MR 光是為此就改了 19 個檔案、76 行（F-006）。測試方面，四個測試全部只驗「會報錯」，沒有一個驗「乾淨的檔案不會報錯」，而這支工具最危險的失敗模式恰好是誤判擋住整條 build（F-007）。\n\n覆蓋度需要說清楚：審查環境沒有 Maven 網路存取，misc/theme-verifier 無法編譯、四個新測試無法執行；本機也沒有任何適用於 Java 的 linter 或 SAST（只有 ruff，而本 diff 沒有 Python 檔）。所以掃描階段對本次的核心程式碼實際覆蓋率是零，Java 端的判斷全部來自靜態閱讀。「全部 162 個 bundle 是否真的都能通過」這題留在 Q-001，要靠 CI 或有網路的環境實跑才能結案。另外本次執行環境沒有可派工的 subagent 機制，ncr-fresh-eyes 與 ncr-quality-check 都沒有跑（已記在掃描執行狀況裡），所以這份報告既少了一次不受 checklist 框架影響的閱讀，也沒有經過獨立的品質複核。"
+}

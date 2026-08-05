@@ -1,0 +1,7 @@
+[
+  "Metrics are attributed to the wrong path on failures - Create/Update error paths record legacy duration instead of storage duration, and DeleteCollection legacy goroutine records storage duration instead of legacy duration",
+  "Async legacy writes are tied to request cancellation - background legacy operations inherit the request context, so if the request ends quickly the legacy write can be canceled immediately",
+  "Delete metrics label uses resource name instead of kind, which can explode label cardinality and mislabel metrics",
+  "klog.NewContext uses d.Log instead of the enriched log variable, dropping the enriched fields",
+  "Mode 3 async legacy writes can make test assertions race - doPlaylistTests validates legacy API results immediately after K8s writes, but in mode 3 legacy writes are fire-and-forget, causing potential flakiness"
+]

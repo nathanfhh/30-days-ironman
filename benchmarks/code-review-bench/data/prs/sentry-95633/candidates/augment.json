@@ -1,0 +1,5 @@
+[
+  "complete_offset is called in finally block, so offsets will be considered processed even when result_processor raises an exception, leading to committing past failed items and dropping them - contradicts docstring guarantee 'Only commits offsets after successful processing'",
+  "Setting worker.shutdown = True before shutting down the queues means workers can exit without draining items still queued, leaving work unprocessed during shutdown and potentially preventing offsets from becoming committable for abandoned items during rebalances",
+  "SimpleQueueProcessingStrategy.close() shuts down the passed-in queue_pool, but the pool is created/stored on ResultsStrategyFactory and shared into each strategy instance - if create_with_partitions is called again (e.g., Kafka rebalance), the factory will reference a previously-shutdown pool and subsequent processing may break"
+]

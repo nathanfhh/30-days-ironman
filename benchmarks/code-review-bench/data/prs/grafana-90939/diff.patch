@@ -1,0 +1,57 @@
+diff --git a/pkg/api/webassets/webassets.go b/pkg/api/webassets/webassets.go
+index 197c5f76..dc26b576 100644
+--- a/pkg/api/webassets/webassets.go
++++ b/pkg/api/webassets/webassets.go
+@@ -3,16 +3,17 @@ package webassets
+ import (
+ 	"context"
+ 	"encoding/json"
+ 	"fmt"
+ 	"io"
+ 	"net/http"
+ 	"os"
+ 	"path/filepath"
++	"sync"
+ 
+ 	"github.com/grafana/grafana/pkg/api/dtos"
+ 	"github.com/grafana/grafana/pkg/services/licensing"
+ 	"github.com/grafana/grafana/pkg/setting"
+ )
+ 
+ type ManifestInfo struct {
+ 	FilePath  string `json:"src,omitempty"`
+@@ -26,22 +27,31 @@ type ManifestInfo struct {
+ 
+ type EntryPointInfo struct {
+ 	Assets struct {
+ 		JS  []string `json:"js,omitempty"`
+ 		CSS []string `json:"css,omitempty"`
+ 	} `json:"assets,omitempty"`
+ }
+ 
+-var entryPointAssetsCache *dtos.EntryPointAssets = nil
++var (
++	entryPointAssetsCacheMu sync.RWMutex           // guard entryPointAssetsCache
++	entryPointAssetsCache   *dtos.EntryPointAssets // TODO: get rid of global state
++)
+ 
+ func GetWebAssets(ctx context.Context, cfg *setting.Cfg, license licensing.Licensing) (*dtos.EntryPointAssets, error) {
+-	if cfg.Env != setting.Dev && entryPointAssetsCache != nil {
+-		return entryPointAssetsCache, nil
++	entryPointAssetsCacheMu.RLock()
++	ret := entryPointAssetsCache
++	entryPointAssetsCacheMu.RUnlock()
++
++	if cfg.Env != setting.Dev && ret != nil {
++		return ret, nil
+ 	}
++	entryPointAssetsCacheMu.Lock()
++	defer entryPointAssetsCacheMu.Unlock()
+ 
+ 	var err error
+ 	var result *dtos.EntryPointAssets
+ 
+ 	cdn := "" // "https://grafana-assets.grafana.net/grafana/10.3.0-64123/"
+ 	if cdn != "" {
+ 		result, err = readWebAssetsFromCDN(ctx, cdn)
+ 	}

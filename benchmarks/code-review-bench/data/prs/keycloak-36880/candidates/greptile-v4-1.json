@@ -1,0 +1,5 @@
+[
+  "Potential NullPointerException when all-clients resource is missing - getResourceTypeResource can return null and the result is passed directly to findByResource without a null guard",
+  "Dead code: getEvaluationContext is never called - this private method is defined but has no callers within ClientPermissionsV2",
+  "getResourceName doesn't handle the CLIENTS resource type - the method falls through to resource.getDisplayName() which is null for individually-created client resources, producing null/UUID display names"
+]

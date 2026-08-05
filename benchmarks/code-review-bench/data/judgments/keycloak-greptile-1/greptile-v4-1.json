@@ -1,0 +1,12 @@
+{
+  "slug": "keycloak-greptile-1",
+  "tool": "greptile-v4-1",
+  "n_golden": 2,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 0, "candidate_index": 0, "confidence": 0.9,
+     "reasoning": "Both flag that isConditionalPasskeysEnabled() is called without the required UserModel parameter, mismatching the parent class's signature."},
+    {"golden_index": 1, "candidate_index": 1, "confidence": 0.85,
+     "reasoning": "Both explain that requiring a non-null user makes the conditional-passkey setup (fillContextForm) skip on the initial login page where no user is selected yet, breaking first-time passkey login."}
+  ]
+}

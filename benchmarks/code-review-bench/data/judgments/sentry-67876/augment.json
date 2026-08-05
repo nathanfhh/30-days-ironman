@@ -1,0 +1,10 @@
+{
+  "slug": "sentry-67876",
+  "tool": "augment",
+  "n_golden": 3,
+  "n_candidates": 3,
+  "matches": [
+    {"golden_index": 2, "candidate_index": 2, "confidence": 0.95,
+     "reasoning": "Both identify that integration.metadata['sender']['login'] is accessed without checking the sender key exists, causing a KeyError."}
+  ]
+}

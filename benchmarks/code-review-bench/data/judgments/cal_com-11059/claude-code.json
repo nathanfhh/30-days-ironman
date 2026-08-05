@@ -1,0 +1,20 @@
+{
+  "slug": "cal_com-11059",
+  "tool": "claude-code",
+  "n_golden": 5,
+  "n_candidates": 4,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Both say injecting the literal 'refresh_token' overwrites the valid stored refresh token and breaks subsequent refreshes."
+    },
+    {
+      "golden_index": 1,
+      "candidate_index": 2,
+      "confidence": 0.95,
+      "reasoning": "Both say the [z.string().toString()] computed keys evaluate to '[object Object]' rather than working key matchers."
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "slug": "cal_com-10967",
+  "tool": "nathan-code-review",
+  "n_golden": 5,
+  "n_candidates": 26,
+  "matches": [
+    {
+      "golden_index": 0,
+      "candidate_index": 0,
+      "confidence": 0.95,
+      "reasoning": "Both flag that the destructured mainHostDestinationCalendar is undefined when evt.destinationCalendar is null/empty and .integration is then read unguarded."
+    },
+    {
+      "golden_index": 2,
+      "candidate_index": 1,
+      "confidence": 0.75,
+      "reasoning": "Both identify the destinationCalendar.find(cal => cal.externalId === externalCalendarId) fallback in GoogleCalendarService.updateEvent as a lookup that can never match and returns undefined."
+    },
+    {
+      "golden_index": 3,
+      "candidate_index": 3,
+      "confidence": 0.95,
+      "reasoning": "Both describe the inverted IS_TEAM_BILLING_ENABLED condition in organizations create.handler.ts that now sets slug when billing is enabled instead of when it is disabled."
+    },
+    {
+      "golden_index": 4,
+      "candidate_index": 7,
+      "confidence": 0.8,
+      "reasoning": "Both point out that createEvent gained a required credentialId parameter that the other Calendar implementations (Office365, Lark, etc.) do not honour, breaking the interface contract."
+    }
+  ]
+}

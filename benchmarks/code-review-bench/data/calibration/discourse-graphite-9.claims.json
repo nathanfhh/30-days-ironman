@@ -1,0 +1,113 @@
+{
+  "slug": "discourse-graphite-9",
+  "claims": [
+    {
+      "claim_id": "c001",
+      "text": "Changing the site default locale at runtime could change fallback results, but TranslateAccelerator caches I18n.translate by config.locale only, which might keep serving cached fallback strings from the previous default locale until I18n.reload!/cache reset occurs"
+    },
+    {
+      "claim_id": "c002",
+      "text": "After removing config.i18n.fallbacks = true from the environment files, will Rails' I18n::Railtie overwrite I18n.fallbacks back to the gem's default after initializers run, causing every request to raise NoMethodError on ensure_loaded!?"
+    },
+    {
+      "claim_id": "c003",
+      "text": "Can FallbackLocaleList#[] calling SiteSetting.default_locale unguarded raise a confusing ActiveRecord exception during early-boot operations (db:migrate, assets:precompile) before the site_settings table is queryable?"
+    },
+    {
+      "claim_id": "c004",
+      "text": "The fallback-chain ordering logic is implemented independently on both the server (Ruby) and the client (JS), as two separate hand-written pieces of logic that must be kept in sync manually, with no shared source of truth."
+    },
+    {
+      "claim_id": "c005",
+      "text": "A .compact call on the fallback-chain array can never actually remove anything since none of the three elements can be nil (a nil default_locale would raise before reaching compact), giving a false impression that nil-handling is already covered."
+    },
+    {
+      "claim_id": "c006",
+      "text": "@loaded_locales gets a nil-safe ||= initialization only in ensure_loaded!, while translate and load_locale still dereference it directly without the same guard, so the nil-defense is inconsistent across the three methods."
+    },
+    {
+      "claim_id": "c007",
+      "text": "Now that fallback is enabled in all environments (including test) instead of just production/profile/cloud66, could this weaken or change existing test assertions that check for 'translation missing' strings?"
+    },
+    {
+      "claim_id": "c008",
+      "text": "The process-global translate LRU cache key does not include the fallback chain, but the fallback chain now depends on the per-site SiteSetting.default_locale, so on a multisite install a translation resolved via one site's fallback can be served to users of a different site sharing the same process."
+    },
+    {
+      "claim_id": "c009",
+      "text": "Thread-safety issue with lazy @loaded_locales"
+    },
+    {
+      "claim_id": "c010",
+      "text": "This change alters I18n.t's resolution order and loading timing on the hottest code path in the app, but the diff includes no tests at all, even though this repo has an established testing convention for this kind of code."
+    },
+    {
+      "claim_id": "c011",
+      "text": "Preserve standard locale-ancestor fallbacks here; otherwise regional locales skip matching base-language translations."
+    },
+    {
+      "claim_id": "c012",
+      "text": "protect_from_forgery should be configured with 'with: :exception' to properly handle Cross-Site Request Forgery"
+    },
+    {
+      "claim_id": "c013",
+      "text": "ensure_loaded! call happens on every request, which has performance implications"
+    },
+    {
+      "claim_id": "c014",
+      "text": "Consider normalizing the input locale (e.g., to a symbol) when checking/loading here to avoid double-loading if the same locale is passed as a String vs Symbol (also applies to other locations in the PR)."
+    },
+    {
+      "claim_id": "c015",
+      "text": "Use direct include instead of send(:include, ...) for I18n::Backend::Pluralization - Ruby 2.1+ makes include public on Module/Class"
+    },
+    {
+      "claim_id": "c016",
+      "text": "The new locale-loading guard (ensure_loaded!) is only wired into ApplicationController's before_filter, so Sidekiq jobs, rake tasks, and other paths that call I18n.t outside a web request never load the fallback chain, meaning fallback silently doesn't work there \u2014 including in outbound emails, which is the most user-visible path."
+    },
+    {
+      "claim_id": "c017",
+      "text": "Calling I18n.fallbacks.ensure_loaded! in set_locale only makes fallbacks work for controller requests, but jobs/mailers that use I18n may not pass through set_locale and therefore may still not have fallback locales loaded"
+    },
+    {
+      "claim_id": "c018",
+      "text": "SiteSetting.default_locale.to_sym is called without nil-safety guard, which will raise NoMethodError if default_locale is nil - should use safe navigation operator (SiteSetting.default_locale&.to_sym)"
+    },
+    {
+      "claim_id": "c019",
+      "text": "The translate_accelerator.rb freedom patch has its own locale loading logic, and the new ensure_loaded! method adds another entry point that should be verified for race conditions or double-loading issues"
+    },
+    {
+      "claim_id": "c020",
+      "text": "ensure_loaded! is only invoked via set_locale (a controller before_filter), so background jobs, mailers, and rake tasks that set I18n.locale and call I18n.t won't have fallback locales loaded, causing the fallback to silently find nothing"
+    },
+    {
+      "claim_id": "c021",
+      "text": "No test files are included in the diff for the new i18n fallback system"
+    },
+    {
+      "claim_id": "c022",
+      "text": "A comment claims the new initializer must load after 02-freedom_patches.rb, but nothing in the code actually enforces or needs that ordering \u2014 it currently works only by coincidence of alphanumeric filename sorting."
+    },
+    {
+      "claim_id": "c023",
+      "text": "FallbackLocaleList subclasses Hash and overrides [] but never calls store, so all inherited Hash methods (fetch, key?, each, size) incorrectly report the hash as empty \u2014 a trap for anyone using it later."
+    },
+    {
+      "claim_id": "c024",
+      "text": "Use of send(:include) to monkey-patch backend classes is fragile across gem upgrades"
+    },
+    {
+      "claim_id": "c025",
+      "text": "FallbackLocaleList class inherits from Hash but only implements [] and ensure_loaded!, meaning other Hash methods could return unexpected results if called by the i18n framework internally"
+    },
+    {
+      "claim_id": "c026",
+      "text": "Use direct include instead of send(:include, ...) for I18n::Backend::Fallbacks - Ruby 2.1+ makes include public on Module/Class"
+    },
+    {
+      "claim_id": "c027",
+      "text": "FallbackLocaleList inherits from Hash and overrides [] to always recompute dynamically, completely ignoring anything stored in the underlying hash, so any plugin or library that tries to register per-locale custom fallbacks via I18n.fallbacks[:fr] = [:fr, :en] would have those writes silently ignored"
+    }
+  ]
+}
