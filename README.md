@@ -11,7 +11,12 @@
 install.sh              把 skills/ 底下的 skill 連進 Claude Code
 skills/
 └── nathan-code-review/ Code Review Skill
+dev-container/          可拋棄的審查環境：工具版本固定，憑證借進來、退出時還回去
+gitlab-proxy/           擋在 GitLab 前面的 nginx：憑證不進 session、端點白名單、限流
 ```
+
+後面兩個目錄是選配的。只想試 skill 的話，`install.sh` 裝完就能用；它們處理的是
+另一個問題——**當你要把這套流程交給 AI Agent 自己跑，該給它多少權限**。
 
 ## 安裝
 
@@ -46,6 +51,31 @@ skills/
 
 環境需求、資料放在哪、觸發方式等細節見
 [`skills/nathan-code-review/README.md`](skills/nathan-code-review/README.md)。
+
+## dev-container
+
+把審查跑在一個可拋棄的容器裡。兩個理由：**環境可重現**（掃描器版本固定，報告不會
+因為誰的機器而不同），以及**邊界**（agent 拿得到什麼由你決定，而不是「我的整台電腦」）。
+
+啟動 wrapper 處理三件跨越 host 邊界的東西：Claude Code 憑證（三個來源依序嘗試）、
+git 的 SSH 憑證（**轉發 ssh-agent socket，不掛 `~/.ssh`**——交出去的是簽章的能力，
+不是私鑰本體），以及 Opengrep 的規則來源。
+
+細節與疑難排解見 [`dev-container/README.md`](dev-container/README.md)。
+
+## gitlab-proxy
+
+一顆 nginx，擋在 GitLab 前面替 agent 蓋憑證的章。
+
+skill 原本的做法是把 token 放進環境變數讓 agent 自己帶，那跟雙手奉上沒有差別：
+MR 說明裡一段 prompt injection 就能讓它拿那把 token 做 scope 內的任何事，而且事後
+沒有任何 per-call 的紀錄可查。代理買到的是 token 買不到的三件事：**端點白名單、
+速率限制、每一次呼叫的紀錄**。
+
+白名單只有六條，對照 skill 真的會呼叫的端點——GitLab 有的端點很多，但
+「知道有這個端點」跟「決定放行這個端點」是兩件事。
+
+細節見 [`gitlab-proxy/README.md`](gitlab-proxy/README.md)。
 
 ## 授權
 

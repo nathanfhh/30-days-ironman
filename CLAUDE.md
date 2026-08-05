@@ -13,9 +13,20 @@ Claude Code skills, and the tests that keep their scripts honest.
 │   ├── assets/                樣板
 │   └── scripts/               PEP 723 單檔腳本，用 `uv run <script>` 執行
 ├── tests/                     所有 skill 共用一組測試
+├── dev-container/             可拋棄的審查環境（Dockerfile + entrypoint + run wrapper）
+├── gitlab-proxy/              nginx 反向代理：憑證不進 session、端點白名單
 ├── pyproject.toml             uv 專案（測試工具鏈）
 └── install.sh                 把 skills/ 連進 ~/.claude
 ```
+
+`dev-container/` 與 `gitlab-proxy/` 跟 skill 沒有程式碼相依，但**設定上是耦合的**，
+改動時要一起看：
+
+- 代理的白名單來自 `skills/nathan-code-review/scripts/gitlab_api.py` 實際呼叫的端點。
+  skill 加一個端點，`gitlab-proxy/nginx.conf.template` 與該 skill 的
+  `references/gitlab-api.md` 兩邊都要跟著改。漏掉的症狀是「直連跑得動、走代理 403」。
+- `SSH_AUTH_SOCK` 的落點（`/ssh/ssh_sock`）寫在兩個地方：Dockerfile 的 ENV，以及
+  run wrapper 的 `-v` 掛載目標。改一邊要改另一邊，否則容器裡的 agent 會連不上。
 
 ## 這個 repo 是「上線中」的
 
