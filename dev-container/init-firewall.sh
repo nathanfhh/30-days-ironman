@@ -131,7 +131,17 @@ done
 # ------------------------------------------------------------------------------
 # 6. 放行所有直連網段
 #
-# gitlab-proxy 就是靠這條通的，不需要為它另開白名單。
+# gitlab-proxy 就是靠這條通的，不需要為它另開白名單——**但前提是容器有接上它那張
+# network**。run wrapper 會在 gitlab-proxy 存在時自動 `--network gitlab-proxy`。
+#
+# ⚠ 沒接上的話這條涵蓋不到它：容器在預設 bridge（172.17.0.0/16），proxy 在自己那張
+#   network（172.19.x），封包走 default route，不在下面撈到的清單裡，最後被第 8 節
+#   REJECT。實測過——症狀是 proxy 明明在跑卻連不到，而 `docker ps` 一切正常。
+#
+# ⚠ 這一節的放行是**全協定全埠**，而且排在第 8 節的 REJECT 之前。所以只要目標落在
+#   直連網段，第 4b 節那個「SSH 只通 GitLab 那一台」的收斂就等於不存在——例如
+#   `--network host`，或 GitLab 本身也跑成同網段的容器。目前的拓樸下不會發生，
+#   但改動網路組態時要記得這兩節的優先序。
 #
 # ⚠ 官方那份是「拿 default route 的 gateway 推一個 /24」。差別不在鬆緊，在正確性：
 #   多接一張 docker network 它就漏掉了，而網段如果不是 /24 也會算錯。這裡改成列出
@@ -152,6 +162,13 @@ while read -r net; do
 done <<< "$connected_subnets"
 
 # 7. 預設 DROP，再放行 established 與白名單
+#
+# ⚠ 這整份只碰 iptables（IPv4），沒有碰 ip6tables。前提是容器沒有 IPv6——實測預設
+#   bridge 上確實沒有（無 global v6 位址、無 v6 預設路由），所以目前這道牆是完整的。
+#   但這是**前提不是保證**：哪天把 docker network 開了 IPv6，OUTPUT 就有半邊沒有牆。
+#   好消息是第 9 節會抓到（curl 走 v6 連上 example.com → 判定「防火牆沒有生效」→ exit 1
+#   → entrypoint fail closed），所以是啟動失敗而不是靜默漏水。真要支援 v6 就得把
+#   下面每一條規則在 ip6tables 再寫一次，並且 ipset 另建一個 hash:net family inet6。
 iptables -P INPUT DROP
 iptables -P FORWARD DROP
 iptables -P OUTPUT DROP

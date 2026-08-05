@@ -67,6 +67,14 @@ docker build --build-arg GITLAB_SSH_HOST=gitlab.example.com -t ncr-dev-container
 
 ### 2. git 的 SSH 憑證
 
+> **先確認你需不需要它。** `nathan-code-review` 這個 skill 取程式碼是走 **HTTPS**
+> （`git clone -c http.extraHeader="PRIVATE-TOKEN: …" https://…`，見
+> `references/workspace-paths.md`），**不走 SSH**。所以只跑這個 skill 的話，
+> 整節可以跳過，直接用 `NCR_NO_SSH_AGENT=1` 啟動——少開一個授權面。
+>
+> 會需要它的情況：你在容器裡手動做 git over SSH（push、clone 別的 repo），
+> 或改用 SSH 取程式碼。下面那個爆炸半徑的警告，就是為這些情況寫的。
+
 wrapper 把 host 的 **ssh-agent socket** 掛進容器，而不是把 `~/.ssh` 掛進去。
 差別是「能力」與「秘密」：容器只能請 agent 幫忙簽章，拿不到私鑰本體；掛目錄則是
 把一把沒有 scope、也沒有到期日的長效私鑰整個交出去。

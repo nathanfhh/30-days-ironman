@@ -142,9 +142,35 @@ if [ -z "${NCR_NO_SSH_AGENT:-}" ] && [ -S "${SSH_AUTH_SOCK:-}" ]; then
     #     group root 可寫，那裡加 gid 0 就等於送出寫入權。換 base image 要重驗：
     #       docker run --rm --entrypoint bash $IMAGE -c \
     #         'find / -xdev -group 0 -perm -g+w ! -perm -o+w ! -type l'
-    #   ⚠ Linux host 不適用這條：那裡 socket 帶的是 host 自己的 uid 且通常 0600，
-    #     uid 對不上時 group 補不回來——真的遇到再處理，別假裝這行能一併解決。
-    RUN_OPTS+=(--group-add 0)
+    #   ⚠ 原生 Linux Docker 不適用這條：那裡 socket 帶的是 host 自己的 uid 且通常 0600，
+    #     uid 對不上時 group 補不回來。所以下面把它跳過——但只在「確定是原生」時跳過。
+    #
+    # 判斷的方向很重要。兩種錯法的代價不對等：
+    #   該加沒加 → SSH 靜默不通（容器照樣起來，只有 git over SSH 會爆，難歸因）
+    #   不該加卻加 → 多一個 gid 0，實測可寫檔案 0 個
+    # 所以判不出來時一律**照加**（fail-open）。
+    #
+    # ⚠ 不能只用 `uname = Darwin` 當判準。「macOS ⇒ VM 型 Docker」成立（macOS 跑不了原生
+    #   Linux container），但這個 gate 用到的是它的逆命題「非 macOS ⇒ 原生」，而那句是假的：
+    #   WSL2 + Docker Desktop（uname 回 Linux）與 Docker Desktop for Linux 都是 VM 型，
+    #   socket 一樣是 root:root 0660。用 uname 當唯一判準會把這兩種人推進靜默失敗。
+    #
+    # 所以 uname 只當**快路徑**：macOS 直接加，不多花一次 docker info；
+    # 只有落在 Linux 時才去問 daemon 是誰。
+    SKIP_GID0=0
+    if [ "$(uname)" = "Linux" ]; then
+        DAEMON_OS="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)"
+        # ⚠ 必須是「確定認出一個非 Docker Desktop 的 daemon」才跳過。docker info 失敗會回
+        #   空字串（daemon 還沒起、權限不足、逾時），那是「問不到」不是「原生 Linux」——
+        #   把空字串當成原生就會在 fail-open 的反方向失敗，正是這段要避免的事。
+        case "$DAEMON_OS" in
+            "" | *"Docker Desktop"*) ;;
+            # 原生 Linux Docker：socket 是 host uid，補 group 沒有用，不加。
+            # ⚠ 這不代表那裡就通了——uid 對不上時失敗點還在，只是要等容器裡 git 才看得出來。
+            *) SKIP_GID0=1 ;;
+        esac
+    fi
+    [ "$SKIP_GID0" = "1" ] || RUN_OPTS+=(--group-add 0)
 fi
 
 # known_hosts 唯讀掛進去。容器裡第一次 git over SSH 會停在 host key 驗證的互動提示，
@@ -155,6 +181,22 @@ if [ -f ~/.ssh/known_hosts ]; then
 else
     echo "⚠️  找不到 ~/.ssh/known_hosts，容器內第一次連 GitLab 會因 host key 未知而失敗。"
     echo "   先在 host 執行一次：ssh-keyscan -t rsa,ed25519 <your-gitlab-host> >> ~/.ssh/known_hosts"
+fi
+
+# gitlab-proxy：有跑就把容器接上那張 network。
+#
+# ⚠ 不接的話，防火牆的「放行直連網段」涵蓋不到它。容器在預設 bridge（172.17.0.0/16），
+#   proxy 在自己那張 network（172.19.x），封包走 default route → 不在直連網段清單裡 →
+#   落到 init-firewall.sh 最後那條 REJECT。症狀是 proxy 明明在跑卻連不到，
+#   而 `docker ps` 看起來一切正常。
+#   實測：接上之後直連網段變成 172.19.0.0/16，IP 與 hostname 兩種都通，
+#   而 example.com 仍然被擋——牆沒有因此變鬆。
+#
+# ⚠ 必須先檢查 network 在不在：docker run 對不存在的 network 會直接報錯退出。
+#   沒跑 gitlab-proxy 的人（多數讀者）不該因為這行而啟動不了容器。
+if docker network inspect gitlab-proxy >/dev/null 2>&1; then
+    RUN_OPTS+=(--network gitlab-proxy)
+    echo "🔌 已接上 gitlab-proxy network（容器內可用 http://gitlab-proxy:5678）"
 fi
 
 # 把「現在所在的資料夾」掛進容器的工作目錄：在要審查的專案根目錄執行本腳本。
