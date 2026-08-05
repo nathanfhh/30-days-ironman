@@ -55,16 +55,18 @@ Phase 4    交付——寫 JSON、驗證 schema、quality-check、
 
 | 工具 | precision | recall | F1 | 候選數 |
 |---|---:|---:|---:|---:|
-| cubic-v2 | 56.8% | 67.2% | **61.5%** | 162 |
-| augment | 47.4% | 59.1% | 52.6% | 171 |
-| greptile-v4-1 | 40.6% | 48.9% | 44.4% | 165 |
-| coderabbit | 26.3% | 56.9% | 35.9% | 297 |
-| claude-code | 32.9% | 39.4% | 35.9% | 164 |
-| **nathan-code-review** | **13.0%** | **73.0%** | **22.0%** | **771** |
+| cubic-v2 | 56.8% | 67.2% | **61.5%** | 175 |
+| augment | 47.4% | 59.1% | 52.6% | 178 |
+| greptile-v4-1 | 40.6% | 48.9% | 44.4% | 168 |
+| coderabbit | 26.3% | 56.9% | 35.9% | 318 |
+| claude-code | 32.9% | 39.4% | 35.9% | 173 |
+| **nathan-code-review** | **13.0%** | **73.0%** | **22.0%** | **775** |
+
+> 單位提醒：TP 的單位是 golden（多條候選命中同一條 golden 只記一次），FP 的單位是候選（沒命中任何 golden 的條數），所以 TP + FP 不等於候選數。以我們為例：775 條候選裡 104 條有命中，但其中 4 條是同一條 golden 的重複命中，TP 記 100、FP 記 671。
 
 recall **最高**，precision 最後一名，總分墊底。
 
-原因是算法本身：上游的 `precision = 命中的 golden 數 / 候選總數`。137 條 golden comment 對上我們的 771 個候選，即使每一個候選都正確，precision 的上限也只有 17.8%。**這個指標懲罰的是「說得多」，而不是「說錯」**——兩者在分數上完全無法區分。
+原因是算法本身：上游的 `precision = 命中的 golden 數 / 候選總數`。137 條 golden comment 對上我們的 775 個候選，即使每一個候選都正確，precision 的上限也只有 17.7%。**這個指標懲罰的是「說得多」，而不是「說錯」**——兩者在分數上完全無法區分。
 
 `open_questions`（skill 刻意不給 severity 的未驗證提問）也一併算進候選。排除它們的話是 P=14.9% / R=70.8% / F1=24.7%，差距不大，不影響結論。兩種算法都列在 `scores/raw_cells.csv` 與 `raw_cells_lenient.csv`。
 
@@ -258,7 +260,7 @@ methodology §3 交代了血緣：
 
 我們沒跑它。理由是上游 published 的 `results/` 底下沒有 `dedup_groups.json`——他們自己的公布數字也沒套用，我們照著他們的 published 設定跑，六個工具一視同仁。
 
-但要講清楚方向：**跑 dedup 會縮小分母，對候選數 274 的我們幫助最大。** 我們選了對自己較不利的那個設定，這是刻意的，不是漏掉。
+但要講清楚方向：**跑 dedup 會縮小分母，對候選數 775 的我們幫助最大。** 我們選了對自己較不利的那個設定，這是刻意的，不是漏掉。
 
 **6.5 資料品質。** 50 個 PR 裡：
 - `sentry-greptile-5` 標題是「Replays Self-Serve Bulk Delete System」，實際 diff 是 32 個無關 commit、106 個檔案、約 8700 行，而那個功能不在裡面（base 就是它自己的 squash commit）。3 條 golden comment 對這種規模的 diff。上游自己的 `az_comment` 寫著 `there is no such PR, it is a mix of many PRs`。
