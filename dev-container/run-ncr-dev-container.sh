@@ -13,6 +13,7 @@ set -euo pipefail
 IMAGE=ncr-dev-container
 RUN_ENV=()
 RUN_MOUNTS=()
+RUN_OPTS=()
 CRED_FILE=""
 STARTED_AGENT=0
 
@@ -68,7 +69,9 @@ else
     #   識別字的一部分，`$RULES_DIR，` 被讀成變數 `RULES_DIR\xEF`——set -u 直接 unbound。
     #   ASCII 標點沒這問題，所以這個 bug 只在中文訊息裡出現。
     echo "⚠️  找不到 ${RULES_DIR}，本場 Opengrep（A4）無規則可用。"
-    echo "   取得規則：git clone https://github.com/semgrep/semgrep-rules.git $RULES_DIR"
+    # --depth 1：只掃描用不到歷史，而 semgrep-rules 的歷史比工作目錄本身大得多。
+    # 上面那行 pull --ff-only 在 shallow clone 上照樣可以更新，不會被迫 unshallow。
+    echo "   取得規則：git clone --depth 1 https://github.com/semgrep/semgrep-rules.git ${RULES_DIR}"
 fi
 
 # git 的 SSH 憑證：轉發 host 的 ssh-agent socket，而不是把 ~/.ssh 掛進去。
@@ -102,7 +105,23 @@ elif [ -z "${SSH_AUTH_SOCK:-}" ]; then
         echo "⚠️  SSH：起不了 ssh-agent，本場不轉發。"
     fi
 else
-    echo "🔐 SSH：轉發 host 現有的 agent（${SSH_AUTH_SOCK}）"
+    # 轉發現成的 agent 之前先確認它裡面有東西。macOS 的 launchd agent 是**永遠都在**的
+    # ——SSH_AUTH_SOCK 一定有值，socket 一定連得上，但沒 ssh-add 過就是空的。
+    # 只看「有沒有 agent」會讓這裡印出 🔐 成功訊息，然後容器裡的 git 才發現沒有金鑰。
+    #
+    # ⚠ 只警告，不自動 ssh-add：這個 agent 是使用者的，載入的金鑰在腳本退出後還留著。
+    #   而且上面那段「另起一個只加受限 key 的 agent」正是預期用法之一，
+    #   自動補上預設金鑰會安靜地破壞掉那個限縮。（自己起的 agent 才由自己載入金鑰。）
+    #   ssh-add -l：0=有金鑰，1=連得上但空的，2=連不上。
+    if ssh-add -l >/dev/null 2>&1; then
+        echo "🔐 SSH：轉發 host 現有的 agent（${SSH_AUTH_SOCK}）"
+    else
+        echo "⚠️  SSH：host 的 agent 裡沒有任何金鑰（${SSH_AUTH_SOCK}），容器內走 SSH 的 git 操作會失敗。"
+        # ⚠ 這裡不舉例任何檔名。上面 ssh-add 那段的理由同樣適用於**訊息**：
+        #   寫 id_ed25519 會讓只有 id_rsa 的人照抄後失敗，反之亦然。
+        #   不帶參數的 ssh-add 本來就會載入預設的那幾把，那才是正確的通用指令。
+        echo "   先在 host 執行 ssh-add（不必指定檔名，會載入預設金鑰）再重跑本腳本。"
+    fi
 fi
 
 # socket 掛載。⚠ 不能加 :ro——連 unix socket 需要寫權限，唯讀會 EACCES，掛了等於沒掛。
@@ -110,6 +129,22 @@ fi
 #   ssh-agent -s 起的在 /tmp/ssh-XXXX/agent.<pid>，每次都不一樣，只能靠 $SSH_AUTH_SOCK。
 if [ -z "${NCR_NO_SSH_AGENT:-}" ] && [ -S "${SSH_AUTH_SOCK:-}" ]; then
     RUN_MOUNTS+=(-v "$SSH_AUTH_SOCK":/ssh/ssh_sock)
+    # ⚠ socket 是 bind mount 裡的特例。目錄與一般檔案（~/.claude 那些）Docker Desktop 會
+    #   把擁有者對映成容器內的 nathan，但 unix socket 過不了 virtiofs——Docker Desktop 改成
+    #   在容器裡放一個自己代理的 socket 節點，而那個節點是 root:root 0660。容器跑 uid 1001，
+    #   結果是掛得好好的卻 `Error connecting to agent: Permission denied`。
+    #   補 gid 0 讓 group 的 rw 生效即可，不必為了 chown 讓整個容器從 root 起。
+    #
+    #   gid 0 不是 root：uid 仍是 1001，不帶任何 capability，也拿不到 setuid 執行檔
+    #   （su/passwd 要密碼）。實測這個 image：group root 可寫但 other 不可寫的檔案 **0 個**，
+    #   多讀到的只有 3 個 dpkg/apt 空鎖檔。代價實質為零。
+    #   ⚠ 這個結論綁在 base image 上。有些 image（OpenShift 慣例）會把 /etc 或應用目錄設成
+    #     group root 可寫，那裡加 gid 0 就等於送出寫入權。換 base image 要重驗：
+    #       docker run --rm --entrypoint bash $IMAGE -c \
+    #         'find / -xdev -group 0 -perm -g+w ! -perm -o+w ! -type l'
+    #   ⚠ Linux host 不適用這條：那裡 socket 帶的是 host 自己的 uid 且通常 0600，
+    #     uid 對不上時 group 補不回來——真的遇到再處理，別假裝這行能一併解決。
+    RUN_OPTS+=(--group-add 0)
 fi
 
 # known_hosts 唯讀掛進去。容器裡第一次 git over SSH 會停在 host key 驗證的互動提示，
@@ -127,6 +162,7 @@ fi
 docker run --rm -it \
     ${RUN_ENV[@]+"${RUN_ENV[@]}"} \
     ${RUN_MOUNTS[@]+"${RUN_MOUNTS[@]}"} \
+    ${RUN_OPTS[@]+"${RUN_OPTS[@]}"} \
     -v ~/.claude:/home/nathan/.claude \
     -v ~/.claude.json:/home/nathan/.claude.json \
     -v "$PWD":/home/nathan/code-review \

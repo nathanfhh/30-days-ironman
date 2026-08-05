@@ -93,8 +93,12 @@ NCR_NO_SSH_AGENT=1 /path/to/run-ncr-dev-container.sh
 `opengrep` 不內建規則，從 host 的 clone 餵進去：
 
 ```bash
-git clone https://github.com/semgrep/semgrep-rules.git ~/Projects/semgrep-rules
+git clone --depth 1 https://github.com/semgrep/semgrep-rules.git ~/Projects/semgrep-rules
 ```
+
+`--depth 1`：掃描只讀工作目錄，歷史一次都用不到，而 semgrep-rules 的歷史比工作目錄
+本身大得多。shallow clone 不影響下面的更新——`pull --ff-only` 照樣 fast-forward，
+不會被迫 unshallow。
 
 wrapper 啟動前會 best-effort `git pull`（離線就沿用現有版本），再唯讀掛進容器。
 找不到 clone 只會警告，容器照常啟動，那一場的 SAST 軌道無規則可用。
@@ -105,7 +109,9 @@ wrapper 啟動前會 best-effort `git pull`（離線就沿用現有版本），�
 |---|---|---|
 | `Host key verification failed.` | 容器裡沒有 known_hosts | host 上執行 `ssh-keyscan -t rsa,ed25519 <host> >> ~/.ssh/known_hosts` 後重跑 |
 | `Error connecting to agent: No such file or directory` | image 的 `SSH_AUTH_SOCK` 有值，但 socket 沒掛進來 | 這是「這條路沒接」不是「設定壞了」。檢查 host 的 `$SSH_AUTH_SOCK`，或你是不是設了 `NCR_NO_SSH_AGENT` |
-| `ssh-add -l` 說 `The agent has no identities` | agent 在跑但袋子是空的 | host 上先 `ssh-add`，再啟動容器 |
+| 容器裡 `$SSH_AUTH_SOCK` 是**空字串** | image 比 Dockerfile 舊。這個變數是 image 的 ENV，改了 Dockerfile 不重 build 就不會生效 | `docker build -t ncr-dev-container .`。啟動時印的 `image built:` 時間比你改 Dockerfile 的時間早就是這個情況 |
+| `Error connecting to agent: Permission denied` | socket 掛進來了，但 Docker Desktop 代理出來的 socket 節點是 `root:root 0660`，而容器跑 uid 1001 | wrapper 掛 socket 時會一併補 `--group-add 0`。還是出現代表你是自己下 `docker run`，補上這個參數 |
+| `ssh-add -l` 說 `The agent has no identities` | agent 在跑但袋子是空的。macOS 的 launchd agent **永遠都在**，所以「有 agent」不等於「有金鑰」 | host 上先 `ssh-add`，再啟動容器。wrapper 會在轉發前先檢查並警告，但不會替你載入——那個 agent 是你的，而且可能是刻意只放了受限 key |
 | git 認證失敗但 agent 有 key | 那把 key 沒有註冊到 GitLab | 到 GitLab 的 SSH Keys 頁面確認 |
 | `❌ Keychain 沒有 Claude Code 憑證` | host 沒登入過 | 先在 host 跑一次 `claude` 登入，或 `export CLAUDE_CODE_OAUTH_TOKEN` |
 
