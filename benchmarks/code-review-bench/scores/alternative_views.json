@@ -1,0 +1,98 @@
+{
+  "provenance": "Computed after a no-context audit agent (2026-08-05) flagged that the corrected precision no longer charges for verbosity. Its two alternative views were independently reproduced from data/ before recording here. Convention matches summary.json: precision = TP/(TP+FP); duplicate hits on an already-matched golden count as neither.",
+  "candidate_counts_note": "Real candidate counts per tool: nathan-code-review 775, coderabbit 318, augment 178, cubic-v2 175, claude-code 173, greptile-v4-1 168. TP+FP differs (771/297/171/162/164/165) because candidates that duplicate an already-matched golden are excluded from both.",
+  "validated_golden_only": {
+    "target": "the 114 golden comments that survived blind verification; no discovery credit on either side",
+    "cells": {
+      "cubic-v2": {
+        "p": 0.488,
+        "r": 0.693,
+        "f1": 0.572
+      },
+      "augment": {
+        "p": 0.456,
+        "r": 0.684,
+        "f1": 0.547
+      },
+      "greptile-v4-1": {
+        "p": 0.392,
+        "r": 0.57,
+        "f1": 0.464
+      },
+      "claude-code": {
+        "p": 0.329,
+        "r": 0.474,
+        "f1": 0.388
+      },
+      "coderabbit": {
+        "p": 0.24,
+        "r": 0.632,
+        "f1": 0.348
+      },
+      "nathan-code-review": {
+        "p": 0.126,
+        "r": 0.851,
+        "f1": 0.219
+      }
+    }
+  },
+  "consensus_exam": {
+    "target": "114 validated golden + 193 clusters raised by at least two tools = 307 items; no single tool defines the exam",
+    "cells": {
+      "augment": {
+        "p": 0.807,
+        "r": 0.45,
+        "f1": 0.577
+      },
+      "greptile-v4-1": {
+        "p": 0.823,
+        "r": 0.44,
+        "f1": 0.573
+      },
+      "claude-code": {
+        "p": 0.769,
+        "r": 0.401,
+        "f1": 0.527
+      },
+      "coderabbit": {
+        "p": 0.538,
+        "r": 0.511,
+        "f1": 0.524
+      },
+      "cubic-v2": {
+        "p": 0.753,
+        "r": 0.397,
+        "f1": 0.52
+      },
+      "nathan-code-review": {
+        "p": 0.345,
+        "r": 0.863,
+        "f1": 0.493
+      }
+    }
+  },
+  "verbosity_curve": {
+    "note": "our candidates truncated per-PR by severity (Critical > Suggestion > Nit, report order within a tier), recall against the 114 validated golden; post-hoc truncation, so a lower bound",
+    "points": {
+      "150": 0.421,
+      "200": 0.491,
+      "408": 0.719,
+      "775": 0.851
+    },
+    "cubic_reference": {
+      "candidates": 175,
+      "recall": 0.693
+    }
+  },
+  "loo_asymmetry": {
+    "note": "loo_ground_truth summed per tool; each tool's LOO exam drops only its own solo finds, so the exams differ in size and the comparison is not symmetric",
+    "items": {
+      "nathan-code-review": 449,
+      "coderabbit": 813,
+      "claude-code": 860,
+      "augment": 864,
+      "cubic-v2": 868,
+      "greptile-v4-1": 868
+    }
+  }
+}
