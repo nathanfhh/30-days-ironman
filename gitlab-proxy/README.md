@@ -5,7 +5,7 @@
 1. **憑證不進 session。** token 只存在於這顆容器的環境變數裡；agent 對代理裸打，
    由代理蓋上 `PRIVATE-TOKEN` 再轉給 GitLab。
 2. **端點白名單。** 只有 skill 真的會呼叫的六條路徑放行，其餘一律 403。
-3. **速率限制。** 10 req/s，避免 agent 失控時把 GitLab 打爆。
+3. **速率限制。** 2 req/s，避免 agent 失控時把 GitLab 打爆。
 
 ## 為什麼需要它
 
@@ -71,6 +71,33 @@ export NCR_GITLAB_API_BASE=http://gitlab-proxy:5678/api/v4
 `discussions` 的 GET 與 POST 是同一條路徑，nginx 同一條 regex 只能有一個
 location，所以合併成一個 block、用 `limit_except GET POST` 控方法。
 六個 location 對應到這七個操作。
+
+### 速率限制怎麼給
+
+共用一個 zone、**2 req/s**，各 location 自己調 burst。
+
+2 這個數字來自實際用量：一整場審查是 whoami 1 次、取 MR 1 次、附件 0~5 次、
+中間分析好幾分鐘、發報告 1 次、偶爾回覆 1 次——總共 5~20 次，持續速率遠低於
+1 r/s。設 10 r/s 等於沒設限：正常操作碰不到，而跑進迴圈的 agent 在那底下可以打一整天。
+
+burst 則是按「**這條路徑有沒有重試的安全網**」給，不是按端點重要性：
+
+| location | 方法 | burst | 理由 |
+|---|---|---:|---|
+| `/user` | GET | 2 | 整場一次 |
+| `/merge_requests/{iid}` | GET | 2 | 整場一次 |
+| `/uploads/...` | GET | 8 | 附件可能好幾個、循序下載，最會連發 |
+| `/discussions` | GET+POST | 5 | GET 分頁會連發，POST 發報告也走這條 |
+| `/discussions/{id}` | GET | 3 | 已知 id 的單串查詢 |
+| `/discussions/{id}/notes` | POST | 5 | **沒有重試安全網** |
+
+`gitlab_api.py` 只對冪等的 GET 重試 429（3 次、線性退避），POST 永遠不重試——
+重試一個發留言的 POST 會在 MR 上留下兩則。所以 GET 撞到限流只是慢幾秒，
+POST 撞到就是報告發不出去。寫入端要給餘裕，讀取端反而可以收緊。
+
+⚠ 限流的 key 是 `$binary_remote_addr`，而這個情境下所有請求都來自同一個容器，
+所以它限的是**這台機器**，不是**這個使用者**。單人用沒差；多人共用時要每人一顆代理，
+額度才會是真的 per-user。
 
 **加端點時**：這份 template 與 skill 的 `references/gitlab-api.md` 是兩份要手動
 同步的清單。漏掉其中一邊的症狀是「本機直連跑得動、走代理 403」。

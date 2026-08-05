@@ -13,9 +13,25 @@ http {
 
     access_log /var/log/nginx/access.log main;
 
-    # 10 req/s per IP，所有端點共用一個 zone；各 location 自己調 burst。
-    limit_req_zone $binary_remote_addr zone=gitlab_api:10m rate=10r/s;
+    # 2 req/s per IP，所有端點共用一個 zone；各 location 自己調 burst。
+    #
+    # 為什麼是 2 而不是 10：算一下一整場審查的實際呼叫量——whoami 1 次、取 MR 1 次、
+    # 附件 0~5 次、中間分析好幾分鐘、發報告 1 次、偶爾回覆 1 次。總共 5~20 次，
+    # 分散在幾分鐘內，持續速率遠低於 1 r/s。設 10 r/s 等於沒設限：正常操作碰不到它，
+    # 而真的跑進迴圈的 agent 在 10 r/s 底下可以打一整天。
+    #
+    # ⚠ key 用 $binary_remote_addr，而這個情境下所有請求都來自同一個容器——
+    #   所以它限的是「這台機器」，不是「這個使用者」。單人用沒差；多人共用時
+    #   每個人一顆代理才會是真的 per-user 額度。
+    limit_req_zone $binary_remote_addr zone=gitlab_api:10m rate=2r/s;
     limit_req_status 429;
+
+    # burst 按「這條路徑有沒有重試的安全網」給，不是按端點重要性給。
+    # gitlab_api.py 只對冪等的 GET 重試 429（3 次、線性退避），POST 永遠不重試
+    # ——重試一個發留言的 POST 會在 MR 上留下兩則。所以：
+    #   GET  撞到限流 → 自己退避重來，代價是慢幾秒
+    #   POST 撞到限流 → 報告直接發不出去，沒有第二次機會
+    # 於是寫入端要給餘裕，讀取端反而可以收緊。
 
     upstream gitlab {
         server ${GITLAB_HOST}:443;
@@ -86,7 +102,7 @@ http {
         #    gitlab_api.py whoami：確認 token 有效、知道自己是誰。
         location = /api/v4/user {
             limit_except GET { deny all; }
-            limit_req zone=gitlab_api burst=3 nodelay;
+            limit_req zone=gitlab_api burst=2 nodelay;   # 整場只呼叫一次，不需要餘裕
             proxy_pass https://gitlab;
         }
 
@@ -94,7 +110,7 @@ http {
         #    gitlab_api.py mr：取回標題、說明、來源與目標分支。
         location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+$ {
             limit_except GET { deny all; }
-            limit_req zone=gitlab_api burst=5 nodelay;
+            limit_req zone=gitlab_api burst=2 nodelay;   # 整場只呼叫一次
             proxy_pass https://gitlab;
         }
 
@@ -103,7 +119,7 @@ http {
         #    回傳 binary。{secret} 是 hex、{filename} 可能含中文（URL-encoded）。
         location ~ ^/api/v4/projects/.+/uploads/[0-9a-f]+/.+$ {
             limit_except GET { deny all; }
-            limit_req zone=gitlab_api burst=3 nodelay;
+            limit_req zone=gitlab_api burst=8 nodelay;   # 附件可能好幾個且循序下載，全篇最會連發的一條
             proxy_pass https://gitlab;
         }
 
@@ -113,7 +129,7 @@ http {
         #    同一條 regex 只能有一個 location，所以 GET / POST 合併用 limit_except。
         location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+/discussions$ {
             limit_except GET POST { deny all; }
-            limit_req zone=gitlab_api burst=5 nodelay;
+            limit_req zone=gitlab_api burst=5 nodelay;   # GET 分頁會連發；POST 發報告也走這條，維持 5
             proxy_pass https://gitlab;
         }
 
@@ -122,7 +138,7 @@ http {
         #    只讀那一串的回覆，不用整包列出。
         location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+/discussions/[0-9a-f]+$ {
             limit_except GET { deny all; }
-            limit_req zone=gitlab_api burst=5 nodelay;
+            limit_req zone=gitlab_api burst=3 nodelay;   # 已知 id 的單串查詢，一次一條
             proxy_pass https://gitlab;
         }
 
@@ -130,7 +146,7 @@ http {
         #    gitlab_api.py reply：回覆作者。對外且不可逆，skill 規定要人類確認過才發。
         location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+/discussions/[0-9a-f]+/notes$ {
             limit_except POST { deny all; }
-            limit_req zone=gitlab_api burst=3 nodelay;
+            limit_req zone=gitlab_api burst=5 nodelay;   # POST，沒有重試安全網，給餘裕
             proxy_pass https://gitlab;
         }
 
