@@ -6,7 +6,8 @@
 
 ```
 Dockerfile                  image 定義
-entrypoint.sh               容器啟動後做的事
+entrypoint.sh               容器啟動後做的事（含網路能力選單）
+init-firewall.sh            限制模式套用的 iptables 白名單
 run-ncr-dev-container.sh    啟動 wrapper：憑證、SSH、規則怎麼進容器
 ```
 
@@ -17,14 +18,20 @@ cd dev-container
 docker build -t ncr-dev-container .
 ```
 
-### 選配：把 GitLab 的 host key 烘進 image
+### 選配：告訴 image 你的 GitLab 在哪
 
 ```bash
 docker build --build-arg GITLAB_SSH_HOST=gitlab.example.com -t ncr-dev-container .
 ```
 
-**不給這個 ARG 就整段跳過**，什麼都不會發生，這是預設。給了才會在 build 時
-`ssh-keyscan` 那台主機，把 host key 寫進 image 的 `~/.ssh/known_hosts`。
+這個 ARG 餵兩個地方：
+
+1. **`known_hosts`** — build 時 `ssh-keyscan` 那台主機，把 host key 寫進 image。
+2. **防火牆** — 寫進 `/etc/ncr/gitlab-ssh-host`（root 所有、0444），限制模式下
+   `init-firewall.sh` 讀它，只放行通往那台主機的 SSH。
+
+**不給就兩段都跳過**：沒有烘 host key（改用 run wrapper 掛 host 的那份），
+限制模式下也不開放任何 SSH outbound。
 
 什麼時候需要它：CI、或者全新的機器上沒有 `~/.ssh/known_hosts` 可以掛。
 一般情況不需要，run wrapper 會掛 host 上現成的那份，而且**掛載會蓋過烘進去的**。
@@ -42,7 +49,9 @@ docker build --build-arg GITLAB_SSH_HOST=gitlab.example.com -t ncr-dev-container
 /path/to/run-ncr-dev-container.sh
 ```
 
-當前目錄會被掛進容器的 `/home/nathan/code-review`。wrapper 幫你處理三件事：
+當前目錄會被掛進容器的 `/home/nathan/code-review`。
+
+啟動後第一個問題是**網路能力**（見下方〈網路邊界〉），接著 wrapper 幫你處理三件事：
 
 ### 1. Claude Code 憑證
 
@@ -103,6 +112,72 @@ git clone --depth 1 https://github.com/semgrep/semgrep-rules.git ~/Projects/semg
 wrapper 啟動前會 best-effort `git pull`（離線就沿用現有版本），再唯讀掛進容器。
 找不到 clone 只會警告，容器照常啟動，那一場的 SAST 軌道無規則可用。
 
+## 網路邊界
+
+容器啟動時會問一次：
+
+```
+網路能力：
+  1 = 限制（白名單） — 只通 api.anthropic.com、直連的 docker 網段（gitlab-proxy），
+                       SSH 22 只通 build 時指定的那台 GitLab（預設）
+  2 = 完全開放       — 不套用任何 iptables 規則
+```
+
+限制模式跑的是 `init-firewall.sh`，改寫自
+[Anthropic 官方 devcontainer 的同名腳本](https://github.com/anthropics/claude-code/blob/main/.devcontainer/init-firewall.sh)。
+保留 Docker 內部 DNS 的那一段幾乎原樣沿用；白名單內容、SSH 收斂與驗證方式都改過。
+
+| | 官方版 | 這一份 |
+|---|---|---|
+| 白名單 | GitHub 全 IP 段 + `registry.npmjs.org` + sentry + statsig + VSCode marketplace + `api.anthropic.com` | 只有 `api.anthropic.com` |
+| SSH 22 | 放行到任何主機 | 只放行 `dig` 解出來的那台 GitLab |
+| 直連網段 | 從 default route 推一個 `/24` | 讀 `ip route` 列出實際的直連網段 |
+| 驗證 | `example.com` 不通 + `api.github.com` 通 | `example.com` 不通 + **每一個**白名單網域都要通 |
+| 開關 | 沒有，一律套用 | 啟動時由人選，`NCR_NET=restricted\|unrestricted` 可跳過選單 |
+
+官方那份的目標是「讓 devcontainer 還能開發」，所以 GitHub、npm、VSCode 全部放行；
+這一份的目標是「讓 agent 只能做審查」，所以預設只通模型 API。放行 `registry.npmjs.org`
+就等於 agent 能在牆內 `npm install`，而工具版本 pin 在 Dockerfile 裡是為了讓報告可重現。
+
+### 三個容易寫錯的地方
+
+**Docker 的內部 DNS 是 NAT 規則，不是服務。** 容器的 `/etc/resolv.conf` 指向
+`127.0.0.11`，那個位址上沒有任何東西在 listen——是 nat 表把它轉到 Docker daemon 開的
+真實 port。所以 `iptables -t nat -F` 一下去，容器就從「連得到但被擋」變成「連網域名稱
+都解不出來」，而錯誤訊息長得像網路壞掉。腳本第 1~3 步就是為了這件事：flush 之前先撈出
+那幾條規則，flush 之後只還原它們。
+
+**規則套完要自我驗證，而且要測兩個方向。** 只測「該擋的有沒有擋住」，會漏掉「不小心把
+全部都擋掉」——那種情況下 agent 從第一次呼叫模型就開始失敗，而錯誤訊息不會說是防火牆。
+腳本第 9 步兩個方向都測，任一不符就 `exit 1`，entrypoint 收到失敗就不啟動 CLI。
+
+**sudoers 要連參數一起鎖。** `nathan` 能 `sudo` 跑 `init-firewall.sh`，否則 entrypoint
+套不了規則。但 sudoers 的語義是「命令後面沒有列參數 ＝ 任何參數都允許」，所以這樣寫是
+有洞的：
+
+```
+nathan ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh
+```
+
+只要腳本會把位置參數用進白名單，容器裡的 agent 就能 `sudo init-firewall.sh
+attacker.example.com` 把任意網域加進去、重建整道牆，**而且自我驗證還會通過**
+（`example.com` 仍不通、白名單網域都通），畫面照樣印出「防火牆已驗證」。
+
+這份因此兩道一起關：腳本不吃任何位置參數，sudoers 也把參數鎖成空（`... init-firewall.sh ""`）。
+同樣的道理，GitLab 主機名走的是 build 時寫死的 `/etc/ncr/gitlab-ssh-host` 而不是環境變數
+——env 是容器裡的 `nathan` 寫得到的東西，政策的來源如果是 env，等於讓被關的人自己挑監獄。
+
+### 已知限制
+
+- **ipset 是開機當下的快照。** `api.anthropic.com` 走 CDN、TTL 很短，長時間 session
+  中途換 IP 的話請求會被 REJECT，只能重開容器。動態跟隨 DNS 就等於把白名單的控制權
+  交給 DNS 回應，所以這是刻意接受的代價。
+- **`docker network connect` 上去的網路不在放行清單裡。** 第 6 步是容器啟動那一刻的
+  快照，之後才接的網路介面有了、路由有了，封包卻被 REJECT，而且不會自己好。
+- **這道牆封不住「你允許連的那個對象，替你連出去」。** `api.anthropic.com` 必須開著，
+  而伺服器端執行的東西（WebSearch、綁在帳號上的 Connector）就從那條路出去。
+  iptables 管不到，控制點在帳號設定。
+
 ## 疑難排解
 
 | 症狀 | 原因 | 處理 |
@@ -114,10 +189,13 @@ wrapper 啟動前會 best-effort `git pull`（離線就沿用現有版本），�
 | `ssh-add -l` 說 `The agent has no identities` | agent 在跑但袋子是空的。macOS 的 launchd agent **永遠都在**，所以「有 agent」不等於「有金鑰」 | host 上先 `ssh-add`，再啟動容器。wrapper 會在轉發前先檢查並警告，但不會替你載入——那個 agent 是你的，而且可能是刻意只放了受限 key |
 | git 認證失敗但 agent 有 key | 那把 key 沒有註冊到 GitLab | 到 GitLab 的 SSH Keys 頁面確認 |
 | `❌ Keychain 沒有 Claude Code 憑證` | host 沒登入過 | 先在 host 跑一次 `claude` 登入，或 `export CLAUDE_CODE_OAUTH_TOKEN` |
+| `❌ Firewall 啟用失敗` 然後容器結束 | 規則沒套成功。fail closed，不會讓 agent 在沒有牆的情況下跑 | 看 `/tmp/firewall.log`。最常見是忘了 `--cap-add=NET_ADMIN`（自己下 `docker run` 時），或白名單網域解析不到 |
+| 限制模式下 WebFetch 還是連得出去 | 那個請求不是從這個 netns 出去的 | 不是設定問題，見上方〈已知限制〉最後一條 |
+| 限制模式下 `git push` 失敗 | build 時沒帶 `--build-arg GITLAB_SSH_HOST` | 帶了重 build，或該場選「2 完全開放」 |
 
 ## 這個容器不做的事
 
-- **不隔離網路。** 容器出得去任何地方。網路邊界是另一個題目。
 - **不保管任何長期憑證。** 憑證都是啟動時借進來、退出時還回去。
 - **不是沙盒。** `--dangerously-skip-permissions` 是預設，agent 在容器裡是自由的；
   邊界畫在容器外面，不在裡面。
+- **管不到伺服器端替你做的事。** 見〈網路邊界〉的已知限制。

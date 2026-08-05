@@ -13,7 +13,7 @@ Claude Code skills, and the tests that keep their scripts honest.
 │   ├── assets/                樣板
 │   └── scripts/               PEP 723 單檔腳本，用 `uv run <script>` 執行
 ├── tests/                     所有 skill 共用一組測試
-├── dev-container/             可拋棄的審查環境（Dockerfile + entrypoint + run wrapper）
+├── dev-container/             可拋棄的審查環境（Dockerfile + entrypoint + firewall + run wrapper）
 ├── gitlab-proxy/              nginx 反向代理：憑證不進 session、端點白名單
 ├── pyproject.toml             uv 專案（測試工具鏈）
 └── install.sh                 把 skills/ 連進 ~/.claude
@@ -27,6 +27,14 @@ Claude Code skills, and the tests that keep their scripts honest.
   `references/gitlab-api.md` 兩邊都要跟著改。漏掉的症狀是「直連跑得動、走代理 403」。
 - `SSH_AUTH_SOCK` 的落點（`/ssh/ssh_sock`）寫在兩個地方：Dockerfile 的 ENV，以及
   run wrapper 的 `-v` 掛載目標。改一邊要改另一邊，否則容器裡的 agent 會連不上。
+- `GITLAB_SSH_HOST` 這個 build ARG 餵兩個地方：`known_hosts`，以及防火牆讀的
+  `/etc/ncr/gitlab-ssh-host`。**刻意不用環境變數**——env 是容器裡的 `nathan` 寫得到的，
+  政策的來源如果是 env，等於讓被關的人自己挑監獄。
+- **`init-firewall.sh` 不吃位置參數，sudoers 也把參數鎖成空**
+  （`... init-firewall.sh ""`）。sudoers 的語義是「沒列參數 ＝ 任何參數都准」，
+  而只要腳本會把參數用進白名單，agent 就能自己擴大白名單、重建整道牆，
+  **連自我驗證都會通過**。要加白名單網域就改腳本頂端的 `ALLOWED_DOMAINS` 再 rebuild，
+  不要開參數這條路。
 
 ## 這個 repo 是「上線中」的
 

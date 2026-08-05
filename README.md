@@ -61,6 +61,11 @@ gitlab-proxy/           擋在 GitLab 前面的 nginx：憑證不進 session、�
 git 的 SSH 憑證（**轉發 ssh-agent socket，不掛 `~/.ssh`**——交出去的是簽章的能力，
 不是私鑰本體），以及 Opengrep 的規則來源。
 
+容器啟動時還會問一次**網路能力**。限制模式預設拒絕所有 outbound，只放行 `api.anthropic.com`、
+直連的 docker 網段，以及通往你指定的那台 GitLab 的 SSH——因為 ssh-agent 交出去的簽章能力
+沒有範圍，範圍只能在網路這一層畫。腳本改寫自 Anthropic 官方 devcontainer 的版本，
+差異與理由見 [`dev-container/README.md`](dev-container/README.md)。
+
 細節與疑難排解見 [`dev-container/README.md`](dev-container/README.md)。
 
 ## gitlab-proxy

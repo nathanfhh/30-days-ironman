@@ -159,7 +159,12 @@ fi
 
 # 把「現在所在的資料夾」掛進容器的工作目錄：在要審查的專案根目錄執行本腳本。
 #（陣列展開用 ${arr[@]+...} 寫法：macOS 內建 bash 3.2 在 set -u 下，空陣列直接展開會炸）
+#
+# --cap-add=NET_ADMIN：entrypoint 要套 iptables 規則。只給這一個 capability，不是
+# --privileged——差別是後者連掛載、載入核心模組、存取任意裝置都一起送出去。
+# 選「完全開放」時這個 capability 用不到，但它是啟動參數、不能事後才加，所以一律帶著。
 docker run --rm -it \
+    --cap-add=NET_ADMIN \
     ${RUN_ENV[@]+"${RUN_ENV[@]}"} \
     ${RUN_MOUNTS[@]+"${RUN_MOUNTS[@]}"} \
     ${RUN_OPTS[@]+"${RUN_OPTS[@]}"} \

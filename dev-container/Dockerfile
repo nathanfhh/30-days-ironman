@@ -8,11 +8,29 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
     DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::https::Verify-Peer=false install -y ca-certificates && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        curl git jq tzdata shellcheck vim openssh-client && \
+        curl git jq tzdata shellcheck vim openssh-client \
+        sudo iptables ipset iproute2 dnsutils && \
     ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
     echo "Asia/Taipei" > /etc/timezone && \
     rm -rf /var/lib/apt/lists/* && \
     useradd -m -s /bin/bash -d /home/nathan nathan
+
+# sudoers：nathan 只能跑 init-firewall.sh，而且**只能無參數地跑**。
+#
+# ⚠ 那個 `""` 不是裝飾。sudoers 的語義是「命令後面沒有列參數 ＝ 任何參數都允許」，
+#   所以少寫它就等於這樣：
+#       nathan ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh
+#   而只要腳本會把參數用進白名單，容器裡的 agent 就能自己擴大自己的牢房——
+#   更糟的是腳本的自我驗證仍然會通過，畫面照樣印出「防火牆已驗證」。
+#   本份的 init-firewall.sh 因此刻意不吃任何位置參數，sudoers 這端也把參數鎖成空，
+#   兩道一起關。
+#
+#   build 時跑 visudo -c 驗語法：sudoers 寫壞不會讓 build 失敗，會等到你 sudo 的那一刻
+#   才變成「a password is required」——那時人已經在容器裡了。
+RUN printf '%s\n' 'nathan ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh ""' \
+      > /etc/sudoers.d/nathan-firewall && \
+    chmod 0440 /etc/sudoers.d/nathan-firewall && \
+    visudo -c -f /etc/sudoers.d/nathan-firewall
 
 # UTF-8 locale：POSIX locale 下 bash readline 會丟棄多位元組輸入（中文打不出來），
 # opengrep 的 frozen Python 也會用 ascii codec 讀規則檔而炸掉。
@@ -125,7 +143,17 @@ WORKDIR /home/nathan/code-review
 # 最後一層寫入 build time 給 entrypoint 啟動時顯示。
 USER root
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh && \
+COPY init-firewall.sh /usr/local/bin/init-firewall.sh
+# GITLAB_SSH_HOST 同時餵兩個地方：上面的 known_hosts，以及這裡給防火牆讀的檔案。
+#
+# ⚠ 為什麼是檔案而不是環境變數：容器裡的 agent 以 nathan 執行，env 是它寫得到的東西；
+#   政策的來源如果是 env，等於讓被關的人自己挑監獄。這個檔案由 root 在 build 時寫入、
+#   0444，agent 改不動也蓋不掉（bind mount 覆蓋要 CAP_SYS_ADMIN，容器只有 NET_ADMIN）。
+#   沒帶這個 build-arg 就是空檔案 → 防火牆一條 SSH outbound 都不開。
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/init-firewall.sh && \
+    mkdir -p /etc/ncr && \
+    printf '%s' "$GITLAB_SSH_HOST" > /etc/ncr/gitlab-ssh-host && \
+    chmod 0444 /etc/ncr/gitlab-ssh-host && \
     date -Iseconds > /etc/image-build-time
 USER nathan
 
