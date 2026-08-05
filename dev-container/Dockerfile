@@ -1,5 +1,22 @@
 FROM ubuntu:24.04
 
+# 預設 shell 換成 bash 並開 pipefail。這一行是為了下面五處 `curl ... | sh`。
+#
+# ⚠ 沒有 pipefail 時，`curl X | sh` 的結束碼取自 **sh**，不是 curl。curl 失敗會輸出
+#   空字串，sh 讀到空輸入正常結束 → 整條 pipeline 回 0 → RUN 成功 → **layer 被 cache**。
+#   實際踩過：一次暫時性 DNS 失敗（`curl: (6) Could not resolve host: astral.sh`），
+#   那層照樣 DONE，uv 根本沒裝進去，直到三層之後才以 `uv: not found` 爆出來。
+#
+#   更糟的排列是失敗發生在 **chain 的最後一個**（rtk）——後面沒有任何步驟用到它，
+#   image 會成功 build、成功出貨，少一個工具，要到 runtime 才發現。
+#
+#   而且壞掉的 layer 會進 cache：之後每次 build 都撈同一顆壞層，重跑救不了，
+#   必須 --no-cache 才能脫身。
+#
+# ⚠ 這行會讓其後**所有** RUN 改用 bash（原本是 /bin/sh → dash）。bash 是超集，
+#   既有指令不受影響；但之後新增 RUN 時要知道自己拿到的是 bash。
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # apt 走 HTTPS：部分 Docker Desktop 代理環境下，容器內純 HTTP/80 會連線失敗。
 # base image 沒有 ca-certificates，先以暫時關閉 TLS 驗證的方式 bootstrap
 #（套件完整性仍由 InRelease 的 GPG 簽章保護），裝完隨即恢復正常驗證。
@@ -42,7 +59,7 @@ USER nathan
 # 四個 curl 安裝：Claude Code、uv（Python 工具鏈）、nvm（Node 版本管理）、rtk（token 節省 proxy）
 RUN curl -fsSL https://claude.ai/install.sh | bash && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash && \
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash && \
     curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
 
 ENV NVM_DIR="/home/nathan/.nvm" \
