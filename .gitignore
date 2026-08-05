@@ -17,3 +17,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# 代理的 .env 裡有 GitLab PAT，絕不進版控。
+gitlab-proxy/.env

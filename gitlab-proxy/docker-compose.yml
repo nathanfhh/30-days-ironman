@@ -1,0 +1,36 @@
+services:
+  gitlab-proxy:
+    image: nginx:alpine
+    container_name: gitlab-proxy
+    # 只綁 loopback。這顆代理握著憑證，不該對區網開。
+    ports:
+      - "127.0.0.1:5678:5678"
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/nginx.conf.template:ro
+    environment:
+      GITLAB_HOST: ${GITLAB_HOST}
+      GITLAB_TOKEN: ${GITLAB_TOKEN}
+    # 啟動時把 template 展開成真正的設定檔。
+    #
+    # envsubst 後面那串參數不能省：不帶參數時它會替換「所有長得像變數的東西」，
+    # 沒定義的直接換成空字串——而 nginx 設定檔裡到處都是 $remote_addr、
+    # $binary_remote_addr、$proxy_add_x_forwarded_for。帶了參數就只換這兩個。
+    #
+    # $$ 是給 docker compose 看的。compose 自己會先對 command 做一次變數插值，
+    # 只寫一個 $ 的話，envsubst 收到的會是 token 的真值（不是合法的變數引用），
+    # 結果什麼都不會被替換，渲染出來的設定檔裡還留著字面上的 ${GITLAB_TOKEN}。
+    # 症狀是 401，不是啟動失敗，很難查；而且 token 會出現在容器的 command line。
+    command: >
+      /bin/sh -c "envsubst '$${GITLAB_HOST} $${GITLAB_TOKEN}'
+      < /etc/nginx/nginx.conf.template
+      > /etc/nginx/nginx.conf
+      && nginx -g 'daemon off;'"
+    networks:
+      - gitlab-proxy
+    restart: unless-stopped
+
+networks:
+  gitlab-proxy:
+    # 具名 bridge：同一台機器上的其他容器可以用 hostname `gitlab-proxy` 連進來。
+    name: gitlab-proxy
+    driver: bridge
