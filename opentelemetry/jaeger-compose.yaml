@@ -1,0 +1,59 @@
+# Claude Code telemetry 的收集端：all-in-one Jaeger（v2），收 OTLP traces。
+#
+# 為什麼是 Jaeger 而不是 console exporter：console 會在 session 結束時把整包 telemetry
+# 倒進終端機，而且寫的是 stdout，跟 `claude -p` 的輸出混在一起。OTLP 完全不碰終端機，
+# Jaeger 還原生把 trace 畫成時間瀑布（互動 → subagent → tool/llm span）。
+#
+# v2（jaegertracing/jaeger）吃設定檔——見 jaeger-config.yaml。v1 已於 2025-12-31 EOL，
+# 舊的 SPAN_STORAGE_TYPE / BADGER_* 環境變數在 v2 完全無效。儲存用內嵌的 badger，
+# 放在 named volume，重啟不掉資料，多場審查會持續累積。
+#
+# 跟 gitlab-proxy 共用同一張 network：dev container 本來就會接上那張網
+#（run wrapper 偵測到就 --network gitlab-proxy），Jaeger 掛同一張，容器內用
+# http://jaeger:4317 直達，防火牆的「放行直連網段」自動涵蓋，iptables 一行都不用動。
+# ⚠ 沒跑 gitlab-proxy 的人：先 `docker network create gitlab-proxy` 再 up。
+#   network 是 external 的，不存在就直接拒絕啟動——看得見的失敗，比默默送不到好。
+#
+# 啟動:  docker compose -f opentelemetry/jaeger-compose.yaml up -d
+# UI:    http://localhost:16686（搜 service = "claude-code"）
+# 停止:  docker compose -f opentelemetry/jaeger-compose.yaml down（資料留在 volume）
+
+services:
+  jaeger:
+    image: jaegertracing/jaeger:2.9.0
+    container_name: jaeger
+    command: ["--config=/etc/jaeger/config.yaml"]
+    user: "0:0"            # badger 要在 root 擁有的 named volume 裡 mkdir
+    restart: unless-stopped
+    # 發佈的 port 只綁 loopback：本機連得到、外面連不到。Jaeger 沒有內建認證，
+    # loopback 綁定就是它的存取控制。容器對容器走 docker network（jaeger:4317），不經這裡。
+    ports:
+      - "127.0.0.1:16686:16686"   # UI
+      - "127.0.0.1:4317:4317"     # OTLP gRPC（host 上直接跑 claude 時指 localhost:4317）
+      - "127.0.0.1:4318:4318"     # OTLP HTTP
+    volumes:
+      - ./jaeger-config.yaml:/etc/jaeger/config.yaml:ro
+      - jaeger-badger:/badger
+    # 沒有 healthcheck 的話，badger 目錄壞掉會讓 jaeger_query 卡死在啟動階段，
+    # `docker ps` 卻照樣報 Up——而 OTLP 是 fail-open，4317 沒人聽等於 telemetry 靜默消失。
+    # healthcheckv2 在 collector 完全就緒前回 503，抓的正是這個狀態。
+    # 變 unhealthy 時的復原：down → `docker volume rm jaeger-badger` → up -d
+    #（會失去既存 trace）。
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:13133/status"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    networks:
+      - gitlab-proxy
+
+volumes:
+  jaeger-badger:
+    # 釘死 volume 名，脫離「compose 專案目錄」前綴——不釘的話搬一次目錄就會
+    # 悄悄換一顆新 volume，歷史 trace 全部留在舊顆裡沒人知道。
+    name: jaeger-badger
+
+networks:
+  gitlab-proxy:
+    external: true     # gitlab-proxy 那組 compose 建的；借用、不擁有

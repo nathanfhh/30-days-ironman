@@ -1,0 +1,44 @@
+# Jaeger v2 設定檔（v2 吃設定檔，v1 的環境變數在這裡完全無效）。
+# badger = 內嵌的磁碟 K/V 儲存，掛在 compose 的 named volume。
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+
+  jaeger_query:
+    storage:
+      traces: main_store
+
+  jaeger_storage:
+    backends:
+      main_store:
+        badger:
+          directories:
+            keys: /badger/keys
+            values: /badger/data
+          ephemeral: false
+          ttl:
+            spans: 720h    # trace 保存 30 天。期限在寫入時就烙進每筆 entry，事後改設定救不回
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: main_store
