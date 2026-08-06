@@ -275,7 +275,10 @@ run_cli() {
     # 收尾整段跳過——meta.json 與 firewall.txt 一定不會有。接住它，把訊號轉給 CLI，
     # 讓正常收尾在 docker stop 這條路徑上也走得到。
     set +e
-    "$@" &
+    # `<&0` 不可省。非互動 shell 沒有 job control，背景命令的 stdin 依 POSIX 會被
+    # 指到 /dev/null——CLI 從此一個按鍵都收不到，畫面看起來就是終端死了。
+    # 用 `-p` 測不出來（headless 不讀 stdin），要互動才會現形。
+    "$@" <&0 &
     local child=$!
     trap 'kill -TERM "$child" 2>/dev/null' TERM INT
     wait "$child"

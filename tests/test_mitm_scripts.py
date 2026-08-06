@@ -475,3 +475,39 @@ def test_null_usage_values_do_not_crash_the_report(wr):
              "usage": {"input_tokens": None, "output_tokens": 5}, "repeat": 0}]
     summary = wr.summarize(rows)      # 先前這行 TypeError，整份報表掛掉
     assert summary["models"][0]["priced"] is True
+
+
+# ------------------------------------------------------------------ entrypoint 的 run_cli
+#
+# 開了錄製之後 run_cli 走背景執行 ＋ trap（為了讓 docker stop 收得到尾）。
+# 那條路徑上 stdin 很容易被吃掉：非互動 shell 沒有 job control，背景命令的 stdin
+# 依 POSIX 被指到 /dev/null。症狀是「開錄的 session 鍵盤沒反應」，而且用 -p 測不出來。
+
+def _run_cli_source() -> str:
+    """只抽 run_cli 這個函式。
+
+    第一版切到 `resolve_session_id "$@"` 為止，把後面整份選單都抓了進來：跑起來時
+    `read` 先吃掉餵給它的 stdin，再把那行字原樣印進「無效輸入」訊息裡，斷言就命中了。
+    測試兩邊都綠，卻跟它要守的東西無關。切函式就要切到函式的結尾。
+    """
+    entrypoint = Path(__file__).resolve().parent.parent / "dev-container" / "entrypoint.sh"
+    src = entrypoint.read_text()
+    start = src.index("run_cli() {")
+    end = src.index("\n}\n", start) + len("\n}\n")
+    return src[start:end]
+
+
+def test_run_cli_passes_stdin_through_on_the_capture_path():
+    import subprocess
+    script = (
+        "NCR_INJECT_SESSION=0\n"
+        "CAPTURE_PID=1\n"          # 非空 ＝ 走背景那條路徑
+        "stop_capture() { :; }\n"
+        "write_capture_sidecar() { :; }\n"
+        + _run_cli_source()
+        + "\nrun_cli cat\n"
+    )
+    out = subprocess.run(["bash", "-c", script], input="鍵盤打進去的字\n",
+                         capture_output=True, text=True, timeout=20, check=False)
+    assert "鍵盤打進去的字" in out.stdout, (
+        f"stdin 沒有傳進去（背景執行吃掉了）：{out.stdout!r} {out.stderr!r}")
