@@ -7,8 +7,8 @@ telemetry-report.py（同資料夾）管時間與 token（來源是 Jaeger 的 t
 這支管錢（來源是 transcript 的 usage，逐請求精確）。兩支合起來才是完整的分析層。
 
 用法：
-    uv run opentelemetry/cost-report.py                          # 目前專案最新的 session
-    uv run opentelemetry/cost-report.py <session.jsonl 或其目錄>  # 指定 session
+    uv run opentelemetry/cost-report.py                          # 最新改動的 session（掃 ~/.claude/projects 全部專案）
+    uv run opentelemetry/cost-report.py <session.jsonl 或其目錄>  # 指定 session（目錄也可給含多場的專案目錄，取最新）
 
 角色的認法：session 目錄下 subagents/<agent-id>.meta.json 的 agentType 欄位，
 對上同名 .jsonl 的 usage。主對話檔算主線程。
@@ -38,7 +38,8 @@ import unicodedata
 from collections import defaultdict
 
 # {模型字串前綴: (input, output) per MTok}。cache 費率由 input 派生。
-# 長字串要排前面：先比對到誰就用誰。
+# 比對取「最長命中前綴」，不吃清單順序——靠排序的話，日後加一個互為前綴的
+# 項目（如 claude-opus-4 vs claude-opus-4-5）就是等著被踩的陷阱。
 RATES: list[tuple[str, tuple[float, float]]] = [
     ("claude-haiku-4-5", (1.0, 5.0)),
     ("claude-sonnet-4", (3.0, 15.0)),
@@ -50,10 +51,12 @@ RATES: list[tuple[str, tuple[float, float]]] = [
 
 
 def rate_for(model: str) -> tuple[float, float] | None:
+    best: tuple[float, float] | None = None
+    best_len = -1
     for prefix, r in RATES:
-        if model.startswith(prefix):
-            return r
-    return None
+        if model.startswith(prefix) and len(prefix) > best_len:
+            best, best_len = r, len(prefix)
+    return best
 
 
 def cost_usd(model: str, u: dict) -> float | None:
@@ -68,6 +71,25 @@ def cost_usd(model: str, u: dict) -> float | None:
         + u["cw5m"] * inp * 1.25
         + u["cw1h"] * inp * 2.0
     ) / 1e6
+
+
+def normalize_usage(u: dict) -> dict:
+    """把 API 回的 usage 攤成 cost_usd 吃的五個欄位。
+
+    抽成函式是因為不只這支在用：mitm/wire_report.py 從線上流量裡撿到的 usage 也走
+    這裡。cache 寫入的 5m/1h 拆分規則只該有一份，兩邊各寫一份遲早會分岔。
+    """
+    cw = u.get("cache_creation") or {}
+    return {
+        "in": u.get("input_tokens", 0),
+        "out": u.get("output_tokens", 0),
+        "cr": u.get("cache_read_input_tokens", 0),
+        # 有 ephemeral 細分就用；沒有（舊格式）就整包當 5m 算（最低價，
+        # 可能低估——舊格式想保守請自行視為區間）
+        "cw5m": cw.get("ephemeral_5m_input_tokens", 0)
+        or (0 if cw else u.get("cache_creation_input_tokens", 0)),
+        "cw1h": cw.get("ephemeral_1h_input_tokens", 0),
+    }
 
 
 def tally(paths: list[str]) -> dict:
@@ -85,18 +107,7 @@ def tally(paths: list[str]) -> dict:
                 u = m.get("usage")
                 if not u or not m.get("model"):
                     continue
-                cw = u.get("cache_creation") or {}
-                usage = {
-                    "in": u.get("input_tokens", 0),
-                    "out": u.get("output_tokens", 0),
-                    "cr": u.get("cache_read_input_tokens", 0),
-                    # 有 ephemeral 細分就用；沒有（舊格式）就整包當 5m 算（最低價，
-                    # 可能低估——舊格式想保守請自行視為區間）
-                    "cw5m": cw.get("ephemeral_5m_input_tokens", 0)
-                    or (0 if cw else u.get("cache_creation_input_tokens", 0)),
-                    "cw1h": cw.get("ephemeral_1h_input_tokens", 0),
-                }
-                seen[(e.get("requestId"), m.get("id"))] = (m["model"], usage)
+                seen[(e.get("requestId"), m.get("id"))] = (m["model"], normalize_usage(u))
 
     agg: dict[str, dict] = defaultdict(
         lambda: {"in": 0, "out": 0, "cr": 0, "cw5m": 0, "cw1h": 0, "n": 0}
@@ -110,16 +121,27 @@ def tally(paths: list[str]) -> dict:
 
 
 def find_session(arg: str | None) -> tuple[str, str]:
-    """回 (主 jsonl 路徑, session 目錄或空字串)。"""
+    """回 (主 jsonl 路徑, session 目錄或空字串)。
+
+    目錄參數吃兩種：session 目錄本身（旁邊有同名 .jsonl）、含多場的專案目錄
+    （取 mtime 最新的一場並印出選了誰——字母序第一場既不是「最新」也沒人知道選了誰）。
+    """
     if arg:
         if os.path.isdir(arg):
-            jsonls = sorted(glob.glob(os.path.join(arg, "*.jsonl")))
+            sib = arg.rstrip("/") + ".jsonl"
+            if os.path.isfile(sib):
+                return sib, arg.rstrip("/")
+            jsonls = glob.glob(os.path.join(arg, "*.jsonl"))
             if not jsonls:
-                sys.exit(f"{arg} 裡沒有 .jsonl")
-            return jsonls[0], arg
+                sys.exit(f"{arg} 裡沒有 .jsonl（給 session 目錄或含 session 的專案目錄）")
+            main = max(jsonls, key=os.path.getmtime)
+            if len(jsonls) > 1:
+                print(f"（目錄含 {len(jsonls)} 場，取 mtime 最新：{os.path.basename(main)}）")
+            base = os.path.splitext(main)[0]
+            return main, base if os.path.isdir(base) else ""
         base = os.path.splitext(arg)[0]
         return arg, base if os.path.isdir(base) else ""
-    # 沒指定：拿 ~/.claude/projects 下最新改動的 session
+    # 沒指定：掃 ~/.claude/projects 全部專案，拿最新改動的 session
     cands = glob.glob(os.path.expanduser("~/.claude/projects/*/*.jsonl"))
     if not cands:
         sys.exit("找不到任何 session transcript（~/.claude/projects 是空的）")
@@ -173,6 +195,13 @@ def main() -> None:
     total_cost, total_known = 0.0, True
     for role, paths in roles.items():
         for model, a in sorted(tally(paths).items()):
+            # Claude Code 的 <synthetic> 訊息 usage 全 0——不進表、也不觸發
+            # 「不含無牌價的模型」免責（一毛錢都沒漏，免責掛了反而失真；
+            # ccusage 也是跳過它，對帳宣稱才對得上）
+            if model == "<synthetic>" and not any(
+                a[k] for k in ("in", "out", "cr", "cw5m", "cw1h")
+            ):
+                continue
             c = cost_usd(model, a)
             if c is None:
                 total_known = False

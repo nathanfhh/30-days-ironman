@@ -228,3 +228,156 @@ def test_main_attributes_roles_from_subagent_meta(cost, tmp_path, monkeypatch, c
     out = capsys.readouterr().out
     assert "ncr-scan-lint" in out and "主線程" in out
     assert "總成本" in out and "無牌價" not in out
+
+
+def test_rate_for_picks_longest_matching_prefix(cost):
+    # 前綴表若有互為前綴的項，必須取最長命中，不吃清單順序
+    cost.RATES.append(("claude-haiku-4-5-turbo", (99.0, 99.0)))
+    try:
+        assert cost.rate_for("claude-haiku-4-5-turbo-20990101") == (99.0, 99.0)
+        assert cost.rate_for("claude-haiku-4-5-20251001") == (1.0, 5.0)
+    finally:
+        cost.RATES.pop()
+
+
+def test_main_skips_zero_usage_synthetic_without_disclaimer(cost, tmp_path, monkeypatch, capsys):
+    # <synthetic> usage 全 0：不進表、不觸發「不含無牌價的模型」免責
+    p = tmp_path / "s.jsonl"
+    p.write_text(
+        usage_line("r1", "m1", "claude-haiku-4-5", 100) + "\n"
+        + json.dumps({"requestId": "r2",
+                      "message": {"id": "m2", "model": "<synthetic>",
+                                  "usage": {"input_tokens": 0, "output_tokens": 0,
+                                            "cache_read_input_tokens": 0}}})
+    )
+    monkeypatch.setattr(sys, "argv", ["cost-report.py", str(p)])
+    cost.main()
+    out = capsys.readouterr().out
+    assert "<synthetic>" not in out
+    assert "無牌價" not in out
+
+
+def test_find_session_accepts_session_dir_and_picks_latest_in_project_dir(cost, tmp_path, capsys):
+    import os
+    import time
+    # session 目錄本身（旁邊有同名 .jsonl）→ 用那份
+    (tmp_path / "abc.jsonl").write_text("")
+    (tmp_path / "abc").mkdir()
+    main, base = cost.find_session(str(tmp_path / "abc"))
+    assert main.endswith("abc.jsonl") and base.endswith("abc")
+    # 專案目錄含多場 → 取 mtime 最新並說出選了誰
+    old, new = tmp_path / "a-old.jsonl", tmp_path / "z-new.jsonl"
+    old.write_text("")
+    new.write_text("")
+    past = time.time() - 3600
+    os.utime(old, (past, past))
+    main, _ = cost.find_session(str(tmp_path))
+    assert main.endswith("z-new.jsonl")
+    assert "取 mtime 最新" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- session-report
+
+
+@pytest.fixture(scope="session")
+def sr() -> ModuleType:
+    return load_dev_script("session-report.py")
+
+
+def jspan(span_id, start_us, dur_us, sid, parent=None, **tags):
+    tag_list = [{"key": "session.id", "value": sid}]
+    tag_list += [{"key": k, "value": v} for k, v in tags.items()]
+    s = {"spanID": span_id, "startTime": start_us, "duration": dur_us, "tags": tag_list}
+    if parent:
+        s["references"] = [{"refType": "CHILD_OF", "spanID": parent}]
+    return s
+
+
+def test_split_by_session_keeps_sessions_apart(sr):
+    data = [
+        {"spans": [jspan("a", 0, 10, "s1-full"), jspan("b", 5, 10, "s2-full")]},
+        {"spans": [jspan("c", 20, 10, "s1-full")]},
+    ]
+    by_sid, all_sids = sr.split_by_session(data, "s1")
+    assert set(by_sid) == {"s1-full"} and len(by_sid["s1-full"]) == 2
+    assert all_sids == {"s1-full", "s2-full"}
+    both, _ = sr.split_by_session(data, "s")
+    assert set(both) == {"s1-full", "s2-full"}  # 命中兩場要分開回，讓呼叫端拒絕合併
+
+
+def test_collect_roles_attributes_by_parent_chain_and_charts_input_tokens(sr):
+    spans = {
+        "d1": {"span.type": "tool", "tool_name": "Task", "subagent_type": "ncr-scan-lint",
+               "_start": 0, "_dur": 5, "_parent": None},
+        "c1": {"span.type": "llm_request", "model": "claude-sonnet-5",
+               "input_tokens": 7, "output_tokens": 3, "cache_read_tokens": 100,
+               "cache_creation_tokens": 20, "_start": 10, "_dur": 30, "_parent": "d1"},
+        "m1": {"span.type": "llm_request", "model": "claude-fable-5",
+               "_start": 0, "_dur": 8, "_parent": None},
+    }
+    agg, chart = sr.collect_roles(spans)
+    assert set(agg) == {"主線程", "ncr-scan-lint"}
+    assert agg["ncr-scan-lint"]["llm_us"] == 30
+    lint_span = next(c for c in chart if c["role"] == "ncr-scan-lint")
+    assert lint_span["in"] == 7 and lint_span["cr"] == 100  # tooltip 命中率分母要有輸入
+
+
+def test_find_gaps_only_reports_long_idle(sr):
+    chart = [{"s": 0, "e": 10_000_000}, {"s": 200_000_000, "e": 210_000_000}]
+    assert sr.find_gaps(chart, gap_min_s=120) == [(10_000_000, 200_000_000)]
+    assert sr.find_gaps(chart, gap_min_s=300) == []
+    assert sr.find_gaps([]) == []
+
+
+def test_hit_rate_zero_denominator_is_none(sr):
+    assert sr.hit_rate({"in": 0, "cr": 0, "cw": 0}) is None
+    assert sr.hit_rate({"in": 10, "cr": 90, "cw": 0}) == pytest.approx(0.9)
+
+
+def _report(tmp_path, name, mtime, mr):
+    import os
+    p = tmp_path / name
+    p.write_text(json.dumps({"conclusion": "Approved", "mr": mr, "findings": []}))
+    os.utime(p, (mtime, mtime))
+    return p
+
+
+def test_find_report_json_matches_by_session_window_not_just_latest(sr, tmp_path):
+    t0, t1 = 1_000_000_000 * 1_000_000, 1_000_003_600 * 1_000_000  # µs
+    _report(tmp_path, "in_window.json", 1_000_003_700, {"iid": 1, "title": "對的"})
+    _report(tmp_path, "newer_but_far.json", 1_000_003_600 + 7 * 3600, {"iid": 2, "title": "錯的"})
+    got = sr.find_report_json(t0, t1, root=str(tmp_path))
+    assert got and got["mr"]["iid"] == 1  # 視窗內取最近，不是全域最新
+    # 視窗內一份都沒有 → None（寧可未封存，不亂配）
+    assert sr.find_report_json(t0 + 10**14, t1 + 10**14, root=str(tmp_path)) is None
+
+
+def test_find_report_json_accepts_null_mr_and_skips_broken_files(sr, tmp_path):
+    import os
+    t0, t1 = 2_000_000_000 * 1_000_000, 2_000_000_100 * 1_000_000
+    broken = tmp_path / "broken.json"
+    broken.write_text("{not json")
+    os.utime(broken, (2_000_000_050, 2_000_000_050))
+    _report(tmp_path, "local.json", 2_000_000_060, None)  # local_branch：mr 是 null
+    got = sr.find_report_json(t0, t1, root=str(tmp_path))
+    assert got and got["mr"] is None
+
+
+def test_build_page_survives_null_mr_and_escapes_script_close(sr):
+    agg = {"主線程": {"first": 0, "last": 60_000_000, "llm_us": 1_000_000},
+           "x</script>y": {"first": 0, "last": 30_000_000, "llm_us": 0}}
+    chart = [{"role": "x</script>y", "s": 0, "e": 1_000_000, "kind": "llm_request",
+              "label": "m", "in": 1, "out": 1, "cr": 0, "cw": 0}]
+    page = sr.build_page("sid12345", agg, chart, [], {},
+                         {"conclusion": "Approved", "mr": None, "findings": []})
+    assert "MR !" not in page          # mr null → 標題略過，不炸
+    assert "</script>y" not in page.split("const DATA")[1].split(";")[0]  # DATA 內已逸出
+
+
+def test_build_page_lists_transcript_only_roles_and_counts_their_cost(sr):
+    agg = {"主線程": {"first": 0, "last": 60_000_000, "llm_us": 0}}
+    tokens = {"主線程": {"in": 1, "out": 1, "cr": 0, "cw": 0, "cost": 1.0, "model": "fable-5"},
+              "ncr-scan-lint": {"in": 9, "out": 9, "cr": 0, "cw": 0, "cost": 99.0, "model": "sonnet-5"}}
+    page = sr.build_page("sid12345", agg, [], [], tokens, None)
+    assert "trace 未拍到" in page and "ncr-scan-lint" in page
+    assert "$100.00" in page  # 總成本卡含 transcript-only 角色，不靜默少算
