@@ -147,7 +147,7 @@ start_capture() {
     local shown="${NCR_CAPTURE_HOST_DIR:-$CAPTURE_DIR}/$(basename "$CAPTURE_SESSION_DIR")/"
     echo "● 錄製中 → ${shown}flows.mitm"
     echo "● 即時畫面 → http://localhost:${NCR_MITM_WEB_PORT:-$CAPTURE_WEB_PORT}/?token=${token}"
-    echo "  （畫面上是未脫敏的即時內容、只有本機連得到；落地的檔案是脫敏版）"
+    echo "  （畫面上是未脫敏的即時內容，host 側只綁本機且要 token；落地的是脫敏版）"
 }
 
 # 收工時把這一場的環境寫在 capture 旁邊。
@@ -179,9 +179,11 @@ write_capture_sidecar() {
     # /proc）會留空，那時寧可空著也不要瞎填一個對不上的。
     local sid="$NCR_SESSION_ID"
 
-    printf '{\n  "capture": "%s",\n  "started": "%s",\n  "ended": "%s",\n  "network": "%s",\n  "telemetry": "%s",\n  "session_id": "%s"\n}\n' \
+    # capture_hosts 一定要記：報表的端點表看起來像「這一場連過的全部」，
+    # 但它其實是「過濾器讓我看到的那些」。不記，讀報表的人無從分辨。
+    printf '{\n  "capture": "%s",\n  "started": "%s",\n  "ended": "%s",\n  "network": "%s",\n  "telemetry": "%s",\n  "capture_hosts": "%s",\n  "session_id": "%s"\n}\n' \
         "$(basename "$CAPTURE_FILE")" "$CAPTURE_STARTED" "$(date -Iseconds)" \
-        "$mode" "${OTEL_EXPORTER_OTLP_ENDPOINT:+on}" "${sid:-}" \
+        "$mode" "${OTEL_EXPORTER_OTLP_ENDPOINT:+on}" "$CAPTURE_HOSTS" "${sid:-}" \
         > "${dir}/meta.json"
 }
 
@@ -211,8 +213,11 @@ inject_session_id() {
     [ -n "$NCR_SESSION_ID" ] || return 1
     case "$1" in claude|*/claude) ;; *) return 1 ;; esac
     for arg in "$@"; do
+        # `=value` 的寫法也要認。只比對裸旗標的話，`--resume=abc` 不匹配，
+        # 我們照樣塞一個 --session-id 進去，CLI 收到兩個衝突的 session 旗標。
         case "$arg" in
-            --session-id|--resume|-r|--continue|-c|--fork-session) return 1 ;;
+            --session-id|--session-id=*|--resume|--resume=*|-r|-r=*|\
+            --continue|--continue=*|-c|--fork-session) return 1 ;;
         esac
     done
     return 0
@@ -232,6 +237,9 @@ resolve_session_id() {
     fi
     NCR_INJECT_SESSION=0
     for arg in "$@"; do
+        case "$arg" in
+            --session-id=*|--resume=*) NCR_SESSION_ID="${arg#*=}"; return ;;
+        esac
         case "$prev" in
             --session-id|--resume|-r)
                 case "$arg" in -*) ;; *) NCR_SESSION_ID="$arg"; return ;; esac ;;
@@ -250,9 +258,17 @@ run_cli() {
     if [ -z "$CAPTURE_PID" ]; then
         exec "$@"
     fi
+    # 背景跑 CLI ＋ trap：開錄之後 PID 1 是這支 bash，而 bash 身為 PID 1 在沒有
+    # trap 的情況下會忽略 SIGTERM。`docker stop` 因此在寬限期後直接 SIGKILL 全滅，
+    # 收尾整段跳過——meta.json 與 firewall.txt 一定不會有。接住它，把訊號轉給 CLI，
+    # 讓正常收尾在 docker stop 這條路徑上也走得到。
     set +e
-    "$@"
+    "$@" &
+    local child=$!
+    trap 'kill -TERM "$child" 2>/dev/null' TERM INT
+    wait "$child"
     local rc=$?
+    trap - TERM INT
     stop_capture
     write_capture_sidecar
     exit "$rc"
@@ -303,7 +319,7 @@ fi
 
 echo ""
 echo "錄製本場流量？（mitmproxy，只錄 ${CAPTURE_HOSTS}）"
-echo "  y = 錄，落在 ~/ncr/mitm/flows-<時間>.mitm（脫敏後）"
+echo "  y = 錄，落在 ~/ncr/mitm/<session-id>/（脫敏後）"
 echo "  n = 不錄（預設）"
 echo ""
 # 非互動環境用 NCR_CAPTURE（1|0|y|n）跳過選單。看不懂的輸入落到保守側（不錄）

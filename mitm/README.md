@@ -18,7 +18,7 @@ dev container 啟動時會問一題，預設不錄：
 
 ```
 錄製本場流量？（mitmproxy，只錄 api.anthropic.com）
-  y = 錄，落在 ~/ncr/mitm/flows-<時間>.mitm（脫敏後）
+  y = 錄，落在 ~/ncr/mitm/<session-id>/（脫敏後）
   n = 不錄（預設）
 ```
 
@@ -35,8 +35,9 @@ addon 由 run wrapper 從**它自己所在的 repo** 掛進容器（`mitm/` → 
   落地；addon 不在就整場不錄，而不是退回錄原始流量。
 - **只錄模型 API 的 host**，其餘一概不收。
 
-即時畫面顯示的是記憶體裡的原始 flow（未脫敏），只綁 `127.0.0.1`、有 token；
-落到磁碟的永遠是脫敏版。兩者是分開的。
+即時畫面顯示的是記憶體裡的原始 flow（未脫敏）。它在容器內綁 `0.0.0.0`，
+host 側只發布到 `127.0.0.1`，而且要帶 token；同一張 docker network 上的其他容器
+連得到那個 port（仍需 token）。落到磁碟的永遠是脫敏版，兩者是分開的。
 
 > ⚠️ 脫敏拿掉的是 **secret**，不是 **content**。整份 system prompt、送進去的程式碼
 > 都還在檔案裡——那正是錄它的目的，但那些東西本身可能就是機敏材料。
@@ -46,12 +47,12 @@ addon 由 run wrapper 從**它自己所在的 repo** 掛進容器（`mitm/` → 
 ## 讀
 
 ```bash
-uv run mitm/wire_report.py ~/ncr/mitm/flows-20260806T101500.mitm --open
+uv run mitm/wire_report.py ~/ncr/mitm/<session-id>/ --open
 uv run mitm/wire_report.py <capture> --json > wire.json
 ```
 
 單頁四塊：上下行總量、累積上傳曲線（疊一層「其中是重送的」）、端點清單、
-每一發請求的 cache 行為。
+每一個模型呼叫的 cache 行為。
 
 **它刻意不做帳單、不做每角色歸因、不畫甘特**——那些 `opentelemetry/` 已經有了，
 而且來源更準（transcript 的 usage 逐請求精確，trace 的父子鏈才認得出誰是誰）。
@@ -64,16 +65,20 @@ uv run mitm/wire_report.py <capture> --json > wire.json
 |---|---|
 | 線上實際傳了多少 byte | trace 記 token，不記 byte。帳單便宜不等於頻寬省 |
 | 其中有多少是重送的 | 要比對 request body 才算得出來 |
-| 除了模型 API 還有誰在講話 | trace 只記錄程式願意送出來的東西，capture 記錄的是事實 |
+| 除了模型 API 還有誰在講話 | trace 只記錄程式願意送出來的東西，capture 記錄的是事實。**但只在 `capture_hosts` 涵蓋的範圍內**，報表會把這個過濾器印出來 |
 | cache 斷點下在哪 | 命中率 trace 看得到，斷點策略只有 body 有 |
 
-「重送」的比對對象是**同一條對話的前一發**，不是時間上相鄰的那一發——subagent 會
-交錯進來，拿時間相鄰的兩發去比會得到一個沒有意義的數字。對話用 `messages[0]` 認，
-不依賴客戶端配合送出任何識別。
+「重送」的比對對象是**同一條對話的前一次**，不是時間上相鄰的那一次。subagent 會交錯進來，
+拿時間相鄰的兩次去比會得到一個沒有意義的數字。對話用 `messages[0]` 的雜湊認，
+不依賴客戶端配合送出任何識別；compaction 或 resume 會換掉那一則，同一場會被
+切成新的一條，重送量從零重算。
 
 byte 數取的是 `raw_content`，也就是沒有解壓的原樣，因為要回答的是「傳了多少」而不是
 「內容有多長」。報表底下會說明這一場的請求有沒有壓縮，決定這裡的數字能不能直接跟
 網卡上的量對帳。
+
+要注意數字量的是**脫敏副本**，不是原始封包。脫敏重新序列化時用 compact 分隔符、
+跟 client 送出的形狀一致，所以差異只剩被換成 `<redacted>` 的那些值本身。
 
 ## 版本綁在檔案上
 
@@ -93,7 +98,7 @@ please update mitmproxy.
 
 ```bash
 mitmweb --version          # 要 >= 容器裡那個版本
-uvx mitmproxy@12.2.3 mitmweb -r ~/ncr/mitm/flows-<時間>.mitm   # 或直接指定版本開
+uvx mitmproxy@12.2.3 mitmweb -r ~/ncr/mitm/<session-id>/flows.mitm   # 或直接指定版本開
 ```
 
 ## 只做 SSE

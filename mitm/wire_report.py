@@ -172,7 +172,7 @@ def _count_all_breakpoints(node: object) -> int:
     return found
 
 
-def _lane_key(req: dict) -> str:
+def _lane_key(req: dict) -> str | None:
     """把請求歸到某一條對話。
 
     同一條對話的每一次請求，messages[0] 都是同一則——主線程是使用者的第一句，
@@ -181,7 +181,9 @@ def _lane_key(req: dict) -> str:
     """
     messages = req.get("messages") or []
     if not messages:
-        return "—"
+        # 回 None 而不是某個字串：字串是 truthy，會讓所有沒有 messages 的請求
+        # 被歸進同一條 lane 互相比對，重送量就變成一個沒有意義的數字。
+        return None
     # 取全長的雜湊，不截前綴：兩個 subagent 的派遣 prompt 常常共用一大段前言，
     # 截斷會把它們判成同一條對話，重送量就歸錯人。
     first = json.dumps(messages[0], ensure_ascii=False, sort_keys=True)
@@ -209,9 +211,12 @@ def resolve_capture(target: Path) -> Path:
     檔案的路徑也要能走。
     """
     if target.is_dir():
-        found = sorted(target.glob("*.mitm"))
+        found = sorted(target.glob("*.mitm"), key=lambda p: p.stat().st_mtime, reverse=True)
         if not found:
             raise SystemExit(f"{target} 裡沒有 .mitm")
+        if len(found) > 1:
+            # 挑了哪一顆要說出來，不要靜靜選一個。
+            print(f"（{target} 裡有 {len(found)} 顆 .mitm，用最新的 {found[0].name}）")
         return found[0]
     return target
 
@@ -413,7 +418,10 @@ def summarize(rows: list[dict]) -> dict:
         slot["cache_write"] += usage.get("cache_creation_input_tokens", 0) or 0
         slot["output"] += usage.get("output_tokens", 0) or 0
         # 正規化與牌價都走 cost-report.py，兩份報表不該對同一個模型報出不同的錢。
-        priced = _cost.cost_usd(model, _cost.normalize_usage(usage))
+        # usage 的欄位可能存在但值是 null。summarize 自己的加總都有 `or 0`，
+        # 丟給 normalize_usage 的那份也要，不然 cost_usd 會 TypeError、整份報表掛掉。
+        clean = {k: (v if v is not None else 0) for k, v in usage.items()}
+        priced = _cost.cost_usd(model, _cost.normalize_usage(clean))
         if priced is None:
             slot["priced"] = False      # 牌價表上沒有就不猜，報表標「無牌價」
         else:
@@ -710,7 +718,7 @@ td.ep { word-break:break-all; }
 </div>
 <div class="card">
   <h2>連線對象</h2>
-  <p class="sub">依上行量排序。不只有模型 API。</p>
+  <p class="sub">依上行量排序。__HOSTS_NOTE__</p>
   <div class="wrap">__ENDPOINTS__</div>
 </div>
 __FIREWALL__
@@ -804,7 +812,9 @@ def cache_boundary(sites: list[str]) -> str:
         return "沒有標記（整段重算）"
     # 位置在請求裡的先後：system → tools → messages，最深的就是最後出現的那個
     order = {"system": 0, "tools": 1, "messages": 2}
-    deepest = max(sites, key=lambda x: order.get(x.split("[")[0], 3))
+    # 用 reversed：max 平手時回傳先遇到的那個，而 sites 在同一段裡是升冪排的，
+    # 直接 max 會在「最後兩則訊息各下一個標記」這種常見情況挑到比較淺的那個。
+    deepest = max(reversed(sites), key=lambda x: order.get(x.split("[")[0], 3))
     extra = len(sites) - 1
     label = site_label(deepest)
     return f"{label}（另有 {extra} 個標記）" if extra else label
@@ -945,14 +955,25 @@ def build_page(name: str, summary: dict, rows: list[dict],
          ("cache 讀", True), ("cache 寫", True), ("新輸入", True), ("輸出", True)],
         call_rows) if call_rows else '<p class="empty">這顆 capture 裡沒有模型呼叫。</p>'
 
+    info = (sidecars or {}).get("meta") or {}
+
     idle_note = ""
     if cap["gaps"]:
         idle_note = (f'　時間軸斷了 {len(cap["gaps"])} 處：全場 {fmt_secs(cap["wall"])} 裡有 '
                      f'{fmt_secs(cap["idle"])} 沒有任何請求。')
+    # 只錄了部分 host 的話一定要講。不講的話這張表看起來就像「這一場連過的全部」，
+    # 而它其實是「過濾器讓我看到的那些」。
+    hosts = info.get("capture_hosts")
+    hosts_note = (f'本場只錄 {hosts}，其餘 host 不在此表。' if hosts
+                  else '這一場的錄製範圍沒有記錄，此表未必是全部連線。')
+
+    compress_caveat = ('　請求有壓縮，這個比例是壓縮後 byte 的前綴比對，不等於內容重複率。'
+                       if cap["requests_compressed"] else '')
     ratio = cap["repeated_ratio"] * 100
     repeat_note = (
         f'{fmt_bytes(cap["repeated"])}（{ratio:.1f}%）是同一條對話前一次就送過的。'
-        f'不是失敗重試，是協定要求每一次都把整段對話從頭附上。' + idle_note
+        f'不是失敗重試，是協定要求每一次都把整段對話從頭附上。'
+        + idle_note + compress_caveat
     )
 
     if cap["requests_compressed"]:
@@ -965,7 +986,6 @@ def build_page(name: str, summary: dict, rows: list[dict],
         )
 
     meta_line = f"{name} · 起始 {started} · 共 {cap['requests']} 次請求"
-    info = (sidecars or {}).get("meta") or {}
     if info.get("network"):
         meta_line += f" · 網路 {info['network']}"
     if info.get("session_id"):
@@ -978,6 +998,7 @@ def build_page(name: str, summary: dict, rows: list[dict],
             .replace("__KPIS__", kpis)
             .replace("__CHART__", svg)
             .replace("__POINTS__", points)
+            .replace("__HOSTS_NOTE__", html.escape(hosts_note))
             .replace("__ENDPOINTS__", endpoints)
             .replace("__CALLS__", calls)
             .replace("__FIREWALL__", build_firewall_card(sidecars or {}))

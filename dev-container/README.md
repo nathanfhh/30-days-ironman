@@ -161,7 +161,7 @@ wrapper 會明講並教你重建。啟動收集端與輸出報表的方式見 `.
 
 ```
 錄製本場流量？（mitmproxy，只錄 api.anthropic.com）
-  y = 錄，落在 ~/ncr/mitm/flows-<時間>.mitm（脫敏後）
+  y = 錄，落在 ~/ncr/mitm/<session-id>/（脫敏後）
   n = 不錄（預設）
 ```
 

@@ -441,3 +441,37 @@ def test_addon_skips_hosts_outside_the_list(monkeypatch):
     inst.response(_FakeFlowForAddon(host="example.com"))
     assert inst._writer.records == []
     assert inst.dropped == 0      # 不是錯誤，是不收
+
+
+def test_redacted_copy_keeps_the_body_compact(rd):
+    """重新序列化不可以把 body 撐大——下游拿這顆檔案的 byte 數當「線上傳了多少」。"""
+    import json as _json
+    original = _json.dumps({"model": "m", "tools": [{"name": "a"}, {"name": "b"}],
+                            "token": "sk-ant-1234567890"}, separators=(",", ":"))
+    msg = FakeMessage(headers={"content-type": "application/json"}, text=original)
+    rd._redact_message(msg)
+    assert ", " not in msg.text and '": ' not in msg.text
+    # 只有被換掉的那個值造成長度差，結構本身不膨脹
+    assert len(msg.text) == len(original) - len("sk-ant-1234567890") + len(rd.REDACTED)
+
+
+def test_cache_boundary_picks_the_deepest_marker_on_a_tie(wr):
+    """同一段裡有兩個標記時，決定省下多少的是比較深的那一個。"""
+    assert wr.cache_boundary(["system[0]", "messages[3]", "messages[-1]"]).startswith("最後一則")
+
+
+def test_requests_without_messages_do_not_share_a_lane(wr):
+    rows = [{"ts": 1, "lane": wr._lane_key({}), "_raw_up": b"AAAA-1", "up": 6},
+            {"ts": 2, "lane": wr._lane_key({}), "_raw_up": b"AAAA-2", "up": 6}]
+    wr.annotate_repeat(rows)
+    assert rows[1]["repeat"] == 0     # 兩者不該互比
+
+
+def test_null_usage_values_do_not_crash_the_report(wr):
+    rows = [{"ts": 1, "host": "h", "path": "/v1/messages", "method": "POST", "status": 200,
+             "up": 1, "down": 1, "req_encoding": "", "resp_encoding": "",
+             "model": "claude-sonnet-5", "lane": "m", "breakpoints": 0,
+             "breakpoint_sites": [],
+             "usage": {"input_tokens": None, "output_tokens": 5}, "repeat": 0}]
+    summary = wr.summarize(rows)      # 先前這行 TypeError，整份報表掛掉
+    assert summary["models"][0]["priced"] is True

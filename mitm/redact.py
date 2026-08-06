@@ -49,12 +49,22 @@ SENSITIVE_JSON_KEYS = {
     "refresh_token",
     "id_token",
     "token",
+    # camelCase 變體。JS 生態的預設命名，而 Claude Code 自己的憑證檔就是用
+    # accessToken——只列 snake_case 等於對最可能出現的那一種放行。
+    "accesstoken",
+    "refreshtoken",
+    "idtoken",
+    "clientsecret",
+    "sessionid",
     "secret",
     "client_secret",
     "password",
     "session",
     "session_id",
 }
+
+# 比對前先把大小寫、底線、連字號抹平，`api_key` / `apiKey` / `api-key` 一視同仁。
+_NORMALISED_KEYS = {k.replace("-", "").replace("_", "") for k in SENSITIVE_JSON_KEYS}
 
 # key 名稱兩側的引號是選配，所以 JSON 形式（"api_key": "sk-…"）與裸寫法
 # （api_key=sk-…、api_key: sk-…）都吃得到。12 字元下限是為了不要把
@@ -63,6 +73,7 @@ SECRET_TEXT_PATTERNS = [
     re.compile(r"(?i)(['\"]?authorization['\"]?\s*[:=]\s*['\"]?)(bearer\s+)?[A-Za-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)(['\"]?x-api-key['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)(['\"]?api[_-]?key['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
+    re.compile(r"(?i)(['\"]?(?:access|refresh|id)[_-]?token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)(['\"]?access_token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)(['\"]?refresh_token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
 ]
@@ -85,7 +96,10 @@ def redact_json_value(value: Any) -> Any:
     """遞迴脫敏。dict 的 key 命中清單就換值，其餘往下走；字串走文字樣式。"""
     if isinstance(value, dict):
         return {
-            str(k): REDACTED if str(k).lower() in SENSITIVE_JSON_KEYS else redact_json_value(v)
+            str(k): REDACTED
+            if str(k).lower().replace("-", "").replace("_", "") in _NORMALISED_KEYS
+            or str(k).lower() in SENSITIVE_JSON_KEYS
+            else redact_json_value(v)
             for k, v in value.items()
         }
     if isinstance(value, list):
@@ -150,7 +164,12 @@ def _redact_message(msg: Any) -> None:
 
     parsed = _parse_json(text)
     if parsed is not None:
-        msg.text = json.dumps(redact_json_value(parsed), ensure_ascii=False)
+        # separators 一定要指定成 compact。json.dumps 的預設會在每個冒號與逗號後
+        # 多一個空白，client 送的是無空白的 JSON——重新序列化就等於把 body 撐大，
+        # 而下游是拿這顆檔案的 byte 數當「線上實際傳了多少」。tools 定義那種 key
+        # 密集的區段膨脹得最兇，headline 數字會系統性偏高。
+        msg.text = json.dumps(redact_json_value(parsed),
+                              ensure_ascii=False, separators=(",", ":"))
     else:
         msg.text = redact_text(text)
 

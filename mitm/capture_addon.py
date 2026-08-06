@@ -46,6 +46,7 @@ class RedactedCapture:
         self.written = 0
         self.dropped = 0
         self.skipped_ws = 0
+        self.errored = 0
 
     def load(self, loader) -> None:
         loader.add_option(
@@ -77,6 +78,14 @@ class RedactedCapture:
             return
         self._save(flow)
 
+    def error(self, flow) -> None:
+        """連線中途壞掉的 flow。
+
+        不收進 capture（沒有完整的 response 可寫），但要記一筆數字——不然報表的
+        請求數只算「有完整回應的」，失敗的連線在畫面上完全不存在。
+        """
+        self.errored += 1
+
     def _save(self, flow) -> None:
         if self._writer is None:
             return
@@ -107,11 +116,11 @@ class RedactedCapture:
             finally:
                 self._fh.close()
                 self._fh = None
-        if self.written or self.dropped or self.skipped_ws:
+        if self.written or self.dropped or self.skipped_ws or self.errored:
             try:
                 ctx.log.info(
                     f"[capture] 寫入 {self.written} 條，丟棄 {self.dropped} 條，"
-                    f"跳過 WebSocket {self.skipped_ws} 條。"
+                    f"跳過 WebSocket {self.skipped_ws} 條，中途出錯 {self.errored} 條。"
                 )
             except Exception:  # noqa: BLE001, S110 - 收尾階段 log 可能已關閉，統計印不出來不算故障
                 pass
