@@ -46,7 +46,8 @@ CAPTURE_DIR="$HOME/ncr/mitm"
 CAPTURE_PROXY_HOST="127.0.0.1"
 CAPTURE_PROXY_PORT="8880"
 CAPTURE_WEB_PORT="8081"          # 容器內固定；host 那側由 run script 動態挑，避免多開時撞號
-CAPTURE_HOSTS="api.anthropic.com"
+CAPTURE_HOSTS=""            # 空字串＝全錄；選單第二題可收斂成只錄模型 API
+CAPTURE_MODEL_HOSTS="api.anthropic.com"
 CAPTURE_CA="$HOME/.mitmproxy/mitmproxy-ca-cert.pem"
 CAPTURE_ON=0
 CAPTURE_PID=""
@@ -137,9 +138,20 @@ start_capture() {
         export SSL_CERT_FILE="$bundle" REQUESTS_CA_BUNDLE="$bundle" \
                CURL_CA_BUNDLE="$bundle" GIT_SSL_CAINFO="$bundle"
     fi
-    # 內部流量不繞經 capture：gitlab-proxy 是審查主線（不該讓 proxy 夾在中間），
-    # jaeger 走 OTLP gRPC、本來就不是錄製標的。
-    export NO_PROXY="gitlab-proxy,jaeger,localhost,127.0.0.1,::1"
+    if [ -z "$CAPTURE_HOSTS" ]; then
+        # 全錄：連我沒預料到的客戶端也要能被錄到，那就只能讓它們信任系統信任庫。
+        if sudo /usr/local/bin/trust-mitm-ca.sh 2>/dev/null; then
+            echo "● CA 已裝進容器的系統信任庫（用完即丟，憑證不持久化）"
+        else
+            echo "⚠️  CA 裝不進系統信任庫，只有吃環境變數的客戶端會信任它（image 需重建）"
+        fi
+        # jaeger 仍排除：OTLP 走 gRPC，HTTP proxy 夾在中間只會讓 telemetry 送不出去，
+        # 錄也錄不到有用的東西。這個例外會寫進 meta.json，報表據此揭露。
+        export NO_PROXY="jaeger,localhost,127.0.0.1,::1"
+    else
+        # 只錄模型 API：內部流量不必繞經 proxy，proxy 也就不在工作的關鍵路徑上。
+        export NO_PROXY="gitlab-proxy,jaeger,localhost,127.0.0.1,::1"
+    fi
     export no_proxy="$NO_PROXY"
 
     # 印 host 視角的路徑（run wrapper 傳進來的）。直接跑容器、沒有 wrapper 時才退回
@@ -183,7 +195,7 @@ write_capture_sidecar() {
     # 但它其實是「過濾器讓我看到的那些」。不記，讀報表的人無從分辨。
     printf '{\n  "capture": "%s",\n  "started": "%s",\n  "ended": "%s",\n  "network": "%s",\n  "telemetry": "%s",\n  "capture_hosts": "%s",\n  "session_id": "%s"\n}\n' \
         "$(basename "$CAPTURE_FILE")" "$CAPTURE_STARTED" "$(date -Iseconds)" \
-        "$mode" "${OTEL_EXPORTER_OTLP_ENDPOINT:+on}" "$CAPTURE_HOSTS" "${sid:-}" \
+        "$mode" "${OTEL_EXPORTER_OTLP_ENDPOINT:+on}" "${CAPTURE_HOSTS:-（全部，jaeger 除外）}" "${sid:-}" \
         > "${dir}/meta.json"
 }
 
@@ -318,7 +330,7 @@ else
 fi
 
 echo ""
-echo "錄製本場流量？（mitmproxy，只錄 ${CAPTURE_HOSTS}）"
+echo "錄製本場流量？（mitmproxy）"
 echo "  y = 錄，落在 ~/ncr/mitm/<session-id>/（脫敏後）"
 echo "  n = 不錄（預設）"
 echo ""
@@ -339,6 +351,38 @@ case "${cap_choice:-n}" in
     [Yy]*) CAPTURE_ON=1 ;;
     *)     CAPTURE_ON=0; echo "● 本場不錄流量" ;;
 esac
+
+# 要錄，才問範圍。
+#
+# 預設全錄，因為這份紀錄的用途之一是回答「有沒有東西走漏」——一份只錄了自己
+# 允許的那一條的紀錄，拿來說「沒有別的」是循環論證。
+#
+# 代價也在這裡講明：全錄要讓所有客戶端都信任 mitm 的憑證，所以憑證會裝進系統
+# 信任庫（範圍是整台機器，但這台機器用完即丟、憑證每場現產）；而且 proxy 從此
+# 在工作的關鍵路徑上，它掛了這一場就跟著掛。
+if [ "$CAPTURE_ON" = "1" ]; then
+    echo ""
+    echo "錄製範圍："
+    echo "  1 = 全部流量（預設） — 憑證裝進容器的系統信任庫，proxy 進關鍵路徑"
+    echo "  2 = 只錄模型 API     — 只收 ${CAPTURE_MODEL_HOSTS}，其餘直連不經過 proxy"
+    echo ""
+    if [ -n "${NCR_CAPTURE_SCOPE:-}" ]; then
+        case "$NCR_CAPTURE_SCOPE" in
+            all|1)   scope_choice=1 ;;
+            model|2) scope_choice=2 ;;
+            *)       echo "無效輸入「${NCR_CAPTURE_SCOPE}」，套用預設（全部）"; scope_choice=1 ;;
+        esac
+        echo "● 非互動：錄製範圍 = ${scope_choice}"
+    else
+        read -r -p "請選擇 [1]: " scope_choice
+    fi
+    case "${scope_choice:-1}" in
+        2) CAPTURE_HOSTS="$CAPTURE_MODEL_HOSTS"
+           echo "● 錄製範圍：只錄 ${CAPTURE_HOSTS}" ;;
+        *) CAPTURE_HOSTS=""
+           echo "● 錄製範圍：全部流量" ;;
+    esac
+fi
 
 # ------------------------------------------------------------------------------
 # Telemetry → Jaeger

@@ -50,6 +50,7 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
 RUN printf '%s\n' \
       'nathan ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh ""' \
       'nathan ALL=(root) NOPASSWD: /usr/local/bin/firewall-counters.sh ""' \
+      'nathan ALL=(root) NOPASSWD: /usr/local/bin/trust-mitm-ca.sh ""' \
       > /etc/sudoers.d/nathan-firewall && \
     chmod 0440 /etc/sudoers.d/nathan-firewall && \
     visudo -c -f /etc/sudoers.d/nathan-firewall
@@ -177,6 +178,7 @@ USER root
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY init-firewall.sh /usr/local/bin/init-firewall.sh
 COPY firewall-counters.sh /usr/local/bin/firewall-counters.sh
+COPY trust-mitm-ca.sh /usr/local/bin/trust-mitm-ca.sh
 # GITLAB_SSH_HOST 同時餵兩個地方：上面的 known_hosts，以及這裡給防火牆讀的檔案。
 #
 # ⚠ 為什麼是檔案而不是環境變數：容器裡的 agent 以 nathan 執行，env 是它寫得到的東西；
@@ -184,7 +186,7 @@ COPY firewall-counters.sh /usr/local/bin/firewall-counters.sh
 #   0444，agent 改不動也蓋不掉（bind mount 覆蓋要 CAP_SYS_ADMIN，容器只有 NET_ADMIN）。
 #   沒帶這個 build-arg 就是空檔案 → 防火牆一條 SSH outbound 都不開。
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/init-firewall.sh \
-        /usr/local/bin/firewall-counters.sh && \
+        /usr/local/bin/firewall-counters.sh /usr/local/bin/trust-mitm-ca.sh && \
     mkdir -p /etc/ncr && \
     printf '%s' "$GITLAB_SSH_HOST" > /etc/ncr/gitlab-ssh-host && \
     chmod 0444 /etc/ncr/gitlab-ssh-host && \

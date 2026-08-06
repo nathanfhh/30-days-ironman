@@ -353,6 +353,9 @@ RUN_ENV+=(-e "NCR_MITM_WEB_PORT=${MITM_WEB_HOST_PORT}")
 # 那個路徑根本不存在，看到也開不起來。同 UI 網址，一律印 host 視角。
 RUN_ENV+=(-e "NCR_CAPTURE_HOST_DIR=${HOME}/ncr/mitm")
 [ -n "${NCR_CAPTURE:-}" ] && RUN_ENV+=(-e "NCR_CAPTURE=${NCR_CAPTURE}")
+# 錄製範圍也要能跳過選單。少轉發這一個，非互動環境會停在第二題等一個
+# 永遠不會來的輸入——不是報錯，是安靜地掛在那裡。
+[ -n "${NCR_CAPTURE_SCOPE:-}" ] && RUN_ENV+=(-e "NCR_CAPTURE_SCOPE=${NCR_CAPTURE_SCOPE}")
 
 # 脫敏 addon 從**這支腳本所在的 repo** 掛進去，不能靠 $PWD——$PWD 掛的是「被審查的
 # 那個專案」，而這支腳本是在那個專案的根目錄執行的。用 $PWD 找 addon，等於要求

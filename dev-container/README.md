@@ -157,13 +157,20 @@ wrapper 會明講並教你重建。啟動收集端與輸出報表的方式見 `.
 工具與報表住在 `../mitm/`，那邊的 README 講脫敏規則與報表怎麼讀；這裡只講容器這側
 的接線。
 
-容器啟動時會問第三題，**預設不錄**：
+容器啟動時會問第三題，**預設不錄**；答應了才問範圍，**範圍預設全部**：
 
 ```
-錄製本場流量？（mitmproxy，只錄 api.anthropic.com）
+錄製本場流量？（mitmproxy）
   y = 錄，落在 ~/ncr/mitm/<session-id>/（脫敏後）
   n = 不錄（預設）
+
+錄製範圍：
+  1 = 全部流量（預設） — 憑證裝進容器的系統信任庫，proxy 進關鍵路徑
+  2 = 只錄模型 API     — 只收 api.anthropic.com，其餘直連不經過 proxy
 ```
+
+範圍預設全部，因為這份紀錄要回答「有沒有東西走漏」——只錄自己允許的那一條，
+拿來說「沒有別的」是循環論證。非互動用 `NCR_CAPTURE_SCOPE=all|model`。
 
 答 y 之後，entrypoint 在容器內起一個 mitmweb，把 `HTTPS_PROXY` 指過去、用
 `NODE_EXTRA_CA_CERTS` 讓 Claude Code 信任它現產的根憑證，並印出檔案位置與
@@ -181,8 +188,13 @@ wrapper 會明講並教你重建。啟動收集端與輸出報表的方式見 `.
   `api.anthropic.com`，即時畫面從 host 進來時來源落在已放行的 docker 網段。
   限制模式下照樣錄得到。
 - **CA 不持久化**，每一場現產一把，炸開的範圍就是這一個容器。
-- **內部流量繞開它**：`NO_PROXY` 排除 `gitlab-proxy` 與 `jaeger`。審查主線不該讓
-  proxy 夾在中間，OTLP 也不是錄製標的。
+- **全錄時 CA 進系統信任庫**（`trust-mitm-ca.sh`，唯讀、不吃參數、sudoers 比照
+  init-firewall 鎖成 `""`）。只餵環境變數只覆蓋得到預先想得到的客戶端；要錄到
+  沒預料到的那個（curl、Go binary），就得往上一層。代價是整台機器都信那張憑證，
+  所以它只活在用完即丟的容器裡。
+- **`NO_PROXY` 只留 loopback 與 `jaeger`**。jaeger 排除是刻意的：OTLP 走明文
+  HTTP/2 不是 TLS、protobuf 也脫敏不了，而且把觀測管道穿過被觀測的東西，proxy
+  一抖就連「剛才發生什麼」都失去。只錄模型 API 時另外把 `gitlab-proxy` 也排除。
 - **開了錄製就不 `exec`。** `exec` 會讓 CLI 接管 PID 1，CLI 一退出容器立刻拆掉，
   背景的 mitmproxy 被 SIGKILL、收尾來不及跑，最後那幾條 flow 就沒了。改成前景跑
   CLI、結束後送 SIGTERM 等它善終，再帶原本的退出碼離開。
