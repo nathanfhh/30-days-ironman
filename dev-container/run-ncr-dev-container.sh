@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 啟動 ncr-dev-container 的 wrapper：解決三件事——CLI 憑證怎麼進容器、
-# git 的 SSH 憑證怎麼進容器、Opengrep 規則怎麼進容器。
+# 啟動 ncr-dev-container 的 wrapper：解決四件事——CLI 憑證怎麼進容器、
+# git 的 SSH 憑證怎麼進容器、Opengrep 規則怎麼進容器，以及（選配）
+# 偵測到 Jaeger 在跑時，把這場審查的 telemetry 錄下來。
 #
 # 憑證來源優先序：
 #   1. CLAUDE_CODE_OAUTH_TOKEN 環境變數（設了就直接透傳進容器，不碰 Keychain）
@@ -223,8 +224,88 @@ fi
 #   沒跑 gitlab-proxy 的人（多數讀者）不該因為這行而啟動不了容器。
 if docker network inspect gitlab-proxy >/dev/null 2>&1; then
     RUN_OPTS+=(--network gitlab-proxy)
-    echo "🔌 已接上 gitlab-proxy network（容器內可用 http://gitlab-proxy:5678）"
+    # 告訴 skill 走 proxy：gitlab_api.py 認這個變數，API base 換成 proxy、
+    # PRIVATE-TOKEN 由 proxy 端注入——所以容器內不需要（也刻意不轉發）GITLAB_TOKEN。
+    # 沒有這個變數的話，限制模式下 skill 會直連 GitLab 的 443 而被防火牆 REJECT。
+    RUN_ENV+=(-e NCR_GITLAB_API_BASE=http://gitlab-proxy:5678)
+    echo "🔌 已接上 gitlab-proxy network（API 走 http://gitlab-proxy:5678，token 由 proxy 注入）"
 fi
+
+# entrypoint 的網路能力選單支援 NCR_NET 跳過（CI / 腳本用），但 env 不會自己穿過
+# docker run——host 有設就轉發進去，沒設就維持互動選單。
+[ -n "${NCR_NET:-}" ] && RUN_ENV+=(-e NCR_NET)
+
+# skill 進容器的方式。install.sh 連進 ~/.claude/skills 的是 symlink，指向 host 上
+# 這個 repo 的絕對路徑；~/.claude 掛進容器後那些 symlink 是斷的——目標只存在於 host。
+# 解法不是改成複製（symlink 是「repo 改一行、下一場就吃到」的前提），而是把目標目錄
+# 用**同一個絕對路徑**掛進容器：路徑一致，symlink 原地復活。agents/*.md 的 symlink
+# 指進同一個目錄，跟著一起活。
+# 只掛屬於本 repo 的目標：~/.claude/skills 裡可能還有使用者自己的其他 skill，
+# 那些不是審查需要的東西，不該順手帶進被審環境。
+# ⚠ 唯讀：skill 是規則本體，容器裡的 agent 不該能改寫自己要遵守的規則。
+_REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+for _link in "$HOME"/.claude/skills/*; do
+    [ -L "$_link" ] || continue
+    _target="$(readlink "$_link")"
+    case "$_target" in
+        "$_REPO_ROOT"/*) [ -d "$_target" ] && RUN_MOUNTS+=(-v "$_target":"$_target":ro) ;;
+    esac
+done
+
+# Telemetry → Jaeger（traces）。只在 jaeger 容器活著時開啟：OTLP 匯出本身是非同步、
+# fail-open，設了沒人收也不會弄壞 claude，但 gating 免掉重試噪音，而且啟動時就把
+# 「這場有沒有在錄」講清楚。Jaeger 掛在 gitlab-proxy 那張 network 上（見
+# jaeger-compose.yaml），所以上面接網成功時，容器內用 http://jaeger:4317 直達，防火牆不用動。
+#
+# 只送 traces：span 上就帶著 token 數，足夠做每角色歸因；metrics/logs 設 none，
+# 不送 Jaeger 收不了的資料。
+TELEMETRY_ENV=()
+if [ "$(docker inspect -f '{{.State.Running}}' jaeger 2>/dev/null)" = "true" ]; then
+    if docker network inspect gitlab-proxy >/dev/null 2>&1; then
+        # Resource attributes：黏在該場所有 span 上的標籤，事後分析就按它們切。
+        # skill.version 自動抓——每筆 trace 記著「哪一版 skill 產生的」，是前後比對的錨。
+        # experiment 由使用者指定，一場標一組實驗代號：
+        #   NCR_EXPERIMENT=before-xxx ./run-ncr-dev-container.sh
+        # 版本讀容器實際掛進去的那份（~/.claude/skills/…，install.sh 連的 symlink）；
+        # fallback 讀 repo 相對路徑，涵蓋還沒跑 install.sh 的 fresh checkout。
+        # 兩處都沒有 → unknown，照樣開錄，只是版本標籤沒有值。
+        SKILL_MD=""
+        for _cand in \
+            "$HOME/.claude/skills/nathan-code-review/SKILL.md" \
+            "$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/skills/nathan-code-review/SKILL.md"; do
+            [ -f "$_cand" ] && { SKILL_MD="$_cand"; break; }
+        done
+        SKILL_VER="$(grep -m1 -E '^version:' "$SKILL_MD" 2>/dev/null | grep -oE '[0-9]{4}\.[0-9.]+' || echo unknown)"
+        RES="skill.version=${SKILL_VER},experiment=${NCR_EXPERIMENT:-none},reviewer=${USER:-unknown},host.env=devcontainer"
+        TELEMETRY_ENV=(
+            -e CLAUDE_CODE_ENABLE_TELEMETRY=1
+            # spans 要這個 beta 旗標才會發（2.1.222 實測：不開的話 Jaeger 一筆 trace 都收不到）
+            -e CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
+            -e OTEL_TRACES_EXPORTER=otlp
+            -e OTEL_METRICS_EXPORTER=none
+            -e OTEL_LOGS_EXPORTER=none
+            -e OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+            -e OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+            # 沒有這個，tool 呼叫的參數（含 Agent 派遣的 prompt 首行 [ncr-*] tag）不進 telemetry
+            -e OTEL_LOG_TOOL_DETAILS=1
+            -e "OTEL_RESOURCE_ATTRIBUTES=${RES}"
+        )
+        echo "📊 Telemetry → Jaeger（jaeger:4317）· UI http://localhost:16686"
+        echo "   resource: ${RES}"
+    else
+        echo "⚠️  jaeger 在跑，但 gitlab-proxy network 不存在，容器接不到它 → 本場不錄。"
+        echo "   jaeger-compose 掛的就是那張網，這個狀態不該出現；重建："
+        echo "   docker compose -f opentelemetry/jaeger-compose.yaml up -d --force-recreate"
+    fi
+else
+    echo "ℹ️  Jaeger 未啟動 → 本場不錄 telemetry（要錄：docker compose -f opentelemetry/jaeger-compose.yaml up -d）"
+fi
+
+# 審查報告的 archive（workspace-paths.md 說它是 permanent 的）寫在 $HOME/ncr。
+# 容器是 --rm 的：不掛出來，報告就跟著容器一起消失，re-review 的歷史對照也永遠
+# 找不到上一輪——「永久」必須由 host 兌現，容器兌現不了。
+mkdir -p "$HOME/ncr"
+RUN_MOUNTS+=(-v "$HOME/ncr":/home/nathan/ncr)
 
 # 把「現在所在的資料夾」掛進容器的工作目錄：在要審查的專案根目錄執行本腳本。
 #（陣列展開用 ${arr[@]+...} 寫法：macOS 內建 bash 3.2 在 set -u 下，空陣列直接展開會炸）
@@ -235,6 +316,7 @@ fi
 docker run --rm -it \
     --cap-add=NET_ADMIN \
     ${RUN_ENV[@]+"${RUN_ENV[@]}"} \
+    ${TELEMETRY_ENV[@]+"${TELEMETRY_ENV[@]}"} \
     ${RUN_MOUNTS[@]+"${RUN_MOUNTS[@]}"} \
     ${RUN_OPTS[@]+"${RUN_OPTS[@]}"} \
     -v ~/.claude:/home/nathan/.claude \

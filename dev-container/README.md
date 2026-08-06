@@ -8,8 +8,11 @@
 Dockerfile                  image 定義
 entrypoint.sh               容器啟動後做的事（含網路能力選單）
 init-firewall.sh            限制模式套用的 iptables 白名單
-run-ncr-dev-container.sh    啟動 wrapper：憑證、SSH、規則怎麼進容器
+run-ncr-dev-container.sh    啟動 wrapper：憑證、SSH、規則怎麼進容器（偵測到 Jaeger 就順帶開錄 telemetry）
 ```
+
+觀測那一掛（Jaeger、每角色時間/成本報表、場次報表頁）在 `../opentelemetry/`，
+wrapper 偵測到 Jaeger 在跑就自動開錄，細節見該資料夾的 README。
 
 ## Build
 
@@ -136,6 +139,13 @@ cache 掛的是讀寫（trivy 會往同一個目錄寫掃描的分析結果）�
 
 目錄刻意不共用 host 自己的 `~/.cache/trivy`——host 若也裝著 trivy，兩邊版本不同時
 DB schema 可能不相容，隔離開來誰也不會弄壞誰。
+
+### 5. Telemetry（選配）
+
+觀測整組（Jaeger 收集端、每角色時間/成本報表、場次報表頁）住在 `../opentelemetry/`。
+wrapper 啟動時偵測到 jaeger 容器在跑就自動注入 OTEL 環境變數並開錄（只送 traces、
+`NCR_EXPERIMENT` 標實驗代號）；沒在跑就完全不碰。啟動收集端與輸出報表的方式
+見 `../opentelemetry/README.md`。
 
 ## 網路邊界
 
