@@ -1,6 +1,6 @@
 {
-  "provenance": "Computed after a no-context audit agent (2026-08-05) flagged that the corrected precision no longer charges for verbosity. Its two alternative views were independently reproduced from data/ before recording here. Convention matches summary.json: precision = TP/(TP+FP); duplicate hits on an already-matched golden count as neither. Recomputed 2026-08-06 under the merged-cluster correction (a candidate cluster that already holds a standing golden comment is no longer a discovery): of the 17 merged clusters, only 1 had ever reached the consensus pool, so the exam falls 307 -> 306 and only greptile-v4-1 and claude-code lose a hit. `consensus_exam` only; `validated_golden_only` is untouched.",
-  "candidate_counts_note": "Real candidate counts per tool: nathan-code-review 775, coderabbit 318, augment 178, cubic-v2 175, claude-code 173, greptile-v4-1 168. TP+FP differs (771/297/171/162/164/165) because candidates that duplicate an already-matched golden are excluded from both.",
+  "provenance": "Computed after a no-context audit agent (2026-08-05) flagged that the corrected precision no longer charges for verbosity. Its two alternative views were independently reproduced from data/ before recording here. Convention matches summary.json: precision = TP/(TP+FP); duplicate hits on an already-matched golden count as neither. Recomputed 2026-08-06 under the merged-cluster correction (a candidate cluster that already holds a standing golden comment is no longer a discovery): of the 17 merged clusters, only 1 had ever reached the consensus pool, so the exam falls 307 -> 306 and only greptile-v4-1 and claude-code lose a hit. `consensus_exam` only; `validated_golden_only` is untouched. 2026-08-06 reconciliation: the 2026-08-05 hand-computed cells regenerate bit-exact from data/ under fp_rule; the apparent irreproducibility was candidate_counts_note over-generalizing the raw convention, not a computation error.",
+  "candidate_counts_note": "Real candidate counts per tool: nathan-code-review 775, coderabbit 318, augment 178, cubic-v2 175, claude-code 173, greptile-v4-1 168. TP+FP differs (771/297/171/162/164/165) because candidates that duplicate an already-matched golden are excluded from both. This note describes the raw-table convention (summary.json). consensus_exam uses its own FP rule — see consensus_exam.fp_rule; the two sets of denominators are intentionally different.",
   "validated_golden_only": {
     "target": "the 114 golden comments that survived blind verification; no discovery credit on either side",
     "cells": {
@@ -38,6 +38,7 @@
   },
   "consensus_exam": {
     "target": "114 validated golden + 192 clusters raised by at least two tools = 306 items; no single tool defines the exam",
+    "fp_rule": "TP = valid-golden hits (deduped by golden_index) + consensus clusters raised (each cluster once). FP = candidates that neither matched a valid golden (duplicate hits excluded here too) nor belong to any credited consensus cluster (all cluster co-members excluded from FP while the cluster counts once in TP). Per-tool TP+FP therefore = 769/162/171/164/292/160 pre-merge-fix (post-fix: greptile 164, claude-code 160 with TP 134/122), distinct from the raw-table 771/162/171/165/297/164.",
     "cells": {
       "augment": {
         "p": 0.807,
