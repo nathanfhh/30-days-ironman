@@ -378,3 +378,47 @@ class TestHttpRequestTimeout:
         with pytest.raises(gitlab_api.ApiError) as excinfo:
             gitlab_api.http_request(f"{stub_server.url}/api/v4/x", "t")
         assert "逾時" in str(excinfo.value) or "無法連線" in str(excinfo.value)
+
+
+class TestApiBaseOverride:
+    """NCR_GITLAB_API_BASE：dev container 限制模式下經 gitlab-proxy 的那條路。
+
+    釘住兩件事：base 換人時 project path/iid 仍來自 MR URL；token 只有在
+    override 在場時才可缺席，而缺席時 PRIVATE-TOKEN header 必須整個不帶——
+    帶空值會被 GitLab 當成無效憑證 401。
+    """
+
+    MR = "https://gitlab.example.com/his/abc/abc-backend/-/merge_requests/61"
+
+    def test_override_replaces_scheme_and_host_only(self, gitlab_api, monkeypatch):
+        monkeypatch.setenv("NCR_GITLAB_API_BASE", "http://gitlab-proxy:5678/")
+        target = gitlab_api.parse_mr_url(self.MR)
+        assert target["api_base"] == "http://gitlab-proxy:5678/api/v4"
+        # path 與 iid 仍來自 MR URL，不受 override 影響
+        assert target["project_path_encoded"] == "his%2Fabc%2Fabc-backend"
+        assert target["iid"] == 61
+
+    def test_without_override_base_is_derived_from_the_url(self, gitlab_api, monkeypatch):
+        monkeypatch.delenv("NCR_GITLAB_API_BASE", raising=False)
+        target = gitlab_api.parse_mr_url(self.MR)
+        assert target["api_base"] == "https://gitlab.example.com/api/v4"
+
+    def test_token_is_optional_only_when_override_is_set(self, gitlab_api, monkeypatch):
+        for var in gitlab_api.TOKEN_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("NCR_GITLAB_API_BASE", "http://gitlab-proxy:5678")
+        assert gitlab_api.read_token() == ""
+
+        monkeypatch.delenv("NCR_GITLAB_API_BASE")
+        with pytest.raises(gitlab_api.UsageError):
+            gitlab_api.read_token()
+
+    def test_empty_token_sends_no_private_token_header(self, gitlab_api, stub_server):
+        stub_server.queue(Reply.json({"ok": True}))
+        gitlab_api.http_request(f"{stub_server.url}/api/v4/user", "")
+        assert "private-token" not in stub_server.requests[-1].headers
+
+    def test_real_token_still_sends_the_header(self, gitlab_api, stub_server):
+        stub_server.queue(Reply.json({"ok": True}))
+        gitlab_api.http_request(f"{stub_server.url}/api/v4/user", "secret-t")
+        assert stub_server.requests[-1].headers.get("private-token") == "secret-t"

@@ -8,9 +8,16 @@ Standard library only (urllib.request). No instance is configured anywhere: the
 host, the API base URL and the project path are all derived from the merge
 request URL that the caller passes in.
 
+One override exists: NCR_GITLAB_API_BASE (e.g. http://gitlab-proxy:5678)
+replaces the scheme+host of the API base while the merge request URL keeps
+supplying the project path and iid. It exists for the dev container's
+restricted network mode, where direct HTTPS to the GitLab host is blocked and
+API calls go through a reverse proxy that injects the credential itself.
+
 The token is read from GITLAB_TOKEN, falling back to NCR_GITLAB_TOKEN, and is
 sent as a PRIVATE-TOKEN header. It is never printed, logged, written to a file,
-or embedded in an error message.
+or embedded in an error message. With NCR_GITLAB_API_BASE set the token is
+optional — the proxy holds it, which is the point of routing through one.
 
 CLI:
     uv run scripts/gitlab_api.py parse       <mr-url>
@@ -52,6 +59,11 @@ EXIT_FAILURE = 1
 EXIT_USAGE = 2
 
 TOKEN_ENV_VARS = ("GITLAB_TOKEN", "NCR_GITLAB_TOKEN")
+
+# Optional API base override（如 http://gitlab-proxy:5678）。dev container 的
+# run wrapper 在接上 proxy 網路時設定；限制模式的防火牆擋掉對 GitLab 主機的直連
+# HTTPS，API 一律經 proxy，且 PRIVATE-TOKEN 由 proxy 端注入。
+API_BASE_ENV = "NCR_GITLAB_API_BASE"
 
 # The literal segment GitLab inserts between the project path and the resource
 # type. Splitting on it is the only reliable way to recover a project path that
@@ -158,7 +170,7 @@ def parse_mr_url(mr_url: str) -> dict[str, Any]:
         # GitLab then 404s on a project that plainly exists.
         "project_path_encoded": urllib.parse.quote(project_path, safe=""),
         "iid": int(iid_token),
-        "api_base": f"https://{host}/api/v4",
+        "api_base": api_base_for(host),
     }
 
 
@@ -167,15 +179,32 @@ def parse_mr_url(mr_url: str) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
+def api_base_for(host: str) -> str:
+    """API base for a host, honouring the NCR_GITLAB_API_BASE override."""
+    override = os.environ.get(API_BASE_ENV, "").strip().rstrip("/")
+    if override:
+        return f"{override}/api/v4"
+    return f"https://{host}/api/v4"
+
+
 def read_token() -> str:
-    """Read the API token from the environment. Never returned to output."""
+    """Read the API token from the environment. Never returned to output.
+
+    With NCR_GITLAB_API_BASE set the token is optional: requests go to a proxy
+    that injects PRIVATE-TOKEN itself, and keeping the credential out of this
+    environment is the reason the proxy exists. Returning "" makes http_request
+    omit the header entirely.
+    """
     for name in TOKEN_ENV_VARS:
         value = os.environ.get(name, "").strip()
         if value:
             return value
+    if os.environ.get(API_BASE_ENV, "").strip():
+        return ""
     raise UsageError(
         "找不到 GitLab token。請設定環境變數 GITLAB_TOKEN"
         "（或改用 NCR_GITLAB_TOKEN），並確認該 token 具備 api scope。"
+        "（若經 gitlab-proxy 存取，改設 NCR_GITLAB_API_BASE 即可，token 由 proxy 注入。）"
     )
 
 
@@ -279,10 +308,13 @@ def http_request(
     """
     data: bytes | None = None
     headers = {
-        "PRIVATE-TOKEN": token,
         "Accept": "application/json",
         "User-Agent": "nathan-code-review/gitlab_api",
     }
+    # 空字串 = proxy 注入模式（見 read_token）。帶一個空的 PRIVATE-TOKEN header
+    # 會被 GitLab 當成無效憑證而 401，所以是「不帶」而不是「帶空值」。
+    if token:
+        headers["PRIVATE-TOKEN"] = token
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -573,7 +605,7 @@ def cmd_whoami(args: argparse.Namespace) -> int:
         raise UsageError("--host 不可為空，請提供 GitLab 主機名稱，例如 gitlab.example.com。")
 
     token = read_token()
-    user = get_json(f"https://{host}/api/v4/user", token)
+    user = get_json(f"{api_base_for(host)}/user", token)
     if not isinstance(user, dict):
         raise ApiError("GET /user 回傳的資料格式不符預期。")
     emit({"id": user.get("id"), "username": user.get("username"), "name": user.get("name")})

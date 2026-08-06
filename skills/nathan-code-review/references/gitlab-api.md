@@ -20,9 +20,21 @@ uv run scripts/gitlab_api.py reply       <mr-url> --id <discussion_id> --body-fi
 The host comes from the merge request URL itself, so there is no instance to
 configure: `baseUrl = https://{host}/api/v4`.
 
+**Proxy override.** When `NCR_GITLAB_API_BASE` is set (e.g.
+`http://gitlab-proxy:5678`, exported automatically by the dev container's run
+wrapper when the proxy network is attached), the API base becomes
+`{NCR_GITLAB_API_BASE}/api/v4` while the merge request URL still supplies the
+project path and iid. This is the only way GitLab API calls work in the
+container's restricted network mode — the firewall blocks direct HTTPS to the
+GitLab host, and the proxy injects `PRIVATE-TOKEN` itself. The proxy exposes
+only the endpoints listed below; anything else returns 403, which is a
+whitelist decision, not an auth failure.
+
 The token is read from `GITLAB_TOKEN`, falling back to `NCR_GITLAB_TOKEN`, and
-sent as a `PRIVATE-TOKEN` header. If neither is set, stop and tell the user in
-zh-TW which variable to set and that it needs `api` scope. Do not attempt to
+sent as a `PRIVATE-TOKEN` header. With `NCR_GITLAB_API_BASE` set the token is
+optional and normally absent — the proxy holds it, which is the point. If
+neither a token nor the override is set, stop and tell the user in zh-TW which
+variable to set and that the token needs `api` scope. Do not attempt to
 continue in a degraded mode — every step of `mr` mode depends on it.
 
 The token is never written to a file, never echoed, and never appears in the

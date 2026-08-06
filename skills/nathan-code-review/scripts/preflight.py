@@ -229,6 +229,15 @@ def check_gitlab_token() -> dict[str, Any]:
         if raw is not None and raw.strip() != "":
             return {"available": True, "source": var_name}
 
+    # 沒有 token 但設了 API base override：走 proxy，PRIVATE-TOKEN 由 proxy 端
+    # 注入，等同「憑證可用」——只是憑證不在這個環境裡（這正是 proxy 的目的）。
+    api_base = os.environ.get("NCR_GITLAB_API_BASE", "").strip()
+    if api_base:
+        return {
+            "available": True,
+            "source": f"NCR_GITLAB_API_BASE（{api_base}，token 由 proxy 注入）",
+        }
+
     joined = " 或 ".join(GITLAB_TOKEN_VARS)
     return {
         "available": False,
