@@ -372,23 +372,36 @@ TRIVY_OK_EXIT_CODES = frozenset({0})
 # reported as "clean" — the trap is real: when the clone is blocked and the tree
 # is rebuilt from API-fetched source files, root-level manifests are the first
 # thing to go missing, and trivy then returns an empty report with exit code 0.
+# 顯式清單對齊完整版 review.md Track A2 的 gate，另補其生態缺口
+# （go.sum / pom.xml / build.gradle）；lock 類比照完整版走後綴通則，
+# 不逐一枚舉——uv.lock、poetry.lock、yarn.lock、package-lock.json、
+# pnpm-lock.yaml 乃至未來的新 lockfile 都落在三個後綴裡。
 DEPENDENCY_MANIFESTS = (
-    "pyproject.toml", "uv.lock", "poetry.lock", "requirements*.txt",
-    "Pipfile", "Pipfile.lock",
-    "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
-    "go.mod", "go.sum", "Cargo.toml", "Cargo.lock",
+    "pyproject.toml", "requirements*.txt", "package.json", "Pipfile",
+    "go.mod", "go.sum", "Cargo.toml", "Gemfile", "composer.json",
     "pom.xml", "build.gradle", "build.gradle.kts",
-    "Gemfile", "Gemfile.lock", "composer.json", "composer.lock",
 )
+LOCKFILE_SUFFIXES = (".lock", "-lock.json", "-lock.yaml")
+
+# vendored 依賴目錄裡的 manifest 不算數：node_modules 裡永遠有 package.json，
+# 把它當標的等於這個 gate 永遠不會觸發。
+VENDOR_DIRS = frozenset({"node_modules", ".venv", "venv", "vendor"})
 
 
 def find_dependency_manifests(root: Path) -> list[Path]:
-    """List dependency manifests in the tree, skipping EXCLUDED_DIRS."""
+    """List dependency manifests in the tree, skipping excluded/vendored dirs."""
+    import fnmatch
+
+    skip = set(EXCLUDED_DIRS) | VENDOR_DIRS
     found: list[Path] = []
-    for pattern in DEPENDENCY_MANIFESTS:
-        for p in root.rglob(pattern):
-            if not any(part in EXCLUDED_DIRS for part in p.parts):
-                found.append(p)
+    for p in root.rglob("*"):
+        if not p.is_file() or any(part in skip for part in p.parts):
+            continue
+        name = p.name
+        if name.endswith(LOCKFILE_SUFFIXES) or any(
+            fnmatch.fnmatch(name, pat) for pat in DEPENDENCY_MANIFESTS
+        ):
+            found.append(p)
     return sorted(found)
 
 

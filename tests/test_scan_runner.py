@@ -305,3 +305,17 @@ class TestTrivyVacuityGate:
         )
         digest = scan_runner.run_trivy(tmp_path, out_prefix)
         assert not any("沒有標的" in n for n in digest["notes"])
+
+    def test_lockfile_suffix_rule_catches_any_lock(self, scan_runner, tmp_path):
+        # 比照完整版 A2 gate：lock 類走後綴通則，未來的新 lockfile 也接得住
+        (tmp_path / "uv.lock").write_text("")
+        (tmp_path / "pnpm-lock.yaml").write_text("")
+        names = sorted(p.name for p in scan_runner.find_dependency_manifests(tmp_path))
+        assert names == ["pnpm-lock.yaml", "uv.lock"]
+
+    def test_vendored_manifests_do_not_count(self, scan_runner, tmp_path):
+        # node_modules 裡永遠有 package.json，算進去等於 gate 永遠不觸發
+        nm = tmp_path / "node_modules" / "leftpad"
+        nm.mkdir(parents=True)
+        (nm / "package.json").write_text("{}")
+        assert scan_runner.find_dependency_manifests(tmp_path) == []
