@@ -41,18 +41,21 @@ docker compose restart
 
 ## 怎麼讓 skill 走這條
 
-skill 的 `scripts/gitlab_api.py` 是從 MR URL 推導出 `https://{host}/api/v4`，
-所以要讓它改打代理，得把 base URL 指過來。最小的改法是加一個環境變數：
+skill 的 `scripts/gitlab_api.py` 預設從 MR URL 推導出 `https://{host}/api/v4`，
+但它認得 `NCR_GITLAB_API_BASE`——設了就改打這個 base：
 
 ```bash
 # 走代理（token 不需要、也不應該設）
-export NCR_GITLAB_API_BASE=http://127.0.0.1:5678/api/v4
+export NCR_GITLAB_API_BASE=http://127.0.0.1:5678
 
 # 容器內的 agent 則用 hostname
-export NCR_GITLAB_API_BASE=http://gitlab-proxy:5678/api/v4
+export NCR_GITLAB_API_BASE=http://gitlab-proxy:5678
 ```
 
-> 這一段需要對 `gitlab_api.py` 做對應的修改；本目錄只提供代理本身。
+> **只給到 `host:port`，不要帶 `/api/v4`。** 那一段由 `gitlab_api.py` 自己補
+> （見 `api_base_for()`），多寫一層就變成 `/api/v4/api/v4`——不在白名單裡，代理回 403。
+> skill 端已經實作，本目錄只提供代理本身；行為對照 `tests/test_gitlab_api.py`
+> 的 `TestApiBaseOverride`。
 
 ## 白名單清單
 

@@ -113,8 +113,12 @@ NCR_NO_SSH_AGENT=1 /path/to/run-ncr-dev-container.sh
 `opengrep` 不內建規則，從 host 的 clone 餵進去：
 
 ```bash
-git clone --depth 1 https://github.com/semgrep/semgrep-rules.git ~/Projects/semgrep-rules
+git clone --depth 1 https://github.com/semgrep/semgrep-rules.git ~/semgrep-rules
 ```
+
+路徑跟 `install.sh` 宣告的 `NCR_OPENGREP_RULES` 同一個（預設 `$HOME/semgrep-rules`）。
+clone 在別的地方就 `export NCR_OPENGREP_RULES=<你的路徑>` 再啟動 wrapper；
+容器內的掛載點固定是 `/home/nathan/semgrep-rules`，不隨 host 路徑變。
 
 `--depth 1`：掃描只讀工作目錄，歷史一次都用不到，而 semgrep-rules 的歷史比工作目錄
 本身大得多。shallow clone 不影響下面的更新——`pull --ff-only` 照樣 fast-forward，
@@ -143,9 +147,10 @@ DB schema 可能不相容，隔離開來誰也不會弄壞誰。
 ### 5. Telemetry（選配）
 
 觀測整組（Jaeger 收集端、每角色時間/成本報表、場次報表頁）住在 `../opentelemetry/`。
-wrapper 啟動時偵測到 jaeger 容器在跑就自動注入 OTEL 環境變數並開錄（只送 traces、
-`NCR_EXPERIMENT` 標實驗代號）；沒在跑就完全不碰。啟動收集端與輸出報表的方式
-見 `../opentelemetry/README.md`。
+wrapper 啟動時偵測到 jaeger 容器在跑、**且 `gitlab-proxy` network 存在**，才自動注入
+OTEL 環境變數並開錄（只送 traces、`NCR_EXPERIMENT` 標實驗代號）。兩個條件缺一就完全不碰
+——jaeger 掛在那張 network 上，沒接上網的容器連 `jaeger:4317` 也連不到，這種情況
+wrapper 會明講並教你重建。啟動收集端與輸出報表的方式見 `../opentelemetry/README.md`。
 
 ## 網路邊界
 
@@ -220,7 +225,8 @@ attacker.example.com` 把任意網域加進去、重建整道牆，**而且自�
 | `Host key verification failed.` | 容器裡沒有 known_hosts | host 上執行 `ssh-keyscan -t rsa,ed25519 <host> >> ~/.ssh/known_hosts` 後重跑 |
 | `Error connecting to agent: No such file or directory` | image 的 `SSH_AUTH_SOCK` 有值，但 socket 沒掛進來 | 這是「這條路沒接」不是「設定壞了」。檢查 host 的 `$SSH_AUTH_SOCK`，或你是不是設了 `NCR_NO_SSH_AGENT` |
 | 容器裡 `$SSH_AUTH_SOCK` 是**空字串** | image 比 Dockerfile 舊。這個變數是 image 的 ENV，改了 Dockerfile 不重 build 就不會生效 | `docker build -t ncr-dev-container .`。啟動時印的 `image built:` 時間比你改 Dockerfile 的時間早就是這個情況 |
-| `Error connecting to agent: Permission denied` | socket 掛進來了，但 Docker Desktop 代理出來的 socket 節點是 `root:root 0660`，而容器跑 uid 1001 | wrapper 掛 socket 時會一併補 `--group-add 0`。還是出現代表你是自己下 `docker run`，補上這個參數 |
+| `Error connecting to agent: Permission denied`（Docker Desktop：macOS / WSL2 / Docker Desktop for Linux） | socket 掛進來了，但 Docker Desktop 代理出來的 socket 節點是 `root:root 0660`，而容器跑 uid 1001 | wrapper 只要沒有確定認出「原生 Linux Docker」就會補 `--group-add 0`（判不出來時也補）。還是出現代表你是自己下 `docker run`，補上這個參數 |
+| `Error connecting to agent: Permission denied`（原生 Linux Docker） | socket 帶的是 **host 自己的 uid** 且通常 0600，跟容器內的 uid 1001 對不上。補 `--group-add 0` 在這裡沒有用（group 補不回 uid），wrapper 也因此刻意不加 | 真因是 uid 不符，只能讓兩邊對上：改 `Dockerfile` 的 `useradd` 帶上你的 uid（`id -u`）後重 build。不想處理就 `NCR_NO_SSH_AGENT=1` 關掉轉發，git 改走 HTTPS。放寬 socket 權限不是解法——那等於把 agent 開給機器上所有人 |
 | `ssh-add -l` 說 `The agent has no identities` | agent 在跑但袋子是空的。macOS 的 launchd agent **永遠都在**，所以「有 agent」不等於「有金鑰」 | host 上先 `ssh-add`，再啟動容器。wrapper 會在轉發前先檢查並警告，但不會替你載入——那個 agent 是你的，而且可能是刻意只放了受限 key |
 | git 認證失敗但 agent 有 key | 那把 key 沒有註冊到 GitLab | 到 GitLab 的 SSH Keys 頁面確認 |
 | `❌ Keychain 沒有 Claude Code 憑證` | host 沒登入過 | 先在 host 跑一次 `claude` 登入，或 `export CLAUDE_CODE_OAUTH_TOKEN` |
@@ -233,4 +239,7 @@ attacker.example.com` 把任意網域加進去、重建整道牆，**而且自�
 - **不保管任何長期憑證。** 憑證都是啟動時借進來、退出時還回去。
 - **不是沙盒。** `--dangerously-skip-permissions` 是預設，agent 在容器裡是自由的；
   邊界畫在容器外面，不在裡面。
+- **擋不住 agent 改「自己要遵守的規則指到哪」。** skill 目錄是唯讀掛進去的，規則檔本身
+  改不動；但 `~/.claude` 是讀寫掛載，裡面的 symlink 與 `settings.json` 容器內動得了、
+  而且會落回 host。這一層刻意不在這裡補，由上層隔離承接——正式版行為也是這樣。
 - **管不到伺服器端替你做的事。** 見〈網路邊界〉的已知限制。

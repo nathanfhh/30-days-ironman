@@ -34,6 +34,9 @@ if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
 elif [ "$(uname)" = "Darwin" ]; then
     # 優先序 2：macOS 把憑證鎖在 Keychain，解出成 Linux 版認得的檔案
     #（第一次執行會跳出 Keychain 授權視窗，按「允許」）
+    # 目錄先建起來：全新的 host 可能還沒有 ~/.claude，重導向會直接失敗，
+    # 訊息卻是「Keychain 沒有憑證」——把人指到完全錯的方向。
+    mkdir -p ~/.claude
     if security find-generic-password -s "Claude Code-credentials" -w \
          > ~/.claude/.credentials.json 2>/dev/null \
        && [ -s ~/.claude/.credentials.json ]; then
@@ -60,7 +63,9 @@ fi
 # Opengrep 規則（A4 軌道）：opengrep binary 不內建規則，從 host 的 semgrep-rules clone 餵。
 # 啟動前 best-effort 更新（離線或 pull 失敗就沿用現有版本，不擋啟動）、唯讀 mount 進容器。
 # clone 不存在 → 警告後照常啟動，A4 軌道本場無規則可用。
-RULES_DIR="$HOME/Projects/semgrep-rules"
+# 路徑跟著 install.sh 對使用者宣告的 NCR_OPENGREP_RULES 走（預設 $HOME/semgrep-rules）：
+# 兩邊各講一個路徑的話，照著 install.sh 設好規則的人會在這裡被判定成「找不到」。
+RULES_DIR="${NCR_OPENGREP_RULES:-$HOME/semgrep-rules}"
 if [ -d "$RULES_DIR/.git" ]; then
     git -C "$RULES_DIR" pull --ff-only 2>/dev/null || echo "⚠️  semgrep-rules 更新失敗，沿用現有版本"
     RUN_MOUNTS+=(-v "$RULES_DIR":/home/nathan/semgrep-rules:ro)
@@ -73,6 +78,7 @@ else
     # --depth 1：只掃描用不到歷史，而 semgrep-rules 的歷史比工作目錄本身大得多。
     # 上面那行 pull --ff-only 在 shallow clone 上照樣可以更新，不會被迫 unshallow。
     echo "   取得規則：git clone --depth 1 https://github.com/semgrep/semgrep-rules.git ${RULES_DIR}"
+    echo "   規則已經在別的地方：export NCR_OPENGREP_RULES=<你的 semgrep-rules 路徑> 再重跑。"
 fi
 
 # Trivy DB（A2 軌道）：trivy binary 不內建弱點資料庫，第一次掃描才去 ghcr.io 抓
@@ -245,6 +251,10 @@ fi
 # 只掛屬於本 repo 的目標：~/.claude/skills 裡可能還有使用者自己的其他 skill，
 # 那些不是審查需要的東西，不該順手帶進被審環境。
 # ⚠ 唯讀：skill 是規則本體，容器裡的 agent 不該能改寫自己要遵守的規則。
+# ⚠ 但這道鎖只蓋到「symlink 指向的那個目錄」。symlink 本身、以及 ~/.claude 底下其餘的
+#   東西（settings.json、agents/…）都在下面那個讀寫掛載裡——容器內改得動，而且會落回
+#   host。也就是說：規則檔本身動不了，但「指到哪一份規則」動得了。這個邊界刻意不在這裡
+#   補，由上層隔離（例如把整場跑在 pty 容器裡）承接；正式版的行為也是這樣，兩邊一致。
 _REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 for _link in "$HOME"/.claude/skills/*; do
     [ -L "$_link" ] || continue
@@ -308,6 +318,43 @@ fi
 # 找不到上一輪——「永久」必須由 host 兌現，容器兌現不了。
 mkdir -p "$HOME/ncr"
 RUN_MOUNTS+=(-v "$HOME/ncr":/home/nathan/ncr)
+
+# mitmproxy 的即時畫面：容器內固定 8081，host 那側動態挑一個沒被占用的。
+# 固定 8081 的話，同時開兩個容器第二個就起不來。
+#
+# 這個 port 一律發布，即使這一場最後選了不錄——published port 是 docker run 的
+# 啟動參數，事後加不上去，而要不要錄是進容器之後才問的。只綁 127.0.0.1，
+# 沒開錄製時那個 port 後面沒有東西在聽。
+MITM_WEB_HOST_PORT=8081
+if command -v python3 >/dev/null 2>&1; then
+    _picked=$(python3 - <<'PY'
+import socket
+for port in range(40000, 40101):
+    with socket.socket() as s:
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        print(port)
+        break
+PY
+)
+    if [ -n "$_picked" ]; then
+        MITM_WEB_HOST_PORT="$_picked"
+    else
+        echo "⚠️  40000–40100 都被占用，mitmproxy 畫面沿用 8081（多開時可能撞號）"
+    fi
+else
+    echo "⚠️  沒有 python3，mitmproxy 畫面沿用固定的 8081（多開時可能撞號）"
+fi
+RUN_OPTS+=(-p "127.0.0.1:${MITM_WEB_HOST_PORT}:8081")
+RUN_ENV+=(-e "NCR_MITM_WEB_PORT=${MITM_WEB_HOST_PORT}")
+[ -n "${NCR_CAPTURE:-}" ] && RUN_ENV+=(-e "NCR_CAPTURE=${NCR_CAPTURE}")
+
+# ~/.claude.json（CLI 的設定檔）不存在時先建成空檔。bind mount 的來源不存在時，
+# Docker 會替你建一個**目錄**，之後 host 上的 claude 就再也讀不到自己的設定，
+# 而且沒有人會告訴你是誰弄的。
+[ -e ~/.claude.json ] || touch ~/.claude.json
 
 # 把「現在所在的資料夾」掛進容器的工作目錄：在要審查的專案根目錄執行本腳本。
 #（陣列展開用 ${arr[@]+...} 寫法：macOS 內建 bash 3.2 在 set -u 下，空陣列直接展開會炸）

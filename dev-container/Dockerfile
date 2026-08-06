@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 
-# 預設 shell 換成 bash 並開 pipefail。這一行是為了下面五處 `curl ... | sh`。
+# 預設 shell 換成 bash 並開 pipefail。這一行是為了下面六處 `curl ... | sh`。
 #
 # ⚠ 沒有 pipefail 時，`curl X | sh` 的結束碼取自 **sh**，不是 curl。curl 失敗會輸出
 #   空字串，sh 讀到空輸入正常結束 → 整條 pipeline 回 0 → RUN 成功 → **layer 被 cache**。
@@ -86,7 +86,9 @@ RUN uv python install 3.13 && \
 RUN uv pip install --python /home/nathan/.venv/bin/python pydantic==2.13.4 && \
     python3 -c "import pydantic; print('pydantic', pydantic.__version__)"
 
-RUN uv tool install ruff && ruff --version
+# ruff：Python linter（A1 軌道）。pin 版本——不 pin 的話，同一份 code 在不同時間
+# build 的 image 底下會給出不同的診斷，審查報告就變得不可重現。
+RUN uv tool install ruff==0.16.1 && ruff --version
 
 # ty：Python type checker（A1 軌道）。仍在 0.0.x、規則月月變，必須 pin。
 RUN uv tool install ty==0.0.66 && ty --version
@@ -108,6 +110,14 @@ RUN OPENGREP_VERSION=v1.26.0 && \
     -o /home/nathan/.local/bin/opengrep && \
     chmod +x /home/nathan/.local/bin/opengrep && \
     opengrep --version
+
+# mitmproxy：錄本場 Claude Code ↔ api.anthropic.com 的 L7 流量（entrypoint 選單開關，預設不錄）。
+# 走 explicit proxy（HTTPS_PROXY 環境變數）而不是 transparent proxy，所以不需要 iptables
+# REDIRECT 那一套：proxy 綁 loopback（firewall 無條件放行 lo），上游是白名單裡的
+# api.anthropic.com——跟限制模式天生相容，零 firewall 改動。
+# pin 版本：.mitm 的檔案格式會隨大版本破壞相容，釘住才能保證舊的 capture 讀得回、
+# addon 的行為不飄。查最新版：https://pypi.org/project/mitmproxy/
+RUN uv tool install mitmproxy==12.2.3 && mitmdump --version
 
 # CodeGraph：程式碼知識圖譜 / 導航輔助（blast radius、caller 矩陣）。
 # 不 pin：輸出不進報告 finding，無可重現性需求。
