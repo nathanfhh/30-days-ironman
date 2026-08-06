@@ -27,7 +27,7 @@ FETCH_DEPTH = 60  # deep enough for merge-base on every benchmark PR seen so far
 
 
 def run(cmd: list[str], cwd: Path, timeout: int = 900) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
 
 
 def fetch_pr_diff(repo_url: str, pr_number: int, workdir: Path, base_rev: str | None = None) -> dict:
@@ -101,6 +101,7 @@ def main() -> int:
     out_root = Path(args.out)
     work_root = Path(args.workdir)
 
+    failures: list[tuple[str, str]] = []
     for entry in manifest:
         slug = entry["slug"]
         if wanted and slug not in wanted:
@@ -115,6 +116,7 @@ def main() -> int:
         )
         if "error" in result:
             print(f"FAIL  {slug}: {result['error']}", file=sys.stderr)
+            failures.append((slug, result["error"]))
             continue
 
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -123,6 +125,14 @@ def main() -> int:
         lines = result["stat"].strip().splitlines()
         print(f"ok    {slug}: {lines[-1].strip() if lines else 'empty diff'}")
 
+    # A missing diff silently shrinks the PR set every later stage runs on, and
+    # the scorer will happily report a mean over whatever survived. Exit non-zero
+    # so the run stops here instead of producing a quietly smaller benchmark.
+    if failures:
+        print(f"\n{len(failures)} PR(s) failed to fetch:", file=sys.stderr)
+        for slug, error in failures:
+            print(f"  {slug}: {error}", file=sys.stderr)
+        return 1
     return 0
 
 

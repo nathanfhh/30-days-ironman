@@ -48,13 +48,16 @@ class TestCaseShape:
 
     def test_name_matches_the_filename(self, path):
         """The judge reports by name; a mismatch makes the summary unmappable."""
+        assert "-" in path.stem, (
+            f"{path.name} 檔名要是 <序號>-<name>.yaml，缺少 '-' 就對不上 case 名稱"
+        )
         assert _load(path)["name"] == path.stem.split("-", 1)[1]
 
     def test_every_skill_file_exists(self, path):
         for rel in _load(path)["skill_files"]:
             assert (REPO_ROOT / rel).is_file(), f"{path.name} 指向不存在的檔案：{rel}"
 
-    def test_conversations_alternate_sensibly(self, path):
+    def test_conversations_are_well_formed(self, path):
         turns = _load(path)["conversations"]
         assert turns, "golden conversation 不能是空的"
         assert turns[0]["role"] == "user", "對話要從 user 開始"

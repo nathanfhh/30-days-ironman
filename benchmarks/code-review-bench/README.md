@@ -76,21 +76,26 @@ Known and disclosed rather than fixed:
 
 ```
 harness/
-  build_manifest.py   PR selection (deterministic)
-  fetch_pr.py         base..head diff for each fork PR, via git only
-  export_inputs.py    golden comments + comparison tools' candidate lists
-  plan_jobs.py        judge job batches, one tool at a time
-  build_claims.py     the blind claim pool per PR
-  score.py            raw (upstream arithmetic) + corrected metrics
-  prompts/            the four agent prompts that replace the LLM calls
+  build_manifest.py     PR selection (deterministic)
+  fetch_pr.py           base..head diff for each fork PR, via git only
+  export_inputs.py      golden comments + comparison tools' candidate lists
+  candidates.py         one tool's candidate list, read the same way everywhere
+  plan_jobs.py          judge job batches, one tool at a time
+  build_claims.py       the blind claim pool per PR
+  score.py              raw (upstream arithmetic) + corrected metrics
+  upstream_baseline.py  upstream's published per-judge scores, for comparison
+  judge_agreement.py    how far our stand-in judge sits from upstream's three
+  prompts/              the four agent prompts that replace the LLM calls
 data/
-  manifest.json       the 19 PRs under test
+  manifest.json       the 50 PRs under test
   prs/<slug>/         diff.patch, meta.json, golden.json, candidates/<tool>.json
   reviews/<slug>/     our report.json, report.md, candidates.json
   judgments/<slug>/   <tool>.json — the judge's match list
   calibration/        <slug>.claims.json (blind), .map.json (key), .verdicts.json
-scores/               raw_cells.csv, corrected_cells.csv, summary.json,
-                      ground_truth_audit.json
+scores/               raw_cells.csv, raw_cells_lenient.csv, corrected_cells.csv,
+                      summary.json, ground_truth_audit.json,
+                      upstream_baseline.json, judge_agreement.json,
+                      alternative_views.json, runtime_cost.json
 REPORT.md             the writeup
 ```
 

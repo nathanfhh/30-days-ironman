@@ -1,5 +1,5 @@
 {
-  "provenance": "Computed after a no-context audit agent (2026-08-05) flagged that the corrected precision no longer charges for verbosity. Its two alternative views were independently reproduced from data/ before recording here. Convention matches summary.json: precision = TP/(TP+FP); duplicate hits on an already-matched golden count as neither.",
+  "provenance": "Computed after a no-context audit agent (2026-08-05) flagged that the corrected precision no longer charges for verbosity. Its two alternative views were independently reproduced from data/ before recording here. Convention matches summary.json: precision = TP/(TP+FP); duplicate hits on an already-matched golden count as neither. Recomputed 2026-08-06 under the merged-cluster correction (a candidate cluster that already holds a standing golden comment is no longer a discovery): of the 17 merged clusters, only 1 had ever reached the consensus pool, so the exam falls 307 -> 306 and only greptile-v4-1 and claude-code lose a hit. `consensus_exam` only; `validated_golden_only` is untouched.",
   "candidate_counts_note": "Real candidate counts per tool: nathan-code-review 775, coderabbit 318, augment 178, cubic-v2 175, claude-code 173, greptile-v4-1 168. TP+FP differs (771/297/171/162/164/165) because candidates that duplicate an already-matched golden are excluded from both.",
   "validated_golden_only": {
     "target": "the 114 golden comments that survived blind verification; no discovery credit on either side",
@@ -37,36 +37,36 @@
     }
   },
   "consensus_exam": {
-    "target": "114 validated golden + 193 clusters raised by at least two tools = 307 items; no single tool defines the exam",
+    "target": "114 validated golden + 192 clusters raised by at least two tools = 306 items; no single tool defines the exam",
     "cells": {
       "augment": {
         "p": 0.807,
-        "r": 0.45,
-        "f1": 0.577
+        "r": 0.451,
+        "f1": 0.579
       },
       "greptile-v4-1": {
-        "p": 0.823,
-        "r": 0.44,
-        "f1": 0.573
-      },
-      "claude-code": {
-        "p": 0.769,
-        "r": 0.401,
-        "f1": 0.527
+        "p": 0.817,
+        "r": 0.438,
+        "f1": 0.57
       },
       "coderabbit": {
         "p": 0.538,
-        "r": 0.511,
+        "r": 0.513,
+        "f1": 0.525
+      },
+      "claude-code": {
+        "p": 0.763,
+        "r": 0.399,
         "f1": 0.524
       },
       "cubic-v2": {
         "p": 0.753,
-        "r": 0.397,
-        "f1": 0.52
+        "r": 0.399,
+        "f1": 0.521
       },
       "nathan-code-review": {
         "p": 0.345,
-        "r": 0.863,
+        "r": 0.866,
         "f1": 0.493
       }
     }
@@ -85,14 +85,14 @@
     }
   },
   "loo_asymmetry": {
-    "note": "loo_ground_truth summed per tool; each tool's LOO exam drops only its own solo finds, so the exams differ in size and the comparison is not symmetric",
+    "note": "loo_ground_truth summed per tool; each tool's LOO exam drops only its own solo finds, so the exams differ in size and the comparison is not symmetric Recomputed 2026-08-06 after the merged-cluster fix; sizes derive from summary.json corrected loo_tp+loo_fn.",
     "items": {
-      "nathan-code-review": 449,
-      "coderabbit": 813,
-      "claude-code": 860,
-      "augment": 864,
-      "cubic-v2": 868,
-      "greptile-v4-1": 868
+      "nathan-code-review": 440,
+      "coderabbit": 797,
+      "claude-code": 846,
+      "augment": 848,
+      "cubic-v2": 852,
+      "greptile-v4-1": 853
     }
   }
 }

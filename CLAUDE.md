@@ -15,6 +15,8 @@ Claude Code skills, and the tests that keep their scripts honest.
 ├── tests/                     所有 skill 共用一組測試
 ├── dev-container/             可拋棄的審查環境（Dockerfile + entrypoint + firewall + run wrapper）
 ├── gitlab-proxy/              nginx 反向代理：憑證不進 session、端點白名單
+├── opentelemetry/             Jaeger compose + 三支報表腳本（telemetry / cost / session）
+├── benchmarks/                code-review-bench：評測資料集（data/）與計分 harness（harness/）
 ├── pyproject.toml             uv 專案（測試工具鏈）
 └── install.sh                 把 skills/ 連進 ~/.claude
 ```
@@ -63,7 +65,7 @@ uv run pytest tests/test_gitlab_api.py -v
 
 `tests/conftest.py` 提供兩件事：
 
-- `load_script(name)`／`gitlab_api`、`report_model`、`render_report` fixtures——`scripts/` 底下是 PEP 723 單檔、不是套件，所以用路徑匯入。
+- `load_script(name)`／`gitlab_api`、`report_model`、`render_report`、`scan_runner` fixtures——`scripts/` 底下是 PEP 723 單檔、不是套件，所以用路徑匯入。
 - `stub_server` fixture——一個 in-process 的 HTTP stub。`http_request` 裡值得釘住的路徑（重試、不跟隨轉址、壞掉的 JSON、逾時）在健康的 GitLab 上永遠打不出來，只能靠它。**測試不會連到任何真實 GitLab。**
 
 寫新測試時：`Reply(status=..., body=..., headers=..., delay=...)` 排隊給 stub server，`stub_server.requests` 拿回實際收到的請求。要測重試就掛 `fast_retries` fixture，否則真的 backoff 會讓每個測試多花好幾秒。
@@ -100,7 +102,7 @@ judge 一定要是 subagent，不能由主 agent 自己判——剛改完 skill 
 ## Lint
 
 ```bash
-uvx ruff check skills/ tests/
+uvx ruff check skills/ tests/ benchmarks/ opentelemetry/
 ```
 
 `pyproject.toml` 明訂 `target-version = "py311"`。這不是裝飾：ruff 在沒有這一行時會去讀 `requires-python` 推斷版本，所以**在 repo 根目錄新增 pyproject.toml 這件事本身，就會改變 skill 腳本的 lint 結果**（版本相關的規則會突然開始／停止觸發），即使那些程式碼一行都沒動。寫死在這裡，之後調整 Python 下限就是一個明確的決定，而不是 lint 結果的意外變動。

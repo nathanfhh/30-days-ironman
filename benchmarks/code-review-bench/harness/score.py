@@ -20,8 +20,9 @@ unmatched candidate *and on every golden comment*, and the ground truth is rebui
 from what survives:
 
     valid golden          golden comments the verifier confirmed
-    discovered issues     clusters of unmatched candidates confirmed real,
-                          credited to every tool that raised one
+    discovered issues     clusters of unmatched candidates confirmed real and
+                          not already standing as a golden comment, credited to
+                          every tool that raised one
     expanded ground truth valid golden ∪ discovered issues
 
 Both corrections are applied to every tool identically. Crediting our own tool's
@@ -38,8 +39,6 @@ from collections import defaultdict
 from pathlib import Path
 
 from candidates import candidate_texts
-
-
 
 # The manifest labels a PR with its source repo's language, which is wrong for
 # five of the fifty: two "Go" grafana PRs are pure TypeScript, a "Java" keycloak
@@ -59,8 +58,15 @@ def diff_language(diff_path: Path) -> str | None:
     if not diff_path.exists():
         return None
     counts: dict[str, int] = {}
+    prev = ""
     for line in diff_path.read_text(errors="replace").splitlines():
-        if not line.startswith("+++") or "/dev/null" in line or "." not in line:
+        # An added source line that itself begins with `++` arrives here as
+        # `+++...`, so the prefix alone does not identify a file header. A real
+        # header is the second half of a `--- ` / `+++ ` pair, which is the
+        # context tested for.
+        is_header = line.startswith("+++ ") and prev.startswith("--- ")
+        prev = line
+        if not is_header or "/dev/null" in line or "." not in line:
             continue
         lang = _EXT_LANG.get(line.rsplit(".", 1)[-1].strip())
         if lang:
@@ -118,7 +124,7 @@ def score_raw(data_root: Path, slug: str, tool: str, lenient: bool = False) -> d
     }
 
 
-def score_corrected(data_root: Path, slug: str, tools: list[str], raw: dict[str, dict]) -> dict | None:  # noqa: C901
+def score_corrected(data_root: Path, slug: str, tools: list[str], raw: dict[str, dict]) -> dict | None:
     """Rebuild the ground truth for one PR from the blind verifier's verdicts."""
     vpath = data_root / "calibration" / f"{slug}.verdicts.json"
     mpath = data_root / "calibration" / f"{slug}.map.json"
@@ -130,27 +136,50 @@ def score_corrected(data_root: Path, slug: str, tools: list[str], raw: dict[str,
 
     valid_golden: set[int] = set()
     invalid_golden: set[int] = set()
+    # Clusters the verifier assigned to a golden comment that is still standing.
+    # The verifier clusters across sources — it is not told which claims are
+    # golden — so a candidate landing in one of these is the same issue as a
+    # golden comment, worded differently, that the judge failed to pair with it.
+    golden_clusters: set[str] = set()
     # cluster -> tools that raised a confirmed-real claim in it
     discovered: dict[str, set[str]] = defaultdict(set)
+    merged_into_golden: set[str] = set()
     unclear = {"golden": 0, "candidate": 0}
 
     for claim in claim_map:
         v = verdicts.get(claim["claim_id"])
-        if v is None:
+        if v is None or claim["source"] != "golden":
             continue
-        if claim["source"] == "golden":
-            if v["verdict"] == "real":
-                valid_golden.add(claim["golden_index"])
-            elif v["verdict"] == "not_real":
-                invalid_golden.add(claim["golden_index"])
-            else:
-                unclear["golden"] += 1
-                valid_golden.add(claim["golden_index"])  # unsettled: leave it standing
+        if v["verdict"] == "real":
+            valid_golden.add(claim["golden_index"])
+        elif v["verdict"] == "not_real":
+            invalid_golden.add(claim["golden_index"])
+            continue  # struck down: it no longer speaks for a cluster
         else:
-            if v["verdict"] == "real":
-                discovered[v.get("cluster") or claim["claim_id"]].add(claim["tool"])
-            elif v["verdict"] != "not_real":
-                unclear["candidate"] += 1
+            unclear["golden"] += 1
+            valid_golden.add(claim["golden_index"])  # unsettled: leave it standing
+        if v.get("cluster"):
+            golden_clusters.add(v["cluster"])
+
+    for claim in claim_map:
+        v = verdicts.get(claim["claim_id"])
+        if v is None or claim["source"] == "golden":
+            continue
+        if v["verdict"] == "real":
+            cluster = v.get("cluster") or claim["claim_id"]
+            # Already in the ground truth as a golden comment. Adding it to
+            # `discovered` would count one issue twice in the denominator, so it
+            # is dropped outright — and no `extra` credit is handed out for it
+            # either. The conservative reading of a candidate sharing a cluster
+            # with a valid golden comment is that the judge missed a pairing,
+            # not that the tool discovered anything; crediting it here would let
+            # a judge miss become a scoring win.
+            if cluster in golden_clusters:
+                merged_into_golden.add(cluster)
+            else:
+                discovered[cluster].add(claim["tool"])
+        elif v["verdict"] != "not_real":
+            unclear["candidate"] += 1
 
     expanded_gt = len(valid_golden) + len(discovered)
 
@@ -202,6 +231,7 @@ def score_corrected(data_root: Path, slug: str, tools: list[str], raw: dict[str,
         "valid_golden": len(valid_golden),
         "invalid_golden": len(invalid_golden),
         "discovered_clusters": len(discovered),
+        "merged_into_golden": sorted(merged_into_golden),
         "unclear": unclear,
         "discovered_detail": {c: sorted(t) for c, t in discovered.items()},
     }
@@ -299,6 +329,7 @@ def main() -> int:
                     "valid_golden": corrected["valid_golden"],
                     "invalid_golden": corrected["invalid_golden"],
                     "discovered_clusters": corrected["discovered_clusters"],
+                    "merged_into_golden": corrected["merged_into_golden"],
                     "unclear": corrected["unclear"],
                     "discovered_detail": corrected["discovered_detail"],
                 }
@@ -377,6 +408,11 @@ def main() -> int:
             "CORRECTED, leave-one-out recall (target excludes each tool's solo finds)",
             loo_rows, header,
         ))
+        print(
+            "  precision is the corrected precision above, unchanged: leave-one-out "
+            "narrows the recall target, not what counts as a hit. The F1 column is "
+            "therefore a hybrid of the two, and only the recall column is leave-one-out."
+        )
         print()
         g_rows = sorted(
             (

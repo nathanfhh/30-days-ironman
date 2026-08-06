@@ -17,7 +17,11 @@ and to the things the ground truth rejected. Anything less and "the golden set
 missed something" is just our own tool's opinion of itself.
 
 The order is a stable hash, not a random shuffle — rerunning must produce the
-same pool, or the verdicts stop lining up with the claims.
+same pool, or the verdicts stop lining up with the claims. That stability holds
+only for the same `--tools` argument: the tool set decides which candidates enter
+the pool at all, and its *order* decides the tie-break between two claims whose
+text hashes identically. Re-running with a different `--tools` value renumbers
+the claim ids, and verdicts recorded under the old numbering no longer apply.
 """
 
 from __future__ import annotations

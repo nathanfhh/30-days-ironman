@@ -13,6 +13,9 @@ skills/
 └── nathan-code-review/ Code Review Skill
 dev-container/          可拋棄的審查環境：工具版本固定，憑證借進來、退出時還回去
 gitlab-proxy/           擋在 GitLab 前面的 nginx：憑證不進 session、端點白名單、限流
+opentelemetry/          觀測：Jaeger compose 與三支報表腳本（時間、錢、單場 HTML）
+tests/                  腳本的單元測試與 skill 的行為回歸 test case
+benchmarks/             code-review-bench：50 個真實 PR 的評測資料集與計分 harness
 ```
 
 後面兩個目錄是選配的。只想試 skill 的話，`install.sh` 裝完就能用；它們處理的是

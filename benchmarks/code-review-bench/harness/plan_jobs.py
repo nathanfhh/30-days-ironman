@@ -48,21 +48,25 @@ def main() -> int:
             continue  # nothing to judge; the scorer already treats this as zero-candidate
         n_g = len(json.loads(gpath.read_text())["comments"])
         out = data_root / "judgments" / slug / f"{args.tool}.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
         if out.exists():
             continue
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if args.tool != OUR_TOOL:
+            field = "(the array itself)"
+        elif n_issues == 0:
+            field = "open_questions[].text only — this review raised no issues"
+        else:
+            field = (
+                "issues[].text followed by open_questions[].text, concatenated in that "
+                f"order — indices 0..{n_issues - 1} are issues, {n_issues}.. are open questions"
+            )
         jobs.append(
             {
                 "slug": slug,
                 "tool": args.tool,
                 "golden": str(gpath),
                 "candidates": str(cpath),
-                "candidates_field": (
-                    "issues[].text followed by open_questions[].text, concatenated in that "
-                    f"order — indices 0..{n_issues - 1} are issues, {n_issues}.. are open questions"
-                    if args.tool == OUR_TOOL
-                    else "(the array itself)"
-                ),
+                "candidates_field": field,
                 "n_golden": n_g,
                 "n_candidates": n_c,
                 "out": str(out),

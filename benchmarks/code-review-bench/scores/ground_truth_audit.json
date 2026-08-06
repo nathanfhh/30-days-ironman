@@ -6,6 +6,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 13,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 3
@@ -67,6 +68,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 14,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 3
@@ -129,6 +131,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 16,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -197,6 +200,7 @@
     "valid_golden": 4,
     "invalid_golden": 0,
     "discovered_clusters": 27,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -301,15 +305,16 @@
     "golden_total": 5,
     "valid_golden": 4,
     "invalid_golden": 1,
-    "discovered_clusters": 26,
+    "discovered_clusters": 24,
+    "merged_into_golden": [
+      "eventmanager-unguarded-destructure",
+      "self-matching-find-external-id"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 1
     },
     "discovered_detail": {
-      "self-matching-find-external-id": [
-        "nathan-code-review"
-      ],
       "webhook-payload-breaking-change": [
         "nathan-code-review"
       ],
@@ -389,9 +394,6 @@
       ],
       "misleading-mainhost-name": [
         "nathan-code-review"
-      ],
-      "eventmanager-unguarded-destructure": [
-        "claude-code"
       ]
     }
   },
@@ -402,6 +404,7 @@
     "valid_golden": 5,
     "invalid_golden": 0,
     "discovered_clusters": 29,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -517,6 +520,7 @@
     "valid_golden": 5,
     "invalid_golden": 0,
     "discovered_clusters": 22,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -606,6 +610,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 10,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -653,6 +658,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 14,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -713,7 +719,11 @@
     "golden_total": 2,
     "valid_golden": 2,
     "invalid_golden": 0,
-    "discovered_clusters": 27,
+    "discovered_clusters": 25,
+    "merged_into_golden": [
+      "empty-data-updatemany-noop",
+      "sed-bsd-vs-gnu"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -773,9 +783,6 @@
         "greptile-v4-1",
         "nathan-code-review"
       ],
-      "sed-bsd-vs-gnu": [
-        "nathan-code-review"
-      ],
       "credentialid-zod-int-positive": [
         "coderabbit"
       ],
@@ -792,9 +799,6 @@
         "nathan-code-review"
       ],
       "platform-constants-undeclared-dep": [
-        "nathan-code-review"
-      ],
-      "empty-data-updatemany-noop": [
         "nathan-code-review"
       ],
       "dropdownmenuitem-for-static-label": [
@@ -821,6 +825,7 @@
     "valid_golden": 3,
     "invalid_golden": 0,
     "discovered_clusters": 12,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 6
@@ -873,6 +878,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 13,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -930,6 +936,7 @@
     "valid_golden": 1,
     "invalid_golden": 1,
     "discovered_clusters": 16,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -999,6 +1006,7 @@
     "valid_golden": 5,
     "invalid_golden": 1,
     "discovered_clusters": 32,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1118,6 +1126,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 13,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -1177,6 +1186,7 @@
     "valid_golden": 1,
     "invalid_golden": 0,
     "discovered_clusters": 10,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1226,6 +1236,7 @@
     "valid_golden": 2,
     "invalid_golden": 1,
     "discovered_clusters": 10,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1277,6 +1288,7 @@
     "valid_golden": 3,
     "invalid_golden": 0,
     "discovered_clusters": 19,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1351,7 +1363,10 @@
     "golden_total": 2,
     "valid_golden": 1,
     "invalid_golden": 1,
-    "discovered_clusters": 9,
+    "discovered_clusters": 8,
+    "merged_into_golden": [
+      "loaded-locales-thread-safety"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1379,9 +1394,6 @@
         "greptile-v4-1",
         "nathan-code-review"
       ],
-      "loaded-locales-thread-safety": [
-        "claude-code"
-      ],
       "initializer-order-comment": [
         "nathan-code-review"
       ],
@@ -1399,6 +1411,7 @@
     "valid_golden": 4,
     "invalid_golden": 0,
     "discovered_clusters": 30,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -1517,6 +1530,7 @@
     "valid_golden": 0,
     "invalid_golden": 2,
     "discovered_clusters": 7,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -1557,6 +1571,7 @@
     "valid_golden": 3,
     "invalid_golden": 2,
     "discovered_clusters": 13,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1619,7 +1634,10 @@
     "golden_total": 1,
     "valid_golden": 1,
     "invalid_golden": 0,
-    "discovered_clusters": 12,
+    "discovered_clusters": 11,
+    "merged_into_golden": [
+      "debug-error-logs"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1634,10 +1652,6 @@
       ],
       "import-grouping": [
         "nathan-code-review"
-      ],
-      "debug-error-logs": [
-        "claude-code",
-        "greptile-v4-1"
       ],
       "test-cleanup-registered-late": [
         "nathan-code-review"
@@ -1679,6 +1693,7 @@
     "valid_golden": 3,
     "invalid_golden": 0,
     "discovered_clusters": 15,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -1746,6 +1761,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 4,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -1771,7 +1787,10 @@
     "golden_total": 2,
     "valid_golden": 2,
     "invalid_golden": 0,
-    "discovered_clusters": 5,
+    "discovered_clusters": 4,
+    "merged_into_golden": [
+      "enable-sql-expressions-dead-logic"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -1786,9 +1805,6 @@
       "duckdb-references-remain": [
         "nathan-code-review"
       ],
-      "enable-sql-expressions-dead-logic": [
-        "nathan-code-review"
-      ],
       "no-test-for-disabled-sql": [
         "nathan-code-review"
       ]
@@ -1801,6 +1817,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 13,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1859,7 +1876,10 @@
     "golden_total": 2,
     "valid_golden": 1,
     "invalid_golden": 1,
-    "discovered_clusters": 10,
+    "discovered_clusters": 9,
+    "merged_into_golden": [
+      "deny-test-vacuous"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -1882,9 +1902,6 @@
         "nathan-code-review"
       ],
       "denial-cache-unbounded-memory": [
-        "nathan-code-review"
-      ],
-      "deny-test-vacuous": [
         "nathan-code-review"
       ],
       "denial-key-missing-identity-type": [
@@ -1911,6 +1928,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 16,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -1978,6 +1996,7 @@
     "valid_golden": 1,
     "invalid_golden": 0,
     "discovered_clusters": 7,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -2016,6 +2035,7 @@
     "valid_golden": 1,
     "invalid_golden": 1,
     "discovered_clusters": 13,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -2071,7 +2091,10 @@
     "golden_total": 2,
     "valid_golden": 2,
     "invalid_golden": 0,
-    "discovered_clusters": 11,
+    "discovered_clusters": 10,
+    "merged_into_golden": [
+      "bouncycastle-provider-indirection"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -2114,9 +2137,6 @@
       ],
       "unused-hamcrest-dep": [
         "nathan-code-review"
-      ],
-      "bouncycastle-provider-indirection": [
-        "nathan-code-review"
       ]
     }
   },
@@ -2127,6 +2147,7 @@
     "valid_golden": 1,
     "invalid_golden": 2,
     "discovered_clusters": 15,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -2195,6 +2216,7 @@
     "valid_golden": 0,
     "invalid_golden": 1,
     "discovered_clusters": 12,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -2249,6 +2271,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 19,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -2323,7 +2346,10 @@
     "golden_total": 4,
     "valid_golden": 3,
     "invalid_golden": 1,
-    "discovered_clusters": 15,
+    "discovered_clusters": 14,
+    "merged_into_golden": [
+      "italian-in-lithuanian"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -2380,9 +2406,6 @@
       ],
       "test-assertion-relaxed": [
         "nathan-code-review"
-      ],
-      "italian-in-lithuanian": [
-        "coderabbit"
       ]
     }
   },
@@ -2393,6 +2416,7 @@
     "valid_golden": 4,
     "invalid_golden": 0,
     "discovered_clusters": 12,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -2446,6 +2470,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 24,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -2541,6 +2566,7 @@
     "valid_golden": 2,
     "invalid_golden": 0,
     "discovered_clusters": 9,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -2585,15 +2611,15 @@
     "golden_total": 2,
     "valid_golden": 2,
     "invalid_golden": 0,
-    "discovered_clusters": 12,
+    "discovered_clusters": 11,
+    "merged_into_golden": [
+      "passkeys-guard-requires-nonnull-user"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 1
     },
     "discovered_detail": {
-      "passkeys-guard-requires-nonnull-user": [
-        "greptile-v4-1"
-      ],
       "missing-override-annotation": [
         "nathan-code-review"
       ],
@@ -2638,6 +2664,7 @@
     "valid_golden": 2,
     "invalid_golden": 1,
     "discovered_clusters": 15,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -2702,15 +2729,15 @@
     "golden_total": 4,
     "valid_golden": 3,
     "invalid_golden": 1,
-    "discovered_clusters": 11,
+    "discovered_clusters": 10,
+    "merged_into_golden": [
+      "queued-default-evaluated-at-import"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 0
     },
     "discovered_detail": {
-      "queued-default-evaluated-at-import": [
-        "greptile-v4-1"
-      ],
       "assignment-source-module-placement": [
         "nathan-code-review"
       ],
@@ -2751,16 +2778,16 @@
     "golden_total": 2,
     "valid_golden": 2,
     "invalid_golden": 0,
-    "discovered_clusters": 15,
+    "discovered_clusters": 14,
+    "merged_into_golden": [
+      "metric-alert-handler-missing-abstract-methods"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 0
     },
     "discovered_detail": {
       "no-op-setup-override": [
-        "nathan-code-review"
-      ],
-      "metric-alert-handler-missing-abstract-methods": [
         "nathan-code-review"
       ],
       "unused-detector-type-param": [
@@ -2815,6 +2842,7 @@
     "valid_golden": 1,
     "invalid_golden": 1,
     "discovered_clusters": 8,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -2855,7 +2883,10 @@
     "golden_total": 5,
     "valid_golden": 5,
     "invalid_golden": 0,
-    "discovered_clusters": 15,
+    "discovered_clusters": 14,
+    "merged_into_golden": [
+      "isinstance-spawnprocess-kill"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -2891,9 +2922,6 @@
       "claudemd-trailing-blank-line": [
         "nathan-code-review"
       ],
-      "isinstance-spawnprocess-kill": [
-        "claude-code"
-      ],
       "flusher-processes-no-lower-bound": [
         "augment",
         "nathan-code-review"
@@ -2918,7 +2946,10 @@
     "golden_total": 3,
     "valid_golden": 2,
     "invalid_golden": 1,
-    "discovered_clusters": 22,
+    "discovered_clusters": 21,
+    "merged_into_golden": [
+      "error-handling-test-inconsistent"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 2
@@ -2944,9 +2975,6 @@
       ],
       "commit-from-background-thread": [
         "nathan-code-review"
-      ],
-      "error-handling-test-inconsistent": [
-        "cubic-v2"
       ],
       "queue-depth-gauge-tag-collision": [
         "nathan-code-review"
@@ -3004,7 +3032,10 @@
     "golden_total": 4,
     "valid_golden": 3,
     "invalid_golden": 1,
-    "discovered_clusters": 11,
+    "discovered_clusters": 10,
+    "merged_into_golden": [
+      "negative-offset-branch-broken"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 0
@@ -3020,9 +3051,6 @@
         "greptile-v4-1"
       ],
       "base-paginator-clamp": [
-        "nathan-code-review"
-      ],
-      "negative-offset-branch-broken": [
         "nathan-code-review"
       ],
       "get-result-duplication": [
@@ -3054,7 +3082,10 @@
     "golden_total": 3,
     "valid_golden": 3,
     "invalid_golden": 0,
-    "discovered_clusters": 15,
+    "discovered_clusters": 14,
+    "merged_into_golden": [
+      "base-paginator-negative-offset"
+    ],
     "unclear": {
       "golden": 0,
       "candidate": 1
@@ -3095,9 +3126,6 @@
       "redirect-depth-cap-lowered": [
         "nathan-code-review"
       ],
-      "base-paginator-negative-offset": [
-        "augment"
-      ],
       "base-paginator-silent-clamp-sitewide": [
         "nathan-code-review"
       ],
@@ -3119,6 +3147,7 @@
     "valid_golden": 1,
     "invalid_golden": 2,
     "discovered_clusters": 18,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 3
@@ -3189,6 +3218,7 @@
     "valid_golden": 2,
     "invalid_golden": 1,
     "discovered_clusters": 33,
+    "merged_into_golden": [],
     "unclear": {
       "golden": 0,
       "candidate": 4

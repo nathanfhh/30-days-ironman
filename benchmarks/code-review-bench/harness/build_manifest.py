@@ -103,7 +103,10 @@ def main() -> int:
     Path(args.out).write_text(json.dumps(manifest, indent=2))
     print(f"{len(manifest)} PRs")
     for m in manifest:
-        print(f"  {m['slug']:<28} {m['language']:<11} golden={m['golden_count']}  {m['pr_title'][:50]}")
+        # `pr_title` is absent for a handful of upstream entries; it is display
+        # only, so a missing one must not take the manifest build down with it.
+        title = (m["pr_title"] or "(no title in benchmark data)")[:50]
+        print(f"  {m['slug']:<28} {m['language']:<11} golden={m['golden_count']}  {title}")
     return 0
 
 

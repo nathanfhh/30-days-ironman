@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 
@@ -49,6 +50,16 @@ def main() -> int:
             "ours_vs_upstream_mean": ours[tool]["f1"] - sum(upstream_f1) / len(upstream_f1),
         }
         rows.append(row)
+
+    if not rows:
+        print(
+            "no tool appears in both files: "
+            f"{args.ours} has {sorted(ours) or 'none'}, "
+            f"{args.baseline} has {sorted({t for j in judges for t in baseline[j]}) or 'none'}. "
+            "Nothing to compare — check that both were produced by the same run.",
+            file=sys.stderr,
+        )
+        return 1
 
     rows.sort(key=lambda r: -r["ours_f1"])
     Path(args.out).write_text(json.dumps(rows, indent=2))

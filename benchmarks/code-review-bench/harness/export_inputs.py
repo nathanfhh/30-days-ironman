@@ -44,6 +44,12 @@ def main() -> int:
     missing = []
     for entry in manifest:
         url = entry["golden_url"]
+        if url not in data:
+            raise SystemExit(
+                f"{entry['slug']}: golden_url {url} is not in {args.benchmark_data}. "
+                "The manifest was built from a different benchmark_data.json than "
+                "the one passed here — rebuild the manifest or pass the matching file."
+            )
         pr = data[url]
         out_dir = out_root / entry["slug"]
         (out_dir / "candidates").mkdir(parents=True, exist_ok=True)
