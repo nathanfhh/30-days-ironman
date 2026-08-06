@@ -65,5 +65,54 @@ else
     echo "● 網路能力：限制白名單 — firewall 已生效（細節：/tmp/firewall.log）"
 fi
 
+# ------------------------------------------------------------------------------
+# Telemetry → Jaeger
+#
+# 只在 run script 已配置（Jaeger 容器在跑＝OTLP endpoint 已注入 env）時才問；
+# 未配置就沒有可送的對象，不出這題。問之前先探一次 endpoint 真的通不通——
+# 牆已經套用，測的就是這一場實際會走的路徑；5 秒不通就直接不送、也不問，
+# 免得答了 y 卻整場默默送不出去（OTLP 匯出 fail-open，不會有人告訴你）。
+# 通了才問。跟網路能力同一個道理：要不要被記錄，是坐在鍵盤前的人每一場
+# 重新做的選擇，不是環境替你決定的預設。
+# ------------------------------------------------------------------------------
+disable_telemetry() {
+    unset CLAUDE_CODE_ENABLE_TELEMETRY CLAUDE_CODE_ENHANCED_TELEMETRY_BETA \
+          OTEL_TRACES_EXPORTER OTEL_METRICS_EXPORTER OTEL_LOGS_EXPORTER \
+          OTEL_EXPORTER_OTLP_PROTOCOL OTEL_EXPORTER_OTLP_ENDPOINT \
+          OTEL_LOG_TOOL_DETAILS OTEL_RESOURCE_ATTRIBUTES
+}
+if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ]; then
+    _ep="${OTEL_EXPORTER_OTLP_ENDPOINT#*://}"; _ep="${_ep%%/*}"
+    _host="${_ep%%:*}"; _port="${_ep##*:}"
+    [ "$_port" = "$_host" ] && _port=4317
+    if ! timeout 5 bash -c "exec 3<>/dev/tcp/${_host}/${_port}" 2>/dev/null; then
+        echo ""
+        echo "⚠️  Jaeger（${_host}:${_port}）5 秒內不通 → 本場不送 telemetry"
+        disable_telemetry
+    else
+        echo ""
+        echo "送 telemetry trace 到 Jaeger？（${OTEL_EXPORTER_OTLP_ENDPOINT}，已探通）"
+        echo "  y = 送（預設）"
+        echo "  n = 本場不送"
+        echo ""
+        # 非互動環境（CI、腳本）用 NCR_OTEL（1|0）跳過選單，同 NCR_NET 的姿勢。
+        if [ -n "${NCR_OTEL:-}" ]; then
+            case "$NCR_OTEL" in
+                1) otel_choice=y ;;
+                0) otel_choice=n ;;
+                *) otel_choice="$NCR_OTEL" ;;
+            esac
+            echo "● 非互動：telemetry = ${otel_choice}"
+        else
+            read -r -p "送 Jaeger? [Y/n]: " otel_choice
+        fi
+        otel_choice="${otel_choice:-y}"
+        case "$otel_choice" in
+            [Nn]*) disable_telemetry; echo "● 本場不送 telemetry" ;;
+            *)     echo "● telemetry → Jaeger" ;;
+        esac
+    fi
+fi
+
 echo ""
 exec "$@"

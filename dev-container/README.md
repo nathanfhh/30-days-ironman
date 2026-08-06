@@ -8,11 +8,11 @@
 Dockerfile                  image 定義
 entrypoint.sh               容器啟動後做的事（含網路能力選單）
 init-firewall.sh            限制模式套用的 iptables 白名單
-run-ncr-dev-container.sh    啟動 wrapper：憑證、SSH、規則怎麼進容器（偵測到 Jaeger 就順帶開錄 telemetry）
+run-ncr-dev-container.sh    啟動 wrapper：憑證、SSH、規則怎麼進容器（偵測到 Jaeger 就配置 telemetry，送不送在啟動選單確認）
 ```
 
 觀測那一掛（Jaeger、每角色時間/成本報表、場次報表頁）在 `../opentelemetry/`，
-wrapper 偵測到 Jaeger 在跑就自動開錄，細節見該資料夾的 README。
+wrapper 偵測到 Jaeger 在跑就配置錄製、啟動選單再確認要不要送，細節見該資料夾的 README。
 
 ## Build
 

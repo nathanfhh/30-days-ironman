@@ -231,9 +231,11 @@ if docker network inspect gitlab-proxy >/dev/null 2>&1; then
     echo "🔌 已接上 gitlab-proxy network（API 走 http://gitlab-proxy:5678，token 由 proxy 注入）"
 fi
 
-# entrypoint 的網路能力選單支援 NCR_NET 跳過（CI / 腳本用），但 env 不會自己穿過
-# docker run——host 有設就轉發進去，沒設就維持互動選單。
+# entrypoint 的網路能力選單支援 NCR_NET 跳過、telemetry 選單支援 NCR_OTEL 跳過
+#（CI / 腳本用），但 env 不會自己穿過 docker run——host 有設就轉發進去，
+# 沒設就維持互動選單。
 [ -n "${NCR_NET:-}" ] && RUN_ENV+=(-e NCR_NET)
+[ -n "${NCR_OTEL:-}" ] && RUN_ENV+=(-e NCR_OTEL)
 
 # skill 進容器的方式。install.sh 連進 ~/.claude/skills 的是 symlink，指向 host 上
 # 這個 repo 的絕對路徑；~/.claude 掛進容器後那些 symlink 是斷的——目標只存在於 host。
@@ -290,7 +292,7 @@ if [ "$(docker inspect -f '{{.State.Running}}' jaeger 2>/dev/null)" = "true" ]; 
             -e OTEL_LOG_TOOL_DETAILS=1
             -e "OTEL_RESOURCE_ATTRIBUTES=${RES}"
         )
-        echo "📊 Telemetry → Jaeger（jaeger:4317）· UI http://localhost:16686"
+        echo "📊 Telemetry 已配置 → Jaeger（jaeger:4317）· UI http://localhost:16686 · 送不送由啟動選單決定"
         echo "   resource: ${RES}"
     else
         echo "⚠️  jaeger 在跑，但 gitlab-proxy network 不存在，容器接不到它 → 本場不錄。"

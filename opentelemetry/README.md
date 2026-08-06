@@ -21,7 +21,8 @@ docker compose -f opentelemetry/jaeger-compose.yaml up -d
 
 UI 在 <http://localhost:16686>（只綁 loopback），搜 service = `claude-code`。
 之後照常跑 `dev-container/run-ncr-dev-container.sh`——wrapper 偵測到 jaeger 在跑
-就自動開錄，並把 `skill.version`（自動抓）與 `experiment` 黏上該場所有 span：
+就配置好錄製，進容器的啟動選單會再問一次要不要送（預設送；非互動用 `NCR_OTEL=1|0`
+跳過選單），並把 `skill.version`（自動抓）與 `experiment` 黏上該場所有 span：
 
 ```bash
 NCR_EXPERIMENT=before-xxx dev-container/run-ncr-dev-container.sh   # 改 skill 之前
