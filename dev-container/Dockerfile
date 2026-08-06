@@ -44,7 +44,12 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
 #
 #   build 時跑 visudo -c 驗語法：sudoers 寫壞不會讓 build 失敗，會等到你 sudo 的那一刻
 #   才變成「a password is required」——那時人已經在容器裡了。
-RUN printf '%s\n' 'nathan ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh ""' \
+#
+# 第二條授權是一支唯讀的計數查詢。它只跑 iptables -L -v -n、不吃參數，
+#   所以拿不到改規則的能力；收工時用它把「這一場擋了多少、放行了多少」留下來。
+RUN printf '%s\n' \
+      'nathan ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh ""' \
+      'nathan ALL=(root) NOPASSWD: /usr/local/bin/firewall-counters.sh ""' \
       > /etc/sudoers.d/nathan-firewall && \
     chmod 0440 /etc/sudoers.d/nathan-firewall && \
     visudo -c -f /etc/sudoers.d/nathan-firewall
@@ -171,13 +176,15 @@ WORKDIR /home/nathan/code-review
 USER root
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY init-firewall.sh /usr/local/bin/init-firewall.sh
+COPY firewall-counters.sh /usr/local/bin/firewall-counters.sh
 # GITLAB_SSH_HOST 同時餵兩個地方：上面的 known_hosts，以及這裡給防火牆讀的檔案。
 #
 # ⚠ 為什麼是檔案而不是環境變數：容器裡的 agent 以 nathan 執行，env 是它寫得到的東西；
 #   政策的來源如果是 env，等於讓被關的人自己挑監獄。這個檔案由 root 在 build 時寫入、
 #   0444，agent 改不動也蓋不掉（bind mount 覆蓋要 CAP_SYS_ADMIN，容器只有 NET_ADMIN）。
 #   沒帶這個 build-arg 就是空檔案 → 防火牆一條 SSH outbound 都不開。
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/init-firewall.sh && \
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/init-firewall.sh \
+        /usr/local/bin/firewall-counters.sh && \
     mkdir -p /etc/ncr && \
     printf '%s' "$GITLAB_SSH_HOST" > /etc/ncr/gitlab-ssh-host && \
     chmod 0444 /etc/ncr/gitlab-ssh-host && \

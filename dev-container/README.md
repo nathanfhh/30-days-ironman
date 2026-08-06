@@ -152,6 +152,47 @@ OTEL 環境變數並開錄（只送 traces、`NCR_EXPERIMENT` 標實驗代號）
 ——jaeger 掛在那張 network 上，沒接上網的容器連 `jaeger:4317` 也連不到，這種情況
 wrapper 會明講並教你重建。啟動收集端與輸出報表的方式見 `../opentelemetry/README.md`。
 
+### 6. 流量錄製（選配）
+
+工具與報表住在 `../mitm/`，那邊的 README 講脫敏規則與報表怎麼讀；這裡只講容器這側
+的接線。
+
+容器啟動時會問第三題，**預設不錄**：
+
+```
+錄製本場流量？（mitmproxy，只錄 api.anthropic.com）
+  y = 錄，落在 ~/ncr/mitm/flows-<時間>.mitm（脫敏後）
+  n = 不錄（預設）
+```
+
+答 y 之後，entrypoint 在容器內起一個 mitmweb，把 `HTTPS_PROXY` 指過去、用
+`NODE_EXTRA_CA_CERTS` 讓 Claude Code 信任它現產的根憑證，並印出檔案位置與
+即時畫面的網址（帶一次性 token）。非互動環境用 `NCR_CAPTURE=1`。
+
+幾個接線上的決定：
+
+- **不開新的 mount。** capture 寫進 `~/ncr/mitm/`，沿用報告 archive 那個既有的
+  bind mount。容器是 `--rm` 的，不掛出來就跟著容器一起消失。
+- **即時畫面的 host port 動態挑**（40000–40100 找一個沒被占用的），固定 8081 的話
+  同時開兩個容器第二個就起不來。這個 port **一律發布**，即使這一場選了不錄——
+  published port 是 `docker run` 的啟動參數，事後加不上去，而要不要錄是進容器
+  之後才問的。只綁 `127.0.0.1`，沒開錄製時後面沒有東西在聽。
+- **零 firewall 改動。** proxy 綁 loopback（無條件放行），上游是白名單裡的
+  `api.anthropic.com`，即時畫面從 host 進來時來源落在已放行的 docker 網段。
+  限制模式下照樣錄得到。
+- **CA 不持久化**，每一場現產一把，炸開的範圍就是這一個容器。
+- **內部流量繞開它**：`NO_PROXY` 排除 `gitlab-proxy` 與 `jaeger`。審查主線不該讓
+  proxy 夾在中間，OTLP 也不是錄製標的。
+- **開了錄製就不 `exec`。** `exec` 會讓 CLI 接管 PID 1，CLI 一退出容器立刻拆掉，
+  背景的 mitmproxy 被 SIGKILL、收尾來不及跑，最後那幾條 flow 就沒了。改成前景跑
+  CLI、結束後送 SIGTERM 等它善終，再帶原本的退出碼離開。
+
+- **addon 從 wrapper 自己所在的 repo 掛進去**（`mitm/` → `/home/nathan/ncr-mitm`，唯讀），
+  不是從 `$PWD`。`$PWD` 掛的是**被審查的那個專案**，拿它找 addon 等於要求每個被審查的
+  專案自己帶一份。掛目錄而不是烘進 image，改脫敏規則免 rebuild。
+
+addon 不在就整場不錄，而不是退回錄未脫敏的原始流量。
+
 ## 網路邊界
 
 容器啟動時會問一次：

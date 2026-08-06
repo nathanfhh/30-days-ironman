@@ -22,6 +22,7 @@ fi
 # 連得出去時，限制模式會擋住它們——那些場合本來就不該在限制模式下硬幹。
 # 重點是這個選擇必須是人做的、是每一場都要重新做的，而且畫面上看得見選了哪個。
 # ------------------------------------------------------------------------------
+
 # ------------------------------------------------------------------------------
 # 流量錄製（mitmproxy L7 capture）
 #
@@ -38,7 +39,9 @@ fi
 # 網頁 UI 顯示的是記憶體裡的即時 flow（未脫敏），只綁本機、有 token。
 # 落到磁碟的永遠只有脫敏版，兩者是分開的。
 # ------------------------------------------------------------------------------
-CAPTURE_ADDON="/home/nathan/code-review/mitm/capture_addon.py"
+# run wrapper 從它自己所在的 repo 把 mitm/ 掛到這裡（:ro）。刻意不用
+# /home/nathan/code-review/mitm——那個掛載點是「被審查的專案」，不是這個 repo。
+CAPTURE_ADDON="/home/nathan/ncr-mitm/capture_addon.py"
 CAPTURE_DIR="$HOME/ncr/mitm"
 CAPTURE_PROXY_HOST="127.0.0.1"
 CAPTURE_PROXY_PORT="8880"
@@ -47,6 +50,19 @@ CAPTURE_HOSTS="api.anthropic.com"
 CAPTURE_CA="$HOME/.mitmproxy/mitmproxy-ca-cert.pem"
 CAPTURE_ON=0
 CAPTURE_PID=""
+CAPTURE_FILE=""
+CAPTURE_SESSION_DIR=""
+CAPTURE_STARTED=""
+
+# 這一場的 session id 由我們指定，不是事後去猜。
+#
+# 先前的做法是收工時撈「capture 開始之後才被改到的那顆 transcript」，那是猜的：
+# 同時開兩個容器、或 host 上剛好也在跑，就會對到別人。改成開場自己產一個 uuid 餵給
+# CLI（`--session-id`），流量、防火牆計數、transcript 三份資料從此共用同一個確定的 id。
+#
+# uuid 直接讀 /proc（Linux 一定有），不為了一個亂數多拉一個 python 或 uuidgen 相依。
+NCR_SESSION_ID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || true)"
+NCR_INJECT_SESSION=0
 
 start_capture() {
     [ "$CAPTURE_ON" = "1" ] || return 0
@@ -54,14 +70,22 @@ start_capture() {
     if [ ! -f "$CAPTURE_ADDON" ]; then
         # fail closed：沒有脫敏 addon 就不錄，而不是錄一份沒掃過的原始流量。
         echo "⚠️  找不到脫敏 addon（${CAPTURE_ADDON}）——本場不錄。"
-        echo "   （run script 要從 repo 根目錄執行，容器裡才看得到 mitm/）"
+        echo "   （run wrapper 應該把它所在 repo 的 mitm/ 掛到 /home/nathan/ncr-mitm）"
         return 0
     fi
 
-    mkdir -p "$CAPTURE_DIR"
-    local flow_file="${CAPTURE_DIR}/flows-$(date +%Y%m%dT%H%M%S).mitm"
+    # 一場一個資料夾，資料夾名就是 session id。流量、防火牆計數、環境三份東西
+    # 住在一起，不必靠檔名前綴去配對；產不出 uuid 時退回時間戳當目錄名。
+    CAPTURE_SESSION_DIR="${CAPTURE_DIR}/${NCR_SESSION_ID:-$(date +%Y%m%dT%H%M%S)}"
+    mkdir -p "$CAPTURE_SESSION_DIR"
+    CAPTURE_FILE="${CAPTURE_SESSION_DIR}/flows.mitm"
+    CAPTURE_STARTED=$(date -Iseconds)
+    local flow_file="$CAPTURE_FILE"
     local token
-    token=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)
+    # 不在尾巴再接一個 head：提前關掉管線會讓上游收到 SIGPIPE，在 pipefail 下
+    # 整個 command substitution 回 141。取夠長的亂數再用參數展開切長度。
+    token=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+    token="${token:0:24}"
 
     # 用 mitmweb 而不是 mitmdump，是為了那個網頁 UI——錄的當下就看得到，
     # 不必等收工後才知道錄到了什麼。
@@ -94,6 +118,7 @@ start_capture() {
         echo "⚠️  mitmproxy 沒起來，本場不錄，CLI 照常啟動（細節：/tmp/mitm-capture.log）"
         kill "$CAPTURE_PID" 2>/dev/null || true
         CAPTURE_PID=""
+        CAPTURE_FILE=""
         rm -f "$flow_file" 2>/dev/null || true   # 清掉啟動時建的 0-byte 殘檔
         return 0
     fi
@@ -117,9 +142,47 @@ start_capture() {
     export NO_PROXY="gitlab-proxy,jaeger,localhost,127.0.0.1,::1"
     export no_proxy="$NO_PROXY"
 
-    echo "● 錄製中 → ${flow_file}"
+    # 印 host 視角的路徑（run wrapper 傳進來的）。直接跑容器、沒有 wrapper 時才退回
+    # 容器內路徑——那種情況下看的人本來就在容器裡。
+    local shown="${NCR_CAPTURE_HOST_DIR:-$CAPTURE_DIR}/$(basename "$CAPTURE_SESSION_DIR")/"
+    echo "● 錄製中 → ${shown}flows.mitm"
     echo "● 即時畫面 → http://localhost:${NCR_MITM_WEB_PORT:-$CAPTURE_WEB_PORT}/?token=${token}"
     echo "  （畫面上是未脫敏的即時內容、只有本機連得到；落地的檔案是脫敏版）"
+}
+
+# 收工時把這一場的環境寫在 capture 旁邊。
+#
+# 為什麼要寫：capture 本身不知道自己錄的是哪一場、在什麼網路模式下錄的，多錄幾場
+# 之後只能靠檔名的時間戳去猜。報表要能自己把這些接起來，就得有人在收工時留下來。
+#
+# 防火牆計數也在這裡收。容器是 --rm 的，規則從套用那一刻起算，所以收工時的數字
+# 就是這一場的總量：放行了多少、擋掉了多少，各條規則分開記。**擋掉的那一條才是
+# 重點**——沒送出去的東西不會出現在任何 L7 紀錄裡，只有這裡看得到。
+write_capture_sidecar() {
+    [ -n "$CAPTURE_FILE" ] && [ -f "$CAPTURE_FILE" ] || return 0
+    local dir="$CAPTURE_SESSION_DIR"
+
+    if [ "$mode" = "restricted" ]; then
+        if sudo /usr/local/bin/firewall-counters.sh > "${dir}/firewall.txt" 2>/dev/null; then
+            local rejected
+            rejected=$(awk '/REJECT|DROP/ {sum += $1} END {print sum + 0}' \
+                       "${dir}/firewall.txt")
+            echo "● 防火牆這一場擋下 ${rejected} 個封包（明細：firewall.txt）"
+        else
+            # 舊 image 沒有這支腳本或 sudoers 沒授權時，如實留白，不要假裝有量到。
+            rm -f "${dir}/firewall.txt" 2>/dev/null || true
+            echo "⚠️  取不到防火牆計數（image 需重建以取得 firewall-counters.sh）"
+        fi
+    fi
+
+    # session id 是開場指定給 CLI 的那一個，不是猜的。產不出 uuid 的環境（沒有
+    # /proc）會留空，那時寧可空著也不要瞎填一個對不上的。
+    local sid="$NCR_SESSION_ID"
+
+    printf '{\n  "capture": "%s",\n  "started": "%s",\n  "ended": "%s",\n  "network": "%s",\n  "telemetry": "%s",\n  "session_id": "%s"\n}\n' \
+        "$(basename "$CAPTURE_FILE")" "$CAPTURE_STARTED" "$(date -Iseconds)" \
+        "$mode" "${OTEL_EXPORTER_OTLP_ENDPOINT:+on}" "${sid:-}" \
+        > "${dir}/meta.json"
 }
 
 # CLI 收工後收掉 mitmproxy：SIGTERM 走正常關閉（跑完 addon 的 done()、把檔案 flush
@@ -138,7 +201,52 @@ stop_capture() {
 # 沒開錄製就維持 exec（行為與加這段之前完全一樣）。開了就不能 exec：
 # exec 讓 CLI 接管 PID 1，CLI 一退出容器立刻拆掉，背景的 mitmproxy 被 SIGKILL，
 # addon 的 done() 來不及跑，最後那幾條 flow 就沒了。
+# 只有在「跑的確實是 claude、而且呼叫端沒有自己指定 session」時才注入。
+# --resume / --continue 帶著既有的 session 進來，硬塞一個新 id 會直接衝突。
+#
+# 名字比對收成 `claude` 或 `*/claude`：`*claude` 會連 `myclaude` 一起吃掉，
+# 對那些名字硬塞旗標只會讓它起不來。
+inject_session_id() {
+    local arg
+    [ -n "$NCR_SESSION_ID" ] || return 1
+    case "$1" in claude|*/claude) ;; *) return 1 ;; esac
+    for arg in "$@"; do
+        case "$arg" in
+            --session-id|--resume|-r|--continue|-c|--fork-session) return 1 ;;
+        esac
+    done
+    return 0
+}
+
+# 這一場的 session id 定案。**必須在錄製開始之前跑**——capture 的資料夾就是拿它
+# 命名的，等到啟動 CLI 才決定就來不及了。
+#
+# 呼叫端自己帶了 session 時，附檔要記那一顆，不能記我們生成卻沒被用到的 uuid。
+# 記錯的後果不是少一個欄位，是 meta.json 宣告了一個對不到任何 transcript 的 id，
+# 事後拿它去撈成本或場次報表會撈到空的，而且看起來像資料遺失。
+resolve_session_id() {
+    local prev=""
+    if inject_session_id "$@"; then
+        NCR_INJECT_SESSION=1
+        return
+    fi
+    NCR_INJECT_SESSION=0
+    for arg in "$@"; do
+        case "$prev" in
+            --session-id|--resume|-r)
+                case "$arg" in -*) ;; *) NCR_SESSION_ID="$arg"; return ;; esac ;;
+        esac
+        prev="$arg"
+    done
+    # --continue 或不帶值的 --resume：id 由 CLI 自己挑，我們無從得知。留空，
+    # 資料夾退回用時間戳命名。
+    NCR_SESSION_ID=""
+}
+
 run_cli() {
+    if [ "$NCR_INJECT_SESSION" = "1" ]; then
+        set -- "$1" --session-id "$NCR_SESSION_ID" "${@:2}"
+    fi
     if [ -z "$CAPTURE_PID" ]; then
         exec "$@"
     fi
@@ -146,6 +254,7 @@ run_cli() {
     "$@"
     local rc=$?
     stop_capture
+    write_capture_sidecar
     exit "$rc"
 }
 
@@ -267,6 +376,14 @@ if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ]; then
     fi
 fi
 
+resolve_session_id "$@"
+if [ -n "$NCR_SESSION_ID" ]; then
+    if [ "$NCR_INJECT_SESSION" = "1" ]; then
+        echo "● session id：${NCR_SESSION_ID}"
+    else
+        echo "● session id（呼叫端指定）：${NCR_SESSION_ID}"
+    fi
+fi
 start_capture
 echo ""
 run_cli "$@"

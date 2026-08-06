@@ -349,7 +349,21 @@ else
 fi
 RUN_OPTS+=(-p "127.0.0.1:${MITM_WEB_HOST_PORT}:8081")
 RUN_ENV+=(-e "NCR_MITM_WEB_PORT=${MITM_WEB_HOST_PORT}")
+# capture 檔的 host 路徑。容器印自己的 /home/nathan/... 沒有用——host 是 mac 的話
+# 那個路徑根本不存在，看到也開不起來。同 UI 網址，一律印 host 視角。
+RUN_ENV+=(-e "NCR_CAPTURE_HOST_DIR=${HOME}/ncr/mitm")
 [ -n "${NCR_CAPTURE:-}" ] && RUN_ENV+=(-e "NCR_CAPTURE=${NCR_CAPTURE}")
+
+# 脫敏 addon 從**這支腳本所在的 repo** 掛進去，不能靠 $PWD——$PWD 掛的是「被審查的
+# 那個專案」，而這支腳本是在那個專案的根目錄執行的。用 $PWD 找 addon，等於要求
+# 每個被審查的專案自己帶一份，那當然找不到。
+# 掛 :ro，而且是掛目錄不是烘進 image：改脫敏規則免 rebuild。
+if [ -d "$_REPO_ROOT/mitm" ]; then
+    RUN_MOUNTS+=(-v "$_REPO_ROOT/mitm":/home/nathan/ncr-mitm:ro)
+    echo "🕵️  流量錄製可用（要不要錄由啟動選單決定）· 即時畫面 host port ${MITM_WEB_HOST_PORT}"
+else
+    echo "⚠️  找不到 ${_REPO_ROOT}/mitm，本場無法錄製流量（entrypoint 會 fail-closed 跳過）"
+fi
 
 # ~/.claude.json（CLI 的設定檔）不存在時先建成空檔。bind mount 的來源不存在時，
 # Docker 會替你建一個**目錄**，之後 host 上的 claude 就再也讀不到自己的設定，
