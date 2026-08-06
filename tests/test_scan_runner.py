@@ -239,3 +239,69 @@ class TestMissingToolsAreDisclosed:
         status, entries, _ = scan_runner._run_ruff(repo)
         assert status["status"] == "error"
         assert entries == []
+
+
+class TestTrivyVacuityGate:
+    """「無標的」不得偽裝成「乾淨」：樹裡沒有依賴 manifest 時，digest 必須講出來。"""
+
+    def test_finds_manifests_and_skips_excluded_dirs(self, scan_runner, tmp_path):
+        (tmp_path / "pyproject.toml").write_text("[project]\n")
+        nested = tmp_path / "sub"
+        nested.mkdir()
+        (nested / "package.json").write_text("{}")
+        hidden = tmp_path / ".git"
+        hidden.mkdir()
+        (hidden / "go.mod").write_text("module x\n")
+
+        found = scan_runner.find_dependency_manifests(tmp_path)
+        names = sorted(p.name for p in found)
+        assert names == ["package.json", "pyproject.toml"]
+
+    def test_empty_tree_has_no_manifests(self, scan_runner, tmp_path):
+        (tmp_path / "app").mkdir()
+        (tmp_path / "app" / "main.py").write_text("x = 1\n")
+        assert scan_runner.find_dependency_manifests(tmp_path) == []
+
+    def test_manifestless_tree_gets_the_vacuity_note(self, scan_runner, tmp_path, monkeypatch):
+        """整條 run_trivy 的接線：空報告 + 無 manifest → notes 揭露無標的。"""
+        from types import SimpleNamespace
+
+        (tmp_path / "app").mkdir()
+        (tmp_path / "app" / "main.py").write_text("x = 1\n")
+        out_prefix = tmp_path / "digest" / "mr1"
+        artifact = out_prefix.with_name(out_prefix.name + ".trivy.json")
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text('{"SchemaVersion": 2}')  # trivy 空報告：連 Results 鍵都沒有
+
+        monkeypatch.setattr(scan_runner, "tool_available", lambda name: True)
+        monkeypatch.setattr(
+            scan_runner,
+            "run_process",
+            lambda argv, cwd=None: SimpleNamespace(
+                failure="", missing=False, exit_code=0, stdout="", stderr=""
+            ),
+        )
+        digest = scan_runner.run_trivy(tmp_path, out_prefix)
+        assert digest["status"] == "ok"
+        assert any("沒有標的" in n for n in digest["notes"])
+        assert any("零發現不代表依賴乾淨" in n for n in digest["notes"])
+
+    def test_tree_with_manifest_gets_no_vacuity_note(self, scan_runner, tmp_path, monkeypatch):
+        from types import SimpleNamespace
+
+        (tmp_path / "pyproject.toml").write_text("[project]\n")
+        out_prefix = tmp_path / "digest" / "mr1"
+        artifact = out_prefix.with_name(out_prefix.name + ".trivy.json")
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text('{"SchemaVersion": 2, "Results": []}')
+
+        monkeypatch.setattr(scan_runner, "tool_available", lambda name: True)
+        monkeypatch.setattr(
+            scan_runner,
+            "run_process",
+            lambda argv, cwd=None: SimpleNamespace(
+                failure="", missing=False, exit_code=0, stdout="", stderr=""
+            ),
+        )
+        digest = scan_runner.run_trivy(tmp_path, out_prefix)
+        assert not any("沒有標的" in n for n in digest["notes"])

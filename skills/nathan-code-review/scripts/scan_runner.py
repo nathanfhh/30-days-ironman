@@ -367,6 +367,30 @@ def line_in_diff(
 # Any non-zero exit therefore means trivy itself failed.
 TRIVY_OK_EXIT_CODES = frozenset({0})
 
+# Dependency manifests trivy's vuln scanner can actually read. A tree with none
+# of these has no vuln-scan target at all, and "no target" must never be
+# reported as "clean" — the trap is real: when the clone is blocked and the tree
+# is rebuilt from API-fetched source files, root-level manifests are the first
+# thing to go missing, and trivy then returns an empty report with exit code 0.
+DEPENDENCY_MANIFESTS = (
+    "pyproject.toml", "uv.lock", "poetry.lock", "requirements*.txt",
+    "Pipfile", "Pipfile.lock",
+    "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "go.mod", "go.sum", "Cargo.toml", "Cargo.lock",
+    "pom.xml", "build.gradle", "build.gradle.kts",
+    "Gemfile", "Gemfile.lock", "composer.json", "composer.lock",
+)
+
+
+def find_dependency_manifests(root: Path) -> list[Path]:
+    """List dependency manifests in the tree, skipping EXCLUDED_DIRS."""
+    found: list[Path] = []
+    for pattern in DEPENDENCY_MANIFESTS:
+        for p in root.rglob(pattern):
+            if not any(part in EXCLUDED_DIRS for part in p.parts):
+                found.append(p)
+    return sorted(found)
+
 
 def run_trivy(root: Path, out_prefix: Path) -> dict[str, Any]:
     artifact = out_prefix.with_name(out_prefix.name + ".trivy.json")
@@ -423,6 +447,21 @@ def run_trivy(root: Path, out_prefix: Path) -> dict[str, Any]:
     # Staleness of the vulnerability DB is worth disclosing but is not a failure.
     if "db" in result.stderr.lower() and "fail" in result.stderr.lower():
         notes.append("trivy 弱點資料庫更新可能失敗，結果可能使用較舊的快取資料庫。")
+
+    # 「無標的」與「乾淨」是兩件事。樹裡一個依賴 manifest 都沒有時，vuln 掃描
+    # 從頭到尾沒有東西可查，零發現不代表依賴乾淨——報告必須揭露，不得寫成
+    # 「安全掃描零命中」。
+    if not find_dependency_manifests(root):
+        file_count = sum(
+            1 for p in root.rglob("*")
+            if p.is_file() and not any(part in EXCLUDED_DIRS for part in p.parts)
+        )
+        notes.append(
+            "掃描樹中未發現任何依賴 manifest（pyproject.toml / lockfile / "
+            "package.json 等）——vuln 掃描沒有標的，零發現不代表依賴乾淨，"
+            f"報告必須揭露此限制。misconfig 與 secret 掃描僅涵蓋樹中現有的 "
+            f"{file_count} 個檔案。"
+        )
 
     try:
         raw = json.loads(artifact.read_text(encoding="utf-8", errors="replace"))

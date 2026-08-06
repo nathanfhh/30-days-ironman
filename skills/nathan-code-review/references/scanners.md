@@ -49,6 +49,14 @@ trivy fs \
   {repo}
 ```
 
+**"No target" is not "clean".** The vuln scanner only works on dependency
+manifests (pyproject.toml, lockfiles, package.json, …). When the tree has none —
+the common case being a tree rebuilt from API-fetched source files after a
+blocked clone — trivy exits 0 with an empty report, and that emptiness says
+nothing about the dependencies. `scan_runner.py` detects this and adds a note to
+the digest; when that note is present, the report must disclose the limitation
+instead of claiming a clean supply-chain scan.
+
 One invocation covers dependency vulnerabilities, configuration mistakes, and
 committed credentials. The `secret` scanner is doing double duty on purpose:
 dedicated git-history credential scanners exist (`gitleaks` and friends), but
