@@ -55,11 +55,70 @@ class TestParseMrUrl:
             ("https://gitlab.example.com/g/r/merge_requests/1", "no /-/ separator"),
             ("https://gitlab.example.com/-/merge_requests/1", "no project path"),
             ("https://gitlab.example.com/g/r/-/merge_requests/abc", "iid not a number"),
+            ("https://gitlab.example.com:abc/g/r/-/merge_requests/1", "port not a number"),
+            ("https://[::1/g/r/-/merge_requests/1", "urlsplit rejects the authority"),
         ],
     )
     def test_rejects_malformed_urls(self, gitlab_api, bad_url, because):
         with pytest.raises(gitlab_api.UsageError):
             gitlab_api.parse_mr_url(bad_url)
+
+    def test_keeps_a_non_default_port(self, gitlab_api):
+        target = gitlab_api.parse_mr_url(
+            "https://gitlab.example.com:8443/g/r/-/merge_requests/7"
+        )
+        assert target["host"] == "gitlab.example.com:8443"
+        assert target["api_base"] == "https://gitlab.example.com:8443/api/v4"
+
+
+class TestUrlCredentialsAreStripped:
+    """URL 裡夾帶的帳密不得流進任何輸出欄位、報告或錯誤訊息。"""
+
+    SECRET = "s3cr3tT0ken"
+    URL = f"https://someone:{SECRET}@gitlab.example.com/his2/group/repo/-/merge_requests/92"
+
+    def test_the_host_carries_no_credentials(self, gitlab_api):
+        target = gitlab_api.parse_mr_url(self.URL)
+        assert target["host"] == "gitlab.example.com"
+
+    def test_no_output_field_contains_the_secret(self, gitlab_api):
+        """The reproduced leak: netloc kept userinfo, so api_base carried it."""
+        target = gitlab_api.parse_mr_url(self.URL)
+        assert self.SECRET not in json.dumps(target)
+        assert "someone" not in json.dumps(target)
+
+    def test_the_note_url_written_into_the_report_is_clean(self, gitlab_api):
+        """publication.url is published on the MR, where anyone can read it."""
+        target = gitlab_api.parse_mr_url(self.URL)
+        assert self.SECRET not in gitlab_api.note_web_url(target, 12345)
+
+    def test_the_api_url_is_clean(self, gitlab_api):
+        target = gitlab_api.parse_mr_url(self.URL)
+        assert self.SECRET not in gitlab_api.mr_base_url(target)
+
+    def test_an_error_message_does_not_echo_the_credential_back(self, gitlab_api):
+        bad = f"https://someone:{self.SECRET}@gitlab.example.com/g/r/merge_requests/1"
+        with pytest.raises(gitlab_api.UsageError) as excinfo:
+            gitlab_api.parse_mr_url(bad)
+        assert self.SECRET not in str(excinfo.value)
+
+    def test_the_stripping_is_stated_rather_than_done_silently(self, gitlab_api, capsys):
+        gitlab_api.parse_mr_url(self.URL)
+        stderr = capsys.readouterr().err
+        assert "已剝除" in stderr
+        assert self.SECRET not in stderr
+
+    def test_a_url_without_credentials_says_nothing(self, gitlab_api, capsys):
+        gitlab_api.parse_mr_url(MR_URL)
+        assert capsys.readouterr().err == ""
+
+    def test_a_redirect_target_is_stripped_too(self, gitlab_api):
+        """Server-controlled, so likelier to carry one than the URL the user typed."""
+        target = gitlab_api._redirect_target_of(
+            f"https://someone:{self.SECRET}@evil.example.com/collect"
+        )
+        assert self.SECRET not in target
+        assert target == "https://evil.example.com/collect"
 
 
 # --------------------------------------------------------------------------
@@ -151,8 +210,11 @@ class TestSafeFilename:
         assert gitlab_api.safe_filename(raw, "attachment-1") == "attachment-1"
 
     def test_cannot_escape_the_destination_directory(self, gitlab_api):
+        # Assert both separators: "/" alone lets a backslash traversal pass
+        # untouched on the r"..\..\windows" input.
         for raw in ["../../etc/shadow", "..%2F..%2Fetc%2Fshadow", r"..\..\windows"]:
-            assert "/" not in gitlab_api.safe_filename(raw, "fallback")
+            cleaned = gitlab_api.safe_filename(raw, "fallback")
+            assert "/" not in cleaned and "\\" not in cleaned
 
 
 # --------------------------------------------------------------------------
@@ -220,7 +282,10 @@ class TestErrorMessages:
         assert "GITLAB_TOKEN" in message and "api scope" in message
 
     def test_404_explains_that_gitlab_hides_permission_errors(self, gitlab_api):
-        assert "404" in gitlab_api._describe_http_error(404, "https://h/api/v4/x")
+        # "404" alone also matches the generic fallback branch; pin the
+        # explanation sentence this test is named after.
+        message = gitlab_api._describe_http_error(404, "https://h/api/v4/x")
+        assert "GitLab 對無權限資源一律回傳 404" in message
 
     def test_error_text_never_echoes_a_query_string(self, gitlab_api):
         message = gitlab_api._describe_http_error(404, "https://h/api/v4/x?private_token=SECRET")
@@ -377,7 +442,10 @@ class TestHttpRequestTimeout:
 
         with pytest.raises(gitlab_api.ApiError) as excinfo:
             gitlab_api.http_request(f"{stub_server.url}/api/v4/x", "t")
-        assert "逾時" in str(excinfo.value) or "無法連線" in str(excinfo.value)
+        # A 2s-delayed reply against a 0.2s timeout is a real socket timeout;
+        # accepting "無法連線" too would let the URLError branch pass a test
+        # named after timeouts.
+        assert "逾時" in str(excinfo.value)
 
 
 class TestApiBaseOverride:
@@ -422,3 +490,141 @@ class TestApiBaseOverride:
         stub_server.queue(Reply.json({"ok": True}))
         gitlab_api.http_request(f"{stub_server.url}/api/v4/user", "secret-t")
         assert stub_server.requests[-1].headers.get("private-token") == "secret-t"
+
+    def test_a_bare_host_needs_no_url(self, gitlab_api, monkeypatch):
+        monkeypatch.delenv("NCR_GITLAB_API_BASE", raising=False)
+        assert gitlab_api.api_base_for("gitlab.example.com") == (
+            "https://gitlab.example.com/api/v4"
+        )
+
+    @pytest.mark.parametrize(
+        "override",
+        ["http://gitlab-proxy:5678", "http://gitlab-proxy:5678/", "http://gitlab-proxy:5678///"],
+        ids=["bare", "one-slash", "many-slashes"],
+    )
+    def test_trailing_slashes_never_reach_the_url(self, gitlab_api, monkeypatch, override):
+        """`.../api/v4` with a doubled slash 404s on GitLab rather than failing loudly."""
+        monkeypatch.setenv("NCR_GITLAB_API_BASE", override)
+        assert gitlab_api.api_base_for("h") == "http://gitlab-proxy:5678/api/v4"
+
+    def test_a_blank_override_is_treated_as_absent(self, gitlab_api, monkeypatch):
+        monkeypatch.setenv("NCR_GITLAB_API_BASE", "   ")
+        assert gitlab_api.api_base_for("gitlab.example.com").startswith("https://gitlab")
+
+
+# --------------------------------------------------------------------------
+# Timestamps and the re-review cutoff
+# --------------------------------------------------------------------------
+
+
+class TestParseTimestamp:
+    @pytest.mark.parametrize(
+        ("value", "expected_hour"),
+        [
+            ("2026-08-01T09:30:00Z", 9),
+            ("2026-08-01T09:30:00+00:00", 9),
+            ("2026-08-01T09:30:00.123Z", 9),
+            ("2026-08-01T17:30:00+08:00", 17),
+        ],
+        ids=["trailing-z", "explicit-utc", "fractional", "offset"],
+    )
+    def test_accepts_the_shapes_gitlab_emits(self, gitlab_api, value, expected_hour):
+        parsed = gitlab_api.parse_timestamp(value)
+        assert parsed is not None
+        assert parsed.hour == expected_hour
+        assert parsed.tzinfo is not None
+
+    def test_a_naive_timestamp_is_read_as_utc(self, gitlab_api):
+        """Left naive it would raise on the first comparison against a cutoff."""
+        from datetime import UTC
+
+        assert gitlab_api.parse_timestamp("2026-08-01T09:30:00").tzinfo is UTC
+
+    @pytest.mark.parametrize(
+        "value", [None, "", "   ", "not-a-date", "2026-13-45T99:99:99Z"],
+        ids=["none", "empty", "blank", "prose", "out-of-range"],
+    )
+    def test_returns_none_for_anything_unparseable(self, gitlab_api, value):
+        assert gitlab_api.parse_timestamp(value) is None
+
+    def test_require_timestamp_turns_that_into_a_usage_error(self, gitlab_api):
+        with pytest.raises(gitlab_api.UsageError) as excinfo:
+            gitlab_api.require_timestamp("yesterday")
+        assert "ISO-8601" in str(excinfo.value)
+
+
+class TestFilterDiscussionsSince:
+    CUTOFF = "2026-08-01T12:00:00Z"
+
+    @staticmethod
+    def _discussion(discussion_id, *notes):
+        return {
+            "id": discussion_id,
+            "notes": [
+                {"id": note_id, "created_at": created, "body": "內容"}
+                for note_id, created in notes
+            ],
+        }
+
+    @pytest.fixture
+    def cutoff(self, gitlab_api):
+        return gitlab_api.require_timestamp(self.CUTOFF)
+
+    def test_keeps_only_notes_after_the_cutoff(self, gitlab_api, cutoff):
+        discussions = [
+            self._discussion(
+                "d1",
+                (1, "2026-08-01T11:00:00Z"),
+                (2, "2026-08-01T13:00:00Z"),
+            )
+        ]
+        [kept] = gitlab_api.filter_discussions_since(discussions, cutoff)
+        assert [n["id"] for n in kept["notes"]] == [2]
+
+    def test_the_boundary_is_strict(self, gitlab_api, cutoff):
+        """A note posted at exactly T is the previous round's own report."""
+        discussions = [self._discussion("d1", (1, self.CUTOFF))]
+        assert gitlab_api.filter_discussions_since(discussions, cutoff) == []
+
+    def test_a_discussion_left_with_no_notes_is_dropped_entirely(self, gitlab_api, cutoff):
+        discussions = [
+            self._discussion("d1", (1, "2026-08-01T09:00:00Z")),
+            self._discussion("d2", (2, "2026-08-01T15:00:00Z")),
+        ]
+        kept = gitlab_api.filter_discussions_since(discussions, cutoff)
+        assert [d["id"] for d in kept] == ["d2"]
+
+    def test_the_original_discussion_is_not_mutated(self, gitlab_api, cutoff):
+        """The caller writes the untrimmed list to --out; trimming in place would lose it."""
+        discussions = [
+            self._discussion("d1", (1, "2026-08-01T09:00:00Z"), (2, "2026-08-01T15:00:00Z"))
+        ]
+        gitlab_api.filter_discussions_since(discussions, cutoff)
+        assert len(discussions[0]["notes"]) == 2
+
+    def test_a_timezone_offset_is_compared_correctly_not_lexically(self, gitlab_api, cutoff):
+        """11:00+08:00 is 03:00Z — before the cutoff, despite sorting after it."""
+        discussions = [self._discussion("d1", (1, "2026-08-01T11:00:00+08:00"))]
+        assert gitlab_api.filter_discussions_since(discussions, cutoff) == []
+
+    @pytest.mark.parametrize(
+        "created", [None, "", "not-a-date"], ids=["missing", "empty", "prose"]
+    )
+    def test_an_undatable_note_stops_the_run_instead_of_vanishing(
+        self, gitlab_api, cutoff, created
+    ):
+        """Silently dropping it is an author reply that disappears.
+
+        On a re-review this filter collects the author's replies. A note that
+        cannot be placed in time used to be filtered out along with the ones
+        genuinely before the cutoff, and the next report would then say the
+        author never answered.
+        """
+        discussions = [{"id": "d1", "notes": [{"id": 7, "created_at": created}]}]
+        with pytest.raises(gitlab_api.ApiError) as excinfo:
+            gitlab_api.filter_discussions_since(discussions, cutoff)
+        assert "created_at" in str(excinfo.value)
+
+    def test_a_discussion_with_no_notes_at_all_is_not_an_error(self, gitlab_api, cutoff):
+        assert gitlab_api.filter_discussions_since([{"id": "d1", "notes": []}], cutoff) == []
+        assert gitlab_api.filter_discussions_since([{"id": "d2"}], cutoff) == []

@@ -5,6 +5,8 @@
 
 ### 總評
 
+{summary}
+
 {dimension_grid}
 
 {dimension_notes}

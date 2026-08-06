@@ -115,11 +115,35 @@ TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "assets" / "report_temp
 # report may cite only what a reader can reach -- repository-relative paths, the
 # merge request, its commits. These patterns are what the rendered Markdown is
 # scanned for before anything is written out.
+#
+# What is matched is deliberately the *review machine's* filesystem, not "any
+# absolute-looking string". An earlier version matched every two-segment path
+# starting with a slash, which caught the reviewer's home directory and also
+# every path belonging to the system under review: an API route in a POC
+# (`curl .../api/v1/orders`), a URL fix (`/user-profile/list`),
+# `/etc/nginx/nginx.conf`. Those are evidence about the reviewed code, and this
+# skill's own report format asks for them, so a gate that rejects them blocks
+# publishing a correct report. The roots below are where a review's own
+# scratch files live -- see references/workspace-paths.md for the clone
+# (`/tmp/ncr/{group}-{repo}-mr{iid}/`) and the archive (`$HOME/ncr/...`).
+
+# Temp and system roots: one segment after them is already machine-specific.
+_MACHINE_ROOTS = ("tmp", "var/tmp", "var/folders", "private", "root")
+# Home roots need two segments (`/home/{user}/{something}`) so that a two-part
+# application route such as `/home/dashboard` is not mistaken for one.
+_HOME_ROOTS = ("home", "[Uu]sers")
+
+# Nothing may precede the slash that would make it part of a longer token: the
+# lookbehind is what keeps "https://host/tmp/x" and "app/tmp/x" out.
+_NOT_MID_PATH = r"(?<![\w:/.~\\-])"
+_SEGMENT = r"[A-Za-z0-9_.+-]+"
+_TAIL = r"[A-Za-z0-9_./+-]*"
+
 LOCAL_PATH_PATTERNS: tuple[re.Pattern[str], ...] = (
-    # POSIX absolute path. The lookbehind keeps URLs ("https://host/x") and
-    # repo-relative paths ("app/api/x.py") out; requiring two non-empty segments
-    # keeps a bare "/packages/" written in prose out.
-    re.compile(r"(?<![\w:/.~\\-])/[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+[A-Za-z0-9_./+-]*"),
+    re.compile(rf"{_NOT_MID_PATH}/(?:{'|'.join(_MACHINE_ROOTS)})/{_SEGMENT}{_TAIL}"),
+    re.compile(
+        rf"{_NOT_MID_PATH}/(?:{'|'.join(_HOME_ROOTS)})/{_SEGMENT}/{_SEGMENT}{_TAIL}"
+    ),
     # $HOME / ~ paths: machine-local too, even without a leading slash.
     re.compile(r"(?<![\w])(?:~|\$HOME)/[A-Za-z0-9_.+-]+[A-Za-z0-9_./+-]*"),
     # Windows drive letter, e.g. C:\work\repo or D:/work/repo.
@@ -495,8 +519,17 @@ def build_collapsed_sections(
         body = "\n\n".join(build_open_question_block(q) for q in open_questions)
         blocks.append(_details("未驗證提問", len(open_questions), body))
 
-    if history:
-        blocks.append(_details("已解決", len(history), build_history_block(history, pushback)))
+    # Resolved and withdrawn are both history, but they are not the same event:
+    # one is a finding the author fixed, the other one this review took back.
+    # Folding them into a single "已解決" block reported every retraction as a
+    # repair, which flatters the review at the author's expense.
+    for status in ("resolved", "withdrawn"):
+        items = [f for f in history if _as_text(f.get("status")) == status]
+        if not items:
+            continue
+        blocks.append(
+            _details(STATUS_LABELS[status], len(items), build_history_block(items, pushback))
+        )
 
     return "\n\n".join(blocks)
 
@@ -601,6 +634,9 @@ def render(report: dict[str, Any], template: str) -> str:
         open_question_count=len(open_questions),
         skill_version=_required_text(meta, "skill_version", "meta"),
         round=round_number,
+        # Optional: an empty summary collapses away with the surrounding blank
+        # lines, leaving the grid where it has always been.
+        summary=_as_text(report.get("summary")),
         dimension_grid=build_dimension_grid(dimensions),
         dimension_notes=build_dimension_notes(dimensions),
         rereview_section=build_rereview_section(report, round_number),
@@ -686,7 +722,9 @@ def main(argv: list[str]) -> int:
         for violation in violations:
             print(f"  - {violation.location}：{violation.path}", file=sys.stderr)
         print(
-            "請改成 repository 相對路徑（例如 app/api/account.py:34），或直接刪掉該路徑後重新產生。",
+            "以上是審查機器上的路徑，MR 的讀者到不了。"
+            "指的若是 repository 內的檔案，改成 repo 相對路徑（例如 app/api/account.py:34）；"
+            "若是掃描產物或暫存檔，刪掉該路徑後重新產生。",
             file=sys.stderr,
         )
         return 1

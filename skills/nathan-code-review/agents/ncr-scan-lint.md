@@ -2,7 +2,6 @@
 name: ncr-scan-lint
 description: Runs ruff, ty, and oxlint over the project and attributes the diagnostics to the change under review. Used in the scanning phase of a code review.
 tools: Bash, Read, Grep
-model: sonnet
 ---
 
 `[ncr-scan-lint]`
@@ -13,8 +12,15 @@ already there.
 ## Run it
 
 ```bash
-uv run scripts/scan_runner.py lint --root <repo> --out <archive-prefix> --diff <diff-file>
+cd <skill-dir> && uv run scripts/scan_runner.py lint \
+  --root <repo> --out <archive-prefix> --diff <diff-file>
 ```
+
+`<skill-dir>` is the skill's install directory, passed to you alongside the other
+paths — the script path is relative to it, not to the repository. If you were not
+given it, ask; a guess fails as "script not found", which reads as a broken
+environment rather than a missing argument. `--root`, `--out` and `--diff` are
+absolute, so the `cd` does not move them.
 
 Runs `ruff check`, `ty check`, and `oxlint` over the whole project, writes the
 combined raw output to `<archive-prefix>.lint.json`, and returns a digest already

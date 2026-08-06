@@ -44,6 +44,15 @@ Work through all six before deciding anything. Record each answer in
 Set `status: withdrawn` on the finding and append the reasoning to `pushback[]`.
 Annotate; never quietly rewrite what was already published.
 
+Withdrawing a finding can change the verdict — the last live Critical going away
+turns `Request Changes` into something else. `conclusion` is derived from the
+findings that are still live, so re-derive it whenever a status changes; the
+validator rejects the report if the two disagree.
+
+```bash
+uv run scripts/report_model.py conclusion <report.json>
+```
+
 **You are right** → explain the why more fully rather than softening. "我聽到了 +
 我維持立場 + 理由是 {tradeoff}". Not louder, not more hedged. If two or three
 exchanges produce no agreement, stop and escalate to the tech lead. A review is

@@ -45,10 +45,42 @@ class TestLocalPathDetection:
             "見 config.yaml.sample:45",
             "test/test_anesthesia.py",
             "套件註冊表路徑含有 /packages/ 片段",
+            "覆蓋 \"1\"/2/None/\"9\" 四個案例",
         ],
-        ids=["repo-relative", "prose-path", "url", "sample", "test-path", "bare-segment"],
+        ids=[
+            "repo-relative",
+            "prose-path",
+            "url",
+            "sample",
+            "test-path",
+            "bare-segment",
+            "quoted-values",
+        ],
     )
     def test_leaves_legitimate_references_alone(self, find_local_paths, text):
+        assert find_local_paths(text, {}) == []
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "curl -X POST 'https://host/api/v1/orders?id=1' -H 'X-Token: x'",
+            "路由應為 /user-profile/list，而不是 /userProfile/list",
+            "設定檔 /etc/nginx/nginx.conf 沒有設定 client_max_body_size",
+            "掛載點 /var/lib/postgresql/data 沒有持久化",
+            "前端路由 /home/dashboard 沒有 auth guard",
+        ],
+        ids=["api-route", "url-fix", "etc-config", "container-mount", "app-route"],
+    )
+    def test_paths_belonging_to_the_reviewed_system_are_not_blocked(
+        self, find_local_paths, text
+    ):
+        """The reproduced bug: the gate rejected evidence this skill asks for.
+
+        An API route in a POC and a URL fix are paths inside the system under
+        review, not on the review machine. Blocking them stopped a correct
+        report from being published at all — a far worse outcome than the
+        prose false positives the old greedy pattern was tuned to catch.
+        """
         assert find_local_paths(text, {}) == []
 
     def test_reports_each_distinct_path_once(self, find_local_paths):
@@ -61,16 +93,9 @@ class TestLocalPathDetection:
         assert violation.path == "/tmp/ncr/x/y"
         assert "findings" in violation.location
 
-    def test_quoted_values_containing_slashes_are_a_known_false_positive(self, find_local_paths):
-        """Documented, not fixed, and deliberately so.
-
-        Prose like `覆蓋 "1"/2/None/"9"` trips the POSIX-path pattern. Tightening
-        the lookbehind to exclude quotes would let a genuinely quoted "/tmp/x/y"
-        through, and this is a pre-publication gate: a false positive costs one
-        rewrite, a false negative leaks a reviewer's filesystem to the whole
-        merge request. The asymmetry is the reason the pattern stays greedy.
-        """
-        assert find_local_paths('覆蓋 "1"/2/None/"9" 四個案例', {}) != []
+    def test_a_quoted_local_path_is_still_caught(self, find_local_paths):
+        """Narrowing the pattern must not open a hole for the quoted form."""
+        assert find_local_paths('報告寫著 "/tmp/ncr/x/y" 這個位置', {}) != []
 
 
 class TestRendering:
@@ -154,11 +179,155 @@ class TestRendering:
         assert "可讀取全院病人的病歷號" in markdown
 
     def test_an_na_dimension_renders_as_a_dash_with_its_reason(self, markdown):
-        assert "—" in markdown
+        # Pin the grid row itself (G pass / H na / I pass). Asserting a bare "—"
+        # proves nothing: every finding heading carries an em dash already.
+        assert "| ✅ | — | ✅ |" in markdown
         assert "diff 內沒有非 Python 檔" in markdown
 
     def test_the_skill_version_is_recorded(self, markdown):
         assert "2026.08.02.02" in markdown
+
+    def test_a_poc_citing_an_api_route_survives_the_path_gate(self, render_report, report):
+        """End to end: the C-1 report that could not be published at all."""
+        from conftest import SCRIPTS
+
+        report["findings"][0]["security"]["poc"] = (
+            "curl -X POST 'https://host/api/v1/patients/1/export'"
+        )
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        markdown = render_report.render(report, template)
+
+        assert render_report.find_local_paths(markdown, report) == []
+        assert "/api/v1/patients/1/export" in markdown
+
+    def test_a_report_naming_the_review_machine_is_still_refused(
+        self, render_report, report
+    ):
+        from conftest import SCRIPTS
+
+        report["findings"][0]["fix"] = "見 /Users/nathan/ncr/scan.json 的完整輸出"
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        markdown = render_report.render(report, template)
+
+        violations = render_report.find_local_paths(markdown, report)
+        assert [v.path for v in violations] == ["/Users/nathan/ncr/scan.json"]
+
+
+class TestSummary:
+    """`summary` 有欄位卻沒被渲染過，等於報告寫了沒人看得到。"""
+
+    @pytest.fixture
+    def render(self, render_report):
+        from conftest import SCRIPTS
+
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        return lambda report: render_report.render(report, template)
+
+    @pytest.fixture
+    def base(self):
+        return {
+            "meta": {
+                "skill_version": "2026.08.06.01",
+                "reviewed_at": "2026-08-06T10:00:00+0800",
+                "round": 1,
+                "mode": "local_branch",
+                "target": "feature/x",
+                "phi_trigger": {"triggered": False},
+            },
+            "intent_check": {
+                "should_do": {"verdict": "ok"},
+                "right_mr": {"verdict": "ok"},
+                "right_timing": {"verdict": "ok"},
+            },
+            "dimensions": {d: {"verdict": "pass"} for d in "ABCDEFGHI"},
+            "findings": [],
+            "open_questions": [],
+            "conclusion": "Approved",
+        }
+
+    def test_it_appears_in_the_published_markdown(self, render, base):
+        base["summary"] = "整體結構清楚，只有錯誤處理的部分值得再看一次。"
+        assert "整體結構清楚，只有錯誤處理的部分值得再看一次。" in render(base)
+
+    def test_it_leads_the_overview_section(self, render, base):
+        """Above the grid: the sentence frames the nine cells, not the reverse."""
+        base["summary"] = "本次沒有阻擋合併的問題。"
+        markdown = render(base)
+        assert markdown.index("本次沒有阻擋合併的問題。") < markdown.index("| A 風格")
+
+    def test_an_absent_summary_leaves_no_placeholder_behind(self, render, base):
+        markdown = render(base)
+        assert "{summary}" not in markdown
+        assert "### 總評\n\n| A 風格" in markdown
+
+
+class TestHistorySections:
+    """已解決與已撤回是兩件事：一件作者修好了，一件審查自己收回。"""
+
+    @pytest.fixture
+    def render(self, render_report):
+        from conftest import SCRIPTS
+
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        return lambda report: render_report.render(report, template)
+
+    @pytest.fixture
+    def report(self):
+        def finding(finding_id, status):
+            return {
+                "id": finding_id,
+                "dimension": "A",
+                "severity": "Suggestion",
+                "status": status,
+                "title": f"{finding_id} 的標題",
+                "evidence": ["app/x.py:1"],
+                "rationale": "理由",
+                "fix": "修法",
+                "source": "dimension",
+            }
+
+        return {
+            "meta": {
+                "skill_version": "2026.08.06.01",
+                "reviewed_at": "2026-08-06T10:00:00+0800",
+                "round": 2,
+                "mode": "local_branch",
+                "target": "feature/x",
+                "phi_trigger": {"triggered": False},
+            },
+            "intent_check": {
+                "should_do": {"verdict": "ok"},
+                "right_mr": {"verdict": "ok"},
+                "right_timing": {"verdict": "ok"},
+            },
+            "rereview": {
+                "q1_new_evidence": "無新證據",
+                "q2_new_paths": "新的 commit 沒有暴露新的執行路徑",
+            },
+            "dimensions": {d: {"verdict": "pass"} for d in "ABCDEFGHI"},
+            "findings": [finding("F-001", "resolved"), finding("F-002", "withdrawn")],
+            "open_questions": [],
+            "conclusion": "Approved",
+        }
+
+    def test_the_two_get_their_own_blocks(self, render, report):
+        markdown = render(report)
+        assert "<summary>已解決（1）</summary>" in markdown
+        assert "<summary>已撤回（1）</summary>" in markdown
+
+    def test_a_withdrawal_is_not_counted_as_a_repair(self, render, report):
+        """The bug: both folded into 已解決, so every retraction read as a fix."""
+        markdown = render(report)
+        assert "<summary>已解決（2）</summary>" not in markdown
+        resolved = markdown.split("<summary>已解決（1）</summary>")[1].split("</details>")[0]
+        assert "F-001" in resolved
+        assert "F-002" not in resolved
+
+    def test_a_block_with_nothing_in_it_is_omitted(self, render, report):
+        report["findings"] = [report["findings"][0]]
+        markdown = render(report)
+        assert "已解決" in markdown
+        assert "已撤回" not in markdown
 
 
 class TestProcessDirectedTextSection:

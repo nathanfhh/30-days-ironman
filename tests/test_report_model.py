@@ -386,3 +386,61 @@ class TestModeInvariants:
         """extra="forbid" is what stops a typo'd key from being silently ignored."""
         with pytest.raises(ValidationError):
             build(_report(conclusionn="Approved"))
+
+
+class TestIntentDoubtNeedsNote:
+    """A 'doubt' verdict with no note is a flag without a reason — rejected."""
+
+    def test_doubt_without_a_note_is_rejected(self, build):
+        intent = _report()["intent_check"] | {"should_do": {"verdict": "doubt"}}
+        with pytest.raises(ValidationError):
+            build(_report(intent_check=intent))
+
+    def test_doubt_with_a_note_is_accepted(self, build):
+        intent = _report()["intent_check"] | {
+            "should_do": {"verdict": "doubt", "note": "退款邏輯是否該進這個 MR 待作者說明"}
+        }
+        build(_report(intent_check=intent))
+
+
+class TestPushbackTargetsKnownFindings:
+    """pushback referencing a finding id that does not exist is rejected."""
+
+    @staticmethod
+    def _pushback(finding_id: str) -> dict:
+        return {
+            "finding_id": finding_id,
+            "author_quote": "這個我不同意，因為內網用不到",
+            "review": {
+                "new_information": "無新事證",
+                "author_proximity": "作者較熟部署環境",
+                "grounded_in_evidence": "程式碼層面的疑慮仍在",
+                "rule_or_preference": "規則",
+                "rule_versus_context": "內網不豁免授權檢查",
+                "knock_on_effects": "撤回會使同類缺陷失去先例",
+            },
+            "outcome": "hold",
+            "response": "維持原判定，理由如上",
+            "appended_at": "2026-08-06T12:00:00+08:00",
+        }
+
+    def test_pushback_on_an_unknown_id_is_rejected(self, build):
+        findings = [_finding(id="F-001", severity="Suggestion")]
+        with pytest.raises(ValidationError, match="unknown finding"):
+            build(
+                _report(
+                    findings=findings,
+                    conclusion="Approved with Comments",
+                    pushback=[self._pushback("F-999")],
+                )
+            )
+
+    def test_pushback_on_a_known_id_is_accepted(self, build):
+        findings = [_finding(id="F-001", severity="Suggestion")]
+        build(
+            _report(
+                findings=findings,
+                conclusion="Approved with Comments",
+                pushback=[self._pushback("F-001")],
+            )
+        )

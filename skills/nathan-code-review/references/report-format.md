@@ -47,6 +47,7 @@ exact field names or the validation rules. The shape:
 | `open_questions[]` | unverified concerns: question, context, what would settle it. No severity |
 | `rereview` | the Q1 and Q2 answers. Required from round 2 onward |
 | `conclusion` | derived, never chosen |
+| `summary` | 總評: a short prose verdict, rendered above the nine-cell grid. Optional — omit it rather than padding |
 | `publication` | discussion_id, note_id, created_at, url — written back after publishing |
 | `pushback[]` | appended when an author disputes a finding; never edits history |
 
@@ -77,11 +78,13 @@ stays readable without dropping anything:
 
 ### 總評
 
+（`summary`：一段話講完這次審查的結論，沒有就省略）
+
 | A 風格 | B 簡潔 | C 安全 |
 |:--:|:--:|:--:|
 | ✅ | ✅ | ❌ |
 
-| D API 慣例 | E 架構 | F 資料庫 |
+| D API 慣例 | E 架構 | F 資料取用與資料庫 |
 |:--:|:--:|:--:|
 | ✅ | ❌ | ✅ |
 
@@ -110,6 +113,7 @@ worked）
 <details><summary>Nit（2）</summary>…</details>
 <details><summary>未驗證提問（2）</summary>…</details>
 <details><summary>已解決（1）</summary>…</details>
+<details><summary>已撤回（1）</summary>…</details>
 ```
 
 `—` marks a dimension that did not apply, and the note says why.

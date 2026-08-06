@@ -2,7 +2,6 @@
 name: ncr-scan-trivy
 description: Runs a trivy filesystem scan for dependency vulnerabilities, misconfiguration, and committed secrets, then triages the results against the code. Used in the scanning phase of a code review.
 tools: Bash, Read, Grep
-model: sonnet
 ---
 
 `[ncr-scan-trivy]`
@@ -14,8 +13,14 @@ reaches the report.
 ## Run it
 
 ```bash
-uv run scripts/scan_runner.py trivy --root <repo> --out <archive-prefix>
+cd <skill-dir> && uv run scripts/scan_runner.py trivy --root <repo> --out <archive-prefix>
 ```
+
+`<skill-dir>` is the skill's install directory, passed to you alongside the other
+paths — the script path is relative to it, not to the repository. If you were not
+given it, ask; a guess fails as "script not found", which reads as a broken
+environment rather than a missing argument. `--root` and `--out` are absolute, so
+the `cd` does not move them.
 
 This writes the full JSON to `<archive-prefix>.trivy.json` and returns a digest.
 Work from the digest. Do not read the raw file into context — it is routinely

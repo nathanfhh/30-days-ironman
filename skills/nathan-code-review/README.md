@@ -78,6 +78,13 @@ assets/           報告 Markdown 樣板
 uv run scripts/report_model.py validate <report.json>
 ```
 
+它是唯一要抓套件的腳本。**受限網路（如 dev container 的限制模式）下第一次跑會失敗**——
+`uv` 得先下載 pydantic，而防火牆擋掉了 PyPI。先在牆外把 cache 暖起來，之後離線可用：
+
+```bash
+uv run scripts/report_model.py --help
+```
+
 ## 版本
 
 `YYYY.mm.dd.NN`，寫在 `SKILL.md` frontmatter，並複製進每份報告的

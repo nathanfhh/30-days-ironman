@@ -387,15 +387,18 @@ LOCKFILE_SUFFIXES = (".lock", "-lock.json", "-lock.yaml")
 # 把它當標的等於這個 gate 永遠不會觸發。
 VENDOR_DIRS = frozenset({"node_modules", ".venv", "venv", "vendor"})
 
+# 走訪原始碼樹時要跳過的目錄：掃描排除的 + vendored 依賴。任何「這棵樹裡有幾個
+# 檔案」的統計都用這一份，否則 node_modules 會把數字灌大好幾個量級。
+SKIPPED_TREE_DIRS = frozenset(EXCLUDED_DIRS) | VENDOR_DIRS
+
 
 def find_dependency_manifests(root: Path) -> list[Path]:
     """List dependency manifests in the tree, skipping excluded/vendored dirs."""
     import fnmatch
 
-    skip = set(EXCLUDED_DIRS) | VENDOR_DIRS
     found: list[Path] = []
     for p in root.rglob("*"):
-        if not p.is_file() or any(part in skip for part in p.parts):
+        if not p.is_file() or any(part in SKIPPED_TREE_DIRS for part in p.parts):
             continue
         name = p.name
         if name.endswith(LOCKFILE_SUFFIXES) or any(
@@ -467,7 +470,7 @@ def run_trivy(root: Path, out_prefix: Path) -> dict[str, Any]:
     if not find_dependency_manifests(root):
         file_count = sum(
             1 for p in root.rglob("*")
-            if p.is_file() and not any(part in EXCLUDED_DIRS for part in p.parts)
+            if p.is_file() and not any(part in SKIPPED_TREE_DIRS for part in p.parts)
         )
         notes.append(
             "掃描樹中未發現任何依賴 manifest（pyproject.toml / lockfile / "
@@ -834,6 +837,8 @@ def _partition(
     """
     if not attribute:
         # No diff supplied: attribution is impossible, so nothing is claimed.
+        # The caller must label these `unattributed` rather than `in_diff` --
+        # see _lint_counts.
         return entries, []
     in_diff: list[dict[str, Any]] = []
     outside: list[dict[str, Any]] = []
@@ -841,6 +846,20 @@ def _partition(
         target = in_diff if line_in_diff(changed, entry["file"], entry["line"]) else outside
         target.append(entry)
     return in_diff, outside
+
+
+def _lint_counts(in_diff: int, outside: int, attribute: bool) -> dict[str, int]:
+    """Name the counts after what the run actually established.
+
+    With no --diff, _partition returns every diagnostic in its first slot
+    because attribution was impossible — not because the diagnostics fall
+    inside the change. Publishing that under `in_diff` asserts as fact the one
+    thing this run could not determine, and a reader who only sees the counts
+    has no way to tell the two apart. `unattributed` says what happened.
+    """
+    if attribute:
+        return {"in_diff": in_diff, "outside_diff": outside}
+    return {"unattributed": in_diff}
 
 
 def _run_ruff(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
@@ -1216,15 +1235,16 @@ def run_lint(root: Path, out_prefix: Path, diff_path: Path | None) -> dict[str, 
             # Counted, never itemised: see _partition's docstring.
             sub_notes.append(f"專案既有問題 {len(outside)} 件，不列入本次。")
         if truncated:
+            scope = "本次變更內" if attribute else "未歸屬"
             sub_notes.append(
-                f"本次變更內 {len(in_diff)} 件，digest 只列出 {MAX_ENTRIES} 件；"
+                f"{scope} {len(in_diff)} 件，digest 只列出 {MAX_ENTRIES} 件；"
                 f"完整結果在 {artifact.name}。"
             )
         sub[name] = {
             "status": status_block["status"],
             "exit_code": status_block["exit_code"],
             "skipped_reason": status_block["skipped_reason"],
-            "counts": {"in_diff": len(in_diff), "outside_diff": len(outside)},
+            "counts": _lint_counts(len(in_diff), len(outside), attribute),
             "entries": capped,
             "truncated": truncated,
             "notes": sub_notes,
@@ -1241,24 +1261,30 @@ def run_lint(root: Path, out_prefix: Path, diff_path: Path | None) -> dict[str, 
             sub[name]["suppressed"] = suppressed_capped
 
     statuses = {block["status"] for block in sub.values()}
-    # The envelope status is the best outcome any sub-tool achieved; per-tool
-    # detail lives in `sub`, so a single missing linter must not mark the whole
-    # step as failed.
-    if "ok" in statuses:
-        status = "ok"
-    elif "error" in statuses:
+    # Worst outcome wins. The envelope is what a reader who never opens `sub`
+    # acts on, and taking the best sub-result meant a crashed ty next to a
+    # working ruff arrived labelled `ok` with an empty reason — the exact
+    # "silence is not a clean bill of health" failure this runner exists to
+    # prevent. Per-tool detail still lives in `sub`, so nothing is lost by
+    # reporting the envelope pessimistically.
+    if "error" in statuses:
         status = "error"
-    else:
+    elif "skipped" in statuses:
         status = "skipped"
+    else:
+        status = "ok"
 
     skipped_reason = ""
     if status != "ok":
+        # Every non-ok sub-tool is named, not only the ones that filled in a
+        # reason: a tool that failed without explaining itself is precisely the
+        # one a reader must not be left to infer.
         parts = [
-            f"{name}：{block['skipped_reason']}"
+            f"{name}：{block['skipped_reason'] or '（未附理由）'}"
             for name, block in sub.items()
-            if block["skipped_reason"]
+            if block["status"] != "ok"
         ]
-        skipped_reason = "；".join(parts) or "ruff / ty / oxlint 均未產生可用結果"
+        skipped_reason = "；".join(parts)
 
     if total_out:
         notes.append(f"專案既有問題合計 {total_out} 件，僅計數揭露，不列為本次發現。")
@@ -1279,7 +1305,7 @@ def run_lint(root: Path, out_prefix: Path, diff_path: Path | None) -> dict[str, 
         status=status,
         exit_code=None,  # three independent tools; see sub[*].exit_code
         artifact=str(artifact),
-        counts={"in_diff": total_in, "outside_diff": total_out},
+        counts=_lint_counts(total_in, total_out, attribute),
         skipped_reason=skipped_reason,
         entries=combined,
         truncated=truncated,

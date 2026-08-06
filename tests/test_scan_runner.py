@@ -128,7 +128,8 @@ class TestTyBareMode:
     """unresolved-import in bare mode is an environment artefact, not a defect."""
 
     def _run(self, scan_runner, repo, fake_tool):
-        # Exit 2 on the json attempt forces the concise fallback ty really uses.
+        # Exit 1 is inside TY_OK_EXIT_CODES; the concise fallback is forced by
+        # the non-JSON stdout (json.loads raises), not by the exit code.
         fake_tool("ty", stdout=TY_OUTPUT, exit_code=1)
         return scan_runner._run_ty(repo)
 
@@ -153,7 +154,6 @@ class TestTyBareMode:
         self, scan_runner, repo, fake_tool
     ):
         _venv(repo)
-        fake_tool("ty", stdout=TY_OUTPUT, exit_code=1)
         status, entries, _ = self._run(scan_runner, repo, fake_tool)
         assert status["mode"] == "resolved"
         assert len(entries) == 3
@@ -239,6 +239,125 @@ class TestMissingToolsAreDisclosed:
         status, entries, _ = scan_runner._run_ruff(repo)
         assert status["status"] == "error"
         assert entries == []
+
+
+class TestLintEnvelope:
+    """信封是不開 `sub` 的讀者唯一會看的東西，必須取最差、且說出理由。"""
+
+    def _all_tools(self, fake_tool, *, ty_exit: int = 0, ty_stdout: str = ""):
+        fake_tool("ruff", stdout="[]", exit_code=0)
+        fake_tool("ty", stdout=ty_stdout, exit_code=ty_exit)
+        fake_tool("oxlint", stdout=json.dumps({"diagnostics": []}), exit_code=0)
+
+    def test_a_crashed_subtool_is_not_hidden_behind_a_working_one(
+        self, scan_runner, repo, tmp_path, fake_tool
+    ):
+        """The reproduced bug: ty exits 3, ruff is fine, envelope said `ok`."""
+        self._all_tools(fake_tool, ty_exit=3, ty_stdout="")
+        digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", None)
+
+        assert digest["status"] == "error"
+        assert "ty" in digest["skipped_reason"]
+        assert digest["sub"]["ruff"]["status"] == "ok"
+
+    def test_a_missing_subtool_leaves_the_envelope_skipped_with_a_reason(
+        self, scan_runner, repo, tmp_path, fake_tool
+    ):
+        # ruff and ty present, oxlint absent from PATH entirely.
+        fake_tool("ruff", stdout="[]", exit_code=0)
+        fake_tool("ty", stdout="", exit_code=0)
+        digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", None)
+
+        assert digest["status"] == "skipped"
+        assert "oxlint" in digest["skipped_reason"]
+
+    def test_error_outranks_skipped(self, scan_runner, repo, tmp_path, fake_tool):
+        """Both present at once: the envelope reports the worse of the two."""
+        fake_tool("ruff", stdout="", stderr="internal panic", exit_code=2)
+        fake_tool("ty", stdout="", exit_code=0)
+        digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", None)
+
+        assert digest["status"] == "error"
+        assert "ruff" in digest["skipped_reason"]
+        assert "oxlint" in digest["skipped_reason"]
+
+    def test_every_tool_working_is_still_ok(self, scan_runner, repo, tmp_path, fake_tool):
+        """Worst-first must not turn every ordinary run into a failure."""
+        self._all_tools(fake_tool)
+        digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", None)
+
+        assert digest["status"] == "ok"
+        assert digest["skipped_reason"] == ""
+
+    def test_a_subtool_that_failed_without_explaining_itself_is_still_named(
+        self, scan_runner, repo, tmp_path, fake_tool, monkeypatch
+    ):
+        """A tool that failed silently is the one a reader must not have to infer."""
+        self._all_tools(fake_tool)
+        monkeypatch.setattr(
+            scan_runner,
+            "_run_ty",
+            lambda root: (
+                {"status": "error", "exit_code": 3, "skipped_reason": "", "notes": []},
+                [],
+                None,
+            ),
+        )
+        digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", None)
+
+        assert digest["status"] == "error"
+        assert "ty" in digest["skipped_reason"]
+        assert "未附理由" in digest["skipped_reason"]
+
+
+class TestLintCounts:
+    """沒有 --diff 時，「未歸屬」不得被寫成「在本次變更內」。"""
+
+    @pytest.fixture
+    def diff(self, tmp_path):
+        path = tmp_path / "change.diff"
+        path.write_text(
+            "--- a/app/x.py\n+++ b/app/x.py\n@@ -1,1 +1,2 @@\n import requests\n+x = 1\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def _ruff_only(self, fake_tool, repo):
+        payload = [
+            {
+                "filename": str(repo / "app" / "x.py"),
+                "code": "F401",
+                "message": "unused import",
+                "location": {"row": 2},
+            }
+        ]
+        fake_tool("ruff", stdout=json.dumps(payload), exit_code=1)
+
+    def test_without_a_diff_the_counts_say_unattributed(
+        self, scan_runner, repo, tmp_path, fake_tool
+    ):
+        self._ruff_only(fake_tool, repo)
+        digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", None)
+
+        assert "in_diff" not in digest["counts"]
+        assert digest["counts"]["unattributed"] == 1
+        assert digest["sub"]["ruff"]["counts"] == {"unattributed": 1}
+
+    def test_with_a_diff_the_two_original_keys_stay(
+        self, scan_runner, repo, tmp_path, fake_tool, diff
+    ):
+        self._ruff_only(fake_tool, repo)
+        digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", diff)
+
+        assert set(digest["counts"]) == {"in_diff", "outside_diff"}
+        assert "unattributed" not in digest["counts"]
+
+    def test_the_unattributed_state_is_disclosed_in_the_notes(
+        self, scan_runner, repo, tmp_path, fake_tool
+    ):
+        self._ruff_only(fake_tool, repo)
+        digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", None)
+        assert any("未歸屬" in note for note in digest["notes"])
 
 
 class TestTrivyVacuityGate:

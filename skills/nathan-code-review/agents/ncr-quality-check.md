@@ -2,7 +2,6 @@
 name: ncr-quality-check
 description: Audits a finished code review report against its publication rules and verifies each finding still matches the code. Read-only; returns a list of violations. Used before a review report is published.
 tools: Read, Grep, Bash
-model: sonnet
 ---
 
 `[ncr-quality-check]`

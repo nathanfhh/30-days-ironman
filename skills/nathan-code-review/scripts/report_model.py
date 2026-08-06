@@ -257,9 +257,12 @@ class Finding(Base):
     security: SecurityDetail | None = None
     accepted_risk: str = Field(
         default="",
-        description="Set when the finding matches a known accepted risk "
-        "(e.g. the read-only package registry token); the finding is still "
-        "listed, just not treated as Critical",
+        description="Why this risk is already accepted, and by whom or on what "
+        "authority (e.g. the read-only package registry token). Records the "
+        "reasoning only: filling this in does NOT downgrade anything. The "
+        "severity is still assigned by the three conditions in "
+        "references/review-dimensions.md, and if they hold it stays Critical "
+        "with this note attached",
     )
 
     @model_validator(mode="after")
@@ -421,8 +424,32 @@ def _cmd_validate(path: str) -> int:
 
 
 def _cmd_conclusion(path: str) -> int:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    findings = [Finding.model_validate(f) for f in data.get("findings", [])]
+    # Same failure branches as _cmd_validate: a missing file and broken JSON are
+    # the two ways this is called during a review, and an unhandled traceback
+    # here reads as a broken skill rather than as a typo in the path.
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        print(f"報告檔案不存在：{path}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print(f"讀不到報告檔：{path}（{exc.strerror or exc}）", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"報告不是合法的 JSON：{exc}", file=sys.stderr)
+        return 1
+
+    if not isinstance(data, dict):
+        print("報告的最外層必須是 JSON 物件。", file=sys.stderr)
+        return 1
+
+    try:
+        findings = [Finding.model_validate(f) for f in data.get("findings") or []]
+    except ValidationError as exc:
+        print("findings 未通過驗證，無法推導 conclusion：", file=sys.stderr)
+        print(str(exc), file=sys.stderr)
+        return 1
+
     print(derive_conclusion(findings))
     return 0
 

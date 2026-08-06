@@ -48,6 +48,46 @@ Then the diff, computed locally rather than fetched from the API:
 git -C <repo> diff --merge-base origin/{target_branch} {source_branch}
 ```
 
+### When the clone is blocked
+
+Two environments cannot clone over HTTPS, and both are normal rather than
+broken:
+
+- **Restricted network.** The dev container's firewall drops outbound 443 to the
+  GitLab host; only the proxy is reachable.
+- **Proxy mode.** `NCR_GITLAB_API_BASE` is set and no token is present — the
+  proxy holds the credential, so there is nothing here for `git` to authenticate
+  with.
+
+Detect it, do not push through: one `git clone` attempt that fails on connection
+or authentication is the signal. Then rebuild the tree from the API instead.
+
+```bash
+# the diff, from the compare endpoint rather than from git
+uv run scripts/gitlab_api.py mr <mr-url>          # source_branch, target_branch
+
+# then, per file the diff touches, fetch the file itself and its neighbours
+# (see references/gitlab-api.md for the compare and repository-files endpoints)
+```
+
+Write the fetched files under the same working directory, at their repository
+paths, so every path in the report stays repo-relative. Fetch each changed file
+in full — a diff hunk alone cannot answer "is there a guard further up this
+function".
+
+**Mark the tree, and disclose it.** A tree rebuilt this way is not the
+repository: it holds the changed files and whatever context was pulled in
+alongside them, and nothing else. Record it as `rebuilt-from-API` and say so in
+the report, because three things silently change:
+
+- `git diff --merge-base` is unavailable; the diff came from the API instead.
+- Whole-project scans cover only what was fetched. `ty` cannot resolve types it
+  never saw, and dimension I's "who else calls this" cannot be answered from
+  this tree — say so rather than reporting a clean result.
+- The vuln scan usually has no target at all, because lockfiles were not among
+  the fetched files. `scanners.md` covers what trivy's empty report means here:
+  "no target" is not "clean", and the report must not read as though it were.
+
 Then build the symbol graph, synchronously — it takes well under a second:
 
 ```bash

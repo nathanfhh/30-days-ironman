@@ -1,7 +1,7 @@
 ---
 name: nathan-code-review
 description: Reviews code changes against this team's conventions and severity calibration (Critical / Suggestion / Nit) and produces a Traditional Chinese report that can be published to a GitLab merge request. Use whenever the user pastes a GitLab merge request URL, asks for a code review or 程式碼審查, asks to review a branch, a diff, uncommitted work, or specific files, or asks to re-review a merge request that was reviewed before. Also use when a merge request author pushes back on a review that was already published and the position needs to be reassessed.
-version: 2026.08.06.03
+version: 2026.08.06.04
 ---
 
 # Nathan Code Review
@@ -67,6 +67,25 @@ re-run the review pipeline.
 
 **Everything else is a review.** Continue below.
 
+## Running the scripts
+
+Every `uv run scripts/...` command in this skill is written relative to **the
+skill's own directory**, not to the project you happen to be sitting in. The
+working directory is the project under review, so run them as:
+
+```bash
+cd <skill-dir> && uv run scripts/preflight.py
+```
+
+`<skill-dir>` is wherever this skill is installed — `~/.claude/skills/nathan-code-review`
+under a default installation. An absolute path to the script works equally well.
+Every subagent you dispatch gets told which directory that is; a subagent that
+was not told must ask rather than guess, because a guess that misses fails as
+"script not found", which reads like a broken environment.
+
+Paths you pass *in* (`--root`, `--out`, `--diff`, the report JSON) are separate
+from this and stay absolute, so the `cd` cannot change what they refer to.
+
 ## Review pipeline
 
 Copy this checklist and keep it updated as you go:
@@ -86,6 +105,13 @@ Run `uv run scripts/preflight.py` first. It reports which tools and credentials
 are present. Nothing in this skill may fail silently because a tool is missing:
 whatever is unavailable gets recorded in `scans[]` with a reason and is disclosed
 in the published report.
+
+That degradation covers the scanners. A tool preflight marks `required` (`git`,
+`uv`) is a different case: without it there is no diff to read and no way to run
+these scripts, so there is no reduced review left to give. **Stop, tell the user
+in zh-TW which tool is missing and what installing it would restore, and go no
+further** — a review that skipped its way past a missing `git` would report on
+nothing at all.
 
 Then pick the mode from what the user gave you:
 
@@ -180,7 +206,8 @@ In order:
    of violations; you make the corrections, then validate again.
 4. Ask the user whether to publish. Publishing is outward-facing and
    irreversible — never call the GitLab write endpoints on your own initiative.
-5. On approval: `uv run scripts/render_report.py` to produce the Markdown, post
+5. On approval: `uv run scripts/render_report.py <report.json> --out <report.md>`
+   to produce the Markdown, post
    it as a discussion, then write `discussion_id` and the timestamp back into the
    JSON. Show the user the direct URL.
 

@@ -117,28 +117,94 @@ class ApiError(Exception):
 # --------------------------------------------------------------------------
 
 
+def host_of(parts: urllib.parse.SplitResult) -> str:
+    """The host[:port] of a URL, with any `user:password@` removed.
+
+    `netloc` keeps the userinfo, and everything downstream is built from the
+    host: api_base, the note URL written into publication.url, and the error
+    messages this module raises. Taking netloc verbatim therefore copied a
+    credential embedded in the merge request URL into the report, into stdout,
+    and into whatever log or ticket someone pasted them in. `hostname` is the
+    parsed form that never carries it; the port has to be re-attached by hand
+    because `hostname` drops it.
+
+    Raises ValueError on a non-numeric port. urlsplit defers that check until
+    `.port` is read, which makes this the first place a malformed authority can
+    be noticed; swallowing it would send the request to the default port
+    instead of the one that was asked for.
+    """
+    host = parts.hostname or ""
+    port = parts.port
+    return f"{host}:{port}" if port else host
+
+
+def has_userinfo(parts: urllib.parse.SplitResult) -> bool:
+    return "@" in parts.netloc
+
+
+def redact_url(raw: str) -> str:
+    """A URL fit to appear in an error message: userinfo removed.
+
+    Splitting on the last '@' rather than re-parsing keeps this usable on the
+    malformed URLs that error messages exist for — including the ones urlsplit
+    itself rejects (an unterminated IPv6 literal), which is why the fallback
+    below never re-parses.
+    """
+    try:
+        parts = urllib.parse.urlsplit(raw)
+    except ValueError:
+        # '//' up to the last '@' of the authority is the only place a
+        # credential can hide in a URL, parseable or not.
+        return re.sub(r"//[^/@\s]*@", "//", raw)
+    if not has_userinfo(parts):
+        return raw
+    hostpart = parts.netloc.rpartition("@")[2]
+    return urllib.parse.urlunsplit(
+        (parts.scheme, hostpart, parts.path, parts.query, parts.fragment)
+    )
+
+
+def warn(message: str) -> None:
+    """User-facing notice on stderr, so it never mixes into the JSON on stdout."""
+    print(message, file=sys.stderr)
+
+
 def parse_mr_url(mr_url: str) -> dict[str, Any]:
     """Split a merge request URL into host, project path and iid.
 
     https://gitlab.example.com/his/abc/abc-backend/-/merge_requests/61
             └───── host ─────┘ └─── project path ───┘             └iid┘
+
+    Credentials embedded in the URL (`https://user:token@host/...`) are stripped
+    and reported, never carried into the returned host.
     """
     raw = (mr_url or "").strip()
     if not raw:
         raise UsageError("未提供 merge request URL。")
+    # Every message below quotes the URL back; redact once, up front, so no
+    # later edit can reintroduce the leak by using `raw` directly.
+    shown = redact_url(raw)
 
-    parts = urllib.parse.urlsplit(raw)
+    try:
+        parts = urllib.parse.urlsplit(raw)
+    except ValueError:
+        # urlsplit rejects a few authorities outright (an unterminated IPv6
+        # literal, say). That is a bad URL, not a crash.
+        raise UsageError(
+            f"無法解析 merge request URL：{shown}\n網址格式不合法。"
+        ) from None
+
     if parts.scheme not in ("http", "https") or not parts.netloc:
         raise UsageError(
             "無法解析 merge request URL："
-            f"{raw}\n"
+            f"{shown}\n"
             "預期格式為 https://{host}/{project_path}/-/merge_requests/{iid}"
         )
 
     if MR_URL_SEPARATOR not in parts.path:
         raise UsageError(
             "無法解析 merge request URL："
-            f"{raw}\n"
+            f"{shown}\n"
             f"網址中找不到 '{MR_URL_SEPARATOR}' 片段。"
             "預期格式為 https://{host}/{project_path}/-/merge_requests/{iid}"
         )
@@ -151,15 +217,31 @@ def parse_mr_url(mr_url: str) -> dict[str, Any]:
 
     if not project_path:
         raise UsageError(
-            f"無法解析 merge request URL：{raw}\n網址中缺少 project path。"
+            f"無法解析 merge request URL：{shown}\n網址中缺少 project path。"
         )
     if not iid_token.isdigit():
         raise UsageError(
-            f"無法解析 merge request URL：{raw}\n"
+            f"無法解析 merge request URL：{shown}\n"
             f"iid 必須是數字，實際取得 '{iid_token}'。"
         )
 
-    host = parts.netloc
+    try:
+        host = host_of(parts)
+    except ValueError:
+        raise UsageError(
+            f"無法解析 merge request URL：{shown}\n通訊埠必須是數字。"
+        ) from None
+
+    if not host:
+        raise UsageError(
+            f"無法解析 merge request URL：{shown}\n網址中缺少主機名稱。"
+        )
+    if has_userinfo(parts):
+        warn(
+            "注意：URL 中夾帶了帳密（user:password@），已剝除且未被記錄——"
+            "不會進入 API 位址、報告或任何錯誤訊息。"
+            "本工具的憑證一律讀自 GITLAB_TOKEN，不從網址取得。"
+        )
 
     return {
         "host": host,
@@ -250,12 +332,20 @@ def _redirect_target_of(location: str) -> str:
     GitLab instance is the single most useful thing about it. The query string
     is dropped for the same reason _endpoint_of drops it — a Location is
     server-controlled, and an error message is the one place a credential in a
-    URL would get copied into a log or a bug report.
+    URL would get copied into a log or a bug report. Userinfo goes for exactly
+    that reason too, and here the server chose it, which makes it likelier.
     """
     parts = urllib.parse.urlsplit(location)
     if not parts.netloc:
         return parts.path or location
-    return f"{parts.scheme}://{parts.netloc}{parts.path}"
+    try:
+        host = host_of(parts)
+    except ValueError:
+        # A Location this malformed is still worth naming in the error; the
+        # hostname alone says the one thing that matters, which is where it
+        # was pointing.
+        host = parts.hostname or ""
+    return f"{parts.scheme}://{host}{parts.path}"
 
 
 def _describe_redirect(status: int, url: str, location: str | None) -> str:
@@ -502,7 +592,12 @@ def safe_filename(name: str, fallback: str) -> str:
 
 
 def parse_timestamp(value: str | None) -> datetime | None:
-    """Parse an ISO-8601 timestamp, tolerating GitLab's trailing 'Z'."""
+    """Parse an ISO-8601 timestamp, tolerating GitLab's trailing 'Z'.
+
+    Returns None for anything unparseable, including a missing value. Deciding
+    what that means is the caller's: require_timestamp turns it into a usage
+    error, filter_discussions_since into a hard stop.
+    """
     if not value:
         return None
     text = value.strip()
@@ -530,35 +625,39 @@ def require_timestamp(value: str) -> datetime:
 def filter_discussions_since(
     discussions: list[dict[str, Any]], since: datetime
 ) -> list[dict[str, Any]]:
-    """Keep only notes created strictly after `since`; drop emptied discussions."""
+    """Keep only notes created strictly after `since`; drop emptied discussions.
+
+    A note whose `created_at` cannot be parsed stops the run. Treating it as
+    undatable and filtering it out — the previous behaviour — dropped it
+    silently, and on a re-review this filter's whole job is collecting the
+    author's replies: a reply lost here is indistinguishable from an author who
+    never answered, and the next report would go on to say exactly that.
+
+    Disclosing a count instead is not available here. SKILL.md Phase 2 seals
+    every digest of these threads while the blind pass runs, and a count is a
+    digest. Failing loudly is the one outcome that neither leaks nor loses.
+    """
     filtered: list[dict[str, Any]] = []
     for discussion in discussions:
         notes = discussion.get("notes") or []
         kept = []
         for note in notes:
-            created = parse_timestamp(note.get("created_at"))
-            if created is not None and created > since:
+            raw_created = note.get("created_at")
+            created = parse_timestamp(raw_created)
+            if created is None:
+                raise ApiError(
+                    f"discussion {discussion.get('id')} 的 note {note.get('id')} "
+                    f"沒有可解析的 created_at（實際值：{raw_created!r}），"
+                    "無法判斷它是否發生在上一輪之後。已中止，"
+                    "以免把作者的回覆當成「作者沒有回覆」。"
+                )
+            if created > since:
                 kept.append(note)
         if kept:
             trimmed = dict(discussion)
             trimmed["notes"] = kept
             filtered.append(trimmed)
     return filtered
-
-
-def summarise_discussions(discussions: list[dict[str, Any]]) -> tuple[int, str | None]:
-    """Return (note_count, latest_created_at) across every note."""
-    note_count = 0
-    latest_value: str | None = None
-    latest_parsed: datetime | None = None
-    for discussion in discussions:
-        for note in discussion.get("notes") or []:
-            note_count += 1
-            created = parse_timestamp(note.get("created_at"))
-            if created is not None and (latest_parsed is None or created > latest_parsed):
-                latest_parsed = created
-                latest_value = note.get("created_at")
-    return note_count, latest_value
 
 
 def note_web_url(target: dict[str, Any], note_id: Any) -> str:
@@ -599,7 +698,13 @@ def cmd_whoami(args: argparse.Namespace) -> int:
     host = args.host.strip()
     # Accept either a bare host or a full URL, and reduce it to the host.
     if "//" in host:
-        host = urllib.parse.urlsplit(host).netloc
+        parts = urllib.parse.urlsplit(host)
+        if has_userinfo(parts):
+            warn("注意：--host 中夾帶的帳密已剝除且未被記錄。")
+        try:
+            host = host_of(parts)
+        except ValueError:
+            raise UsageError("--host 的通訊埠必須是數字。") from None
     host = host.strip("/")
     if not host:
         raise UsageError("--host 不可為空，請提供 GitLab 主機名稱，例如 gitlab.example.com。")
@@ -683,8 +788,6 @@ def cmd_discussions(args: argparse.Namespace) -> int:
     if since is not None:
         discussions = filter_discussions_since(discussions, since)
 
-    note_count, latest_created_at = summarise_discussions(discussions)
-
     if args.out:
         out_path = Path(args.out)
         try:
@@ -697,16 +800,14 @@ def cmd_discussions(args: argparse.Namespace) -> int:
             raise UsageError(
                 f"無法寫入 --out 指定的檔案 {out_path.as_posix()}：{exc.strerror or exc}"
             ) from exc
-        # Only metadata is printed. The whole point of --out is that the caller
-        # can fetch the discussion content without it entering its own context.
-        emit(
-            {
-                "out": out_path.as_posix(),
-                "discussion_count": len(discussions),
-                "note_count": note_count,
-                "latest_created_at": latest_created_at,
-            }
-        )
+        # The path, and nothing else. --out exists so that a re-review can fetch
+        # the author's replies while its blind pass is still running, and a
+        # count is the smallest possible digest of those replies: "3 replies
+        # since the last round" already tells the blind pass how much the author
+        # disputed. Everything printed here lands in the caller's context, and
+        # everything omitted is in the file, one read away once the blind pass
+        # is sealed. See references/re-review.md and SKILL.md Phase 2.
+        emit({"out": out_path.as_posix()})
         return EXIT_OK
 
     emit(discussions)

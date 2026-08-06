@@ -52,7 +52,8 @@ trivy fs \
 **"No target" is not "clean".** The vuln scanner only works on dependency
 manifests (pyproject.toml, lockfiles, package.json, …). When the tree has none —
 the common case being a tree rebuilt from API-fetched source files after a
-blocked clone — trivy exits 0 with an empty report, and that emptiness says
+blocked clone (`workspace-paths.md`) — trivy exits 0 with an empty report, and
+that emptiness says
 nothing about the dependencies. `scan_runner.py` detects this and adds a note to
 the digest; when that note is present, the report must disclose the limitation
 instead of claiming a clean supply-chain scan.
@@ -147,6 +148,20 @@ results:
 
 **Missing:** each is independent. `ruff` absent does not stop `oxlint`; record a
 separate `scans[]` entry per tool.
+
+**The digest is one envelope over three tools — split it before filing.** The
+`lint` digest carries a `sub` block with a status, exit code and reason per tool.
+Turn that into **three `ScanRun` entries**, one each for `ruff`, `ty` and
+`oxlint`, carrying that tool's own status and reason. Filing the envelope as a
+single entry throws away which of the three actually ran.
+
+The envelope status is the **worst** of the three, never the best: a run where
+ruff succeeded and ty crashed is `error`, and the reason names every non-ok tool.
+An envelope that is not `ok` always says which tools were not, and why.
+
+**Counts.** With `--diff`, `counts` is `{in_diff, outside_diff}`. Without one,
+attribution is impossible and the key is `{unattributed}` instead — a diagnostic
+that was never attributed must not be reported as though it landed in the change.
 
 **oxlint with nothing to lint.** On a Python-only repository oxlint prints a
 bare `No files found to lint` line instead of JSON and exits 1. That is

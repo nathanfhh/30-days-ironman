@@ -2,7 +2,6 @@
 name: ncr-fresh-eyes
 description: Reads a code change with no checklist and reports what stands out. Used once per review, before any structured analysis, to catch what a checklist would frame away.
 tools: Read, Grep, Glob, Bash
-model: sonnet
 ---
 
 `[ncr-fresh-eyes]`

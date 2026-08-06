@@ -24,6 +24,11 @@ During the blind pass you may not read:
 `ncr-fetch-threads` runs in parallel with the Phase 2 scanners and writes its
 output to a file in the working directory. **You do not open that file yet.**
 
+Before starting the blind pass, state the seal to the user in one line — what
+you will not read, and when it unseals. A declared seal leaves an auditable
+order in the transcript; a silent one cannot be told apart from never having
+sealed at all.
+
 The threads are sealed alongside the report for one reason: author replies quote
 the findings they are replying to. "F-003 我改了", "C-2 我不同意，因為……" — reading
 the replies is reading the previous report through a side door. New information

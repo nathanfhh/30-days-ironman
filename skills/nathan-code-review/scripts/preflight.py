@@ -289,9 +289,23 @@ def build_summary(
     available_count = total - len(missing)
 
     parts = [f"工具可用 {available_count}/{total}。"]
-    if missing:
-        parts.append(f"缺少：{'、'.join(missing)}，對應步驟將略過並於報告揭露。")
-    else:
+    # A missing scanner costs the review one step; a missing `required` tool
+    # costs it every step. Saying "對應步驟將略過" for git or uv would promise a
+    # degraded run that cannot happen — there is no diff to read and no way to
+    # run these scripts — so the two cases have to read differently.
+    missing_required = [
+        name for name in missing if tools[name].get("category") == "required"
+    ]
+    missing_optional = [name for name in missing if name not in missing_required]
+
+    if missing_required:
+        parts.append(
+            f"缺少必要工具：{'、'.join(missing_required)}，"
+            "review 流程無法進行，請停止並回報使用者。"
+        )
+    if missing_optional:
+        parts.append(f"缺少：{'、'.join(missing_optional)}，對應步驟將略過並於報告揭露。")
+    if not missing:
         parts.append("所有預期工具皆可用。")
 
     token = credentials["gitlab_token"]

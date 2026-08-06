@@ -9,7 +9,7 @@ uv run scripts/gitlab_api.py parse       <mr-url>
 uv run scripts/gitlab_api.py whoami      --host <host>
 uv run scripts/gitlab_api.py mr          <mr-url>
 uv run scripts/gitlab_api.py attachments <mr-url> --dest <dir>
-uv run scripts/gitlab_api.py discussions <mr-url> [--since <iso8601>]
+uv run scripts/gitlab_api.py discussions <mr-url> [--since <iso8601>] [--out <file>]
 uv run scripts/gitlab_api.py discussion  <mr-url> --id <discussion_id>
 uv run scripts/gitlab_api.py post-report <mr-url> --body-file <markdown>
 uv run scripts/gitlab_api.py reply       <mr-url> --id <discussion_id> --body-file <markdown>
@@ -39,6 +39,12 @@ continue in a degraded mode — every step of `mr` mode depends on it.
 
 The token is never written to a file, never echoed, and never appears in the
 report.
+
+**Credentials in the URL are stripped, not used.** A merge request URL of the
+form `https://user:token@host/...` has its userinfo removed before anything is
+built from the host, and the removal is stated on stderr. Otherwise the
+credential would travel into the API base, into `publication.url` in the report,
+and into every error message quoting the URL back.
 
 ## Parsing the URL
 
@@ -76,6 +82,33 @@ Fields taken from the response: `title`, `description`, `source_branch`,
 The diff is **not** taken from the API. It is computed from the clone — see
 `workspace-paths.md`.
 
+### Rebuilding the tree when the clone is blocked
+
+Only for the restricted-network and proxy cases in `workspace-paths.md`. These
+are the fallback for a diff that cannot be computed locally; they are not the
+normal path, because a tree assembled from them is a partial one.
+
+`GET /projects/:id/repository/compare?from={target_branch}&to={source_branch}`
+
+Returns `diffs[]`, each with `old_path`, `new_path`, and a unified `diff`. Set
+`straight=false` (the default) so the comparison is against the merge base, which
+is what `git diff --merge-base` would have given.
+
+`GET /projects/:id/repository/files/:file_path/raw?ref={source_branch}`
+
+One file, in full. `file_path` is percent-encoded whole, `/` included — the same
+`quote(path, safe="")` rule as `project_path`. Fetch every file the compare
+touched, plus the ones a finding needs as context; a diff hunk on its own cannot
+show a guard that sits ten lines above it.
+
+`GET /projects/:id/repository/tree?ref={branch}&path={dir}&recursive=true`
+
+Lists what exists, for deciding what else to pull. Paginated like everything
+else.
+
+Mark the result `rebuilt-from-API` and disclose the limits — `workspace-paths.md`
+lists which of them bite.
+
 ### Download attachments
 
 `GET /projects/:id/uploads/:secret/:filename`
@@ -105,6 +138,15 @@ replies, and the cutoff time T.
 On a re-review, list the discussions and take replies made after T. When the
 `discussion_id` is already known, fetching the single discussion is the cheaper
 call — it returns that thread's replies instead of everything on the MR.
+
+`--out <file>` writes the discussions to a file and prints **only that path** —
+no count, no timestamp. That is what `ncr-fetch-threads` runs during a re-review,
+so that the replies can be fetched while the blind pass is still sealed; a count
+is the smallest digest of them and is withheld for the same reason the text is.
+
+A note whose `created_at` cannot be parsed stops the command rather than being
+filtered out: on a re-review a dropped note is an author reply that vanishes, and
+"no reply" is what the report would then say.
 
 Replying to the author uses the last endpoint.
 

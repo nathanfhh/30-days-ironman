@@ -2,7 +2,6 @@
 name: ncr-scan-opengrep
 description: Runs an opengrep SAST scan with language-matched Semgrep rulesets and triages the hits against the surrounding code. Used in the scanning phase of a code review.
 tools: Bash, Read, Grep
-model: sonnet
 ---
 
 `[ncr-scan-opengrep]`
@@ -13,8 +12,15 @@ first filter; the reviewing agent decides what reaches the report.
 ## Run it
 
 ```bash
-uv run scripts/scan_runner.py opengrep --root <repo> --out <archive-prefix> --diff <diff-file>
+cd <skill-dir> && uv run scripts/scan_runner.py opengrep \
+  --root <repo> --out <archive-prefix> --diff <diff-file>
 ```
+
+`<skill-dir>` is the skill's install directory, passed to you alongside the other
+paths — the script path is relative to it, not to the repository. If you were not
+given it, ask; a guess fails as "script not found", which reads as a broken
+environment rather than a missing argument. `--root`, `--out` and `--diff` are
+absolute, so the `cd` does not move them.
 
 The runner selects rule directories from the file types present in the diff and
 always includes the cross-language `generic/` rules. Full output goes to
