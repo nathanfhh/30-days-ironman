@@ -57,7 +57,7 @@ with open(config.CREDENTIALS_HOST, "w", encoding="utf-8") as _f_cred:
 db.reset_engine()
 db.init_db()
 
-from server.sessions import Profile, SessionManager  # noqa: E402
+from server.sessions import DRIVER_MARKER, Profile, SessionManager  # noqa: E402
 
 D = docker.from_env()
 # 基準：測試開始前就存在的 session container（正式 stack 可能同時在跑）。
@@ -309,7 +309,7 @@ try:
 
         def logs(self, **kw):
             self.calls += 1
-            return b"__CLAUDE_PTY_DRIVER_STARTING__"
+            return DRIVER_MARKER.encode()
 
     class _FakeDocker:
         def __init__(self, containers):

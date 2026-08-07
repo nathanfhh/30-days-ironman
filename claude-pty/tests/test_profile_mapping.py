@@ -46,20 +46,19 @@ check("預設是**限制出網**（安全預設，要放行必須是明確的選
 check("不覆蓋 entrypoint（走 image entrypoint.sh）", "entrypoint" not in kw)
 # 精確比對整份 env（不是子集）：多送一個變數給 entrypoint.sh 就等於多開一條它會反應的
 # 分支，那必須是有意識的決定而不是順手加的。新增變數時請一起更新這裡。
-check("env 帶 CLI/NET/CAPTURE + MARK + 模型設定", env == {
-    "CLAUDE_PTY_CLI": "claude", "CLAUDE_PTY_NET": "restricted", "CLAUDE_PTY_CAPTURE": "0",
-    # 只有 MARK 有值時 entrypoint.sh 才印 DRIVER_MARKER——人類跑 run script 不會設它，
-    # 畫面上就不會多出一行機器用的標記
-    "CLAUDE_PTY_MARK": "1",
-    # 與 run script 對齊：同一份 prompt 在兩條路徑下的 subagent 巢狀深度必須一致，
-    # 否則會出現「run script 跑得動、claude-pty 跑不動」這種極難查的差異
-    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2",
+# 🔴 精確比對整份 env（不是子集）：多送一個變數給 entrypoint 就等於多開一條它會反應的
+#    分支，那必須是有意識的決定。**subagent 深度上限刻意不在裡面**——人自己開容器時
+#    沒有它，送了就是製造差異（見 build_run_kwargs 的說明）。
+check("env 帶 NET/CAPTURE/SCOPE/MARK + 模型設定", env == {
+    "NCR_NET": "restricted", "NCR_CAPTURE": "0", "NCR_CAPTURE_SCOPE": "all",
+    # 只有 MARK 有值時 entrypoint 才印就緒標記——人自己開容器不會設它
+    "NCR_MARK": "1",
     # per-user 狀態空間（ADR 0016）。這兩個**不是**給 entrypoint.sh 的，是給 CLI 本身的，
     # 所以不隨 profile 變、每一場都在。
     # 少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器 writable layer，換一顆容器就沒了。
     "CLAUDE_CONFIG_DIR": "/home/nathan/.claude",
     "CLAUDE_SECURESTORAGE_CONFIG_DIR": "/home/nathan/.claude-creds",
-    "CLAUDE_PTY_MODEL": "opus", "CLAUDE_PTY_EFFORT": "high"})
+    "NCR_MODEL": "opus", "NCR_EFFORT": "high"})
 # restricted 是預設，所以這裡要有 firewall 需要的能力（下面 restricted 段落再驗一次細節）
 check("預設帶 cap_add=[NET_ADMIN]（restricted 套 iptables 需要）",
       kw.get("cap_add") == ["NET_ADMIN"])
@@ -90,12 +89,12 @@ print("== restricted：cap_add NET_ADMIN + network ==")
 kw = build_run_kwargs("c", "sid2", Profile(network="restricted"), _UID)
 check("cap_add=[NET_ADMIN]", kw.get("cap_add") == ["NET_ADMIN"])
 check("network=session network", kw.get("network") == config.SESSION_NETWORK)
-check("env CLAUDE_PTY_NET=restricted", kw["environment"]["CLAUDE_PTY_NET"] == "restricted")
+check("env NCR_NET=restricted", kw["environment"]["NCR_NET"] == "restricted")
 
-print("== telemetry：OTEL env + CLAUDE_PTY_OTEL + network 到 jaeger ==")
+print("== telemetry：OTEL env + NCR_OTEL + network 到 jaeger ==")
 kw = build_run_kwargs("c", "sidT", Profile(telemetry=True), _UID)
 env = kw["environment"]
-check("CLAUDE_PTY_OTEL=1（跳過選單、保留 telemetry）", env.get("CLAUDE_PTY_OTEL") == "1")
+check("NCR_OTEL=1（跳過選單、保留 telemetry）", env.get("NCR_OTEL") == "1")
 # ⚠ 這個 flag 是「trace（非只有 metrics）」的開關，缺它 claude 不吐 trace（live 驗證踩到）。
 check("CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1（啟用 trace）", env.get("CLAUDE_CODE_ENHANCED_TELEMETRY_BETA") == "1")
 check("OTEL endpoint 指向 jaeger", env.get("OTEL_EXPORTER_OTLP_ENDPOINT") == config.OTEL_ENDPOINT)
@@ -105,7 +104,11 @@ check("network 到得了 jaeger", kw.get("network") == config.SESSION_NETWORK)
 print("== capture：mount addon + host 落盤（ADR 0008 後不再由 create 發布 mitm port）==")
 kw = build_run_kwargs("c", "sidC", Profile(capture=True), _UID)
 env = kw["environment"]
-check("env CLAUDE_PTY_CAPTURE=1", env["CLAUDE_PTY_CAPTURE"] == "1")
+check("env NCR_CAPTURE=1", env["NCR_CAPTURE"] == "1")
+# 🔴 條件題要成對送：capture=1 時 entrypoint 會接著問錄製範圍，沒帶 scope 就停在那道
+#    read——容器卡在啟動，而畫面上只看得到「一直在建立中」。
+check("🔴 capture 開著時一定帶 NCR_CAPTURE_SCOPE（否則容器卡在 read）",
+      env.get("NCR_CAPTURE_SCOPE") in ("all", "model", "1", "2"))
 # ADR 0007 的落盤要求還在，但落點改成 per-user（ADR 0016）——見下方「per-user 狀態空間」
 # 段落。這裡 MOUNTS 是空的（測試隔離），所以連 addon 都不會掛，只驗 env 與 port。
 # ADR 0008：port 屬 on-demand view 範疇，create 不再發布 host port
@@ -123,8 +126,8 @@ print("== 模型與思考深度 → entrypoint 的 env ==")
 #   啟動任何 CLI），寫什麼都不花錢——但測試檔會被當成範例抄，留著貴的型號等於在邀請
 #   別人開一個貴的 session。
 kw = build_run_kwargs("c", "sidM", Profile(model="sonnet", effort="xhigh"), _UID)
-check("帶入 CLAUDE_PTY_MODEL", kw["environment"].get("CLAUDE_PTY_MODEL") == "sonnet")
-check("帶入 CLAUDE_PTY_EFFORT", kw["environment"].get("CLAUDE_PTY_EFFORT") == "xhigh")
+check("帶入 NCR_MODEL", kw["environment"].get("NCR_MODEL") == "sonnet")
+check("帶入 NCR_EFFORT", kw["environment"].get("NCR_EFFORT") == "xhigh")
 
 check("預設為 opus / high",
       (_P.from_dict(None).model, _P.from_dict(None).effort) == ("opus", "high"))

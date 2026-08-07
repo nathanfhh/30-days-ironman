@@ -43,7 +43,7 @@ from .models import SessionHistory
 # entrypoint.sh 在 exec driver 前印出的標記（⚠ SYNC：dev-container/entrypoint.sh）。
 # 有它就代表前置（選單/firewall/mitm）全數完成、driver 正要啟動——比辨識 CLI banner
 # 可靠得多（banner 會隨版本改）。
-DRIVER_MARKER = "__CLAUDE_PTY_DRIVER_STARTING__"
+DRIVER_MARKER = "__NCR_DRIVER_STARTING__"
 
 # container 視為「session 仍在」的狀態；exited/dead/removing 視為結束。
 ALIVE_STATES = frozenset({"running", "restarting", "paused", "created"})
@@ -1629,17 +1629,27 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     #   invalid argument`）。這邊之所以沒爆，只因為 mountpoint 本來就存在於掛進去的
     #   `~/.claude` 裡；改成 per-user 空目錄後那個前提就沒了。
 
-    # 第一層：env 非互動答選單（對應 entrypoint.sh 的 CLAUDE_PTY_* env-skip）。
+    # 第一層：env 非互動答選單。
+    #
+    # ⚠ **名稱一律用 `NCR_*`，那是 entrypoint.sh 認得的前綴**（它是兩條路徑共用的
+    #   SSOT，見 ADR 0006）。這裡曾經用自己的 `CLAUDE_PTY_*` 前綴，那等於要求
+    #   entrypoint 為了網頁這條路徑再認一組同義的變數——多一組就多一個會漂的對照表，
+    #   而漂掉的症狀是「選單沒被跳過、容器停在 read 等一個永遠不來的輸入」。
+    # ⚠ **條件題要成對送**：`NCR_CAPTURE=1` 時 entrypoint 會接著問錄製範圍，沒帶
+    #   `NCR_CAPTURE_SCOPE` 就會停在那道 read。所以下面兩者一起給、不可只給前者。
+    # ⚠ **這裡刻意沒有 subagent 深度上限**（曾經送過 `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`）。
+    #   那個 env 存在的理由是「兩條路徑行為一致」，而人自己開容器時沒有它——送了反而
+    #   製造它當初要消除的差異。日後真要一個上限，**加在 entrypoint**（一個地方、兩條
+    #   路徑都吃得到），不要在這裡重新發明。
     env: dict = {
-        "CLAUDE_PTY_CLI": profile.cli,
-        "CLAUDE_PTY_NET": profile.network,
-        "CLAUDE_PTY_CAPTURE": "1" if profile.capture else "0",
-        # 請 entrypoint.sh 印出 DRIVER_MARKER。人類跑 run script 時不設此值，
-        # 畫面上就不會多出一行機器用的標記。
-        "CLAUDE_PTY_MARK": "1",
-        # 與 run script 對齊：同一份 prompt 在兩條路徑下的 subagent 巢狀深度應該一致，
-        # 否則「用 run script 跑得動、用 claude-pty 跑不動」會變成很難查的差異。
-        "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2",
+        "NCR_NET": profile.network,
+        "NCR_CAPTURE": "1" if profile.capture else "0",
+        # 成對送：見上方警告。值域是 entrypoint 的 all|1|model|2；這裡固定「全錄」，
+        # 與它的預設一致——網頁這條路徑沒有人可以回答那道題。
+        "NCR_CAPTURE_SCOPE": "all",
+        # 請 entrypoint 印出就緒標記（DRIVER_MARKER）。人自己開容器時不設它，畫面上
+        # 就不會多出一行機器用的字——那條路徑的零偏差由 test_entrypoint_human_path 守。
+        "NCR_MARK": "1",
         # per-user 狀態空間（ADR 0016）。**這兩個 env 是整個機制的關鍵**：
         #   CLAUDE_CONFIG_DIR         → transcript / settings / skills / .claude.json 全部
         #                               改看這個目錄（實測：設了之後 host 的 ~/.claude 一次
@@ -1652,16 +1662,16 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         "CLAUDE_SECURESTORAGE_CONFIG_DIR": config.CREDENTIALS_DIR_BIND,
     }
 
-    # 模型與思考深度：entrypoint.sh 把它翻成 `--model` / `--effort`，這裡只負責放進 env。
-    env["CLAUDE_PTY_MODEL"] = profile.model
-    env["CLAUDE_PTY_EFFORT"] = profile.effort
+    # 模型與思考深度：entrypoint.sh 把它翻成 `--model` / `--effort`，這裡只放進 env。
+    env["NCR_MODEL"] = profile.model
+    env["NCR_EFFORT"] = profile.effort
 
     # 第二層：docker 能力（env 給不了）。
     if profile.network == "restricted":
         kwargs["cap_add"] = ["NET_ADMIN"]              # init-firewall.sh 需要
         kwargs["network"] = config.SESSION_NETWORK
     if profile.telemetry:
-        env["CLAUDE_PTY_OTEL"] = "1"
+        env["NCR_OTEL"] = "1"
         env.update(_otel_env(sid))
         kwargs.setdefault("network", config.SESSION_NETWORK)       # 到得了 jaeger
     if profile.capture:

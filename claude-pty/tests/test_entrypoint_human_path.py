@@ -3,8 +3,8 @@
 run script 走的是 image 內的 entrypoint.sh。這裡把 repo 最新版（含今天所有改動）
 bind-mount 進去，等同於「rebuild image 之後」的情況，再用真 PTY 逐項回答選單：
 
-  1. 四個選單照舊出現，且不設 CLAUDE_PTY_* env 時完全走互動分支
-  2. 畫面上不該出現 __CLAUDE_PTY_DRIVER_STARTING__（那是給控制平面看的機器標記）
+  1. 選單照舊出現，且不設任何 NCR_* env 時完全走互動分支
+  2. 畫面上不該出現就緒標記（那是給控制平面看的機器標記，只有 NCR_MARK=1 才印）
   3. 最終真的進到 CLI
 
 零 token：進到 Claude Code 的畫面就停手，不送任何 prompt。
@@ -24,16 +24,11 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 IMAGE = os.environ.get("CLAUDE_PTY_IMAGE", "ncr-dev-container")
 NAME = "claude-pty-humanpath-test"
 
-# ⚠ 這支測的是「人自己開容器時的互動選單」——**那個對接還沒做**。
-#   控制平面現在送的是 `CLAUDE_PTY_*`，而 dev-container 的 entrypoint 讀的是 `NCR_*`，
-#   兩邊還沒對起來。接上之前這支測的是一個不存在的介面，所以先 gate 住並講明原因
-#   （run-all.sh 的紀律：跳過了什麼一定要說，靜靜略過會讓「全部通過」看起來涵蓋全部）。
-_EP = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                   "dev-container", "entrypoint.sh")
-if not (os.path.isfile(_EP) and "CLAUDE_PTY_NET" in open(_EP, encoding="utf-8").read()):
-    print("  SKIP  entrypoint.sh 的選單與這支預期的不同（profile 對接尚未完成）")
-    sys.exit(0)
-MARKER = "__CLAUDE_PTY_DRIVER_STARTING__"
+# ⚠ **從 server 端 import，不要在這裡抄一份字串**。這個標記是控制平面與 entrypoint
+#   之間的約定，抄一份的話改名時這支會繼續比對舊字串——而它比對的是「不該出現」，
+#   舊字串永遠不出現，所以**測試會一直綠、而且是假的**。
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from server.sessions import DRIVER_MARKER as MARKER  # noqa: E402
 
 for v in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
     os.environ.pop(v, None)
@@ -94,41 +89,35 @@ argv = [
     IMAGE,
 ]
 
-print("== 起容器（走 image entrypoint，不設任何 CLAUDE_PTY_* env）==")
+print("== 起容器（走 image entrypoint，不設任何 NCR_* env）==")
 child = pexpect.spawn("docker", argv, encoding="utf-8", timeout=120, dimensions=(40, 140))
 transcript = []
 child.logfile_read = type("W", (), {"write": transcript.append, "flush": lambda self: None})()
 
 try:
-    # 1) CLI 選單
-    child.expect("啟動 CLI")
-    check("① CLI 選單出現", True)
-    child.expect(r"請選擇 \[1\]:")
-    child.sendline("")                       # 取預設 claude
-
-    # 2) 網路能力選單
+    # 1) 網路能力選單
     child.expect("網路能力")
-    check("② 網路能力選單出現", True)
+    check("① 網路能力選單出現", True)
     child.expect(r"請選擇 \[1\]:")
-    child.sendline("2")                      # 選 unrestricted（測試不依賴 gitlab-proxy）
+    child.sendline("2")                      # 選 unrestricted（測試不依賴白名單那條路）
 
-    # 3) 流量錄製
-    child.expect("流量錄製")
-    check("③ 流量錄製選單出現", True)
-    child.expect(r"錄製流量\? \[Y/n\]:")
+    # 2) 流量錄製
+    child.expect("錄製本場流量")
+    check("② 流量錄製選單出現", True)
+    child.expect(r"錄製流量\? \[y/N\]:")
     child.sendline("n")                      # 不錄製（測試不依賴 mitm addon）
 
-    # 4) telemetry 只有在 OTEL_EXPORTER_OTLP_ENDPOINT 有值時才問
+    # 3) telemetry 只有在 OTEL_EXPORTER_OTLP_ENDPOINT 有值時才問
     idx = child.expect(["送 Jaeger\\? \\[Y/n\\]:", "網路能力：完全開放", pexpect.TIMEOUT], timeout=30)
     if idx == 0:
-        check("④ telemetry 選單出現（endpoint 有設時）", True)
+        check("③ telemetry 選單出現（endpoint 有設時）", True)
         child.sendline("n")
     else:
-        print("  SKIP  ④ telemetry 選單（未設 OTEL endpoint，照設計不問）")
+        print("  SKIP  ③ telemetry 選單（未設 OTEL endpoint，照設計不問）")
 
     # 進到 CLI：等 Claude Code 的畫面元素
     child.expect(["bypass permissions", "Claude Code", "for shortcuts"], timeout=120)
-    check("⑤ 最終進到 CLI 畫面", True)
+    check("④ 最終進到 CLI 畫面", True)
 finally:
     with open("/tmp/claude-pty-humanpath.log", "w") as f:
         f.write("".join(transcript))  # 供人工比對畫面
@@ -136,11 +125,11 @@ finally:
     subprocess.run(["docker", "rm", "-f", NAME], capture_output=True)
 
 text = "".join(transcript)
-check("⑥ 畫面上沒有機器用的 DRIVER_MARKER", MARKER not in text)
+check("⑤ 畫面上沒有機器用的就緒標記（沒設 NCR_MARK）", MARKER not in text)
 # env-skip 的提示只在非互動時印；人類路徑不該看到
-check("⑦ 沒有出現非互動模式的提示（● 非互動 …）", "非互動" not in text)
+check("⑥ 沒有出現非互動模式的提示（● 非互動 …）", "非互動" not in text)
 plain = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", text)
-check("⑧ 有印出 firewall/網路能力的結論行", "網路能力" in plain)
+check("⑦ 有印出 firewall/網路能力的結論行", "網路能力" in plain)
 
 print(f"\n{'done' if _fails == 0 else f'{_fails} FAILED'}（完整輸出：/tmp/claude-pty-humanpath.log）")
 sys.exit(1 if _fails else 0)
