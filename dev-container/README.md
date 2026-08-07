@@ -36,6 +36,12 @@ docker build --build-arg GITLAB_SSH_HOST=gitlab.example.com -t ncr-dev-container
 **不給就兩段都跳過**：沒有烘 host key（改用 run wrapper 掛 host 的那份），
 限制模式下也不開放任何 SSH outbound。
 
+⚠ **這個 ARG 只決定「通往哪一台」，不決定「開不開」。** 22 的放行還有另一個條件：
+**ssh-agent 真的被轉發進來**。沒有 agent 的容器一個 SSH 出口都沒有，即使這個 ARG
+給了——那個 port 當初進白名單就是為了服務 agent，沒有 agent 時留著它不會讓任何事情
+變得可能。判準是 `/ssh/ssh_sock` 這個 socket 在不在，不是「誰啟動了這個容器」：
+同一件事有兩個來源就會漂。
+
 什麼時候需要它：CI、或者全新的機器上沒有 `~/.ssh/known_hosts` 可以掛。
 一般情況不需要，run wrapper 會掛 host 上現成的那份，而且**掛載會蓋過烘進去的**。
 
@@ -88,6 +94,10 @@ host 上沒有 agent 的話，wrapper 會臨時起一個、載入預設金鑰，
 ⚠ **爆炸半徑跟 CLI 憑證不同。** CLI 憑證外洩，別人能拿你的訂閱去問模型；SSH agent
 外洩，別人能以你的身分登入**所有信任那把 key 的主機**——內網 git、正式機、跳板機。
 而容器篩不掉 agent 裡的任何一把 key。
+
+也因為如此，限制模式下的 22 是**跟著 agent 走的**：用 `NCR_NO_SSH_AGENT=1` 啟動
+（或 host 上根本沒有 agent）時，防火牆連那台 GitLab 的 22 都不會開。少一個授權面，
+也少一個「以為關了其實還開著」的落差。
 
 要限縮，在 host 端做：
 

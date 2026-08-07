@@ -64,10 +64,17 @@ benchmarks/             code-review-bench：50 個真實 PR 的評測資料集�
 git 的 SSH 憑證（**轉發 ssh-agent socket，不掛 `~/.ssh`**——交出去的是簽章的能力，
 不是私鑰本體），以及 Opengrep 的規則來源。
 
-容器啟動時還會問一次**網路能力**。限制模式預設拒絕所有 outbound，只放行 `api.anthropic.com`、
-直連的 docker 網段，以及通往你指定的那台 GitLab 的 SSH——因為 ssh-agent 交出去的簽章能力
-沒有範圍，範圍只能在網路這一層畫。腳本改寫自 Anthropic 官方 devcontainer 的版本，
-差異與理由見 [`dev-container/README.md`](dev-container/README.md)。
+容器啟動時還會問一次**網路能力**。限制模式預設拒絕所有 outbound，只放行 `api.anthropic.com`
+與直連的 docker 網段。腳本改寫自 Anthropic 官方 devcontainer 的版本，差異與理由見
+[`dev-container/README.md`](dev-container/README.md)。
+
+**SSH（22）的放行條件是「ssh-agent 真的被轉發進來」。** 沒有 agent 的容器一個 SSH
+出口都沒有——那個 port 當初進白名單就是為了服務 agent，沒有 agent 時它不會讓任何
+事情變得可能，只是多一個攻擊面。有 agent 時也只通你指定的那一台 GitLab，不是
+blanket 的 22：agent 交出去的是簽章的能力，而那個能力**沒有範圍**（同一把金鑰通常
+也進得了別的伺服器），範圍只能在網路這一層畫。
+
+判準是那個 socket 在不在，不是「誰啟動了這個容器」——同一件事有兩個來源就會漂。
 
 細節與疑難排解見 [`dev-container/README.md`](dev-container/README.md)。
 
