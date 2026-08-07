@@ -489,6 +489,31 @@ def auth_view():
     return resp
 
 
+@app.get("/api/auth/check")
+def auth_check():
+    """ttyd-rust `--auth-url` 掛載點（第二層授權，與 nginx auth_request 是縱深）。
+
+    **純判定、零副作用**：驗 cookie（authn 由 gate 做完）＋ 擁有權，然後回 204/403，
+    不開 view、不回報 port、不碰 dockerd、不寫 DB。這支會被**每個 asset 與 WS 升級**
+    各打一次（fork 端有 --auth-cache-ttl 壓頻率），熱路徑上任何副作用都會被放大——
+    /api/auth/view 沒有存活 view 時會當場開一個，所以不能共用那支。
+
+    授權答案只需要 DB 的擁有權事實，所以走 manager.peek（純 DB 讀）：不問 dockerd
+    ——容器此刻的狀態不改變「這場是不是他的」。
+
+    一律 403 不回 404：這支的消費者是 ttyd/nginx 這類只認 2xx/401/403 的守門者。
+    對外它被 nginx 擋成 404（同 /api/auth/view 的理由，見 deploy/nginx.conf）。
+    """
+    sid = request.args.get("session", "")
+    try:
+        row = manager.peek(sid)
+    except SessionError:
+        return "", 403
+    if row["user_id"] != g.user["id"] and not g.user["is_admin"]:
+        return "", 403
+    return "", 204
+
+
 @app.get("/api/prefs")
 def get_prefs():
     """這個人的偏好設定 + 每一項的合法選項（畫面直接照它畫，不必在前端複製白名單）。"""

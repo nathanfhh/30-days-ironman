@@ -218,6 +218,32 @@ check("非擁有者 → 403（nginx 據此擋下）", r.status_code == 403)
 r = c.get("/api/auth/view?session=nonexistent")
 check("不存在的 session → 403", r.status_code == 403)
 
+print("== /api/auth/check：ttyd --auth-url 的第二層，純判定零副作用 ==")
+# 這支被每個 asset 與 WS 升級各打一次。斷言三件事：判定對、不開 view、不碰 dockerd。
+from server import views as _views_probe  # noqa: E402
+_opened: list = []
+_orig_open = _views_probe.open_view
+_views_probe.open_view = lambda *a, **k: _opened.append(a) or {"port": 1}
+_app_manager = __import__("server.app", fromlist=["manager"]).manager
+_orig_docker = getattr(_app_manager, "_docker", None)
+class _NoDocker:
+    def __getattr__(self, name):
+        raise AssertionError("auth_check 不可以碰 dockerd")
+_app_manager._docker = _NoDocker()
+try:
+    check("非擁有者 → 403", c.get("/api/auth/check?session=otherses1").status_code == 403)
+    check("不存在 → 403（不是 404——消費者是只認 2xx/401/403 的守門者）",
+          c.get("/api/auth/check?session=nonexistent").status_code == 403)
+    ca_chk = app.test_client()
+    ca_chk.post("/api/auth/login", json={"username": "admin", "password": "admin-password-1"})
+    check("擁有者 → 204", ca_chk.get("/api/auth/check?session=otherses1").status_code == 204)
+    check("未登入 → 401（authn 由 gate 做，這支不豁免）",
+          app.test_client().get("/api/auth/check?session=otherses1").status_code == 401)
+    check("🔴 全程沒有開任何 view（副作用零——那是 /api/auth/view 的事）", _opened == [])
+finally:
+    _views_probe.open_view = _orig_open
+    _app_manager._docker = _orig_docker
+
 print("== 權限只在建立時決定（沒有提權/降權端點）==")
 # 「最後一位管理員」不再需要專屬防線：能拿走管理員身分的兩條路（降權、停用）都不存在
 # 了。admin 改掉另一位 admin 的密碼不會動到 is_admin——帳號還是管理員，只是換了鑰匙，

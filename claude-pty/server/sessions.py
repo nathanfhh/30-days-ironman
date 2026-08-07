@@ -1077,6 +1077,14 @@ class SessionManager:
         q = q.order_by(SessionRow.created_at.desc())
         return q.limit(limit).offset(offset) if limit is not None else q
 
+    def peek(self, sid: str) -> dict:
+        """純 DB 讀的單筆查詢：不問 dockerd、不寫任何東西。
+
+        給**熱路徑上只需要 DB 事實**的呼叫端用（auth_check 的擁有權判定：容器此刻
+        的狀態不改變「這場是不是他的」）。要當下容器狀態的呼叫端走 status()。
+        """
+        return self._row(sid)
+
     def status(self, sid: str, with_ready: bool = False) -> dict:
         """單筆查詢。這裡**仍然**問 dockerd——問的是一顆指定的容器，呼叫端要的就是它的
         當下狀態（`?wait_ready` 的輪詢靠這條）。與列表的差別是爆炸半徑：問壞了只有這一筆

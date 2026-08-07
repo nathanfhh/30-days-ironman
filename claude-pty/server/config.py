@@ -176,11 +176,15 @@ SEMGREP_RULES_BIND = "/home/nathan/semgrep-rules"
 # 前唯一的身分把關，比錯的後果是「所有 view 被判死」或「誤殺無關程序」。
 TTYD_BINS = {"ttyd": "C", "ttyd-rust": "Rust"}
 TTYD_BIN_DEFAULT = "ttyd"
-# 支援伺服器端 `--title` 的 binary。這是**能力旗標**，不要拿顯示標籤（上面的 "C"/"Rust"）
-# 當判斷依據——標籤是給畫面看的，哪天改字這裡不該跟著壞。
-# 差異的實質見 views._ttyd_argv：C 版只能用 titleFixed 蓋畫面（真標題已送給每個 client），
-# Rust 版能在伺服器端就換掉宣告出去的標題。
-TTYD_TITLE_CAPABLE = frozenset({"ttyd-rust"})
+# 兩顆 binary 的**能力差異寫在 views._TTYD_EXTRAS**（每顆一組參數建構策略）：
+# Rust 版有伺服器端 --title 與 --auth-url／--auth-cache-ttl，C 版沒有。判斷一律
+# keyed on binary 名，不拿顯示標籤（上面的 "C"/"Rust"）當依據——標籤是給畫面看的。
+
+# ttyd-rust 的 --auth-url 放行快取秒數（0＝不快取，每個請求都問控制平面一次）。
+# 每個靜態檔案與 WS 升級都是一次 auth 子請求，快取把它壓成每 TTL 一次。
+# 取捨：TTL 內撤銷（改密碼收終端）對**新請求**的生效最多晚這麼多秒；已升級的
+# WebSocket 本來就不受任何 TTL 影響（授權只發生在連線交出去之前）。
+TTYD_AUTH_CACHE_TTL = int(os.environ.get("CLAUDE_PTY_TTYD_AUTH_CACHE_TTL", "2"))
 
 def ttyd_bin_or_default(value: str | None) -> str:
     """把存下來的偏好收斂成一個合法的 binary 名稱。

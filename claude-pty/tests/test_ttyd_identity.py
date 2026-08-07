@@ -87,23 +87,51 @@ try:
     check("不認得的值 → 退回預設，不可以照著 exec",
           views._ttyd_argv(41000, "c", "sid", "rm -rf /")[0] == config.TTYD_BIN_DEFAULT)
 
-    print("== 伺服器端 --title：只有支援的 binary 才帶（發表阻擋項）==")
-    # Rust 版由伺服器端換掉宣告出去的標題——命令列一個字都不上線；C 版沒有這個選項
-    # （帶了會拒起），它的標題只是被 client 端的 titleFixed 蓋住畫面。
+    print("== 參數建構策略：每顆 binary 一組，特有旗標不進共用模板 ==")
+    # Rust 特有旗標（--title / --auth-url / --auth-cache-ttl）C 版**不認得**，塞進
+    # 共用模板 C 版直接拒起——strategy 拆開就是在守這件事。
     rust = views._ttyd_argv(41000, "claude-pty-xyz789", "xyz789", "ttyd-rust")
     c = views._ttyd_argv(41000, "claude-pty-xyz789", "xyz789", "ttyd")
+    check("🔴 策略表恆等於白名單（多一顆 binary 就要寫下它的策略，含「沒有」）",
+          set(views._TTYD_EXTRAS) == set(config.TTYD_BINS))
+    check("🔴 共用模板是兩邊的交集：C argv ＝ Rust argv 去掉特有段（只差 argv[0]）",
+          c[1:] == [a for a in rust[1:]
+                    if a not in ("--title", "agent-tty · xyz789", "--auth-url",
+                                 "--auth-cache-ttl",
+                                 str(config.TTYD_AUTH_CACHE_TTL))
+                    and not a.startswith("http://127.0.0.1:")])
+
+    print("== --title（發表阻擋項）==")
     check("🔴 Rust 版帶 --title", "--title" in rust)
     _title = rust[rust.index("--title") + 1] if "--title" in rust else ""
-    check("🔴 --title 只含這一場的編號，命令列一個字都不上線",
+    check("🔴 --title 只剩固定字樣加這一場的編號，命令列一個字都不上線",
           "xyz789" in _title and "docker" not in _title and "attach" not in _title
           and "claude-pty-xyz789" not in _title)
     check("--title 與 titleFixed 是同一個字串（兩條路顯示一致）",
           f"titleFixed={_title}" in rust)
-    check("🔴 C 版不帶 --title（沒有這個選項，帶了會拒起）", "--title" not in c)
+    check("🔴 C 版沒有任何 Rust 特有旗標（帶了會拒起）",
+          not {"--title", "--auth-url", "--auth-cache-ttl"} & set(c))
     check("C 版仍靠 titleFixed 蓋畫面",
           any(a.startswith("titleFixed=") for a in c))
-    check("能力旗標是 binary 名不是顯示標籤（防有人拿 \"Rust\" 字樣判斷）",
-          config.TTYD_TITLE_CAPABLE <= set(config.TTYD_BINS))
+
+    print("== --auth-url：第二層授權（縱深），打的是無副作用端點 ==")
+    _auth = rust[rust.index("--auth-url") + 1] if "--auth-url" in rust else ""
+    check("🔴 指向 /api/auth/check（不是有副作用的 /api/auth/view）",
+          "/api/auth/check" in _auth and "/api/auth/view" not in _auth)
+    check("sid 烤進 URL（一顆 ttyd 只屬於一場）", "session=xyz789" in _auth)
+    check("走 loopback 問控制平面（不繞出去、不經 nginx）",
+          _auth.startswith(f"http://127.0.0.1:{config.CONTROL_PORT}/"))
+    check("預設帶 --auth-cache-ttl（每個 asset 都問一次太貴）",
+          "--auth-cache-ttl" in rust
+          and rust[rust.index("--auth-cache-ttl") + 1] == str(config.TTYD_AUTH_CACHE_TTL))
+    _saved_ttl = config.TTYD_AUTH_CACHE_TTL
+    try:
+        config.TTYD_AUTH_CACHE_TTL = 0
+        r0 = views._ttyd_argv(41000, "c", "sid0", "ttyd-rust")
+        check("TTL=0 → 不帶快取旗標（每請求都問，語意乾淨不是帶個 0）",
+              "--auth-cache-ttl" not in r0)
+    finally:
+        config.TTYD_AUTH_CACHE_TTL = _saved_ttl
 
     print("== 邊界 ==")
     check("pid=None → False", _is_our_ttyd(None) is False)

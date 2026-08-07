@@ -208,6 +208,46 @@ def _alive_view(session_id: str) -> dict | None:
 
 # --- ttyd 進程 --------------------------------------------------------------------
 
+def _c_extras(session_id: str) -> list[str]:
+    """C 版特有參數：**沒有**。共用模板（見 _ttyd_argv）就是 C 版的全部能力——
+    它是基準，Rust 版是在它之上加東西。這個函式存在是為了讓 _TTYD_EXTRAS 對
+    TTYD_BINS 的每一顆都有明確條目，「沒有」是一個寫出來的決定，不是漏寫。"""
+    return []
+
+
+def _rust_extras(session_id: str) -> list[str]:
+    """ttyd-rust 特有參數。⚠ 這幾支旗標 C 版**不認得**——塞進共用模板會讓 C 版
+    直接拒起，這正是拆 strategy 的理由。
+
+    --title：伺服器端換掉宣告給 client 的標題——命令列一個字都不上線，標題只剩
+      固定字樣加這一場的編號。C 版那個洞仍然存在、只是被共用模板裡的 titleFixed
+      蓋住畫面——這是兩顆 binary 的實質差異之一，選 binary 的人應該知道自己在
+      選什麼（設定畫面已寫明；README 由文件階段補）。
+    --auth-url：ttyd 自己在放行前多問控制平面一次（第二層，與 nginx auth_request
+      是縱深不是重複）。打的是**無副作用**的 /api/auth/check——不是 /api/auth/view，
+      那支沒有存活 view 時會當場開一個，不能拿來當每個 asset 都打的驗證端點。
+      sid 在 spawn 時就烤進 URL：一顆 ttyd 本來就只屬於一場。
+    --auth-cache-ttl：每個 asset 與 WS 升級都是一次子請求，TTL 把它壓成每幾秒
+      一次（取捨見 config.TTYD_AUTH_CACHE_TTL）。0＝不帶＝每請求都問。
+    """
+    extras = [
+        "--title", f"agent-tty · {session_id}",
+        # ttyd 與控制平面在同一個容器（views 由 control 自己 spawn），loopback 即達；
+        # 非容器化執行時 Flask 同樣聽 CONTROL_PORT。
+        "--auth-url",
+        f"http://127.0.0.1:{config.CONTROL_PORT}/api/auth/check?session={session_id}",
+    ]
+    if config.TTYD_AUTH_CACHE_TTL > 0:
+        extras += ["--auth-cache-ttl", str(config.TTYD_AUTH_CACHE_TTL)]
+    return extras
+
+
+# 每顆 binary 一組參數建構策略；共用部分留在 _ttyd_argv 的模板裡。
+# ⚠ 鍵集合必須恆等於 config.TTYD_BINS（測試釘著）：白名單多一顆 binary，這裡就要
+#   同步寫下它的策略——即使是「沒有特有參數」也要寫（見 _c_extras 的理由）。
+_TTYD_EXTRAS = {"ttyd": _c_extras, "ttyd-rust": _rust_extras}
+
+
 def _ttyd_argv(port: int, container_name: str, session_id: str,
                ttyd_bin: str | None = None) -> list[str]:
     # C 版或 Rust 版，由**開這個終端的人**的偏好決定（users.ttyd_bin，管理畫面的
@@ -216,13 +256,7 @@ def _ttyd_argv(port: int, container_name: str, session_id: str,
     binary = config.ttyd_bin_or_default(ttyd_bin)
     return [
         binary,
-        # 伺服器端標題：**只有支援的 binary 才帶**（能力旗標 config.TTYD_TITLE_CAPABLE）。
-        # 它直接換掉 ttyd 宣告給 client 的標題——命令列一個字都不上線，標題只剩這一場
-        # 的編號。C 版沒有這個選項（帶了會拒起），那個洞在 C 版仍然存在、只是被下面的
-        # titleFixed 蓋住畫面——這是兩顆 binary 的實質差異之一，選 binary 的人應該知道
-        # 自己在選什麼（設定畫面與 README 都要講）。
-        *(["--title", f"agent-tty · {session_id}"]
-          if binary in config.TTYD_TITLE_CAPABLE else []),
+        *_TTYD_EXTRAS[binary](session_id),
         "-p", str(port),
         "-i", config.TTYD_BIND,        # 非容器化＝loopback；容器化＝0.0.0.0（僅內部網路，ADR 0009）
         "-b", f"/session/{session_id}",  # base-path，配合 nginx 子路徑路由
@@ -236,9 +270,9 @@ def _ttyd_argv(port: int, container_name: str, session_id: str,
         #   顯示別的字。所以這一行買到的是「分頁標題、瀏覽紀錄、截圖裡看不到」，
         #   買不到「沒有送出去」。
         #
-        # ⚠ 真正的修法是上面那個**伺服器端**的 `--title`（Rust 版已接上）。這一行
-        #   仍然無條件留著：C 版只有它可靠（遮畫面聊勝於無）；Rust 版帶著也無妨——
-        #   兩個值是同一個字串，client 端不會蓋出不一樣的東西。
+        # ⚠ 真正的修法是**伺服器端**的 `--title`（Rust 版已接上，見 _rust_extras）。
+        #   這一行仍然無條件留著：C 版只有它可靠（遮畫面聊勝於無）；Rust 版帶著也
+        #   無妨——兩個值是同一個字串，client 端不會蓋出不一樣的東西。
         "-t", f"titleFixed=agent-tty · {session_id}",
         # 讓使用者選得到文字。Claude Code 的 TUI 會開啟滑鼠追蹤（實測 ?1000/?1002/?1003/
         # ?1006 全開），一開啟，拖曳就被當成應用程式的滑鼠事件送進 TUI，終端不再拿它來
