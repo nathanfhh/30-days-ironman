@@ -93,20 +93,12 @@ check("一般使用者 POST /api/users → 403",
 check("一般使用者 POST /api/users/<uid>/password（代改他人密碼）→ 403",
       c.post(f"/api/users/{admin['id']}/password",
              json={"new_password": "hijacked-password"}).status_code == 403)
-# ⚠ 這幾條的對象刻意是**管理員**。先前只測了「一般使用者停用另一個一般使用者」，
-#   而權限提升真正想做的是對管理員下手：停掉他、或把自己提上去。攻擊面在那裡，
-#   測試就該在那裡（2026-07-25 使用者指出這個缺口）。
-for label, body in [
-    ("停用管理員", {"is_active": False}),
-    ("降權管理員", {"is_admin": False}),
-]:
-    check(f"一般使用者{label} → 403",
-          c.patch(f"/api/users/{admin['id']}", json=body).status_code == 403)
-check("一般使用者提權自己 → 403",
-      c.patch(f"/api/users/{alice['id']}", json={"is_admin": True}).status_code == 403)
-check("被擋下之後 admin 仍是啟用中的管理員",
-      all(u["is_admin"] and u["is_active"]
-          for u in auth.list_users() if u["username"] == "admin"))
+# 🔴 事後改權限的路徑**整條不存在**——不是 403，是根本沒有這個端點。權限只在建立
+#    時決定；沒有提權/降權，就沒有「一般使用者把自己提上去」這個攻擊面。這裡釘的是
+#    「路由真的不在」：哪天有人把 PATCH /api/users/<uid> 加回來，這兩條會先紅。
+check("PATCH /api/users/<uid> 不存在（一般使用者，405/404 而非 403）",
+      c.patch(f"/api/users/{admin['id']}",
+              json={"is_admin": True}).status_code in (404, 405))
 check("被擋下之後 alice 仍不是管理員",
       not next(u for u in auth.list_users() if u["username"] == "alice")["is_admin"])
 
@@ -203,22 +195,20 @@ check("🔴 按下送出的這一台也被登出（不留特例）", c.get("/api
 c.post("/api/auth/login", json={"username": "alice", "password": "alice-new-password"})
 check("以新密碼重新登入後恢復", c.get("/api/auth/me").status_code == 200)
 
-print("== 停用帳號（刪除的正解：可逆、留痕、不 cascade 掉他的 session）==")
+print("== 退場＝管理員改掉他的密碼（沒有「停用」這個狀態）==")
+# 停用能做到的三件事，改密碼全部做得到：登不進來（他不知道新密碼）、既有 cookie 全滅
+# （版號遞增）、開著的終端被切（呼叫端收 view）。可逆性也還在：把新密碼告訴他。
+# 這一段驗的就是這個等價性——它是拔掉 is_active 的前提，不成立就不能拔。
 bob_id = next(u["id"] for u in ca.get("/api/users").get_json()["users"] if u["username"] == "bob")
 cb = app.test_client()
-check("停用前可登入", cb.post("/api/auth/login",
+check("退場前可登入", cb.post("/api/auth/login",
       json={"username": "bob", "password": "bob-password-1"}).status_code == 200)
-r = ca.patch(f"/api/users/{bob_id}", json={"is_active": False})
-check("admin 可停用", r.status_code == 200 and r.get_json()["is_active"] is False)
-check("停用後密碼正確也登不進去", _fails_auth("bob", "bob-password-1"))
-check("停用會讓既有 cookie 立即失效", cb.get("/api/auth/me").status_code == 401)
-check("一般使用者不得停用他人", c.patch(f"/api/users/{bob_id}",
-      json={"is_active": False}).status_code == 403)
-check("不可停用自己", ca.patch(f"/api/users/{admin['id']}",
-      json={"is_active": False}).status_code == 400)
-r = ca.patch(f"/api/users/{bob_id}", json={"is_active": True})
-check("復用後又能登入",
-      r.status_code == 200 and auth.authenticate("bob", "bob-password-1")["id"] == bob_id)
+r = ca.post(f"/api/users/{bob_id}/password", json={"new_password": "exit-password-1"})
+check("admin 改掉他的密碼 → 204", r.status_code == 204)
+check("🔴 舊密碼登不進去（他不知道新密碼＝回不來）", _fails_auth("bob", "bob-password-1"))
+check("🔴 既有 cookie 立即失效", cb.get("/api/auth/me").status_code == 401)
+check("可逆：把新密碼告訴他，就回來了",
+      auth.authenticate("bob", "exit-password-1")["id"] == bob_id)
 
 print("== nginx auth_request 端點 ==")
 # auth_view 是給 nginx auth_request 用的，一律回 403（nginx 據此擋下並導回）——
@@ -228,64 +218,19 @@ check("非擁有者 → 403（nginx 據此擋下）", r.status_code == 403)
 r = c.get("/api/auth/view?session=nonexistent")
 check("不存在的 session → 403", r.status_code == 403)
 
-print("== 提權 / 降權 ==")
-from server.sessions import ensure_system_user  # noqa: E402
-
-sys_uid = ensure_system_user()          # 這個帳號是 is_admin=True 但密碼為 "!"（登不進去）
-admin2 = auth.create_user("admin2", "admin2-password", is_admin=True)
-plain = auth.create_user("plain-user", "plain-password")
-
-r = auth.set_admin(plain["id"], True)
-check("一般使用者可被提為管理員", r["is_admin"])
-check("提權會遞增 password_version（既有 cookie/token 立即失效）",
-      r["password_version"] > plain["password_version"])
-check("降權回一般使用者", not auth.set_admin(plain["id"], False)["is_admin"])
-
-for label, fn in [
-    ("不可變更 system 帳號的權限", lambda: auth.set_admin(sys_uid, False)),
-    ("不可停用 system 帳號", lambda: auth.set_active(sys_uid, False)),
-]:
-    try:
-        fn()
-        check(label, False)
-    except auth.AuthError:
-        check(label, True)
-
-print("== 最後一位管理員的保護（三條路徑共用同一道檢查）==")
-# ⚠ 這裡的關鍵是 system：它 is_admin=True 但密碼是 "!"、永遠驗不過。若把它算進
-#   「還有其他管理員」，就會允許把最後一位真人管理員降權——之後沒有任何人能登入管理。
-for u in auth.list_users():
-    if u["is_admin"] and u["username"] not in ("admin", config.SYSTEM_USERNAME):
-        auth.set_admin(u["id"], False)
-remaining = [u["username"] for u in auth.list_users() if u["is_admin"]]
-check(f"現在只剩 admin 與 system 是管理員（{remaining}）",
-      set(remaining) == {"admin", config.SYSTEM_USERNAME})
-
-last_admin = next(u for u in auth.list_users() if u["username"] == "admin")
-for label, fn in [
-    ("降權最後一位管理員被擋下（system 不算數）",
-     lambda: auth.set_admin(last_admin["id"], False)),
-    ("停用最後一位管理員被擋下", lambda: auth.set_active(last_admin["id"], False)),
-]:
-    try:
-        fn()
-        check(label, False)
-    except auth.AuthError as e:
-        check(f"{label}（{e}）", True)
-check("擋下之後他仍是啟用中的管理員",
-      next(u for u in auth.list_users() if u["username"] == "admin")["is_admin"])
-
-print("== 權限 API 的輸入驗證（權限邊界不接受型別猜測）==")
+print("== 權限只在建立時決定（沒有提權/降權端點）==")
+# 「最後一位管理員」不再需要專屬防線：能拿走管理員身分的兩條路（降權、停用）都不存在
+# 了。admin 改掉另一位 admin 的密碼不會動到 is_admin——帳號還是管理員，只是換了鑰匙，
+# 而鑰匙在動手的那位 admin 手上。這裡釘住「改密碼不動權限」，防線才真的閉合。
 ca2 = app.test_client()
 ca2.post("/api/auth/login", json={"username": "admin", "password": "admin-password-1"})
+admin2 = auth.create_user("admin2", "admin2-password", is_admin=True)
+ca2.post(f"/api/users/{admin2['id']}/password", json={"new_password": "admin2-rotated-1"})
+check("🔴 admin 代改另一位 admin 的密碼，不會動到 is_admin",
+      auth.get_user(admin2["id"])["is_admin"] is True)
+
+print("== 建立帳號的輸入驗證（權限邊界不接受型別猜測）==")
 victim = auth.create_user("victim", "victim-password")
-for bad in ({"is_admin": "yes"}, {"is_admin": "tru"}, {"is_admin": 1},
-            {"is_admin": {}}, {"is_admin": True, "is_active": True}, {"nope": True}):
-    r = ca2.patch(f"/api/users/{victim['id']}", json=bad)
-    check(f"{bad} → 400（不猜型別、不靜默忽略）", r.status_code == 400)
-check("真正的 boolean 才生效",
-      ca2.patch(f"/api/users/{victim['id']}", json={"is_admin": True}).status_code == 200)
-# 建立與改權限是同一個權限邊界：只有一邊嚴格等於沒有嚴格
 for bad in ({"is_admin": "yes"}, {"is_admin": 1}, {"is_admin": "tru"}, {"role": "admin"}):
     r = ca2.post("/api/users", json={"username": f"strict-{abs(hash(str(bad))) % 9999}",
                                      "password": "strict-password-1", **bad})
@@ -295,14 +240,14 @@ r = ca2.post("/api/users", json={"username": "strict-ok", "password": "strict-pa
 check("POST /api/users 收真正的 boolean", r.status_code == 201
       and r.get_json()["user"]["is_admin"] is False)
 
-print("== 帳號沒有刪除路徑（ADR 0010：退場只有停用）==")
+print("== 帳號沒有刪除路徑（ADR 0010：退場是改掉密碼，不是刪除）==")
 check("DELETE /api/users/<uid> 不存在（405 或 404，總之不是 2xx）",
       ca2.delete(f"/api/users/{victim['id']}").status_code >= 400)
 check("auth 模組不再提供 delete_user", not hasattr(auth, "delete_user"))
 check("被拒之後帳號仍在", any(u["username"] == "victim" for u in auth.list_users()))
 r = ca2.patch(f"/api/users/{[u for u in auth.list_users() if u['username']=='admin'][0]['id']}",
               json={"is_admin": False})
-check("不可變更自己的權限（要由另一位管理員操作）", r.status_code == 400)
+check("PATCH /api/users/<uid> 連 admin 也打不到（路由不存在）", r.status_code in (404, 405))
 
 print("== 公開的 login 端點不可被畸形輸入打成 500（review 2026-07-26）==")
 # ⚠ 這條**未登入就打得到**。任何 500 都等於「誰都能在日誌裡刷 traceback」，而 argon2 拿到
@@ -436,10 +381,6 @@ try:
     check("🔴 操作中的這一台也被登出（不留特例）",
           cme3.get("/api/auth/me").status_code == 401)
 
-    _closed.clear()
-    r = ca2.patch(f"/api/users/{victim_id}", json={"is_active": False})
-    check("停用帳號仍然會收終端（原本就有，不可以被改壞）",
-          r.status_code == 200 and _closed == [f"sess-of-{victim_id}"])
 finally:
     _views_mod.close_views, _app_mod.manager.list = _orig_close, _orig_list
 

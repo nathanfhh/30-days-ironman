@@ -193,21 +193,19 @@ check("進行中的列表已不含歸檔的那幾筆",
 # 而那正是這批改動要杜絕的（review N3）
 archive([f"page{n:04d}" for n in range(3, 25)], "gone")
 
-print("== 停用帳號不動他的 session（ADR 0010：退場是停用，不是刪除）==")
+print("== 退場（admin 改掉他的密碼）不動他的 session（ADR 0010）==")
 # 刪除會沿 FK cascade 掉 sessions 登錄——容器還在跑卻沒人追蹤，歷史也沒經過 archive
-# 就消失。停用沒有這個問題：存取被切斷，工作繼續，紀錄完整。
+# 就消失。退場走「改密碼」沒有這個問題：存取被切斷，工作繼續，紀錄完整。
 with db.session_scope() as s:
     s.add(SessionRow(id="keepalive1", container_name="claude-pty-keepalive1",
                      user_id=alice_id, status=STATUS_CREATING, workdir="/w"))
-r = ca.patch(f"/api/users/{alice_id}", json={"is_active": False})
-check("停用成功", r.status_code == 200 and r.get_json()["is_active"] is False)
+r = ca.post(f"/api/users/{alice_id}/password", json={"new_password": "alice-exited-pw-1"})
+check("退場成功（admin 代改密碼 → 204）", r.status_code == 204)
 with db.session_scope() as s:
     check("他的 session 登錄仍在（沒被 cascade 掉）",
           s.get(SessionRow, "keepalive1") is not None)
 check("帳號仍在名冊上（留痕）",
       any(u["id"] == alice_id for u in ca.get("/api/users").get_json()["users"]))
-check("停用是可逆的", ca.patch(f"/api/users/{alice_id}",
-                            json={"is_active": True}).status_code == 200)
 archive(["keepalive1"], "gone")   # 收尾走唯一出口
 
 print("== XSS：使用者可控的欄位進 innerHTML 前一律逸出 ==")

@@ -1,4 +1,4 @@
-"""帳號清單：分頁、停用的帳號不會消失、以及「不可對自己動手」那道門。
+"""帳號清單：分頁、以及密碼路徑（自改＝全斷、admin 代改＝退場）。
 
     uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
         --with psutil python tests/test_user_roster.py
@@ -35,13 +35,12 @@ def check(label, ok):
 reset_engine()
 init_db()
 PW = "roster-password-1"
-# 名字刻意讓排序把管理員排在最前、停用的排在最後——這樣「最後一頁」才驗得到停用的那個
+# 名字刻意讓排序把管理員排在最前、zzz-far 排在最後——「最後一頁」才驗得到翻頁翻得完
 boss = auth.create_user("aaa-boss", PW, is_admin=True)
 mate = auth.create_user("aab-mate", PW, is_admin=True)
 for i in range(24):
     auth.create_user(f"u{i:02d}", PW)
-off = auth.create_user("zzz-off", PW)
-auth.set_active(off["id"], False)
+auth.create_user("zzz-far", PW)
 auth.create_user("plain", PW)
 # ⚠ 數出來，不要寫死。手寫的常數會在多加一個帳號時變成「測試錯了」而不是「程式錯了」，
 #   而那種紅燈很容易被當成雜訊直接改掉數字——真正的分頁 bug 就是這樣混過去的。
@@ -83,37 +82,23 @@ check(f"limit 超過上限 {config.MAX_PAGE_SIZE} → 400",
       admin.get(f"/api/users?limit={config.MAX_PAGE_SIZE + 1}").status_code == 400)
 check("offset=-1 → 400", admin.get("/api/users?offset=-1").status_code == 400)
 
-print("== 停用的帳號不會從清單上消失 ==")
-# 停用是這個系統唯一的退場方式（沒有刪除，ADR 0010）。清單上看不到他，就沒有人能
-# 把他復用回來，他過去開的 session 歷史也再也篩不出來。
+print("== 退場過的帳號不會從清單上消失 ==")
+# 退場＝admin 改掉他的密碼（沒有刪除也沒有停用）。他仍是一列普通帳號，所以「清單
+# 完整」由上面的翻頁斷言守住；這裡另外釘：清單欄位裡沒有 is_active 這種殘留。
 last = admin.get(f"/api/users?offset={(TOTAL - 1) // config.PAGE_SIZE * config.PAGE_SIZE}")
 names = [u["username"] for u in last.get_json()["users"]]
-check(f"已停用的 zzz-off 在最後一頁上：{names[-3:]}", "zzz-off" in names)
-row = next(u for u in last.get_json()["users"] if u["username"] == "zzz-off")
-check("而且標得出來（is_active=false）", row["is_active"] is False)
+check(f"排最後的 zzz-far 在最後一頁上：{names[-3:]}", "zzz-far" in names)
+check("清單欄位沒有 is_active（停用這個狀態不存在）",
+      all("is_active" not in u for u in last.get_json()["users"]))
+check("一般使用者拿不到帳號名單（那是管理員的東西）",
+      plain.get("/api/users").status_code == 403)
 
-print("== 下拉選單要的是完整名單，不是第一頁 ==")
+print("== /api/users/options：給「建立帳號後跳頁」算位置用的完整名單 ==")
 opt = admin.get("/api/users/options").get_json()
-check(f"/api/users/options 回全部 {TOTAL} 筆（沒有被分頁截斷）", len(opt["users"]) == TOTAL)
-check("停用的也在裡面", any(not u["is_active"] for u in opt["users"]))
-check("只回畫一個選項需要的欄位",
-      set(opt["users"][0]) == {"id", "username", "is_admin", "is_active"})
-check("不含密碼雜湊之類的東西",
-      not any(k in opt["users"][0] for k in ("password_hash", "password_version")))
-check("一般使用者拿不到（帳號名單是管理員的東西）",
-      plain.get("/api/users/options").status_code == 403)
-check("一般使用者也拿不到分頁的那條", plain.get("/api/users").status_code == 403)
-
-print("== 不可對自己動手（畫面上沒有那顆按鈕，後端也要擋）==")
-r = admin.patch(f"/api/users/{boss['id']}", json={"is_active": False})
-check(f"停用自己 → 400：{r.get_json().get('error')}", r.status_code == 400)
-check("而且真的沒被停用（不是回了 400 卻已經寫進去）",
-      auth.get_user(boss["id"])["is_active"] is True)
-r = admin.patch(f"/api/users/{boss['id']}", json={"is_admin": False})
-check(f"降自己的權 → 400：{r.get_json().get('error')}", r.status_code == 400)
-check("權限也沒真的變", auth.get_user(boss["id"])["is_admin"] is True)
-r = admin.patch(f"/api/users/{boss['id']}", json={"is_admin": True})
-check("提自己的權也擋（自我授權同樣不行）", r.status_code == 400)
+check(f"回全部 {TOTAL} 筆（沒有被分頁截斷，位置才算得準）", len(opt["users"]) == TOTAL)
+check("欄位只有 id 與 username（算位置不需要更多）",
+      set(opt["users"][0]) == {"id", "username"})
+check("一般使用者拿不到", plain.get("/api/users/options").status_code == 403)
 
 print("== 使用者名稱：型別、長度、字元 ==")
 # 都是探索性測試（2026-07-26）實際打出來的：非字串會讓 `raw.strip()` 拋
@@ -233,10 +218,9 @@ for bad in (123, True, ["a"], {"a": 1}, None):
     r = app.test_client().post("/api/auth/login", json={"username": bad, "password": "x"})
     check(f"login username={bad!r} → 400", r.status_code == 400)
 
-print("== 改自己的密碼不該把自己踢下線 ==")
-# 換密碼會遞增 password_version，所有既有 cookie 失效——包含按下送出的這一台。他剛用
-# 舊密碼證明過自己是本人，踢掉他換不到任何安全性，而畫面上的提示還寫著「你在**其他
-# 裝置**的登入已失效」。
+print("== 改自己的密碼＝全部斷掉，包含這一台 ==")
+# 換密碼會遞增 password_version，所有既有 cookie 失效——**不為按下送出的這一台留特例**。
+# 例外換到的只是少按幾個鍵，卻讓「全部失效」變成說一套做一套。
 me = app.test_client()
 auth.create_user("selfpw", PW)
 me.post("/api/auth/login", json={"username": "selfpw", "password": PW})
@@ -253,13 +237,17 @@ check("新密碼可以",
       other.post("/api/auth/login",
                  json={"username": "selfpw", "password": PW + "x"}).status_code == 200)
 
-print("== 但對別人是可以的，別把門關死了 ==")
-check("停用另一位管理員 → 200",
-      admin.patch(f"/api/users/{mate['id']}", json={"is_active": False}).status_code == 200)
-check("他真的被停用了", auth.get_user(mate["id"])["is_active"] is False)
-check("復用回來 → 200",
-      admin.patch(f"/api/users/{mate['id']}", json={"is_active": True}).status_code == 200)
-check("自己被擋之後仍然登得進去（沒有把自己鎖在門外）",
+print("== 退場路徑走 admin 代改密碼，對另一位管理員也通 ==")
+check("admin 改掉另一位 admin 的密碼 → 204",
+      admin.post(f"/api/users/{mate['id']}/password",
+                 json={"new_password": PW + "-rotated"}).status_code == 204)
+check("對方舊密碼登不進來（退場生效）",
+      app.test_client().post("/api/auth/login",
+          json={"username": "aab-mate", "password": PW}).status_code == 400)
+check("把新密碼告訴他就回來了（退場可逆）",
+      app.test_client().post("/api/auth/login",
+          json={"username": "aab-mate", "password": PW + "-rotated"}).status_code == 200)
+check("動手的這位 admin 自己不受影響（沒有把自己鎖在門外）",
       admin.get("/api/auth/me").status_code == 200)
 
 import shutil  # noqa: E402

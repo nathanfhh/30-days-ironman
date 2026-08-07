@@ -126,13 +126,8 @@ def _require_login():
     # 沒有這道檢查，管理員重設被盜帳號的密碼後，攻擊者手上的 cookie 仍可用滿 7 天。
     if user is not None and session.get("pwv") != user["password_version"]:
         user = None
-    # 停用目前是靠 set_active() 順手遞增 password_version 才踢得掉 cookie——那是間接的
-    # 副作用。直接檢查一次，日後多一條不遞增版號的停用路徑（批次停用、SSO 同步）時，
-    # gate 才不會靜默放行已停用的帳號。
-    if user is not None and not user["is_active"]:
-        user = None
     if user is None:
-        # 未登入、版號對不上（改過密碼）、帳號已停用，或那一列直接從 DB 消失了
+        # 未登入、版號對不上（改過密碼），或那一列直接從 DB 消失了
         # ——應用層沒有刪除帳號的路徑（ADR 0010），所以最後一種只會是有人動了資料庫。
         session.clear()       # 手上的 cookie 一律作廢
         # API 回 401 讓前端自行處理；HTML 頁面導向登入頁（同一個 gate，兩種呈現）
@@ -212,7 +207,7 @@ def _body() -> dict:
 def _reject_unknown(body: dict, allowed: set[str]) -> None:
     """未知欄位一律 400。
 
-    ⚠ 這是 `POST /api/users` / `PATCH /api/users/<uid>` 早就在做的事，session 這邊卻沒有
+    ⚠ 這是 `POST /api/users` 早就在做的事，session 這邊卻沒有
       ——於是打錯欄位名（少一個字母）會**靜靜建出一個用預設值的容器**，
       呼叫端拿到 201 而完全沒有跡象（交叉審查 2026-07-26 指出）。
     """
@@ -240,18 +235,9 @@ class BadInput(ValueError):
     pass
 
 
-class NotAllowed(PermissionError):
-    """權限不足。與 BadInput 分開，因為呼叫端該做的事不同：一個是改參數、一個是換人。"""
-
-
 @app.errorhandler(BadInput)
 def _bad_input(e: BadInput):
     return jsonify(error=str(e)), 400
-
-
-@app.errorhandler(NotAllowed)
-def _not_allowed(e: NotAllowed):
-    return jsonify(error=str(e)), 403
 
 
 def _int_in(body: dict, key: str, default: int, lo: int, hi: int) -> int:
@@ -323,11 +309,6 @@ def _check_model_effort(raw: dict) -> None:
     for key in ("model", "effort"):
         if key in raw and not isinstance(raw[key], str):
             raise BadInput(f"profile.{key} 必須是字串")
-    model = raw.get("model")
-    if model in config.ADMIN_ONLY_MODELS and not g.user.get("is_admin"):
-        # 403 而不是「不是合法值」的 400：擋下來的理由是**權限**，講清楚比較好查。
-        # 這個名單本來就不是祕密（管理員的畫面上就列著），沒有隱藏存在性的必要。
-        raise NotAllowed(f"模型 {model} 限管理員使用")
     if "model" in raw and raw["model"] not in _CLAUDE_MODELS:
         raise BadInput(f"profile.model 只能是 {' / '.join(_CLAUDE_MODELS)}")
     if "effort" in raw and raw["effort"] not in _CLAUDE_EFFORTS:
@@ -341,15 +322,11 @@ def get_catalog():
     `default_model`＝沒有選擇可沿用時該落在哪一顆。**不可以用「清單的第一個」代替**：
     清單的順序只是選單的排列（世代新→舊），預設是另一個獨立的決定（見 config）。
     """
-    admin = bool(g.user.get("is_admin"))
     return jsonify(
         claude={"models": [{"slug": m, "display_name": m.capitalize(),
                             "efforts": list(_CLAUDE_EFFORTS),
                             "default_effort": config.DEFAULT_EFFORT}
-                           for m in _CLAUDE_MODELS
-                           # 不列給非管理員：選得到卻按不下去只是噪音。**後端仍然會擋**
-                           # （見 _check_model_effort）——藏起來擋不住直接打 API 的人。
-                           if admin or m not in config.ADMIN_ONLY_MODELS],
+                           for m in _CLAUDE_MODELS],
                 "default_model": config.DEFAULT_MODEL,
                 "source": "static", "fetched_at": None})
 
@@ -403,26 +380,8 @@ def _enum_or_none(args, key: str) -> str | None:
 def _filters_from_args() -> sessions_mod.Filters:
     """把 query string 轉成 Filters。兩張列表共用同一組參數名。
 
-    ⚠ `owner` 只有 admin 有意義，而且**不能**當成授權：一般使用者的查詢在
-      list()/history() 那層本來就已經被 user_id 綁死，這裡對非 admin 直接忽略該參數，
-      免得有人以為改網址就看得到別人的（他看不到，但參數被默默吃掉比假裝支援誠實）。
     """
     args = request.args
-    owner = None
-    raw = args.get("owner")
-    if raw not in (None, ""):
-        # ⚠ 非 admin 明確帶了這個參數就**回 400**，不要默默忽略。他看不到別人的
-        #   （list/history 那層以 user_id 綁死），但靜靜吃掉會讓他以為篩選生效了——
-        #   「查到 0 筆」與「這個條件根本沒套用」是兩件完全不同的事。
-        #   畫面那邊會在載入時先把它從網址拿掉（見 sessions.html），所以別人分享的連結
-        #   不會因此變成一片錯誤訊息。
-        if not g.user["is_admin"]:
-            raise BadInput("owner 只有管理員能用；你本來就只看得見自己的 session")
-        owner = _int_in({"owner": raw}, "owner", 0, 1, 2_000_000_000)
-        # 存不存在也要驗。不驗的話打錯一個數字只會得到空清單，而空清單看起來就像
-        # 「這個人沒開過 session」——找不出是自己打錯了。
-        if auth.get_user(owner) is None:
-            raise BadInput(f"查無此使用者（owner={owner}）")
     # 時間範圍有兩種寫法，但**只認一種同時存在**：
     #   `since=<天數>`      畫面上的「一週內」這種預設值
     #   `from` / `to`（ISO） 自訂起迄，任一端可省略
@@ -445,7 +404,6 @@ def _filters_from_args() -> sessions_mod.Filters:
             raise BadInput("from 不能晚於 to")
 
     return sessions_mod.Filters(
-        owner_id=owner,
         since_at=since_at,
         until_at=until_at,
         cli=_enum_or_none(args, "cli"),
@@ -531,20 +489,6 @@ def auth_view():
     return resp
 
 
-# --- 系統觀測 ----------------------------------------------------------------------
-
-@app.get("/api/admin/ttyd")
-@admin_only
-def admin_ttyd():
-    """此刻所有 ttyd 程序的實況（見 views.inspect_ttyd）。
-
-    admin only：回應裡有別人的 session id、擁有者、內部 port 與程序層級的量測值——那是
-    「這台機器上正在跑什麼」的層級，不是一般使用者該看到的。刻意**只讀不給動作**：
-    孤兒 ttyd 目前沒有實際發生過，先確認它真的會發生，再談要不要給收拾的按鈕。
-    """
-    return jsonify(views.inspect_ttyd(g.user.get("ttyd_bin")))
-
-
 @app.get("/api/prefs")
 def get_prefs():
     """這個人的偏好設定 + 每一項的合法選項（畫面直接照它畫，不必在前端複製白名單）。"""
@@ -594,9 +538,8 @@ def set_prefs():
 def list_users():
     """?limit=&offset= 分頁，回傳形狀與 /api/sessions 一致。
 
-    ⚠ 這條是**分頁**的，不要拿它去餵下拉選單：超過一頁的人會靜靜地不見，而畫面上
-      看不出少了誰——挑不到的那個帳號看起來就像「不存在」。選單要的是完整名單，
-      走 /api/users/options。
+    ⚠ 這條是**分頁**的，不要拿它去餵「要看到每一個人」的用途：超過一頁的人會靜靜地
+      不見，而畫面上看不出少了誰。完整名單走 /api/users/options（欄位砍到最少）。
     """
     limit = _int_in(request.args, "limit", config.PAGE_SIZE, 1, config.MAX_PAGE_SIZE)
     offset = _int_in(request.args, "offset", 0, 0, 1_000_000)
@@ -607,20 +550,18 @@ def list_users():
 @app.get("/api/users/options")
 @admin_only
 def list_user_options():
-    """給下拉選單用的**完整**名單，只有畫一個選項需要的欄位。
+    """帳號的**完整**名單，欄位只有 id 與 username。
 
-    刻意不分頁：選單的職責就是「任何一個人都挑得到」，分頁的選單做不到這件事，而且
-    挑不到時沒有任何畫面線索。代價是回應大小隨帳號數線性成長——欄位砍到四個就是為了
-    讓這個代價夠小；真的成長到讓它變成問題的規模時，該做的是改成後端搜尋，不是偷偷
-    截斷。
+    唯一的消費者是帳號頁「建立帳號後翻到他那一頁」（清單依名字排序又分頁，新帳號
+    多半不在目前這一頁——建完看不到，跟建立失敗長得一模一樣）。算頁碼需要「他排第
+    幾」，而那只有完整名單答得出來；分頁的 /api/users 給不了這個答案。
 
-    路由不會和 `/api/users/<int:uid>` 打架：那條的轉換器是 int，"options" 配不上。
+    刻意不分頁：這條的職責就是「任何一個人都找得到位置」。代價是回應隨帳號數線性
+    成長——欄位砍到兩個就是為了讓代價夠小；真的大到有感時，該做的是後端搜尋，不是
+    偷偷截斷。路由不會和 `/api/users/<int:uid>` 打架：那條的轉換器是 int。
     """
-    return jsonify(users=[
-        {"id": u["id"], "username": u["username"],
-         "is_admin": u["is_admin"], "is_active": u["is_active"]}
-        for u in auth.list_users()
-    ])
+    return jsonify(users=[{"id": u["id"], "username": u["username"]}
+                          for u in auth.list_users()])
 
 
 @app.post("/api/users")
@@ -628,8 +569,11 @@ def list_user_options():
 def create_user():
     """建立帳號。body: {"username", "password", "is_admin"?}
 
-    `is_admin` 與 PATCH 走同一套嚴格解析（`_strict_bool`）——建立與改權限是同一個
-    權限邊界，只有其中一邊嚴格等於沒有嚴格。
+    `is_admin` 走嚴格解析（`_strict_bool`）：這是權限邊界，"true"/1/[] 這種
+    「看起來像 true」的值一律 400，不做型別猜測。
+
+    ⚠ 這是**唯一**能把帳號設成管理員的地方——沒有事後提權/降權的端點（見下方退場
+      說明）。設錯了的救法：再建一個對的，然後把設錯那個的密碼改掉讓它退場。
     """
     body = _body()
     unknown = set(body) - {"username", "password", "is_admin"}
@@ -640,43 +584,6 @@ def create_user():
         is_admin=_strict_bool(body, "is_admin", False),
     )
     return jsonify(user=user), 201
-
-
-@app.patch("/api/users/<int:uid>")
-@admin_only
-def update_user(uid: int):
-    """停用 / 復用（`is_active`）與提權 / 降權（`is_admin`）。
-
-    停用是刪除帳號的正解——可逆、保留歸屬痕跡，且不會像刪除那樣把他的 session 登錄
-    一起 cascade 掉（容器卻還在跑，只能等 reconciler 當孤兒收）。
-    """
-    body = _body()
-    # ⚠ 權限邊界不接受寬鬆的型別猜測（見 _strict_bool）。
-    allowed = {"is_active", "is_admin"}
-    unknown = set(body) - allowed
-    if unknown:
-        raise BadInput(f"不支援的欄位：{'、'.join(sorted(unknown))}")
-    given = set(body) & allowed
-    if len(given) != 1:
-        raise BadInput("請指定 is_active 或 is_admin 其中之一")
-    field = given.pop()
-    # default 傳什麼都到不了——`field` 是從 body 的鍵取出來的，必然存在。給 False 只是
-    # 為了滿足簽名，讀的人不必去猜「不給時預設 False」有什麼語意。
-    value = _strict_bool(body, field, default=False)
-
-    if field == "is_admin":
-        # 自己的權限不給自己改：提權是「我要更多權力」、降權則會在按下去的瞬間讓自己
-        # 失去繼續操作的資格（連反悔都做不到）。兩者都該由另一位管理員執行。
-        if uid == g.user["id"]:
-            return jsonify(error="不可變更自己的權限，請由另一位管理員操作"), 400
-        return jsonify(auth.set_admin(uid, value))
-    active = value
-    if uid == g.user["id"] and not active:
-        return jsonify(error="不可停用自己"), 400
-    result = auth.set_active(uid, active)
-    if not active:
-        _cut_live_terminals(uid)
-    return jsonify(result)
 
 
 def _cut_live_terminals(uid: int) -> None:
@@ -691,19 +598,20 @@ def _cut_live_terminals(uid: int) -> None:
 
     ⚠ **涵蓋範圍是「他擁有的 session」，不是「他開著的終端」**——這兩者在 admin 身上會
       分岔：admin 開得了別人的 session，而 view 是掛在 session 上、不記得是誰在看。所以
-      「降權一位 admin」這條路徑目前收不掉他正開著的、屬於別人的終端。要補得先讓 view
-      記錄開啟者，那是 schema 變更；在那之前這是已知的缺口，不要以為降權等於斷線。
+      「改掉一位 admin 的密碼」目前收不掉他正開著的、屬於別人的終端。要補得先讓 view
+      記錄開啟者，那是 schema 變更；在那之前這是已知的缺口，不要以為改密碼等於全斷。
     """
     for s in manager.list(user_id=uid):
         with suppress(Exception):
             views.close_views(s["id"])
 
 
-# ⚠ **沒有刪除帳號的端點，這是刻意的**（ADR 0010）。停用涵蓋了所有實務需求（無法登入、
-#   既有 cookie 與 token 立刻失效、開著的終端被切斷），而且可逆；刪除則是不可逆，還會沿
-#   FK cascade 掉他的 `sessions` 登錄——容器仍在跑卻沒人追蹤，那段歷史也沒經過 archive
-#   就消失了。稽核價值正是這個系統保留 `session_history` 的理由，開一條能抹掉歸屬的路徑
-#   與它直接衝突。代價是使用者名稱不可回收（UNIQUE），這是接受的。
+# ⚠ **沒有刪除帳號的端點，也沒有「停用」，這是刻意的**（ADR 0010）。
+#   刪除是不可逆的，還會沿 FK cascade 掉他的 `sessions` 登錄——容器仍在跑卻沒人追蹤，
+#   那段歷史也沒經過 archive 就消失了。稽核價值正是這個系統保留 `session_history` 的
+#   理由，開一條能抹掉歸屬的路徑與它直接衝突。代價是使用者名稱不可回收（UNIQUE）。
+#   退場的做法是**管理員改掉他的密碼**（admin_change_password）：cookie 全滅、終端全收、
+#   新密碼他不知道，效果與停用相同而少維護一個狀態——詳見 auth.py 尾段的說明。
 
 
 @app.post("/api/users/me/password")
@@ -738,11 +646,14 @@ def change_own_password():
 @app.post("/api/users/<int:uid>/password")
 @admin_only
 def admin_change_password(uid: int):
-    """管理員代改密碼（免舊密碼，供忘記密碼時重設）。
+    """管理員代改密碼（免舊密碼）。三種情境共用這一條：忘記密碼、帳號被盜、**退場**。
 
-    ⚠ 與停用走同一套收尾（`_cut_live_terminals`）。這條路徑的典型情境正是「這個帳號被盜了
-      幫他重設」——只換掉密碼而不切斷已連上的終端，等於重設完之後對方還握著 shell。
-      停用那條早就想到這件事，這條漏了。
+    退場＝改掉他的密碼，就這樣。cookie 因版號遞增全部失效、下面那行把他開著的終端
+    切斷、新密碼他不知道——三件合起來等價於「停用」，而少維護一個狀態（見 auth.py
+    尾段）。要讓他回來，把新密碼告訴他即可。
+
+    ⚠ 只換掉密碼而不切斷已連上的終端，等於重設完之後對方還握著 shell——cookie 的
+      版號管不到一條已經升級完成的 WebSocket（見 _cut_live_terminals）。
     """
     body = _body()
     _reject_unknown(body, {"new_password"})

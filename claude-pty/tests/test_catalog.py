@@ -5,7 +5,7 @@
 
 守的性質：
   🔴 malformed 輸入不可以變成 500（dict/list 對 frozenset 取雜湊會 TypeError）。
-  🔴 受限模型（ADMIN_ONLY_MODELS）畫面藏起來、後端也要擋——兩層缺一不可。
+  🔴 模型清單對誰都一樣——沒有按身分過濾的分支。
   🔴 default_model 一律讀 DEFAULT_MODEL，不是「清單的第一個」。
 """
 import os
@@ -79,8 +79,6 @@ def rejected(as_admin=True, **kw):
             return None
         except app_mod.BadInput as e:
             return 400, str(e)
-        except app_mod.NotAllowed as e:
-            return 403, str(e)
 
 
 print("== 白名單驗證 ==")
@@ -118,39 +116,19 @@ check("🔴 claude 清單順序＝白名單順序（選單順序的 SSOT 只有�
 check("🔴 haiku 在清單裡而且排最後（實測 CLI 收這個別名）",
       d["claude"]["models"][-1]["slug"] == "haiku")
 
-print("== 受限模型：畫面藏起來，後端也要擋 ==")
-# ⚠ 兩層都要驗。只藏不擋＝直接打 API 就繞過去了；只擋不藏＝畫面上列著一個按下去會 403
-#   的選項。這一組的名單是 config.ADMIN_ONLY_MODELS（env 可改，預設 fable）。
-check("預設就限制 fable", "fable" in config.ADMIN_ONLY_MODELS)
-check("管理員的目錄看得到 fable",
-      "fable" in [m["slug"] for m in c.get("/api/catalog").get_json()["claude"]["models"]])
-check("🔴 管理員選 fable → 通過驗證（不是「不等於 403」那種弱斷言）",
-      rejected(as_admin=True, model="fable") is None)
-
+print("== 模型清單對誰都一樣（沒有按身分過濾的分支）==")
+# 這裡沒有「限管理員的模型」。清單只有一種形狀，驗證只看白名單不看身分——
+# 這兩條釘住「沒有第二種形狀」：哪天有人加回身分過濾，先在這裡現形。
 plain_id = auth.create_user("catalog-plain", "catalog-password-2")["id"]
 c2 = app.test_client()
 with c2.session_transaction() as sess:
     sess["uid"] = plain_id
     sess["pwv"] = auth.get_user(plain_id)["password_version"]
 d2 = c2.get("/api/catalog").get_json()
-check("🔴 非管理員的目錄看不到 fable",
-      "fable" not in [m["slug"] for m in d2["claude"]["models"]])
-check("非管理員的 default_model 仍然落在他看得到的清單裡（不會指向被藏起來的那顆）",
-      d2["claude"]["default_model"] in [m["slug"] for m in d2["claude"]["models"]])
-check("🔴 非管理員直接打 API 選 fable → 403（藏起來擋不住這條路）",
-      c2.post("/api/sessions", json={"profile": {"cli": "claude", "model": "fable"}})
-      .status_code == 403)
-check("🔴 非管理員選沒被限制的模型 → 通過驗證",
-      rejected(as_admin=False, model="opus") is None)
-
-# 名單是唯一來源，沒有寫死的第二份
-_saved_admin_only = config.ADMIN_ONLY_MODELS
-config.ADMIN_ONLY_MODELS = frozenset({"opus"})
-check("換一組名單 → 換誰受限就是誰",
-      (rejected(as_admin=False, model="opus") or (0,))[0] == 403)
-check("🔴 不在名單裡的 fable 這時就放行了",
-      rejected(as_admin=False, model="fable") is None)
-config.ADMIN_ONLY_MODELS = _saved_admin_only
+check("🔴 非管理員拿到的清單與管理員一字不差",
+      d2["claude"] == c.get("/api/catalog").get_json()["claude"])
+check("🔴 非管理員選任何白名單內的模型都通過驗證",
+      all(rejected(as_admin=False, model=m) is None for m in config.CLAUDE_MODELS))
 
 print("== 清理 ==")
 db.reset_engine()

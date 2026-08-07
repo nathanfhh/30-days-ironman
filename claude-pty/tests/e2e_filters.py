@@ -49,11 +49,12 @@ def check(label, ok):
 reset_engine()
 init_db()
 
-# 三個帳號：admin、一般使用者、以及一個**已停用**的（清單要標得出來）
+# 三個帳號：admin、一般使用者、以及一個退場過的（admin 改掉了他的密碼——他只是一列
+# 普通帳號，歷史照樣掛在他名下）
 admin = auth.create_user("e2e-admin", "e2e-password-1", is_admin=True)
 plain = auth.create_user("e2e-plain", "e2e-password-1", is_admin=False)
 gone = auth.create_user("e2e-retired", "e2e-password-1", is_admin=False)
-auth.set_active(gone["id"], False)
+auth.change_password(gone["id"], "e2e-exited-password-1", require_old=False)
 
 now = utcnow()
 
@@ -209,31 +210,8 @@ try:
 
         page.keyboard.press("Escape")
 
-        print("== 使用者那格：打字就能限縮 ==")
-        page.click('[data-testid="pick-owner-button"]')
-        page.wait_for_selector('[data-testid="pick-owner-search"]')
-        before = page.locator('[data-testid="pick-owner-menu"] .picker__option').count()
-        page.fill('[data-testid="pick-owner-search"]', "retired")
-        page.wait_for_timeout(150)
-        after = page.locator('[data-testid="pick-owner-menu"] .picker__option').count()
-        check(f"打字前 {before} 個選項、打字後剩 {after} 個", after < before and after >= 1)
-        check("剩下的就是那個帳號",
-              "e2e-retired" in page.inner_text('[data-testid="pick-owner-menu"]'))
-        page.fill('[data-testid="pick-owner-search"]', "nobody-matches-this")
-        page.wait_for_timeout(150)
-        check("找不到時明講，不是留一片空白",
-              "找不到" in page.inner_text('[data-testid="pick-owner-menu"]'))
-        page.fill('[data-testid="pick-owner-search"]', "")
-        page.wait_for_timeout(150)
-
-        print("== 停用的帳號要留在清單裡，而且看得出來 ==")
-        # 歷史紀錄是永久的，濾掉他的話那筆 eh1 就永遠查不到
-        menu = page.inner_text('[data-testid="pick-owner-menu"]')
-        check("已停用的帳號仍在選項裡", "e2e-retired" in menu)
-        check("而且標了「已停用」", "已停用" in menu)
-        slash = page.locator('[data-testid="pick-owner-menu"] .fa-user-slash').count()
-        check("用不同圖示標出來（不是只有一行小字）", slash >= 1)
-        page.keyboard.press("Escape")
+        # （owner 篩選整組拔掉了：搜尋式 picker 目前沒有消費者，相關互動測試隨之退場。
+        #   「篩選那格不存在」在最下面的非 admin 段一併釘住——它現在對誰都不存在。）
 
         print("== 自訂時間區間：兩個月並排的區間選擇器 ==")
         pick(page, "pick-since", "custom")
@@ -326,18 +304,18 @@ try:
               "限制" in page.inner_text('[data-testid="pick-fnet-button"]'))
         check("清單是篩過的", rows(page) == 1)
 
-        print("== 非 admin：使用者那格要消失，網址上的 owner 也不算數 ==")
+        print("== 非 admin：殘留的 ?owner= 書籤不作廢、也繞不過授權 ==")
+        # owner 篩選已整組拔除：那一格對誰都不存在，後端把 ?owner= 當一般未知參數忽略
+        # （授權在 list 那層由 user_id 綁死，本來就不是靠篩選）。舊書籤照樣能用。
         ctx.clear_cookies()          # logout 是 POST，用 goto 打不到；清 cookie 等效且直接
         login(page, "e2e-plain")
         page.goto(f"{BASE}/?owner={admin['id']}&cli=claude", wait_until="domcontentloaded")
         page.wait_for_timeout(800)
-        check("owner 被從網址拿掉（後端會回 400，不該讓分享的連結整個作廢）",
-              "owner=" not in page.url)
         check("其餘條件照樣生效", "cli=claude" in page.url)
         open_filters(page)
-        check("使用者那一格不存在",
-              page.locator('[data-testid="field-owner"]').is_hidden())
-        check("只看得到自己的那一筆", rows(page) == 1)
+        check("使用者那一格不存在（對 admin 也一樣——整組拔掉了）",
+              page.locator('[data-testid="field-owner"]').count() == 0)
+        check("只看得到自己的那一筆（?owner= 繞不過授權）", rows(page) == 1)
 
         browser.close()
 finally:

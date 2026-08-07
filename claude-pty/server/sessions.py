@@ -160,7 +160,6 @@ class Filters:
       真的成立。
     """
 
-    owner_id: int | None = None
     since_at: _dt.datetime | None = None
     until_at: _dt.datetime | None = None
     cli: str | None = None
@@ -174,14 +173,12 @@ class Filters:
         時間區間的兩端算**一個**條件：畫面上它就是一格「時間範圍」，自訂起迄時填了
         兩個欄位卻跳成 2，會讓人以為多套了一個看不見的條件。
         """
-        n = sum(v is not None for v in (self.owner_id, self.cli, self.network,
+        n = sum(v is not None for v in (self.cli, self.network,
                                         self.capture, self.telemetry))
         return n + (self.since_at is not None or self.until_at is not None)
 
     def apply(self, q, model, date_col):
         """把條件套上查詢。`date_col` 是 since_days 要比對的欄位。"""
-        if self.owner_id is not None:
-            q = q.filter(model.user_id == self.owner_id)
         if self.since_at is not None:
             q = q.filter(date_col >= self.since_at)
         if self.until_at is not None:

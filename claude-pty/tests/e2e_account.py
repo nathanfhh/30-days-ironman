@@ -3,8 +3,8 @@
     uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
         --with psutil --with playwright python tests/e2e_account.py
 
-**不需要 docker**。驗的是管理員實際會做的那一串：翻頁、找到已停用的人、建一個新帳號
-之後看得到他、以及自己那一列不給自己按停用。
+**不需要 docker**。驗的是管理員實際會做的那一串：翻頁、建一個新帳號之後看得到他、
+以及每一列只有「重設密碼」一顆動作鈕（停用/提權/降權都不存在——退場＝改掉密碼）。
 
 ⚠ 可見性一律問 `is_visible()`，不要問 `hidden` 屬性。作者樣式（`.pager{display:flex}`
   之類）的特異性比 UA 樣式表的 `[hidden]{display:none}` 高，屬性是 true 而畫面上還在
@@ -45,11 +45,11 @@ def check(label, ok):
 reset_engine()
 init_db()
 PW = "e2e-password-1"
-# 排序在最前面（管理員自己）、中段一堆、最後一個是停用的——三個位置各驗一件事
+# 排序在最前面（管理員自己）、中段一堆、最後一個排最遠——三個位置各驗一件事
 auth.create_user("aaa-boss", PW, is_admin=True)
 for i in range(24):
     auth.create_user(f"u{i:02d}", PW)
-auth.set_active(auth.create_user("zzz-off", PW)["id"], False)
+auth.create_user("zzz-off", PW)
 TOTAL = len(auth.list_users())
 
 
@@ -117,12 +117,13 @@ try:
         check("上一頁是停用的（已經在第一頁了）",
               page.locator('[data-testid="roster-prev"]').is_disabled())
         check("下一頁可以按", page.locator('[data-testid="roster-next"]').is_enabled())
-        check("自己那一列不給自己停用（介面上沒有那顆按鈕）",
-              page.locator('tr:has-text("aaa-boss") button[data-act="disable"]').count() == 0)
-        check("自己那一列也不給自己降權",
-              page.locator('tr:has-text("aaa-boss") button[data-act="demote"]').count() == 0)
-        check("但重設密碼是可以的（那是自己的事）",
-              page.locator('tr:has-text("aaa-boss") button[data-act="reset"]').count() == 1)
+        # 🔴 動作鈕只有「重設密碼」。停用/復用/提權/降權的按鈕**整個介面都不存在**
+        #    ——退場＝改掉他的密碼。哪天有人把這些鈕加回來，先在這裡現形。
+        for act in ("disable", "enable", "promote", "demote"):
+            check(f"整頁沒有 data-act={act} 的按鈕",
+                  page.locator(f'button[data-act="{act}"]').count() == 0)
+        check("每一列都有「重設密碼」（含自己那列——那是改自己密碼的另一條入口）",
+              page.locator('button[data-act="reset"]').count() == len(first))
 
         print("== 翻到下一頁 ==")
         page.click('[data-testid="roster-next"]')
@@ -134,19 +135,14 @@ try:
               status(page).replace(" ", "").startswith(f"{config.PAGE_SIZE + 1}–"))
         check("上一頁變成可以按", page.locator('[data-testid="roster-prev"]').is_enabled())
 
-        print("== 翻到最後一頁：停用的人要在，而且看得出來 ==")
+        print("== 翻到最後一頁：一個都不能漏 ==")
         seen = set(first) | set(second)
         while page.locator('[data-testid="roster-next"]').is_enabled():
             page.click('[data-testid="roster-next"]')
             page.wait_for_timeout(500)
             seen |= set(names(page))
         check(f"翻完蒐集到全部 {TOTAL} 個帳號，沒有漏人", len(seen) == TOTAL)
-        check("已停用的帳號在清單裡（停用是唯一的退場方式，看不到就沒人能復用他）",
-              "zzz-off" in names(page))
-        row = page.locator('tr:has-text("zzz-off")')
-        check("標成「已停用」", "已停用" in row.inner_text())
-        check("而且給的是「復用」鍵不是「停用」鍵",
-              row.locator('button[data-act="enable"]').count() == 1)
+        check("排最遠的 zzz-off 在最後一頁", "zzz-off" in names(page))
         check("下一頁在最後一頁是停用的",
               page.locator('[data-testid="roster-next"]').is_disabled())
 
@@ -165,14 +161,6 @@ try:
         check("新帳號出現在畫面上（清單已翻到他那一頁）", "zzz-newbie" in names(page))
         check(f"總數加一：{status(page)}",
               f"共{TOTAL + 1}筆" in status(page).replace(" ", ""))
-
-        print("== 停用一個人：狀態與按鍵都要跟著換 ==")
-        page.click('tr:has-text("zzz-newbie") button[data-act="disable"]')
-        page.wait_for_timeout(900)
-        row = page.locator('tr:has-text("zzz-newbie")')
-        check("變成已停用", "已停用" in row.inner_text())
-        check("鍵換成「復用」", row.locator('button[data-act="enable"]').count() == 1)
-        check("停用之後他仍然在清單上（不是被移除）", "zzz-newbie" in names(page))
 
         print("== 長名字要被截斷，不能把表格推爆 ==")
         # 後端的長度上限只管得住碼位與東亞寬字元；字形寬度是字體的事、伺服器量不到

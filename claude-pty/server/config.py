@@ -177,17 +177,6 @@ SEMGREP_RULES_BIND = "/home/nathan/semgrep-rules"
 TTYD_BINS = {"ttyd": "C", "ttyd-rust": "Rust"}
 TTYD_BIN_DEFAULT = "ttyd"
 
-# --- 模型選擇（限管理員的部分見 ADMIN_ONLY_MODELS）--------------------------------------------------------
-# 只有管理員能選的模型（以 slug 指定）。逗號分隔，空字串＝不限制任何模型。
-#   CLAUDE_PTY_ADMIN_ONLY_MODELS=fable
-# 快速開關：改 deploy/.env 再 `./redeploy.sh --no-build`（不必重新 build——它不是 build arg）。
-# ⚠ 這是**授權**不是顯示偏好：畫面上不列給非管理員，後端也必須擋（兩層都要，畫面藏起來
-#   擋不住直接打 API 的人）。
-ADMIN_ONLY_MODELS = frozenset(
-    m.strip() for m in os.environ.get("CLAUDE_PTY_ADMIN_ONLY_MODELS", "fable").split(",")
-    if m.strip())
-
-
 def ttyd_bin_or_default(value: str | None) -> str:
     """把存下來的偏好收斂成一個合法的 binary 名稱。
 
@@ -511,11 +500,6 @@ CLI_VERSION_TIMEOUT = float(os.environ.get("CLAUDE_PTY_CLI_VERSION_TIMEOUT", "5"
 # 寧可偶爾開到一個已經死掉的終端，也不要讓 dockerd 慢的時候整個功能不能用。
 VIEW_PROBE_TIMEOUT = float(os.environ.get("CLAUDE_PTY_VIEW_PROBE_TIMEOUT", "3"))
 
-# --- ttyd 觀測（views.inspect_ttyd）-----------------------------------------------
-# CPU 使用率的取樣間隔。psutil 的 cpu_percent 需要兩個取樣點，第一次一律回 0.0；
-# 所有程序共用這一次等待（不是每個各等一次），所以 N 個 ttyd 也只付一次。
-# 太短會量不出差別，太長則整頁跟著慢——這是一支管理頁，0.2 秒可以接受。
-TTYD_CPU_SAMPLE_SECONDS = float(os.environ.get("CLAUDE_PTY_TTYD_CPU_SAMPLE", "0.2"))
 
 # 持久化 registry（ADR 0008）。資料庫**就是 SQLite**，不支援第二種方言——單機部署、
 # 檔案級鎖、備份＝複製一個檔案。所以設定收的是**檔案路徑**，不是連線字串：

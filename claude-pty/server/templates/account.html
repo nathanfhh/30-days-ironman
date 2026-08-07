@@ -68,9 +68,9 @@
     <h2 class="panel__title">帳號清單</h2>
     <table class="roster">
       <thead>
-        <tr><th>ID</th><th>使用者名稱</th><th>權限</th><th>狀態</th><th>建立時間</th><th></th></tr>
+        <tr><th>ID</th><th>使用者名稱</th><th>權限</th><th>建立時間</th><th></th></tr>
       </thead>
-      <tbody id="roster-body" data-testid="roster"><tr><td colspan="6">載入中…</td></tr></tbody>
+      <tbody id="roster-body" data-testid="roster"><tr><td colspan="5">載入中…</td></tr></tbody>
     </table>
     {# 分頁的樣式與 session 列表共用同一個 .pager，不另立一套——同一個系統裡「翻頁」
        應該長得一樣、按鍵在同一個位置。只有一頁時整條收起來。 #}
@@ -83,23 +83,6 @@
     </div>
   </section>
 
-  {# 終端程序：ttyd 是 on-demand 的（開網頁才起、關掉就自退），所以這一區平時多半是空的
-     ——那是正常狀態，不是壞了。放在帳號管理頁而不是導覽列新增一格：分段控制目前是兩格
-     等寬，--navseg-w 是照「四個中文字」量出來的，加第三格要重量並重調 thumb 的平移。 #}
-  <section class="panel">
-    <div class="section-head" style="margin-bottom:var(--space-4)">
-      <h2 class="panel__title" style="margin:0">終端程序（ttyd）</h2>
-      <div class="section-head__actions">
-        <span class="section-head__note" id="ttyd-updated"></span>
-        <button class="btn" id="ttyd-refresh"><i class="fa-solid fa-rotate"></i> 重新整理</button>
-      </div>
-    </div>
-    <p class="panel__lede">
-      每開一個終端就在控制平面內起一個 <code>ttyd</code>，關掉網頁它會自行退出，
-      所以這裡空著是常態。有價值的是下面兩種對不上的情況。
-    </p>
-    <div id="ttyd-body"><div class="empty">載入中…</div></div>
-  </section>
   {% endif %}
 </div>
 {% endblock %}
@@ -136,8 +119,6 @@
     document.getElementById("pick-role").addEventListener("change", paintRole);
     paintRole();
   }
-  const myId = {{ user.id }};
-
   // 改密碼：兩次輸入一致且達長度下限才讓按鈕可按（後端仍會自己驗一次）
   const MIN_PW = {{ min_password_length }};
   const oldPw = document.getElementById("old-pw");
@@ -194,29 +175,18 @@
         rosterPageSize = data.limit;
         renderRosterPager(data);
         body.innerHTML = data.users.map((u) => {
-          // 帳號的退場只有「停用」，沒有刪除（ADR 0010）：可逆、留痕、不會把他的
-          // session 登錄一起 cascade 掉，稽核鏈也不會斷在半路。
+          // 這裡刻意只有「重設密碼」一顆動作鈕。帳號的退場就是它：改掉密碼＝cookie
+          // 全滅＋終端全收＋他登不回來，效果等同停用而少維護一個狀態（見 auth.py 尾段）。
+          // 沒有刪除（ADR 0010：刪除會 cascade 掉 session 登錄、斷稽核鏈），也沒有事後
+          // 提權/降權——權限在建立時決定，設錯就再建一個對的。
           const role = u.is_admin
             ? '<span class="chip" data-tone="accent">admin</span>'
             : '<span class="chip">user</span>';
-          const state = u.is_active
-            ? '<span class="chip" data-tone="ok">啟用中</span>'
-            : '<span class="chip" data-tone="error">已停用</span>';
-          const self = u.id === myId;
-          const toggle = self ? "" : (u.is_active
-            ? `<button class="btn" data-act="disable" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-user-slash"></i> 停用</button>`
-            : `<button class="btn" data-act="enable" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-user-check"></i> 復用</button>`);
-          // 權限升降。**自己的不給自己改**：提權等於自我授權，降權則會在按下的那一刻
-          // 讓自己失去操作資格（連反悔都做不到）——兩者都該由另一位管理員執行，後端也擋。
-          const rank = self ? "" : (u.is_admin
-            ? `<button class="btn" data-act="demote" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-arrow-down-short-wide"></i> 降為一般</button>`
-            : `<button class="btn" data-act="promote" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-user-shield"></i> 提為管理員</button>`);
           return `
           <tr>
             <td class="mono-id">${u.id}</td>
             <td><span class="roster__name" title="${esc(u.username)}">${esc(u.username)}</span></td>
             <td>${role}</td>
-            <td>${state}</td>
             {# 絕對時間回答「是哪一天」，相對時間回答「多久以前」——找特定帳號時用前者，
                判斷「這是不是剛剛新增的」用後者，兩個問題都常問，所以兩個都給。
                relTime() 來自 app.js，與 session 列表共用同一份說法。 #}
@@ -230,13 +200,12 @@
             <td>
               <div class="row-actions">
                 <button class="btn" data-act="reset" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-key"></i> 重設密碼</button>
-                ${rank}${toggle}
               </div>
             </td>
           </tr>`;
         }).join("");
       } catch (ex) {
-        body.innerHTML = `<tr><td colspan="6">讀取失敗：${esc(ex.message)}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="5">讀取失敗：${esc(ex.message)}</td></tr>`;
         rosterPager.hidden = true;
         toastError("帳號清單讀取", ex);
       }
@@ -286,28 +255,6 @@
           await api(`/api/users/${id}/password`, { method: "POST", body: { new_password: pw } });
           toast(`已重設 ${name} 的密碼`, "success",
                 { body: "他既有的登入與開著的終端都已立刻失效" });
-        } else if (act === "promote" || act === "demote") {
-          const up = act === "promote";
-          const ok = await dialog({
-            title: up ? "提為管理員" : "降為一般使用者",
-            body: up
-              ? `${name} 將能管理所有帳號、看見並終止所有人的 session。`
-              : `${name} 將失去管理權限。他自己的 session 不受影響。`,
-            confirmText: up ? "提權" : "降權", danger: !up,
-            confirmIcon: up ? "fa-user-shield" : "fa-arrow-down-short-wide",
-          });
-          if (!ok) { toast("已取消", "info", { body: `${name} 的權限未變動` }); return; }
-          await api(`/api/users/${id}`, { method: "PATCH", body: { is_admin: up } });
-          toast(`${name} 已${up ? "提為管理員" : "降為一般使用者"}`, up ? "warning" : "success",
-                { body: "他既有的登入已失效，需重新登入才會套用新權限" });
-          await loadUsers();
-        } else if (act === "disable" || act === "enable") {
-          const on = act === "enable";
-          await api(`/api/users/${id}`, { method: "PATCH", body: { is_active: on } });
-          toast(`已${on ? "復用" : "停用"} ${name}`, on ? "success" : "warning",
-                { body: on ? "他可以重新登入了"
-                           : "他無法再登入，已開啟的終端也已被切斷；session 本身繼續執行" });
-          await loadUsers();
         }
       } catch (ex) { toastError("操作", ex); }
     });
@@ -347,154 +294,6 @@
     });
 
     loadUsers();
-
-    // ── 終端程序（ttyd）─────────────────────────────────────────────────────
-    const ttydBody = document.getElementById("ttyd-body");
-    const ttydUpdated = document.getElementById("ttyd-updated");
-
-    const bytes = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB`
-                       : n >= 1024 ? `${(n / 1024).toFixed(0)} KB` : `${n} B`;
-
-    /** 一個程序的量測值排成兩欄。讀不到的項目直接不出現，不要顯示「-」冒充有量到。 */
-    function procRows(p) {
-      if (!p) return "";
-      // ⚠ 每一行都要驗**它自己會插值的每一個鍵**。只驗第一個的話，量測半途失敗
-      //   （伺服端那邊是整組寫入，但版本差異或未來改動仍可能只給一半）會印出
-      //   `5 / undefined`、`VMS undefined B`——那比不顯示還糟，它看起來像量到的值。
-      const has = (...keys) => keys.every((k) => p[k] !== undefined && p[k] !== null);
-      // 每一列都掛說明。這些是作業系統的術語，不是「多看兩眼就懂」的東西——
-      // 尤其 VMS，它幾乎一定比 RSS 大好幾倍，不解釋的話會被讀成「這東西吃了 18MB RAM」。
-      const pairs = [
-        ["狀態", has("status") ? p.status : null,
-         "作業系統眼中的程序狀態。sleeping 就是正常的——它在等網路 I/O，不是卡住。"
-         + "running 代表此刻正在用 CPU；zombie 代表已結束但還沒被回收。"],
-        ["CPU", has("cpu_percent", "cpu_user", "cpu_system")
-          ? `${p.cpu_percent}%（累計 user ${p.cpu_user}s / sys ${p.cpu_system}s）` : null,
-         "百分比是這一次讀取時取樣 0.2 秒量到的「瞬時」使用率；括號內是從啟動到現在"
-         + "累計燒掉的 CPU 秒數（user＝跑自己的程式碼，sys＝在核心裡做系統呼叫）。"
-         + "ttyd 只負責轉發 bytes，兩個數字都該接近 0；持續偏高多半是畫面在狂刷。"],
-        ["記憶體", has("rss", "vms", "mem_percent")
-          ? `RSS ${bytes(p.rss)} · VMS ${bytes(p.vms)} · ${p.mem_percent}%` : null,
-         "RSS（常駐集合）＝此刻真的佔住的實體記憶體，要看「它吃掉多少 RAM」就看這個。\n"
-         + "VMS（虛擬記憶體）＝程序宣告的整個位址空間，包含還沒真正用到的保留區、"
-         + "以及與其他程序共用的函式庫。它幾乎一定比 RSS 大很多，但那"
-         + "不代表真的吃了那麼多 RAM——不要拿它判斷記憶體壓力。\n"
-         + "百分比是 RSS 佔本機實體記憶體的比例。"],
-        ["執行緒 / fd", has("threads", "fds") ? `${p.threads} / ${p.fds}` : null,
-         "執行緒：ttyd 是單執行緒的事件迴圈，正常就是 1。\n"
-         + "fd（file descriptor，檔案描述子）＝這個程序此刻開著的「東西」有幾個——"
-         + "檔案、網路連線、pipe 都算一個。ttyd 每接一個瀏覽器就會多開幾個 socket，"
-         + "所以它會跟著看終端的人數上下。只升不降才是洩漏的徵兆。"],
-        ["監聽", (p.listening || []).join("、") || null,
-         "它實際綁在哪個位址與 port（0.0.0.0 代表容器內所有介面，但這個 port 不對外，"
-         + "只在 docker network 內）。拿它跟登錄裡記的 port 對照就知道有沒有對上，"
-         + "不必自己連連看。"],
-        ["連線中的 client", has("clients") ? String(p.clients) : null,
-         "此刻有幾條 TCP 連線連著它＝有幾個人正開著這個終端。\n"
-         + "ttyd 帶 `-q`，最後一個 client 斷線就會自行退出——所以這裡是 0 卻還活著，"
-         + "要嘛是剛起來還沒人連上，要嘛它就是該被收掉卻沒人找得到的那種孤兒。"],
-        ["啟動", has("started_at") ? absTime(p.started_at) : null,
-         "這個 ttyd 程序被起來的時刻（不是 session 建立的時刻——終端可以關掉再開，"
-         + "session 本體不受影響）。"],
-      ].filter(([, v]) => v !== null && v !== undefined);
-      return pairs.map(([k, v, tip]) =>
-        // tip--left：這些標籤很短、又貼在面板左緣，置中的 tooltip 會往左長出視窗外
-        //（實測「狀態」「執行緒 / fd」「啟動」三個都被切掉）。靠左對齊往右長才進得去。
-        `<div class="kv"><span class="kv__k tip tip--wide tip--left" data-tip="${esc(tip)}">` +
-        `${esc(k)}</span>` +
-        `<span class="kv__v">${esc(String(v))}</span></div>`).join("");
-    }
-
-    // 哪一顆 binary。C 版與 Rust 版同時在 image 裡，由每個人在 session 列表的「設定」選——畫面上
-    // 要看得出「現在設定的是哪一顆」，以及「這個程序實際是哪一顆」：切換之後舊版起的
-    // 程序還會活一陣子，只顯示設定值會讓那些殘留看起來像是新設定起的。
-    const TTYD_FLAVOR = { "ttyd": "C", "ttyd-rust": "Rust" };
-    const flavor = (bin) => TTYD_FLAVOR[bin] || bin || "?";
-    /* 哪一顆 ttyd 是**分類**不是狀態，所以給類別色（同 cli- 的做法），不是灰底。
-       日後多一顆 binary 也不會變成裸字：`[data-tone^="bin-"]` 有基底樣式接住。 */
-    const binTone = (bin) => `bin-${flavor(bin).toLowerCase()}`;
-
-    function renderTtyd(d) {
-      const parts = [];
-      if (d.bin) {
-        // ⚠ 這顆 chip 要**自己講完整**。原本印的是 `ttyd：Rust ttyd-rust`——看的人無從判斷
-        //   那是「目前的設定」還是「有哪些版本」，而且 flavor 與 binary 名之間沒有任何
-        //   區隔，讀起來像兩個並列的東西（使用者回報 2026-07-27）。
-        // ⚠ tooltip 用 `tip--left`（靠左緣、往右長）。這顆 chip 貼在面板最左邊，用
-        //   `tip--right` 會往左長而被視窗左緣切掉——那種裁切不會多一條橫向捲軸，所以不會
-        //   被溢出檢查抓到，只會靜靜少半句話（app.css 的 `.tip--` 那段已記過這個坑）。
-        parts.push(`<div class="ttyd-current">
-          <span class="chip tip tip--wide tip--left" data-tone="${esc(binTone(d.bin))}"
-            data-tip="你的偏好（per-user），在 session 列表的「設定」裡切。只影響之後開的終端。">
-            目前使用：${esc(flavor(d.bin))}<span class="ttyd-current__bin">（${esc(d.bin)}）</span>
-          </span></div>`);
-      }
-      if (!d.psutil) {
-        // 明講而不是靜靜顯示空的孤兒清單——那看起來會像「掃過了，很乾淨」
-        parts.push(`<div class="empty" data-tone="error">沒有安裝 psutil，只能顯示登錄裡的資料；`
-                 + `程序實況與孤兒偵測都無法進行。</div>`);
-      }
-      if (!d.views.length && !d.orphans.length) {
-        parts.push(`<div class="empty">目前沒有任何 ttyd 在跑（沒有人開著終端）。</div>`);
-      }
-      for (const v of d.views) {
-        const dead = v.alive === false;
-        // ⚠ alive 有三種值：true / false / null（查不到，例如沒有 psutil，或這一列的
-        //   pid 還沒寫回來）。null 塌成「活著」等於在正確的免責聲明旁邊掛一盞捏造的綠燈。
-        const unknown = v.alive === null || v.alive === undefined;
-        // ⚠ 對不上目前設定時，warn 要**蓋過**類別色：那一刻要傳達的是「跟你選的不一樣」，
-        //   不是「它是 Rust 版」。對得上時才用類別色，一眼認得出這個程序跑的是哪一顆。
-        parts.push(`
-          <article class="ttyd ${dead ? "ttyd--dead" : ""}">
-            <div class="ttyd__head">
-              <span class="lamp" data-state="${dead ? "exited" : unknown ? "gone" : "running"}"
-                ${unknown ? 'title="查不到這個程序的狀態"' : ""}></span>
-              <strong>${esc(v.session_name || v.session_id)}</strong>
-              <span class="mono-id">${esc(v.session_id)}</span>
-              <span class="chip">port ${esc(String(v.port))}</span>
-              <span class="chip">pid ${esc(String(v.pid ?? "—"))}</span>
-              <span class="chip">${esc(v.owner || "—")}</span>
-              ${v.proc && v.proc.bin ? `<span class="chip tip tip--wide tip--right"
-                data-tone="${v.proc.bin !== d.bin ? "warn" : esc(binTone(v.proc.bin))}"
-                data-tip="${esc(v.proc.bin === d.bin
-                  ? "與你目前的設定一致"
-                  : "⚠ 不是你目前設定的那一顆（切換之前起的）。關掉終端重開就會換過來。")}"
-                >${esc(flavor(v.proc.bin))}</span>` : ""}
-              ${dead ? `<span class="chip tip tip--wide tip--right" data-tone="error"
-                data-tip="登錄有、程序沒了。關掉終端後還沒輪到被清而已，不影響下次開終端。
-一直都在才是問題——那代表對帳器沒在跑。">幽靈記錄</span>` : ""}
-            </div>
-            <div class="ttyd__facts">${procRows(v.proc)}</div>
-          </article>`);
-      }
-      for (const o of d.orphans) {
-        parts.push(`
-          <article class="ttyd ttyd--orphan">
-            <div class="ttyd__head">
-              <span class="lamp" data-state="exited"></span>
-              <strong>孤兒程序</strong>
-              <span class="chip">pid ${esc(String(o.pid))}</span>
-              <span class="chip tip tip--wide tip--right" data-tone="error"
-                data-tip="程序在跑、登錄裡卻沒有它。沒有任何機制找得到這種 ttyd，那個 port 會就此卡住。">
-                沒有對應的登錄</span>
-            </div>
-            <div class="ttyd__facts">${procRows(o.proc)}</div>
-          </article>`);
-      }
-      ttydBody.innerHTML = parts.join("");
-      ttydUpdated.textContent =
-        `擷取於 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}`;
-    }
-
-    async function loadTtyd() {
-      try {
-        renderTtyd(await api("/api/admin/ttyd"));
-      } catch (ex) {
-        ttydBody.innerHTML = `<div class="empty">讀取失敗：${esc(ex.message)}</div>`;
-      }
-    }
-    document.getElementById("ttyd-refresh").addEventListener("click", loadTtyd);
-    loadTtyd();
   }
 </script>
 {% endblock %}

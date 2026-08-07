@@ -91,10 +91,6 @@
          這樣選了「自訂範圍」時，起迄兩格就緊接在它後面流下去——讀起來是連續的一句話，
          而不是跑到下面另一塊區域去。三格都是一般的 .field，尺寸與其他格一致。 #}
       <div class="filters__grid">
-        <div class="field" id="field-owner" hidden data-testid="field-owner">
-          <span class="label tip tip--wide" data-tip="只看某個人開的。一般使用者看不到這一格——他本來就只看得見自己的。">使用者</span>
-          <div id="pick-owner"></div>
-        </div>
         <div class="field">
           <span class="label tip tip--wide" data-tip="限制＝只放行白名單（entrypoint 會套 iptables）；開放＝容器可以連任何地方。">網路能力</span>
           <div id="pick-fnet"></div>
@@ -652,13 +648,7 @@
    * 「不限」一律用**空字串**，不是省略也不是 "all"：後端把空字串與缺席都當成不限
    * （見 app._tri_bool），而空字串讓 picker 有一個實際可選的值。
    */
-  // ⚠ owner 只對 admin 成立：伺服端對非 admin 直接忽略該參數（見 app._filters_from_args），
-  //   而畫面上也沒有那一格。把它算進生效數的話，admin 把帶 owner 的網址貼給一般
-  //   使用者時，對方看到「篩選 · 2 / 2 個條件生效中」而伺服器實際只套了 1 個——那正好是
-  //   這個數字當初要防止的誤判，方向還相反。所以非 admin 一律不認這個鍵。
-  const FILTER_KEYS = isAdmin
-    ? ["owner", "since", "from", "to", "network", "capture", "telemetry"]
-    : ["since", "from", "to", "network", "capture", "telemetry"];
+  const FILTER_KEYS = ["since", "from", "to", "network", "capture", "telemetry"];
   const ANY = "";
   const CUSTOM = "custom";        // 時間範圍那格的「自訂區間」選項
 
@@ -978,23 +968,11 @@
   /* 篩選的 picker。初值直接從網址讀——重新整理後 picker 要停在你上次選的那一格，
      不然畫面說「不限」、清單卻是篩過的，兩者對不上。 */
   (function initFilters() {
-    // 非 admin 連 owner 這個鍵都不該留在網址上：後端會回 400（那是對的，靜靜忽略會讓人
-    // 以為篩選生效了）。admin 把帶 owner 的網址貼給一般使用者時，先把 owner 拿掉，
-    // 剩下的條件照樣生效——連結不會整個作廢，也不會變成一片錯誤訊息。
-    if (!isAdmin) {
-      const p = new URLSearchParams(location.search);
-      if (p.has("owner")) {
-        p.delete("owner");
-        history.replaceState(null, "",
-          p.toString() ? `${location.pathname}?${p}` : location.pathname);
-      }
-    }
     const mk = (mountId, key, options, opts) => {
       const mount = document.getElementById(mountId);
       if (!mount) return null;
-      // ⚠ 每次都重讀網址，不要用外面那份快照：owner 那格要等 /api/users 回來才建立，
-      //   中間若按過「清除全部條件」，picker 誕生後會停在舊值——畫面顯示某個使用者名字，
-      //   實際上根本沒套用那個條件。
+      // 每次都重讀網址，不要用外面那份快照——「清除全部條件」會改網址，晚建立的
+      // picker 用快照會停在舊值。
       const p = createPicker(mount, options,
                              new URLSearchParams(location.search).get(key) ?? ANY, opts);
       mount.addEventListener("change", (e) => (key === "since" ? setTimeFilter : setFilter)
@@ -1025,29 +1003,6 @@
     mk("pick-fcap", "capture", tri("有錄製", "沒錄製"));
     mk("pick-ftel", "telemetry", tri("有送", "沒送"));
 
-    // 使用者：只有 admin 有意義——一般使用者本來就只看得見自己的，給他一個永遠只有
-    // 一個選項的下拉是雜訊。名單非同步載入，載到之前先只放「不限」。
-    if (isAdmin) {
-      document.getElementById("field-owner").hidden = false;
-      {# ⚠ 走 /options 不是 /api/users：後者是分頁的，第二頁之後的人會靜靜地從選單
-         消失，而畫面上看不出來——挑不到的那個帳號看起來就像從來不存在。 #}
-      api("/api/users/options").then(({ users }) => {
-        mk("pick-owner", "owner", [
-          { value: ANY, label: "不限", icon: "fa-solid fa-asterisk" },
-          // 已停用的帳號**留在清單裡**：歷史紀錄是永久保存的（ADR 0010），他過去開的
-          // session 還在，濾掉會讓那些永遠查不到。
-          // 停用與啟用要**用圖示分得出來**，不能只靠右邊那行小字——一整排相同的人形
-          // 圖示掃過去時，那行字很容易被略過。停用是加了斜線的人形。
-          ...users.map((u) => ({
-            value: String(u.id),
-            label: u.username,
-            icon: !u.is_active ? "fa-solid fa-user-slash"
-                : u.is_admin ? "fa-solid fa-user-shield" : "fa-solid fa-user",
-            hint: u.is_active ? "" : "已停用",
-          })),
-        ], { search: true });   // 帳號會愈來愈多，給它一個輸入框用名字找
-      }).catch(() => {});     // 拿不到名單就不給這一格，其他條件照常用
-    }
     // 網址帶著自訂區間進來（書籤／別人分享的連結）：picker 要停在「自訂範圍」、
     // 區間要填回去、那一格要展開。少了這段，畫面會說「不限」而清單卻是篩過的。
     const cur0 = new URLSearchParams(location.search);

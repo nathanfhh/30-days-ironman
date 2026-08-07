@@ -110,10 +110,6 @@ check("restricted + 有錄製 → 1 筆", live(Filters(network="restricted", cap
 # 那一筆有錄製沒錯，但它沒有 telemetry——OR 的話會錯誤地算進來
 check("有錄製 + 有 telemetry → 0 筆", live(Filters(capture=True, telemetry=True)) == 0)
 
-print("== 擁有者 ==")
-check("owner=1（alice）→ 2 筆", live(Filters(owner_id=1)) == 2)
-check("owner=2（bob）→ 1 筆", live(Filters(owner_id=2)) == 1)
-
 print("== 日期區間：兩張表比的是**不同欄位** ==")
 # 執行中的表比 created_at（「一週內開的」）
 check("執行中 since=7 → 2 筆", live(Filters(since_at=now - _dt.timedelta(days=7))) == 2)
@@ -171,10 +167,8 @@ class _FakeDocker:
 app_mod.manager._docker = _FakeDocker()
 
 USERS = {
-    1: {"id": 1, "username": "alice", "is_admin": True, "is_active": True,
-        "password_version": 1},
-    2: {"id": 2, "username": "bob", "is_admin": False, "is_active": True,
-        "password_version": 1},
+    1: {"id": 1, "username": "alice", "is_admin": True, "password_version": 1},
+    2: {"id": 2, "username": "bob", "is_admin": False, "password_version": 1},
 }
 # 走**真正的** authn gate（不是塞一個 before_request——那會註冊在 gate 之後而被 401 擋下，
 # 也就測不到 gate 本身）。只換掉查帳號那一步，其餘照原路徑跑。
@@ -247,23 +241,15 @@ r = client.get("/api/sessions?from=2026-07-26T14:30:00")
 check("不帶時區偏移 → 400（不猜時區）", r.status_code == 400)
 check("錯誤訊息點出要帶時區", "時區" in r.get_json()["error"])
 
-print("== owner 參數的把關 ==")
-# alice 是 admin
-check("admin 用存在的 id → 200", client.get("/api/sessions?owner=2").status_code == 200)
-r = client.get("/api/sessions?owner=999")
-check("admin 用**不存在**的 id → 400（不是靜靜回空清單）", r.status_code == 400)
-# 空清單看起來就像「這個人沒開過 session」，找不出是自己打錯數字
-check("錯誤訊息說得出是查無此人", "查無此使用者" in r.get_json()["error"])
-
+print("== 沒有 owner 篩選，但授權那層照樣綁死 ==")
+# owner 篩選整組拔掉了（Filters 沒有 owner_id、API 不認 ?owner=）。這裡守住兩件事：
+# 1) 授權不是靠篩選——非 admin 在 list/history 那層本來就被 user_id 綁死；
+# 2) ?owner= 這種殘留書籤不會讓整個連結作廢（未知參數一律忽略，與其他未知參數一致）。
+check("Filters 不再有 owner_id 欄位", not hasattr(Filters(), "owner_id"))
 login_as(2)                                    # bob（一般使用者，只有 s3）
 check("非 admin 只看得到自己的那一筆", hit("")["total"] == 1)
-r = client.get("/api/sessions?owner=1")        # bob 指定 alice 的 id
-# ⚠ 回 400 而不是默默忽略：他看不到別人的（那層由 user_id 綁死），但靜靜吃掉會讓他
-#   以為篩選生效了——「查到 0 筆」與「這個條件根本沒套用」是兩件完全不同的事。
-check("非 admin 帶 owner → 400", r.status_code == 400)
-check("錯誤訊息說明只有管理員能用", "管理員" in r.get_json()["error"])
-check("歷史那支也一樣把關",
-      client.get("/api/sessions/history?owner=1").status_code == 400)
+check("殘留的 ?owner= 書籤不作廢、也繞不過授權（仍只有自己的）",
+      hit("?owner=1")["total"] == 1)
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f"\n{_pass} passed, {_fail} failed")

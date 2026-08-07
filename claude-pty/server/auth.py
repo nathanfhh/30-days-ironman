@@ -196,9 +196,6 @@ def authenticate(username: str, password: str) -> dict:
             raise AuthError("帳號或密碼錯誤") from None
         if user is None:                       # 假驗證竟通過也不可能放行
             raise AuthError("帳號或密碼錯誤")
-        if not user.is_active:
-            # 停用的帳號連「密碼對不對」都不該回饋，訊息與帳密錯誤一致
-            raise AuthError("帳號或密碼錯誤")
         if _ph.check_needs_rehash(user.password_hash):
             user.password_hash = _ph.hash(password)  # 參數升級時自動換新雜湊
         return _to_dict(user)
@@ -216,11 +213,10 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
         user = s.get(User, user_id)
         if user is None:
             raise AuthError("使用者不存在")
-        # ⚠ 與 set_active / set_admin 同一道防線。system 的 password_hash 是不可用值 `!`
-        #   （argon2 永遠驗不過），那是它「無法被登入」的**唯一**保障——給它設一個真密碼
-        #   就等於把一個 is_admin=True 的帳號變成可登入的管理員，而它不會被
-        #   `_count_usable_admins` 算進來，「至少留一位管理員」的保護也就跟著失準。
-        #   它出現在 /api/users 清單上，admin 點得到那顆「重設密碼」。
+        # ⚠ system 的 password_hash 是不可用值 `!`（argon2 永遠驗不過），那是它「無法被
+        #   登入」的**唯一**保障——給它設一個真密碼就等於把一個 is_admin=True 的帳號變成
+        #   可登入的管理員。它出現在 /api/users 清單上，admin 點得到那顆「重設密碼」，
+        #   所以這道防線要擋在這裡，不能只靠畫面不提供。
         if user.username == config.SYSTEM_USERNAME:
             raise AuthError("不可設定 system 帳號的密碼（它必須維持無法登入）")
         if require_old:
@@ -282,83 +278,19 @@ def page_users(limit: int, offset: int = 0) -> tuple[list[dict], int]:
         return [_to_dict(u) for u in rows], total
 
 
-def set_active(user_id: int, active: bool) -> dict:
-    """停用 / 復用帳號。停用即無法登入，既有 cookie 也會在下次請求被 gate 擋下。
-
-    這是刪除帳號的正解：可逆、留下歸屬痕跡、不動任何既有資料。
-
-    停用最後一位管理員與降權後果相同（沒有人能再登入管理介面），所以走同一道檢查，
-    也同樣需要序列化——見 set_admin 的說明。
-    """
-    with session_scope(immediate=True) as s:
-        user = s.get(User, user_id)
-        if user is None:
-            raise AuthError("使用者不存在")
-        if user.username == config.SYSTEM_USERNAME:
-            raise AuthError("不可停用 system 帳號")
-        if not active:
-            _assert_not_last_admin(s, user)
-        user.is_active = active
-        if not active:
-            user.password_version += 1   # 立刻讓其既有登入 cookie 失效
-        return _to_dict(user)
-
-
-def _count_usable_admins(s, exclude_id: int | None = None) -> int:
-    """數還剩幾位**真的能登入**的管理員。
-
-    ⚠ 必須排除 `system`：它是 `is_admin=True`，但 password_hash 固定為 `"!"`，argon2
-    永遠驗不過（見 sessions.ensure_system_user）。把它算進來的話，「至少留一位管理員」
-    這個保護會在只剩一位真人管理員時放行——降完之後沒有任何人能登入管理介面，
-    只能直接改資料庫才救得回來。
-    """
-    q = (s.query(User)
-          .filter(User.is_admin.is_(True), User.is_active.is_(True))
-          .filter(User.username != config.SYSTEM_USERNAME))
-    if exclude_id is not None:
-        q = q.filter(User.id != exclude_id)
-    return q.count()
-
-
-def _assert_not_last_admin(s, user: User) -> None:
-    """把使用者變成「不再是可用的管理員」之前，確認還有別人守著。
-
-    降權與停用共用這一個判斷——兩者的後果相同（少一位能登入的管理員），卻曾經只有降權
-    有檢查。呼叫端的交易必須以 `session_scope(immediate=True)` 開啟（BEGIN IMMEDIATE），
-    否則檢查與寫入之間可以插進另一筆同樣「檢查通過」的交易。（曾經還有第三條路徑「刪除帳號」，已於 ADR 0010 移除。）
-    """
-    if not (user.is_admin and user.is_active):
-        return                      # 他本來就不算數，拿掉不影響
-    if _count_usable_admins(s, exclude_id=user.id) == 0:
-        raise AuthError("這是最後一位能登入的管理員，這麼做之後就沒有人能管理系統了")
-
-
-def set_admin(user_id: int, is_admin: bool) -> dict:
-    """提權 / 降權。
-
-    「數一數還有幾位管理員 → 改掉這一位」必須是一筆不可分割的交易。沒有它的話，
-    兩位管理員同時互相降權時，兩邊都會先看到「對方還在」而放行，結果一個管理員都不剩。
-    互斥靠 `immediate=True` 的 BEGIN IMMEDIATE：交易一開始就取整個 DB 的寫鎖。
-    """
-    with session_scope(immediate=True) as s:
-        user = s.get(User, user_id)
-        if user is None:
-            raise AuthError("使用者不存在")
-        if user.username == config.SYSTEM_USERNAME:
-            raise AuthError("不可變更 system 帳號的權限")
-        if not is_admin:
-            _assert_not_last_admin(s, user)
-        user.is_admin = is_admin
-        # 權限變更要立即生效於既有連線：cookie 帶著簽發當下的版號，
-        # 遞增它等於強制重新認證，拿到的才會是新權限。
-        user.password_version += 1
-        return _to_dict(user)
-
-
-# 這裡**刻意沒有 delete_user()**：帳號的退場是 set_active(False)，不是刪除（ADR 0010）。
-# 刪除會沿 FK cascade 掉 `sessions` 登錄（容器變孤兒），也讓稽核鏈斷在半路。
+# 這裡**刻意沒有 delete_user()，也沒有「停用」**。
+#
+# 不刪除：刪除會沿 FK cascade 掉 `sessions` 登錄（容器變孤兒），也讓稽核鏈斷在半路。
 # `session_history` 仍保留 user_id ON DELETE SET NULL 與 username 快照——那是給
 # 「有人直接動資料庫」的兜底，不是應用層還會走的路徑。
+#
+# 退場的做法是**管理員改掉他的密碼**（app.admin_change_password），這樣就夠了：
+#   1. password_version 遞增 → 他既有的 cookie 全部當場失效；
+#   2. 呼叫端會切斷他所有開著的終端（cookie 管不到已升級的 WebSocket，見該處說明）；
+#   3. 他不知道新密碼，登不回來。
+# 三件合起來與「停用」的效果相同，而少維護一個狀態——不必有 is_active 欄位、不必在
+# 登入與 gate 各查一次、也不必替「停用最後一位管理員」造一道專屬防線。要讓他回來，
+# 就把新密碼告訴他，這也同時取代了「復用」。
 
 
 def _to_dict(user: User) -> dict:
@@ -366,7 +298,6 @@ def _to_dict(user: User) -> dict:
         "id": user.id,
         "username": user.username,
         "is_admin": user.is_admin,
-        "is_active": user.is_active,
         "password_version": user.password_version,
         # 這個人開終端時要用哪一顆 ttyd（見 config.TTYD_BINS）。一律經收斂函式，
         # 讓沒設過（NULL）與白名單改掉之後留下的舊值都退回預設。

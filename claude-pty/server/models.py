@@ -73,11 +73,6 @@ class User(Base):
     # 一個 DB 端的預設值才填得進去（純 Python 端的 default 對 ALTER 無效）。
     password_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1")
-    # 停用取代刪除：刪帳號會 cascade 掉他的 session 登錄（容器卻還在跑，只能等
-    # reconciler 當孤兒收），也一併抹掉「誰開過什麼」的歸屬。停用可逆、留痕、
-    # 且不動任何既有資料。server_default 同上：既有 DB 靠 ALTER 補這欄。
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1")
     # 這個人開終端時要用哪一顆 ttyd（C 版 `ttyd` / Rust 重寫 `ttyd-rust`），由管理畫面的
     # 「設定」切換。**做成 per-user 而不是全域**：它的用途是 A/B 比較，全域的話一個人切換
     # 會把別人正在比的終端一起換掉。NULL＝沒設過 → 用 config.TTYD_BIN_DEFAULT。
