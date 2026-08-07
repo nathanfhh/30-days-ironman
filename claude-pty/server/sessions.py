@@ -20,7 +20,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import docker
 from sqlalchemy.exc import IntegrityError
@@ -447,6 +447,36 @@ def _guard_credentials(user_id: int | None) -> None:
         "把輸出貼到帳號管理頁的「CLI 憑證」再開。")
 
 
+# telemetry 探測的 TCP 逾時（秒）。短——這是「開場前順手探一下」，不是可靠性偵測；
+# 探不到就降級照開場（見 create），不值得為它讓建立 session 卡住。
+_JAEGER_PROBE_TIMEOUT = float(os.environ.get("CLAUDE_PTY_JAEGER_PROBE_TIMEOUT", "0.6"))
+
+
+def _jaeger_reachable() -> bool:
+    """OTEL_ENDPOINT 的 host:port 此刻連得上嗎（TCP connect）。
+
+    只回答「連得上」——連得上不保證 collector 健康，但**連不上**幾乎一定代表 trace
+    送出去會石沉大海（OTLP 是 fail-open，claude 不會報錯）。控制平面據此決定：
+      · 連得上  → 照設 OTEL env，session 真的送 trace
+      · 連不上  → **不設** OTEL env（不送去一個沒人接的地方），但 session 照開
+    這不是 fail-closed：telemetry 是觀察不是控制，不能為了它讓人開不了場。
+
+    ⚠ 回傳只影響「送不送 + 座標記什麼」，不影響 session 起不起得來。任何例外都當
+      「連不上」——探測本身壞掉不該比 jaeger 不在更嚴重。
+    """
+    from urllib.parse import urlparse
+    try:
+        u = urlparse(config.OTEL_ENDPOINT)
+        host, port = u.hostname, u.port or 4317
+        if not host:
+            return False
+        import socket
+        with socket.create_connection((host, port), timeout=_JAEGER_PROBE_TIMEOUT):
+            return True
+    except Exception:      # noqa: BLE001 — 探測壞掉＝當成連不上，見 docstring
+        return False
+
+
 def ensure_system_user() -> int:
     """取得（必要時建立）預設的 system 使用者 id。
 
@@ -801,6 +831,22 @@ class SessionManager:
         #   ADR 0016 之後那個目錄是 per-user 空間的一部分，由 provision_user_space() 無條件
         #   建出來（不分 capture 開關——少一個條件分支，也就少一個「開了錄製才發現目錄沒建」）。
 
+        # telemetry：**在這裡探 jaeger 通不通，並據此決定送不送 + 座標記什麼**。
+        # 探不到就降級——不設 OTEL env（下面傳給 build_run_kwargs 的 profile 關掉 telemetry），
+        # 但 session 照開（不 fail-closed：觀察不能擋工作）。座標則兩者都記：
+        #   telemetry（＝使用者要求了什麼）不動；另記 telemetry_active（＝實際有沒有開成）。
+        # 這樣歷史列表能誠實區分三態：要求且開成 / 要求但沒開成 / 沒要求——那個座標的
+        # 用途是事後比對，記謊會污染後續所有分析（見 sessions.html 的 chip 措辭）。
+        run_profile = profile
+        telemetry_active = False
+        if profile.telemetry:
+            telemetry_active = _jaeger_reachable()
+            if not telemetry_active:
+                run_profile = replace(profile, telemetry=False)  # 不送，但照開場
+        stored_profile = _stored_profile(profile)
+        if profile.telemetry:
+            stored_profile["telemetry_active"] = telemetry_active
+
         # 步驟 1：DB 交易＝配額檢查 + 佔登錄（status=creating）。這一列就是舊版 in-memory
         # `_creating` 的替代品：它同時是配額計數的依據與失敗時要補償刪除的對象。
         # immediate=True：SQLite 以 BEGIN IMMEDIATE 在交易起始就取寫鎖，讓「數 + 寫」
@@ -821,7 +867,7 @@ class SessionManager:
             s.add(SessionRow(id=sid, container_name=name, user_id=user_id,
                              display_name=(display_name or "").strip() or None,
                              workdir=config.WORKDIR, rows=rows, cols=cols,
-                             profile=_stored_profile(profile)))
+                             profile=stored_profile))
 
         # 步驟 2：起 container（慢 I/O，在交易外做）。任一步失敗都補償刪除登錄列 +
         # 收掉可能已建立的 container——makedirs 也必須在 try 內（否則繞過補償、白佔配額）。
@@ -848,7 +894,8 @@ class SessionManager:
             #   所以使用者網路必須在 `start` **之前**接上。
             #
             # ⚠ `create()` 不吃 `detach`（那是 `run` 專屬的），要從 kwargs 拿掉。
-            run_kwargs = build_run_kwargs(name, sid, profile, user_id)
+            # 用 run_profile（telemetry 探不到 jaeger 時已被關掉）——不是原 profile。
+            run_kwargs = build_run_kwargs(name, sid, run_profile, user_id)
             run_kwargs.pop("detach", None)
             container = self._docker.containers.create(config.IMAGE, **run_kwargs)
             container.start()
@@ -1543,6 +1590,10 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     if profile.network == "restricted":
         kwargs["cap_add"] = ["NET_ADMIN"]              # init-firewall.sh 需要
         kwargs["network"] = config.SESSION_NETWORK
+    # ⚠ 這裡只看 profile.telemetry——是**純函式**，不探 jaeger。可達性的判斷與降級在
+    #   create()：它探不到就把傳進來的 run_profile 的 telemetry 關掉，所以走到這裡時
+    #   telemetry=True 已經代表「探得到、要真的送」。把探測放這裡會讓這支變成有 I/O 的
+    #   函式，而 test_profile_mapping 正是靠它是純的、Profile(telemetry=True) 一定設 env。
     if profile.telemetry:
         env["NCR_OTEL"] = "1"
         env.update(_otel_env(sid))
