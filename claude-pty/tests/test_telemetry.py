@@ -6,13 +6,16 @@
 **不需要 docker daemon**——docker client 是假的。守的性質：
   🔴 探不到 jaeger 時**照開場**（不 fail-closed：telemetry 是觀察不是控制）
   🔴 探不到時**不設** OTEL env（不送去一個沒人接的地方）
-  🔴 那個環境座標**不准說謊**：探得到記 active、探不到記「要求了但沒開成」、沒要求記 off
+  🔴 **探得到但 jaeger 沒接上這個人的網路，一樣算沒開成**（ADR 0016：探測從控制平面發出，
+     證明的是控制平面那張網到得了，跟 session 那張網是兩回事）
+  🔴 那個環境座標**不准說謊**：開成記 active、沒開成記「要求了但沒開成」、沒要求記 off
      ——它的用途是事後比對，記謊會污染後續所有分析
 """
 import os
 import socket
 import sys
 import tempfile
+from urllib.parse import urlparse
 
 os.environ["CLAUDE_PTY_NO_MOUNTS"] = "1"
 _tmp = tempfile.mkdtemp(prefix="claude-pty-telemetry-")
@@ -42,15 +45,54 @@ def check(label, ok):
 
 
 # --- 假 docker：只實作 create() 會碰到的那幾支 ------------------------------------
+#
+# ⚠ **jaeger 有沒有接上這張網，是這個假 client 要模擬的第二個維度。** per-user 之後
+#   「送不送得到」由兩件事共同決定：控制平面探不探得到（`_jaeger_reachable`）、以及
+#   jaeger 在不在**這個使用者那張網**上。只模擬前者的話，下面那條「探得到但沒接上」
+#   的測試根本測不出來。
+_JAEGER_ATTACHED = True          # 由各段落切換
+
 class _FakeContainer:
     id = "fake-container-id"
     def start(self): pass
     def exec_run(self, *a, **k): return (1, b"")
 
+class _FakeJaeger:
+    """扮演 jaeger 容器。`attrs` 是 `jaeger_on_network` 唯一會讀的東西。"""
+    id = "fake-jaeger-id"
+    @property
+    def attrs(self):
+        nets = {n: {} for n in _FAKE_NETS} if _JAEGER_ATTACHED else {}
+        return {"NetworkSettings": {"Networks": nets}}
+
 class _FakeContainers:
     def create(self, image, **kw): return _FakeContainer()
-    def get(self, *a, **k): raise docker.errors.NotFound("x")
+    def get(self, name, *a, **k):
+        # OTEL_ENDPOINT 的 hostname 就是 jaeger 的容器名（預設 "jaeger"）。
+        if name == urlparse(config.OTEL_ENDPOINT).hostname:
+            return _FakeJaeger()
+        raise docker.errors.NotFound(name)
     def list(self, **k): return []
+
+class _FakeNetwork:
+    def __init__(self, name): self.name = name
+    def connect(self, *a, **k): pass
+    def remove(self): pass
+
+_FAKE_NETS: dict[str, _FakeNetwork] = {}
+
+class _FakeNetworks:
+    def list(self, names=None, **k):
+        if names:
+            return [_FAKE_NETS[n] for n in names if n in _FAKE_NETS]
+        return list(_FAKE_NETS.values())
+    def create(self, name, **k):
+        _FAKE_NETS[name] = _FakeNetwork(name)
+        return _FAKE_NETS[name]
+    def get(self, name):
+        if name in _FAKE_NETS:
+            return _FAKE_NETS[name]
+        raise docker.errors.NotFound(name)
 
 class _FakeAPI:
     def resize(self, *a, **k): pass
@@ -62,6 +104,7 @@ class _FakeImages:
 class _FakeClient:
     def __init__(self):
         self.containers = _FakeContainers()
+        self.networks = _FakeNetworks()
         self.api = _FakeAPI()
         self.images = _FakeImages()
 
@@ -159,6 +202,31 @@ check("🔴 送進容器的 profile 已降級成不送 telemetry",
       _captured[sid].telemetry is False)
 env = _orig_brk("c", sid, _captured[sid], uid)["environment"]
 check("🔴 因此不設 OTEL env（NCR_OTEL 不在）", "NCR_OTEL" not in env)
+
+
+print("== 探得到、但 jaeger 沒接上這個人的網路：一樣算沒開成（ADR 0016）==")
+# ⚠ 這是 per-user 網路帶進來的**新的失敗模式**，而且是最難查的一種：控制平面自己那張網
+#   到得了 jaeger，探測回 True，於是 OTEL env 照設——但 session 待在使用者自己那張網上，
+#   jaeger 不在那裡，**一筆 trace 都送不出去，而 OTLP 是 fail-open，完全沒有錯誤訊息**。
+#   畫面上還會說「有在錄」。座標說謊比沒有座標更糟：事後比對會拿一堆空的 trace 當基準。
+_saved = sessions._jaeger_reachable
+try:
+    sessions._jaeger_reachable = lambda: True      # 控制平面探得到
+    _JAEGER_ATTACHED = False                       # 但沒接上使用者那張網
+    mgr = make_mgr()
+    info = mgr.create(user_id=uid, profile=Profile(telemetry=True))
+    sid = info["id"]
+finally:
+    sessions._jaeger_reachable = _saved
+    _JAEGER_ATTACHED = True
+check("🔴 session 照樣建起來了（不 fail-closed）", info.get("id") is not None)
+prof = stored_profile(sid)
+check("🔴 座標 telemetry_active=False（探得到不等於送得到）",
+      prof["telemetry_active"] is False)
+check("🔴 送進容器的 profile 已降級成不送",
+      _captured[sid].telemetry is False)
+check("🔴 不設 OTEL env（送去一個到不了的地方比不送更糟：畫面會說有在錄）",
+      "NCR_OTEL" not in _orig_brk("c", sid, _captured[sid], uid)["environment"])
 
 sessions.build_run_kwargs = _orig_brk
 db.reset_engine()

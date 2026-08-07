@@ -733,69 +733,51 @@ def preflight() -> list[str]:
     靜默降級（2026-07-25 實測踩到：容器化後 _SELF_REPO_ROOT 推導成 "/"）。
     """
     problems = []
-    # session 用的 docker network。**由這裡建，不是 compose。**
+    # ⚠ **這裡不再建任何共用的 session network。** session 住在**它主人那一張**上
+    #   （`claude-pty-user-{id}`），由 `create()` 在建容器之前 `ensure_network` 建出來——
+    #   那是 per-user 的，開機時根本不知道等一下會有誰來開場，先建不了。
     #
-    # ⚠ compose 的頂層 `networks:` 只會建立「有服務引用到」的那些——而這個 network 沒有
-    #   任何服務用它（用它的是控制平面另外起的 session 容器）。宣告在 compose 裡看起來
-    #   有人負責，實際上不會被建出來（2026-07-29 redeploy 後實測：`docker network ls`
-    #   裡就是沒有它）。而 session 容器 join 一個不存在的 network 是**直接失敗**——
-    #   `failed to set up container networking: network ... not found`。
-    #   也就是說要到第一場 restricted session 才會發現，而那時看起來像 session 壞了。
-    # ⚠ 放在啟動路徑而不是 create() 裡：每建一場多問一次 docker 不划算，而 network 一旦
-    #   建好就不會自己消失。真被手動刪掉的話，下次重啟控制平面會補回來。
-    try:
-        _client = docker.from_env(timeout=config.DOCKER_TIMEOUT)
-        # ⚠ 精確比對：docker 的 `names` filter 是**子字串**比對，撿回來還要對名字。
-        _hits = _client.networks.list(names=[config.SESSION_NETWORK])
-        if not any(n.name == config.SESSION_NETWORK for n in _hits):
-            try:
-                _client.networks.create(config.SESSION_NETWORK, driver="bridge")
-                print(f"[claude-pty] 建立 session network：{config.SESSION_NETWORK}", flush=True)
-            except docker.errors.APIError as e:
-                # ⚠ 「已經有了」是**成功**，不是問題。compose 裡 control 與 reconciler
-                #   同時啟動，兩邊都會看到 `None` 然後都去建——敗方原本會把 APIError 交給
-                #   下面那條，於是一個完全健康的部署每次重啟都印一行「session network
-                #   建立失敗——restricted 與 telemetry 的 session 都會開不起來」。
-                #   那句話是假的，而假警報比沒有警報更糟：真的壞掉時沒有人會認真看。
-                #   （下面那段講「別在 preflight 放有副作用的東西」，講的是同一場競態。）
-                # ⚠ network 的衝突訊息是 `already exists`，與 container 的
-                #   `already in use` 不同。
-                if "already exists" not in str(e):
-                    raise
-    except Exception as e:  # noqa: BLE001 — 失敗也要講清楚，不可靜默
+    # ⚠ 這裡曾經建 `claude-pty-sessions` 給所有人共用。它退役了（ADR 0016），但**升級前
+    #   的機器上那張網還在，而且繼續佔著一格位址池**——reconciler 只掃有 label 的網路，
+    #   永遠不會碰它。整台機器只有 31 格，一格是真的成本，所以講出來讓人清掉。
+    #   訊息會在他清掉之後自己消失：這不是狼來了，是一件真的還沒做完的事。
+    # ⚠ **只報不刪。** 自動刪是有副作用的動作，而那張網上可能還掛著升級前開的、還在跑的
+    #   session（它們會繼續用它直到被關掉）。判斷「還有沒有人在上面」需要的資訊比一句
+    #   提醒多得多，交給人。
+    if config.LEGACY_NETWORK_ENV:
+        # 一個被靜靜忽略的旋鈕是最難查的那種：設了、重啟了、什麼都沒變，而且沒有訊息。
         problems.append(
-            f"session network {config.SESSION_NETWORK} 確認/建立失敗（{type(e).__name__}）"
-            f"——restricted 與 telemetry 的 session 都會開不起來。"
-            f"手動補：docker network create {config.SESSION_NETWORK}")
+            f"CLAUDE_PTY_NETWORK（目前是 {config.LEGACY_NETWORK_ENV}）**已經沒有作用**"
+            f"——session 現在住在每個使用者自己的網路上（ADR 0016）。請從 .env 移除。")
+    with suppress(Exception):  # noqa: BLE001 — 查不到就別報，這只是提醒不是檢查
+        _c = docker.from_env(timeout=config.DOCKER_TIMEOUT)
+        # ⚠ 精確比對：docker 的 `names` filter 是**子字串**比對，撿回來還要對名字。
+        if any(n.name == config.LEGACY_SESSION_NETWORK
+               for n in _c.networks.list(names=[config.LEGACY_SESSION_NETWORK])):
+            problems.append(
+                f"舊的共用 session network {config.LEGACY_SESSION_NETWORK} 還在。"
+                f"已經沒有人會用它，但它佔著一格位址池（整台機器只有 31 格）。"
+                f"確認沒有 session 還掛在上面之後移除："
+                f"docker network rm {config.LEGACY_SESSION_NETWORK}")
     # Telemetry 的接線：**jaeger 不歸我們管，但「它到不到得了」是我們的問題。**
     #
-    # jaeger 由另一份 compose 起（opentelemetry/jaeger-compose.yaml），而那份只接**一張**網。
-    # 實測踩到的狀態：它接在「人自己跑容器」那條路用的網上，於是網頁這條路三方互不相通
-    # ——控制平面探測 gaierror、session 也送不到。而 **OTLP 是 fail-open，從頭到尾沒有任何
-    # 錯誤訊息**，畫面上只是永遠沒有 trace（2026-08-07 實測）。
+    # 規約是「需要 jaeger 的那一方，把 jaeger 接到自己的網路上」（見 user_proxy.attach_jaeger）。
+    # 開機這一輪要接兩種：
+    #   · **所有既有的使用者網路** — 涵蓋「jaeger 比那些網路晚起來」。新建的那些由
+    #     `ensure_network` 當場接，reconciler 每輪再兜一次底。
+    #   · **控制平面自己那幾張**   — `_jaeger_reachable()` 從這裡發出探測
     #
-    # 所以由需要它的這一方主動接上去。同一顆容器可以同時掛多張網，接上不影響它原本那張。
-    #   · SESSION_NETWORK      — session 真正送 trace 的地方
-    #   · 控制平面自己這幾張   — `_jaeger_reachable()` 從這裡發出探測
-    #
-    # ⚠ 兩邊**都要**。只接 session 那張的話探測會失敗 → 控制平面判定「送不到」→ 根本不設
+    # ⚠ 兩種**都要**。只接使用者網路的話探測會失敗 → 控制平面判定「送不到」→ 根本不設
     #   OTEL env，於是 session 明明到得了卻不送。**探測與現實脫節，比探測失敗更難查。**
     # ⚠ jaeger 不在就安靜跳過：它是選配設施，不是缺陷。整段包在 suppress 裡——這是錦上
     #   添花，任何失敗都不該影響控制平面啟動。
     with suppress(Exception):  # noqa: BLE001 — 見上
-        from urllib.parse import urlparse
-        _jname = urlparse(config.OTEL_ENDPOINT).hostname
-        if _jname:
-            _c = docker.from_env(timeout=config.DOCKER_TIMEOUT)
-            _jg = _c.containers.get(_jname)
-            _want = {config.SESSION_NETWORK}
-            with suppress(Exception):      # 沒跑在容器裡（本機開發）就只接 session 那張
-                _me = _c.containers.get(socket.gethostname())
-                _want |= set(_me.attrs["NetworkSettings"]["Networks"])
-            for _net in _want - set(_jg.attrs["NetworkSettings"]["Networks"]):
-                with suppress(docker.errors.APIError):
-                    _c.networks.get(_net).connect(_jg.id)
-                    print(f"[claude-pty] jaeger 接上 {_net}（否則 trace 靜默不送）", flush=True)
+        _c = docker.from_env(timeout=config.DOCKER_TIMEOUT)
+        _want = {n.name for n in user_proxy.list_networks(_c)}
+        with suppress(Exception):      # 沒跑在容器裡（本機開發）就只接使用者網路
+            _me = _c.containers.get(socket.gethostname())
+            _want |= set(_me.attrs["NetworkSettings"]["Networks"])
+        user_proxy.attach_jaeger(_c, sorted(_want))
 
     # ⚠ **這裡刻意沒有「位址池餘裕」的預先檢查。** 曾經寫過一版：啟動時試建 N 個 network
     #   再刪掉，建不出來就警告。它有兩個問題，而且都是自找的：
@@ -945,16 +927,37 @@ class SessionManager:
         #   ADR 0014 之後那個目錄是 per-user 空間的一部分，由 provision_user_space() 無條件
         #   建出來（不分 capture 開關——少一個條件分支，也就少一個「開了錄製才發現目錄沒建」）。
 
-        # telemetry：**在這裡探 jaeger 通不通，並據此決定送不送 + 座標記什麼**。
-        # 探不到就降級——不設 OTEL env（下面傳給 build_run_kwargs 的 profile 關掉 telemetry），
+        # 這個使用者的網路（ADR 0016）。**每一場都要，不分 profile、不分有沒有設 PAT**
+        # ——它是 session 的家，容器要以它為 `network` 參數建立。
+        #
+        # ⚠ **在交易之前做，而且失敗就直接拋。** 兩個理由：
+        #   · 位址池滿是**開不了場**，不是「少一個功能」。這裡沒有 DB 列要補償刪除，
+        #     錯誤最短、最乾淨。
+        #   · 下面的 telemetry 判定要問「jaeger 在不在這張網上」，網路得先存在——而那個
+        #     答案要寫進 step 1 的登錄列裡，所以不能等到 step 2 才建。
+        # ⚠ 代價是：配額已滿的人也會先建出網路。無害（他有 session 在跑，網路本來就該在），
+        #   真的變成孤兒時 reconciler 過了寬限期會收掉。
+        user_net_name = user_proxy.network_name(user_id)
+        self._ensure_user_network(user_id)
+
+        # telemetry：**在這裡判斷 trace 送不送得到，並據此決定送不送 + 座標記什麼**。
+        # 送不到就降級——不設 OTEL env（下面傳給 build_run_kwargs 的 profile 關掉 telemetry），
         # 但 session 照開（不 fail-closed：觀察不能擋工作）。座標則兩者都記：
         #   telemetry（＝使用者要求了什麼）不動；另記 telemetry_active（＝實際有沒有開成）。
         # 這樣歷史列表能誠實區分三態：要求且開成 / 要求但沒開成 / 沒要求——那個座標的
         # 用途是事後比對，記謊會污染後續所有分析（見 sessions.html 的 chip 措辭）。
+        #
+        # ⚠ **兩個條件都要問，缺一不可。** `_jaeger_reachable()` 是從**控制平面**發出的
+        #   探測，證明的是「控制平面自己那張網到得了 jaeger」；per-user 之後，那跟 session
+        #   要待的那張網完全是兩回事。只憑探測就設 OTEL env 的話，會得到「畫面說有在錄、
+        #   實際一筆都沒有」——而 OTLP 是 fail-open，沒有任何錯誤訊息會告訴你這件事。
+        #   反過來只問「有沒有接上」也不夠：接上了但 jaeger 自己死掉（badger 壞掉時它照樣
+        #   `Up`）一樣送不到。
         run_profile = profile
         telemetry_active = False
         if profile.telemetry:
-            telemetry_active = _jaeger_reachable()
+            telemetry_active = (_jaeger_reachable()
+                                and user_proxy.jaeger_on_network(self._docker, user_net_name))
             if not telemetry_active:
                 run_profile = replace(profile, telemetry=False)  # 不送，但照開場
         stored_profile = _stored_profile(profile)
@@ -998,12 +1001,13 @@ class SessionManager:
                 # 會是 root:root，容器內的 nathan 寫不進去，restricted 每次都卡滿 120 秒逾時。
                 with suppress(OSError):
                     os.makedirs(config.TRIVY_CACHE_SELF, exist_ok=True)
-            # 這個使用者的 GitLab 代理與網路（ADR 0016）。**要在建容器之前**——待會兒要在
-            # `start` 之前把容器接上那個網路，網路得先存在。
+            # 這個使用者的 GitLab 代理（ADR 0016）。**要在建容器之前**：session 一起來就
+            # 可能立刻打 API，代理得先在網路上待命。網路本身在交易之前就建好了（見上）。
             #
-            # 沒設 PAT 的人**什麼都不建**：建一顆沒憑證的代理只會把錯誤從「連不到」變成
-            # 401，而 401 更難懂（使用者會以為 token 錯了，其實是根本沒設）。
-            user_net = self._ensure_user_proxy(user_id)
+            # 沒設 PAT 的人**不建代理**（但網路照建、session 照開）：建一顆沒憑證的代理
+            # 只會把錯誤從「連不到」變成 401，而 401 更難懂（使用者會以為 token 錯了，
+            # 其實是根本沒設）。
+            has_proxy = self._ensure_user_proxy(user_id)
 
             # ADR 0001：`docker run -dit`，PID 1 為目標互動程式，PTY 由 dockerd 持有。
             #
@@ -1012,7 +1016,12 @@ class SessionManager:
             #   是個**快照**。容器啟動之後才 `network connect` 上去的網路不在那份清單裡
             #   ——介面有了、路由有了，但封包被 REJECT，而且**永遠不會好**（reconciler 補得了
             #   網路、補不了 iptables，防火牆不會重跑）。實測兩個方向都驗過。
-            #   所以使用者網路必須在 `start` **之前**接上。
+            #
+            #   使用者網路是靠 `build_run_kwargs` 放進 `network=` 參數、在**建立當下**就掛上
+            #   的，比事後 connect 更早，這條自然滿足。**但 create/start 仍然不可以合併回
+            #   一發 `run()`**：中間這個縫隙還住著 `_put_cli_token`（憑證只能在容器存在之後、
+            #   entrypoint 跑起來之前送進去），而且日後要加第二張網也只剩這個位置放得下。
+            #   `test_create_ordering` 釘著這件事。
             #
             # ⚠ `create()` 不吃 `detach`（那是 `run` 專屬的），要從 kwargs 拿掉。
             # 用 run_profile（telemetry 探不到 jaeger 時已被關掉）——不是原 profile。
@@ -1023,18 +1032,6 @@ class SessionManager:
             #   一顆已經存在的容器，而 entrypoint 一跑起來就會去讀它。中間這個縫隙是唯一
             #   的窗口。失敗不中斷：拿不到憑證的終端會停在登入提示，那是誠實的失敗畫面。
             _put_cli_token(container, user_id, run_profile.token_delivery)
-            # ⚠ **就是這裡，不能更晚。** 見上面那段：防火牆放行的是 entrypoint 起跑那一刻
-            #   的路由快照，`start` 之後才接的網路永遠通不了。
-            has_proxy = False
-            if user_net is not None:
-                try:
-                    user_net.connect(container.id)
-                    has_proxy = True
-                except Exception as e:  # noqa: BLE001 — 一律降級，不中斷（見下）
-                    # GitLab 不通是「這場少一個功能」，不是「這場沒用」。
-                    # ⚠ 例外訊息可能夾帶設定內容（因而夾帶 PAT），只印型別。
-                    print(f"[claude-pty] ⚠ session {sid} 接不上使用者網路"
-                          f"（{type(e).__name__}）：本場 git / API 走不了代理", flush=True)
             container.start()
             with suppress(docker.errors.APIError):
                 self._docker.api.resize(container.id, height=rows, width=cols)  # 開機為 0x0
@@ -1046,9 +1043,11 @@ class SessionManager:
                 # 失敗而害 session 開不起來（見各自的 helper）。
                 row.image_created_at = self._image_created_at()
                 row.cli_version = self._cli_version(container, profile.cli)
-                # 這一場當初有沒有配到 GitLab 代理（ADR 0016）。畫面照這一欄講「有沒有
-                # 路」，不照「這個帳號現在有沒有設 PAT」講——後者中途會變，而網路接上與否
-                # 是開場那一刻就定死的。
+                # 這一場開場時，網路上有沒有一顆代理在待命（ADR 0016）。畫面照這一欄講
+                # 「有沒有路」，不照「這個帳號現在有沒有設 PAT」講——後者中途會變。
+                # ⚠ 這一欄記的是**開場那一刻**的事實。代理事後被補起來的話，正在跑的
+                #   session 其實用得到它（同一張網、同一個 alias），只是這一欄不會回頭改
+                #   ——保守的方向：寧可畫面說沒有而實際有，不要反過來。
                 row.gitlab_proxy = has_proxy
         except Exception:
             # ⚠ **代理不在這裡收**：它是 per-user 的，不屬於這一場——這一場失敗不代表使用者
@@ -1076,28 +1075,60 @@ class SessionManager:
 
         return self.status(sid)
 
-    def _ensure_user_proxy(self, user_id: int):
-        """確保這個使用者的 GitLab 代理與網路就位，回傳那個 network（沒有就 `None`）。
+    def _ensure_user_network(self, user_id: int):
+        """確保這個使用者的網路存在。**建不出來就讓 session 開不起來。**
+
+        ⚠ **這一支與 `_ensure_user_proxy` 的失敗語意刻意相反，不要「順手統一」。**
+          代理不在＝這場少一個功能（降級照開）；網路不在＝這場**沒有地方可以待**。
+          唯一的替代方案是把他塞進一張共用的網，而那會無聲地取消掉整個隔離設計
+          （ADR 0016：任何情況下都不得退回共用網路）。所以這裡拋，那裡不拋。
+
+        ⚠ 位址池滿要講**人聽得懂的下一步**，不要把 docker 的原文丟出去
+          （`all predefined address pools have been fully subnetted` 對使用者毫無意義）。
+          人數上限講**約略值**：真正的數字取決於這台機器上還有多少別的 compose 專案，
+          講死了就會變成一個比機制還準確的宣稱。
+        """
+        try:
+            return user_proxy.ensure_network(self._docker, user_id)
+        except user_proxy.PoolExhausted as e:
+            print(f"[claude-pty] ⚠ {e}", flush=True)
+            raise SessionError(
+                "這台機器的 docker 位址池用完了，開不了新的 session。"
+                "目前每位使用者佔一張網路，預設上限大約是同時 26 人在線。"
+                "請關掉沒在用的 session，或請管理員在 daemon.json 調整 "
+                "default-address-pools（做法見 README）。") from e
+        except Exception as e:
+            # 其他失敗（daemon 不回應、label 衝突…）同樣是開不了場，但原因不明確——
+            # 只講型別，不把可能夾帶設定內容的原始訊息端到畫面上。
+            raise SessionError(
+                f"建立你的 session 網路失敗（{type(e).__name__}），這場開不起來。"
+                f"稍後再試一次；持續失敗請找管理員看控制平面的 log。") from e
+
+    def _ensure_user_proxy(self, user_id: int) -> bool:
+        """確保這個使用者的 GitLab 代理就位。回傳「網路上現在有沒有一顆代理」。
+
+        **網路不歸這裡管**（`_ensure_user_network` 在交易之前就建好了，而且它是無條件的）。
+        這一支只負責網路上的那顆 nginx。
 
         ⚠ **任何失敗都只警告，不往上拋。** GitLab 不通是「這場少一個功能」，不是「這場
           沒用」——為了它讓整個 session 開不起來是錯的取捨。失敗的原因多半是外部的
-          （image 沒拉到、位址池滿、GitLab 的主機名解不開讓 nginx 拒絕啟動）。
+          （image 沒拉到、GitLab 的主機名解不開讓 nginx 拒絕啟動）。
+          ⚠ 與 `_ensure_user_network` 的相反語意是刻意的，見那支的說明。
         ⚠ 代理已經在跑但設定過期時**熱重載**，不重建：重建會斷掉這個使用者**其他** session
           正在進行的 git 操作。
         ⚠ 失敗時要**確保沒有留下半顆**：`create` 成功但 `start` 失敗會留下一顆 `created`
           狀態、且設定裡已經有 PAT 的容器。
         """
         if not config.gitlab_enabled():
-            return None                      # 部署者沒設 GitLab 主機＝整個功能關閉
+            return False                     # 部署者沒設 GitLab 主機＝整個功能關閉
         if auth_mod.gitlab_pat_state(user_id) != "ok":
-            return None
+            return False
         pat = auth_mod.gitlab_pat(user_id)
         if not pat:
-            return None                      # 三態與明文之間的競態（剛好被清掉），視同沒設
+            return False                     # 三態與明文之間的競態（剛好被清掉），視同沒設
         # 「本次呼叫親手建出來的那一顆」——補償只清得掉它，見下面 except 那段。
         mine: str | None = None
         try:
-            net = user_proxy.ensure_network(self._docker, user_id)
             existing = user_proxy.find(self._docker, user_id)
             if existing is None:
                 cid, won = user_proxy.create_or_adopt(self._docker, user_id, pat)
@@ -1125,11 +1156,7 @@ class SessionManager:
                 self._docker.api.start(existing.id)
             elif user_proxy.running_state(self._docker, user_id) != gitlab_proxy.fingerprint(pat):
                 user_proxy.reload(self._docker, user_id, pat)
-            return net
-        except user_proxy.PoolExhausted as e:
-            # 這一種要單獨講：該去清 docker network，不是去查 GitLab。
-            print(f"[claude-pty] ⚠ {e}", flush=True)
-            return None
+            return True
         except Exception as e:  # noqa: BLE001 — 見 docstring：一律降級不中斷
             # ⚠ 例外訊息可能夾帶設定內容（因而夾帶 PAT）——只印型別。
             print(f"[claude-pty] ⚠ 使用者 {user_id} 的 GitLab 代理無法就緒"
@@ -1149,7 +1176,7 @@ class SessionManager:
                     half = user_proxy.find(self._docker, user_id)
                     if half is not None and half.id == mine and half.status != "running":
                         user_proxy.remove(self._docker, user_id)
-            return None
+            return False
 
     def wait_ready(self, sid: str, timeout: float | None = None) -> bool:
         """等到 TUI 可以吃按鍵為止。兩段式，取代先前的固定延遲：
@@ -1838,17 +1865,28 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     env["NCR_EFFORT"] = profile.effort
 
     # 第二層：docker 能力（env 給不了）。
+    #
+    # **網路：無條件指定成這個使用者自己那張**（ADR 0016）。四種 profile 組合都設，沒有
+    # 例外——它是 session 的家，不是某個功能的配件。
+    #
+    # ⚠ 這裡曾經只在 `restricted` 或 `telemetry` 時設 network，於是 **unrestricted 且不送
+    #   telemetry 的 session 落在 docker 預設 `bridge`**。那張網住著這台機器上每一顆沒指定
+    #   網路的容器，不只是別人的 session——比它要取代的共用網路還糟。而且它是**沉默的**：
+    #   容器起得來、網路也通，看不出自己在一張公共的網上（2026-08-07 盤點時發現，當時
+    #   一條測試都沒蓋到這個組合）。所以這一行**不可以再退回條件式**。
+    # ⚠ 仍然是**純函式**：`network_name()` 只是字串組裝，不碰 docker。網路要存在是
+    #   `create()` 的責任（它在建容器之前 `ensure_network`）。
+    kwargs["network"] = user_proxy.network_name(user_id)
     if profile.network == "restricted":
         kwargs["cap_add"] = ["NET_ADMIN"]              # init-firewall.sh 需要
-        kwargs["network"] = config.SESSION_NETWORK
     # ⚠ 這裡只看 profile.telemetry——是**純函式**，不探 jaeger。可達性的判斷與降級在
-    #   create()：它探不到就把傳進來的 run_profile 的 telemetry 關掉，所以走到這裡時
-    #   telemetry=True 已經代表「探得到、要真的送」。把探測放這裡會讓這支變成有 I/O 的
-    #   函式，而 test_profile_mapping 正是靠它是純的、Profile(telemetry=True) 一定設 env。
+    #   create()：它探不到（或 jaeger 沒接上這個人的網路）就把傳進來的 run_profile 的
+    #   telemetry 關掉，所以走到這裡時 telemetry=True 已經代表「真的送得到」。把探測放這裡
+    #   會讓這支變成有 I/O 的函式，而 test_profile_mapping 正是靠它是純的、
+    #   Profile(telemetry=True) 一定設 env。
     if profile.telemetry:
         env["NCR_OTEL"] = "1"
         env.update(_otel_env(sid))
-        kwargs.setdefault("network", config.SESSION_NETWORK)       # 到得了 jaeger
     if profile.capture:
         # 存在性查 *_SELF、掛載用 host 路徑（同上，ADR 0009）
         if os.path.isdir(config.CLAUDE_MITM_SELF):     # redact addon 在才掛（否則 entrypoint fail-closed 跳過）

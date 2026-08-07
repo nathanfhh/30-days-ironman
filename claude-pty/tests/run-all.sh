@@ -28,7 +28,7 @@ DEPS=(--with flask --with docker --with sqlalchemy --with argon2-cffi
 #   上又看不到它——找起來很久（2026-07-27 撞到，test_view_lifecycle）。
 NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
               test_reconciler test_entrypoint_human_path test_entrypoint_profile
-              test_firewall_ssh_gate test_user_proxy e2e_flow)
+              test_firewall_ssh_gate test_user_proxy test_network_isolation e2e_flow)
 
 # 另外需要 host 上有 ttyd binary 的：這兩支會真的把 ttyd 生出來（不是在容器裡跑）。
 # 沒裝的話所有 port 都起不來，會以「無可用 port」這種完全不像缺工具的訊息失敗。

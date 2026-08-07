@@ -70,13 +70,38 @@ docker compose exec control python -m server.cli create-admin alice   # 第一�
 沒有「剩幾天」。症狀是**新開的 session 停在登入提示、開不了場**；遇到就重跑一次
 `claude setup-token`、把新的貼回帳號頁。已經在跑的 session 不受影響。
 
+## 每個人一張網：session 之間的隔離邊界
+
+**每個使用者有一張自己的 docker network，他所有的 session 都住在上面，而且只住在上面。**
+這是自動的，沒有開關，也不需要設定任何東西。
+
+```
+network claude-pty-user-1   ┌ 使用者 1 的 session A ─┐
+                            └ 使用者 1 的 session B ─┘
+
+network claude-pty-user-2   ┌ 使用者 2 的 session C ─┐
+                            └ 使用者 2 的 session D ─┘
+
+（同一個人的 session 之間看得到彼此；跨使用者連不到）
+```
+
+⚠ **隔離來自網路邊界，不是容器裡的防火牆。** `restricted` 的容器內有 iptables 擋出網，
+但那擋的是「連出去外面」，擋不住同一個網段的橫向連線；`unrestricted` 連那一層都沒有。
+所以兩種網路能力設定下，跨使用者的隔離**一樣成立**。
+
+⚠ **同一個人的 session 之間是互通的**，這是刻意的（同一個人的東西，讓它們找得到彼此）。
+如果你要隔離的是「一場你不信任的 session」，隔離不了——**要隔離那場，就終止那場**。
+
+⚠ 這件事有一個容量上限：**每個同時在線的使用者佔一張 docker network，而位址池是整台
+機器共用的**，預設約 26 人。見〈同時在線人數的上限〉。
+
 ## GitLab：每個人一顆代理，token 不進 session
 
 **預設關閉**，在 `deploy/.env` 填 `CLAUDE_PTY_GITLAB_HOST` 才會啟用（不含 `https://`
 與結尾斜線）。沒填的話這一整套完全不存在——不建任何東西，帳號頁也不會出現這一塊。
 
-開了之後，每個在帳號頁貼了 Personal Access Token 的人，會拿到**一顆自己的 nginx 與一張
-自己的 docker network**，他所有的 session 都掛在上面：
+開了之後，每個在帳號頁貼了 Personal Access Token 的人，會在**他自己那張網**上多一顆
+自己的 nginx（那張網本來就有，見上一節）：
 
 ```
 network claude-pty-user-{id}  ┌ 他的 session A ─┐
@@ -137,15 +162,40 @@ log 裡**。把那句話端到畫面上，才不會讓人往完全錯的方向�
 
 - **不支援 git-lfs**：LFS 的 batch API 回的是外部 href（可能直指物件儲存），nginx 改不掉。
   有用 LFS 的 repo 會靜默壞掉
-- **每個「同時有 session 在跑的 GitLab 使用者」佔一張 docker network**，而位址池是
-  **整台機器共用**的（每個 compose 專案都佔一格）。沒有 session 就會回收，所以消耗量
-  等於**同時在線**的人數；真的用完會在建立的當下報錯並講出下一步
 - session 存活期間，裡面的東西仍能透過代理做**白名單允許的任何事**。買到的是「帶不走」
   與「範圍收斂」，不是「不能濫用」
 
 > 這與 `gitlab-proxy/`（本 repo 的另一個目錄）是**兩套東西**：那顆是單人單機用的一顆
 > 共用代理，這一套是多人環境用的、每個人自己一顆。兩者不必同時跑。
 > API 白名單在兩邊各有一份，改一邊記得看另一邊。
+
+## 同時在線人數的上限
+
+每個**同時在線**的使用者佔一張 docker network，而位址池是**整台機器共用**的。預設切得出
+31 張（`172.17`–`172.31` 共 15 張，加 `192.168.0.0/16` 切 size 20 的 16 張），扣掉 docker
+自己的 bridge、本 stack、jaeger、機器上其他 compose 專案，實務上大約是**同時 26 人**。
+
+看的是同時在線不是帳號數：沒有活著的 session，那張網就會被回收。
+
+用完的時候，建立 session 會**直接失敗**，畫面上會說明原因與兩條路（關掉沒在用的 session、
+或請管理員放寬位址池）。**它不會偷偷把人塞回一張共用的網**——那會讓上面那道隔離無聲消失，
+而且畫面上完全看不出來。
+
+要放寬就給 docker daemon 一個更大的池，`/etc/docker/daemon.json`：
+
+```json
+{"default-address-pools": [{"base": "10.200.0.0/14", "size": 24}]}
+```
+
+改完重啟 docker daemon，這樣是 1024 張。
+
+⚠ **陷阱不是語法，是選網段。** 那段位址一旦與公司內網或 VPN 的路由重疊，容器會把本來
+要送去內網的封包留在本機，而症狀是「某些內部主機從容器裡連不到」——完全指不到 docker
+設定。挑一段確定沒有人在用的。
+
+⚠ 從舊版升級上來的話：正在跑的 session 還掛在舊的共用網路上，會繼續正常運作到它們被關掉
+為止，新開的才是隔離的（不需要停機）。舊的 `claude-pty-sessions` 沒有人會再用它，但它
+繼續佔著一格位址池——控制平面啟動時會提醒你 `docker network rm` 掉它。
 
 ## 終端程式：兩顆 ttyd，差異不是快慢
 
@@ -185,13 +235,15 @@ Rust 版沒有預編 binary 可下載：image 的第一階段用 `cargo build --
 開場時可以選擇把該場 CLI 的 trace 送到 Jaeger（OTLP gRPC，endpoint 預設
 `http://jaeger:4317`，`CLAUDE_PTY_OTEL_ENDPOINT` 可改）。
 
-- **Jaeger 的服務定義不在這個 stack 裡**——它以 external network 引用 session
-  network，所以順序是：先起這個 stack（控制平面會把 network 建好），再起 Jaeger。
-  反過來 Jaeger 起不來，而 OTLP 是 fail-open，trace 會靜默消失
-- **探不到就降級，不擋開場**：建立 session 時控制平面先探一次 Jaeger，探不到就
-  不設 telemetry 環境變數（不送去一個沒人接的地方），session 照開——telemetry
-  是觀察不是控制，不能為了它讓人開不了場
-- **紀錄說實話**：歷史列表的座標分三態——真的在送／要求了但沒開成（建立時探不到，
+- **Jaeger 的服務定義不在這個 stack 裡**（在 `opentelemetry/jaeger-compose.yaml`）。
+  它只擁有自己那張網，**由需要它的一方把它接過來**——控制平面會自動把 Jaeger 接到
+  每一張使用者網路上。所以**沒有啟動順序要求**，兩個 stack 誰先起都可以
+- **探不到就降級，不擋開場**：建立 session 時控制平面問兩件事——Jaeger 連不連得上，
+  以及它在不在**這個使用者那張網**上。任何一項不成立就不設 telemetry 環境變數
+  （不送去一個到不了的地方），session 照開——telemetry 是觀察不是控制，不能為了它
+  讓人開不了場。⚠ 兩項都要問：探測是從控制平面發出的，而 session 待在別張網上，
+  只憑探測會得到「畫面說有在錄、實際一筆都沒有」，而 OTLP 是 fail-open，不會有錯誤
+- **紀錄說實話**：歷史列表的座標分三態——真的在送／要求了但沒開成（建立時送不到，
   已降級）／不送。那個座標的用途是事後比對，所以不准說謊
 
 ## 貼圖 / 檔案上傳

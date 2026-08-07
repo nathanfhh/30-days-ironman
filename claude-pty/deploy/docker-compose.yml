@@ -16,6 +16,38 @@
 
 name: claude-pty
 
+# --- GitLab 代理的設定（ADR 0016）---------------------------------------------------
+#
+# ⚠ **compose 讀 `.env` 只是為了做 `${VAR}` 插值，不會把任何東西注進容器。** 所以
+#   `.env` 填了 `CLAUDE_PTY_GITLAB_HOST` 而這裡沒有對應的一行，容器裡就是**沒有**那個
+#   變數，`config.gitlab_enabled()` 恆為 False——整套 GitLab 代理在容器化部署下完全不
+#   存在，而畫面上唯一的症狀是「帳號頁沒有 PAT 面板」。2026-08-07 盤點時發現這十個變數
+#   一個都沒接（`grep GITLAB deploy/` 零命中），是使用者自己問「PAT 面板在哪」才浮出來的。
+#
+# ⚠ **用 anchor 而不是在兩隻服務各抄一份。** control 與 reconciler 都要，而且
+#   **reconciler 漏掉更糟**：它是收斂代理的那一邊，看不到 GITLAB_HOST 會把每一顆代理
+#   判成「該收」，於是代理被建起來、下一輪被收掉、再被建起來。抄兩份遲早會漂——同一份
+#   檔案裡已經有過一次（下面 TTYD_RUST_* 那段記著那次）。
+x-gitlab-env: &gitlab-env
+  # 總開關：填了主機名才啟用（不含 https:// 與結尾斜線）。空的＝整套不存在。
+  CLAUDE_PTY_GITLAB_HOST: ${CLAUDE_PTY_GITLAB_HOST:-}
+  # git over SSH 的主機名，只用於 URL 改寫。多數部署與上面同一個，不填就沿用。
+  CLAUDE_PTY_GITLAB_SSH_HOST: ${CLAUDE_PTY_GITLAB_SSH_HOST:-}
+  # session 在自己網路上找代理的名字與埠（＝容器裡看到的 API base）。
+  CLAUDE_PTY_GITLAB_PROXY_ALIAS: ${CLAUDE_PTY_GITLAB_PROXY_ALIAS:-}
+  CLAUDE_PTY_GITLAB_PROXY_PORT: ${CLAUDE_PTY_GITLAB_PROXY_PORT:-5678}
+  # 代理容器的 image 與資源上限。
+  CLAUDE_PTY_GITLAB_PROXY_IMAGE: ${CLAUDE_PTY_GITLAB_PROXY_IMAGE:-}
+  CLAUDE_PTY_GITLAB_PROXY_MEM_LIMIT: ${CLAUDE_PTY_GITLAB_PROXY_MEM_LIMIT:-128m}
+  CLAUDE_PTY_GITLAB_PROXY_PIDS_LIMIT: ${CLAUDE_PTY_GITLAB_PROXY_PIDS_LIMIT:-64}
+  # 逃生口：讓代理的 /etc/hosts 多幾筆（`name:ip`，逗號分隔）。預設空的。
+  # ⚠ 這是一個能讓代理指向任意主機的旋鈕，設錯就是把所有人的 PAT 送到別的地方。
+  CLAUDE_PTY_GITLAB_PROXY_EXTRA_HOSTS: ${CLAUDE_PTY_GITLAB_PROXY_EXTRA_HOSTS:-}
+  # PAT 長度上限（貼錯東西時在入口就回 400）。
+  CLAUDE_PTY_GITLAB_PAT_MAX: ${CLAUDE_PTY_GITLAB_PAT_MAX:-512}
+  # 代理連續幾輪起不來才把錯誤端到畫面上（不是 1：偶爾重啟一輪是正常的）。
+  CLAUDE_PTY_GITLAB_PROXY_FAIL_THRESHOLD: ${CLAUDE_PTY_GITLAB_PROXY_FAIL_THRESHOLD:-3}
+
 services:
   control:
     build:
@@ -79,6 +111,8 @@ services:
       #   一側**固定 /data**，兩隻服務與 CLAUDE_PTY_DB_PATH 都依賴它。
       - ${CLAUDE_PTY_DATA_DIR:-./data}:/data
     environment:
+      # GitLab 代理那十個變數（見檔頭的 x-gitlab-env；兩隻服務都要，不可以只給一邊）
+      <<: *gitlab-env
       # --- 路徑解耦：傳給 daemon 的必須是 **host** 路徑（ADR 0009）---
       CLAUDE_PTY_HOST_HOME: ${HOME}
       CLAUDE_PTY_HOST_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
@@ -111,9 +145,10 @@ services:
       # 由 daemon 解讀——控制平面自己不掛也不碰它，只把路徑轉給 daemon。
       # ⚠ 開了就是每個能建立 session 的帳號都拿得到那把 key（沒有租戶隔離）。
       CLAUDE_PTY_SSH_AUTH_SOCK: ${CLAUDE_PTY_SSH_AUTH_SOCK:-}
-      # session 容器要加入的 network。改它的話下面的 networks: 區塊與 jaeger 的
-      # compose 都要跟著改。
-      CLAUDE_PTY_NETWORK: ${CLAUDE_PTY_NETWORK:-}
+      # ⚠ 這裡曾經有 `CLAUDE_PTY_NETWORK`（所有 session 共用的那張網）。**它退役了**
+      #   ——session 現在住在每個使用者自己的網路上（ADR 0016），由控制平面按需建立，
+      #   compose 給不了也不該給。下面的 `networks:` 區塊是**控制平面自己**那張，與
+      #   session 無關，不要因為名字像就一起改。
     networks: [claude-pty-net]
     restart: unless-stopped
 
@@ -143,14 +178,14 @@ services:
       - ../..:${HOST_REPO_ROOT:-/repo}:ro
       - ${CLAUDE_PTY_DATA_DIR:-./data}:/data   # 與 control 同一份 SQLite（見上方說明）
     environment:
+      # ⚠ **與 control 同一份**（見檔頭 x-gitlab-env）。這一邊漏掉比 control 漏掉更糟：
+      #   reconciler 是收斂代理的那一方，看不到 GITLAB_HOST 就會把每一顆代理判成該收。
+      <<: *gitlab-env
       CLAUDE_PTY_HOST_HOME: ${HOME}
       CLAUDE_PTY_HOST_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
       CLAUDE_PTY_SELF_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
       CLAUDE_PTY_DB_PATH: /data/claude-pty.db
       CLAUDE_PTY_SECRET_KEY: ${CLAUDE_PTY_SECRET_KEY:?同上}
-      # session 容器要加入的 network。改它的話下面的 networks: 區塊與 jaeger 的
-      # compose 都要跟著改。
-      CLAUDE_PTY_NETWORK: ${CLAUDE_PTY_NETWORK:-}
     networks: [claude-pty-net]
     depends_on: [control]
     restart: unless-stopped

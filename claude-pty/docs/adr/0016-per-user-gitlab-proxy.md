@@ -1,6 +1,10 @@
-# ADR 0016：GitLab 憑證代理是 per-user，不是 per-session
+# ADR 0016：每個使用者一張網路——session 的隔離邊界，兼他的 GitLab 代理
 
 - 狀態：已接受；已實作
+- **2026-08-08 擴充**：per-user 網路從「GitLab 代理的實作細節」升格成 **session 的拓樸**。
+  原本的結論（代理跟著人走）沒有改變，改變的是那張網路的**地位**：它現在無條件屬於每一個
+  開 session 的人，GitLab 只是掛在上面的其中一樣東西。新增的是〈拓樸〉〈同時在線人數的
+  上限〉〈隔離來自哪裡〉三節，以及「不得退回共用網路」這條硬規則。
 
 ## 背景
 
@@ -16,21 +20,65 @@
 
 ## 決策
 
-**每個設了 PAT 的使用者：一個 docker network + 一顆 nginx。**
+**每個使用者一張 docker network，他所有的 session 都住在上面，而且只住在上面。**
+設了 PAT 的人，那張網上再多一顆 nginx。
+
+### 拓樸
 
 ```
-network claude-pty-sessions   所有 session · jaeger                （共用）
-network claude-pty-user-{id}  ┌ 該使用者的 session A ─┐
-                              ├ 該使用者的 session B ─┼─► gitlab-proxy（alias）──► GitLab
-                              └ 該使用者的 session C ─┘   一顆，握他自己的 PAT
+network claude-pty-user-1   ┌ 使用者 1 的 session A ─┐
+                            ├ 使用者 1 的 session B ─┼─► gitlab-proxy（alias）──► GitLab
+                            └ 使用者 1 的 session C ─┘   一顆，握他自己的 PAT
+                                    └───────────────────► jaeger（選配，控制平面接上來）
+
+network claude-pty-user-2   ┌ 使用者 2 的 session D ─┐
+                            └ 使用者 2 的 session E ─┴─► gitlab-proxy（**他自己那顆**）
+
+（沒有任何跨使用者共用的 session 網路）
 ```
 
-- session 容器**同時掛在這兩個網路**上
-- 每個使用者的網路上只有一顆代理，network alias 預設是 **`gitlab-proxy`**
+- session 容器**只掛一張網**，就是他主人那一張。由 `containers.create(network=…)` 在
+  建立當下掛上，不是事後 `connect`
+- **四種 profile 組合一律指定**（restricted／unrestricted × telemetry 開關）。沒有例外
+- 每個使用者的網路上最多一顆代理，network alias 預設是 **`gitlab-proxy`**
   （`CLAUDE_PTY_GITLAB_PROXY_ALIAS`，多數部署不會動它）
 - session 那一端看到的位址**由 env 注進容器**（`NCR_GITLAB_API_BASE`），
   **任何呼叫端都不該把 `http://gitlab-proxy:5678` 寫死**——寫死之後改 alias 就是靜默失效
-- 只有真的設了 PAT 的使用者才建網路；沒有 session 在跑就回收
+- **網路無條件建**（不看 GitLab 開不開、不看有沒有 PAT）；**代理才有 PAT 前提**
+- 兩者都在「這個人沒有活著的 session」之後回收
+
+### 這次修掉的兩個洞
+
+先前所有人的 session 共用一張 `claude-pty-sessions`。2026-08-07 實測（兩個使用者各開一場
+`unrestricted`，在其中一顆起 TCP listener，從另一顆連過去）：**連得上，收得到 banner。**
+
+盤點時發現第二個、而且更大的洞：`build_run_kwargs` 只在 `restricted` 或 `telemetry` 時才設
+`network`，所以 **`unrestricted` 且不送 telemetry 的 session 根本沒加入任何指定網路，落在
+docker 預設 `bridge`**——那張網住著這台機器上每一顆沒指定網路的容器，不只是別人的 session。
+
+⚠ 兩個洞都不是「寫錯一行」，是**測試的形狀漏了一格**：restricted 與 telemetry 各有一條
+斷言，就是沒有人測第三種組合。現在四組都釘在 `test_profile_mapping`，真實封包則由
+`test_network_isolation` 用真容器、真 listener、正反雙向驗。
+
+### 隔離來自哪裡
+
+**網路邊界，不是容器內的防火牆。**
+
+`restricted` 的容器裡有 iptables 擋出網，但那擋的是「出去外面」，擋不住同網段的橫向連線；
+`unrestricted` 連那一層都沒有。所以隔離**不可以**建立在防火牆上——它必須是網路本身的性質，
+兩種 profile 才會一致成立。
+
+`test_network_isolation` 刻意用最陽春的容器（沒有 iptables、沒有 NET_ADMIN、沒跑
+`init-firewall.sh`）來證明這件事：連那一層都沒有還是連不到，擋住封包的就只可能是網路。
+
+### 不得退回共用網路（硬規則）
+
+**位址池滿、網路建不出來時，正確的行為是讓 session 開不起來，並把下一步講清楚。**
+
+唯一的「降級」選項是把人塞進一張共用的網，而那會把上面兩個洞原樣打回來，**而且是無聲地**
+——畫面上一切正常，只有隔離消失了。所以 `_ensure_user_network` 的失敗語意與
+`_ensure_user_proxy` **刻意相反**：代理不在是「這場少一個功能」，網路不在是「這場沒有地方
+可以待」。不要為了對稱把它們統一掉。
 
 ### 為什麼不是 per-session
 
@@ -66,6 +114,84 @@ nginx、N 個獨立的計數桶——設定寫 `10r/s`，對 GitLab 的實際速
 | 先建在**預設 bridge** 再 connect | alias 有了，**但代理同時留在 bridge 上**——任何 bridge 容器都能用 IP 打到它，**隔離當場破掉** |
 | **低階 `api.create_container(networking_config=…)`** | ✅ 只在使用者網路上、alias 生效、拿得到內嵌 DNS |
 
+## 同時在線人數的上限
+
+**一人一張網，而 docker 的位址池是整台機器共用的。** 預設能切出 **31 張** bridge network：
+
+| 來源 | 張數 |
+|---|---|
+| `172.17.0.0/16` – `172.31.0.0/16`（size 16） | 15 |
+| `192.168.0.0/16` 切成 size 20 | 16 |
+| **合計** | **31** |
+
+扣掉基礎設施吃掉的（docker 自己的 `bridge`、claude-pty 的 compose 專案網、jaeger 的
+`ncr-telemetry`、這台機器上其他 compose 專案，以及升級前留下的 `claude-pty-sessions`），
+實務上大約是**同時 26 人在線**。
+
+⚠ **不要把這個數字寫死成宣稱。** 它取決於那台機器上還有多少別的東西，講死了就會變成一個
+比機制還準確的說法。程式裡的錯誤訊息也是講「大約」。
+
+⚠ 消耗量是**同時在線**人數，不是帳號數：沒有活著的 session 就會被回收。
+
+### 怎麼放寬
+
+在 daemon 的 `/etc/docker/daemon.json` 加一個更大的池，然後重啟 daemon：
+
+```json
+{"default-address-pools": [{"base": "10.200.0.0/14", "size": 24}]}
+```
+
+這樣是 1024 張。⚠ **真正的陷阱不是語法，是選錯網段**：那段位址一旦與公司內網或 VPN 的
+路由重疊，容器會把本來要送去內網的封包留在本機，而症狀是「某些內部主機從容器裡連不到」
+——完全指不到 docker 設定。挑一段確定沒有人用的。
+
+### 用完的時候會怎樣
+
+`user_proxy.PoolExhausted` → `sessions._ensure_user_network` 轉成 `SessionError`，
+畫面直接說「開不了新的 session」、給出「關掉沒在用的 session」與「調 default-address-pools」
+兩條路。**不吐 docker 的原文**（`all predefined address pools have been fully subnetted`
+對使用者毫無意義），也**不退回共用網路**（見上面那條硬規則）。
+
+## jaeger：誰需要它，誰把它接過來
+
+jaeger 只擁有自己那張網（`ncr-telemetry`，見 `opentelemetry/jaeger-compose.yaml`）。
+需要送 trace 的一方負責 `docker network connect`：
+
+- **claude-pty** — 控制平面把 jaeger 接到**每一張使用者網路**上（`user_proxy.attach_jaeger`）
+- **dev-container** — run wrapper 把 jaeger 接到 `gitlab-proxy` 那張網上，再開容器
+
+⚠ 反過來（jaeger 用 `external:` 去借別人的網）有兩個毛病：那張網必須**先存在**，於是產生
+開機順序（先起對方再起 jaeger，反過來就 `network not found`）；而且它只借得到**一張**，
+per-user 之後根本不夠用。
+
+⚠ **接線點必須有三個**，因為網路與 jaeger 都可能在任意時刻出現：網路剛建好時
+（`ensure_network`）、控制平面啟動時（`preflight`）、以及 reconciler 每一輪的差集補接
+（涵蓋「jaeger 比網路晚起來」）。漏接的症狀是那個人完全沒有 trace，而 **OTLP 是 fail-open，
+從頭到尾沒有任何錯誤訊息**。
+
+⚠ **`telemetry_active` 要問兩件事**：控制平面探不探得到（`_jaeger_reachable`）、以及 jaeger
+在不在**這個使用者那張網**上（`jaeger_on_network`）。只問前者的話，探測是從控制平面自己
+那張網發出的，跟 session 待的那張網完全是兩回事——會得到「畫面說有在錄、實際一筆都沒有」，
+而那比探測失敗更難查。
+
+⚠ **回收網路之前要先把 jaeger 拔下來。** 掛著的容器會讓 `network.remove()` 直接失敗，
+於是每一張使用者網路都變成永遠收不掉，位址池只出不進，症狀要等到「開不了 session」才浮現。
+判準是「**除了 jaeger 之外**沒有別人」（`only_jaeger_left`）：真的還有 session 容器掛著時
+不拔也不收，交給下一輪——先拔再發現收不掉的話，那個人的 trace 會靜靜停掉。
+
+## 升級：正在跑的 session 不受影響
+
+升級前開的 session 還掛在舊的共用網路上，會繼續正常運作到它們被關掉為止；**新開的**才是
+隔離的。不需要遷移，也不需要停機。
+
+舊的 `claude-pty-sessions` 沒有人會再用它，但它繼續佔著一格位址池，而 reconciler 只掃有
+label 的網路、永遠不會碰它。`preflight` 看到它還在就報一行，叫人自己 `docker network rm`
+——**只報不刪**：那張網上可能還掛著升級前、還在跑的 session，判斷「還有沒有人在上面」需要
+的資訊比一句提醒多得多。訊息會在移除之後自己消失。
+
+`CLAUDE_PTY_NETWORK` 同理：它已經沒有作用，但設了卻被靜靜忽略是最難查的那種，所以
+`preflight` 看到它有值也報一行。
+
 ## 授權標頭：API 走 `PRIVATE-TOKEN`，git 走 Basic
 
 兩條路徑的授權形式不同，而且**都不可以設在 server 層**：
@@ -97,10 +223,13 @@ API 那條**刻意選 `PRIVATE-TOKEN` 而不是 `Bearer`**（兩者 GitLab 都�
 
 **GitLab 不通是「這場少一個功能」，不是「這場沒用」。** 所以：
 
-- 部署者沒設 `CLAUDE_PTY_GITLAB_HOST` → 什麼都不建，session 照開
-- 使用者沒設 PAT → 什麼都不建，session 照開
-- 代理建不起來（image 沒拉到、位址池滿、主機名解不開）→ **只警告**，session 照開
-- 接網路那一步失敗 → **只警告**，session 照開，`gitlab_proxy` 記 `False`
+- 部署者沒設 `CLAUDE_PTY_GITLAB_HOST` → **不建代理**（網路照建），session 照開
+- 使用者沒設 PAT → **不建代理**（網路照建），session 照開
+- 代理建不起來（image 沒拉到、主機名解不開）→ **只警告**，session 照開，`gitlab_proxy` 記 `False`
+
+⚠ **這一節講的是代理，不適用於網路。** 網路建不出來（位址池滿、daemon 不回應）是
+**開不了場**，直接拋 `SessionError`——見上面〈不得退回共用網路〉。兩者的失敗語意刻意相反，
+不要為了對稱統一掉：代理不在是少一個功能，網路不在是沒有地方可以待。
 
 ⚠ **但「降級」不等於「沉默」。** 每一條失敗路徑都要留下痕跡，而且要留在**看得到的地方**：
 

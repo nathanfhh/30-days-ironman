@@ -93,6 +93,36 @@ class _FakeContainers:
         raise docker.errors.NotFound("gone")
 
 
+class _FakeNetwork:
+    name = "fake-user-net"
+
+    @staticmethod
+    def connect(*a, **kw):
+        pass
+
+
+class _FakeNetworks:
+    """使用者網路（ADR 0016）。**這裡一定要有東西回**。
+
+    ⚠ create() 在配額交易**之前**就要先把使用者的網路準備好，而那一步失敗時拋的也是
+      `SessionError`。少了這個假物件，兩條執行緒都會在網路那一關就死掉，然後被下面的
+      `except SessionError` 記成「被配額擋下」——於是這支測試會報「兩個都被擋」，
+      看起來像互斥壞了，其實配額那段根本沒跑到（2026-08-07 加 per-user 網路時踩到）。
+    """
+
+    @staticmethod
+    def list(names=None, **kw):
+        return [_FakeNetwork()] if names else []
+
+    @staticmethod
+    def create(name, **kw):
+        return _FakeNetwork()
+
+    @staticmethod
+    def get(name):
+        return _FakeNetwork()
+
+
 class _FakeAPI:
     @staticmethod
     def resize(*a, **kw):
@@ -105,6 +135,7 @@ class _FakeAPI:
 
 class _FakeClient:
     containers = _FakeContainers()
+    networks = _FakeNetworks()
     api = _FakeAPI()
 
 

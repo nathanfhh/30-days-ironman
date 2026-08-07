@@ -8,11 +8,26 @@
 # 舊的 SPAN_STORAGE_TYPE / BADGER_* 環境變數在 v2 完全無效。儲存用內嵌的 badger，
 # 放在 named volume，重啟不掉資料，多場審查會持續累積。
 #
-# 跟 gitlab-proxy 共用同一張 network：dev container 本來就會接上那張網
-#（run wrapper 偵測到就 --network gitlab-proxy），Jaeger 掛同一張，容器內用
-# http://jaeger:4317 直達，防火牆的「放行直連網段」自動涵蓋，iptables 一行都不用動。
-# ⚠ 沒跑 gitlab-proxy 的人：先 `docker network create gitlab-proxy` 再 up。
-#   network 是 external 的，不存在就直接拒絕啟動——看得見的失敗，比默默送不到好。
+# ## 網路的規約：**Jaeger 只擁有自己那張，由需要它的人把它接過去**
+#
+# 送 trace 的容器必須跟 Jaeger 在同一張 network 上（容器內用 http://jaeger:4317 直達，
+# 防火牆的「放行直連網段」自動涵蓋，iptables 一行都不用動）。達成的方向有兩種，這裡
+# 選的是後者：
+#
+#   · ✗ Jaeger 去借別人的網（`external: true`）——那張網必須**先存在**，於是就有了
+#     開機順序：先起對方、再起 Jaeger，反過來就 `network not found`。而且它只借得到
+#     **一張**，送 trace 的人一多就不夠用。
+#   · ✓ Jaeger 建自己的網，**誰要送 trace，誰負責 `docker network connect jaeger <自己的網>`**。
+#     一顆容器可以同時掛多張網，接上去不影響它原本那張。沒有開機順序，張數也沒有上限。
+#
+# 兩條路徑都照這條規約做：
+#   · claude-pty  — 控制平面把 Jaeger 接到**每一張使用者網路**上（server/user_proxy.py
+#     的 `attach_jaeger`；每個使用者一張網，ADR 0016）
+#   · dev-container — run wrapper 把 Jaeger 接到 gitlab-proxy 那張網上再開容器
+#     （`dev-container/run-ncr-dev-container.sh` 的 telemetry 區塊）
+#
+# ⚠ 兩邊都必須在**容器啟動之前**接好。限制模式的防火牆放行的是 entrypoint 起跑那一刻的
+#   直連網段快照，之後才接上的網路封包會被 REJECT，而且永遠不會好。
 #
 # 啟動:  docker compose -f opentelemetry/jaeger-compose.yaml up -d
 # UI:    http://localhost:16686（搜 service = "claude-code"）
@@ -46,11 +61,8 @@ services:
       start_period: 60s
       retries: 3
     networks:
-      # 要收得到 trace，jaeger 必須跟**送 trace 的那些容器**在同一個網路上。
-      # 預設是 claude-pty 的 session network（`claude-pty-sessions`）；跑 dev-container
-      # 那條路徑、或想沿用別組 compose 建好的網路時，在 .env 覆寫 JAEGER_NETWORK。
-      # ⚠ 那個網路必須**先存在**（external）。claude-pty 的控制平面啟動時會建它，
-      #   所以順序是：先起 claude-pty，再起這個。反過來會得到「network not found」。
+      # 只掛自己這一張。**送 trace 的那一方會把 jaeger 接到他自己的網上**（見檔頭的
+      # 網路規約），所以這裡不需要、也不應該去引用任何別人的網路。
       - trace
 
 volumes:
@@ -61,6 +73,7 @@ volumes:
 
 networks:
   trace:
-    # 借用、不擁有：這個網路由送 trace 的那一方建立，這裡只是接上去。
-    external: true
-    name: ${JAEGER_NETWORK:-claude-pty-sessions}
+    # **擁有，不借用**（見檔頭）。compose 會自己建，不需要任何東西先存在。
+    # ⚠ 釘死名字，理由同上面的 volume：不釘的話會被冠上 compose 專案目錄前綴，
+    #   搬一次目錄就換一張網，而要接上來的那兩方都是照名字找的。
+    name: ncr-telemetry

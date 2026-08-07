@@ -3,6 +3,7 @@
     uv run --with flask --with docker python tests/test_profile_mapping.py
 """
 import os
+import re
 import sys
 import tempfile
 
@@ -11,7 +12,7 @@ _tmp = tempfile.mkdtemp(prefix="claude-pty-profmap-")
 os.environ["CLAUDE_PTY_DB_URL"] = f"sqlite:///{os.path.join(_tmp, 'test.db')}"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import auth, config, db  # noqa: E402
+from server import auth, config, db, user_proxy  # noqa: E402
 from server.sessions import Profile, build_run_kwargs  # noqa: E402
 
 config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
@@ -65,8 +66,8 @@ check("env 帶 NET/CAPTURE/SCOPE/MARK + 模型設定", env == {
 # restricted 是預設，所以這裡要有 firewall 需要的能力（下面 restricted 段落再驗一次細節）
 check("預設帶 cap_add=[NET_ADMIN]（restricted 套 iptables 需要）",
       kw.get("cap_add") == ["NET_ADMIN"])
-check("預設接上 session network",
-      kw.get("network") == config.SESSION_NETWORK)
+check("預設接上**這個使用者自己**那張網（ADR 0016）",
+      kw.get("network") == user_proxy.network_name(_UID))
 check("無 ports", "ports" not in kw)
 check("bind-mount repo entrypoint.sh（freshness）", config.ENTRYPOINT_SH in kw["volumes"])
 
@@ -91,8 +92,31 @@ finally:
 print("== restricted：cap_add NET_ADMIN + network ==")
 kw = build_run_kwargs("c", "sid2", Profile(network="restricted"), _UID)
 check("cap_add=[NET_ADMIN]", kw.get("cap_add") == ["NET_ADMIN"])
-check("network=session network", kw.get("network") == config.SESSION_NETWORK)
+check("network=該使用者的網路", kw.get("network") == user_proxy.network_name(_UID))
 check("env NCR_NET=restricted", kw["environment"]["NCR_NET"] == "restricted")
+
+print("== 🔴 網路：四種 profile 組合**一律**指定，沒有例外（ADR 0016）==")
+# ⚠ 這一段守的是一個實際存在過的洞：`network` 曾經只在 `restricted` 或 `telemetry` 時才
+#   設，於是 **unrestricted 且不送 telemetry 的 session 落在 docker 預設 `bridge`**——
+#   那張網住著這台機器上每一顆沒指定網路的容器，比它要取代的共用網路還糟。
+#   當時 restricted 與 telemetry 兩組都有測試，**就是沒有人測第三種組合**，所以它活了下來。
+#   四組全列在這裡，任何一組退回條件式都會立刻紅。
+# ⚠ 斷言比對的是「等於這個人的網路」，不是「有設就好」。設成別人的網路一樣會通過
+#   `is not None`，而那是跨使用者外洩，正是這整套設計要防的東西。
+_want_net = user_proxy.network_name(_UID)
+for _net_mode in ("restricted", "unrestricted"):
+    for _tel in (False, True):
+        _kw = build_run_kwargs("c", f"sidN-{_net_mode}-{_tel}",
+                               Profile(network=_net_mode, telemetry=_tel), _UID)
+        check(f"🔴 network={_net_mode} telemetry={_tel} → 掛在 {_want_net}",
+              _kw.get("network") == _want_net)
+# 反向：換一個 uid 就該換一張網。寫死或算錯的話上面四條照樣全過。
+check("🔴 換一個使用者就是換一張網（網路名真的由 uid 決定）",
+      build_run_kwargs("c", "sidN-other", Profile(), _UID + 1).get("network")
+      == user_proxy.network_name(_UID + 1) != _want_net)
+# NET_ADMIN 仍然只有 restricted 要：它是套 iptables 的能力，不是上網的前提。
+check("unrestricted 不給 NET_ADMIN（網路歸屬與防火牆能力是兩件事）",
+      "cap_add" not in build_run_kwargs("c", "sidN-u", Profile(network="unrestricted"), _UID))
 
 print("== telemetry：OTEL env + NCR_OTEL + network 到 jaeger ==")
 kw = build_run_kwargs("c", "sidT", Profile(telemetry=True), _UID)
@@ -102,7 +126,12 @@ check("NCR_OTEL=1（跳過選單、保留 telemetry）", env.get("NCR_OTEL") == 
 check("CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1（啟用 trace）", env.get("CLAUDE_CODE_ENHANCED_TELEMETRY_BETA") == "1")
 check("OTEL endpoint 指向 jaeger", env.get("OTEL_EXPORTER_OTLP_ENDPOINT") == config.OTEL_ENDPOINT)
 check("resource attr 帶 session.id", "session.id=sidT" in env.get("OTEL_RESOURCE_ATTRIBUTES", ""))
-check("network 到得了 jaeger", kw.get("network") == config.SESSION_NETWORK)
+# ⚠ 「到得了 jaeger」現在**不是**這支函式能保證的事：session 待在自己人的網路上，jaeger
+#   要由控制平面接過去（user_proxy.attach_jaeger）。這支是純函式，只負責掛對網路；
+#   「jaeger 真的在那張網上嗎」由 create() 在開場前問，問不到就不設 OTEL env（見
+#   test_telemetry）。這裡只驗網路歸屬，不要在這裡假裝驗到了可達性。
+check("network 仍是該使用者的網路（jaeger 由控制平面接過去）",
+      kw.get("network") == user_proxy.network_name(_UID))
 
 print("== capture：mount addon + host 落盤（ADR 0008 後不再由 create 發布 mitm port）==")
 kw = build_run_kwargs("c", "sidC", Profile(capture=True), _UID)
@@ -288,8 +317,9 @@ try:
           vols.get(os.path.join(root, "ncr")) == {"bind": config.NCR_HOME_BIND, "mode": "rw"})
     check("🔴 沒有把 mitm 另外掛一次（那會是巢狀掛載）",
           not any(v["bind"].startswith(config.NCR_HOME_BIND + "/") for v in vols.values()))
-    check("capture 的落點是那個根底下的 mitm（與 entrypoint 的 CAPTURE_DIR 一致）",
-          config.MITM_BIND == config.NCR_HOME_BIND + "/mitm")
+    # capture 的落點必須與 entrypoint 的 CAPTURE_DIR 一致——那條斷言在下面「零偏差」那段，
+    # 因為它要**真的去讀那份檔案**。這裡曾經寫成 `config.MITM_BIND == NCR_HOME_BIND + "/mitm"`，
+    # 而那正是 MITM_BIND 的定義，恆真、什麼都沒守到。
     check("host 的 ~/.claude 完全不在掛載裡（狀態層已隔離）",
           not any(v["bind"] == "/home/nathan/.claude" and k != os.path.join(root, "claude")
                   for k, v in vols.items()))
@@ -426,6 +456,24 @@ if os.path.isfile(_ep) and os.path.isfile(_run):
     # 賦值等於在控制平面看不到的地方換憑證。
     check("entrypoint.sh 不改寫 CLAUDE_CODE_OAUTH_TOKEN（讀可以，賦值不行）",
           "CLAUDE_CODE_OAUTH_TOKEN=" not in _ep_src)
+
+    # --- 🔴 capture 的落點：兩份檔案講的必須是同一個路徑 ---------------------------
+    #
+    # ⚠ 對不上的症狀是**完全安靜的**：session 照樣起得來、mitm 照樣錄，只是錄進一個沒有
+    #   被掛出來的目錄——容器一收就什麼都沒有，而且沒有任何錯誤訊息（config.MITM_ADDON_BIND
+    #   旁邊那句「錄了個寂寞」講的就是這件事）。要發現它只能等到有人回頭要那份流量。
+    # ⚠ 這條斷言**必須真的讀 entrypoint.sh**。它原本寫在上面的掛載段，比的是
+    #   `config.MITM_BIND == config.NCR_HOME_BIND + "/mitm"`——那是 MITM_BIND 的定義本身，
+    #   永遠成立，改壞 entrypoint 它一聲都不會吭。
+    # ⚠ `$HOME` 展開成 `NCR_HOME_BIND` 的上一層：那不是取巧，run script 也是把 host 的
+    #   `$HOME/ncr` 掛到那個位置，「容器裡的家目錄」本來就是這兩者共同的錨。
+    _m = re.search(r'^CAPTURE_DIR="([^"]+)"', _ep_src, re.M)
+    check("🔴 entrypoint.sh 找得到 CAPTURE_DIR 的定義（找不到＝這條測試失效了）",
+          _m is not None)
+    if _m:
+        _home = os.path.dirname(config.NCR_HOME_BIND)          # /home/<session 使用者>
+        check("🔴 capture 落點與 entrypoint 的 CAPTURE_DIR 逐字一致（對不上＝錄了個寂寞）",
+              _m.group(1).replace("$HOME", _home) == config.MITM_BIND)
     # run script 掛的仍然是 host 上**正式的那一份**，不是 per-user 空間。
     check("run script 仍掛 host 正式的 ~/.claude", "-v ~/.claude:" in _run_src)
     check("run script 仍掛 host 正式的 ~/.claude.json", "-v ~/.claude.json:" in _run_src)

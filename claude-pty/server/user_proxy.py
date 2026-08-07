@@ -1,18 +1,28 @@
-"""per-user GitLab 憑證代理的 docker 生命週期（ADR 0016）。
+"""per-user 網路與 GitLab 憑證代理的 docker 生命週期（ADR 0016）。
 
-**每個設了 PAT 的使用者一個網路 + 一顆 nginx**，他所有的 session 都掛在那個網路上，
-以 network alias `gitlab-proxy` 找到它。
+**每個開過 session 的使用者一張網路**——他所有的 session 都住在上面，而且只住在上面。
+跨使用者連不到彼此，靠的就是這個邊界（**不是**容器內的 iptables，所以 `unrestricted`
+profile 也一樣隔離）。網路上還可能掛著兩樣東西：
+
+  · **他的 GitLab 代理**（設了 PAT 才有），session 以 network alias `gitlab-proxy` 找到它
+  · **jaeger**（在跑才有），session 送 trace 的地方，見 `attach_jaeger`
+
+⚠ **網路不綁 GitLab，代理才綁。** 網路是 session 的家，GitLab 功能整個關掉、或這個人沒設
+  PAT，網路照建照用——`ensure_network` 是無條件的，`create_or_adopt` 才有 PAT 前提。
+  綁在一起的話，沒 PAT 的人就沒有網路可加入，只能退回共用網路或預設 bridge，而那正是
+  這個模組要消滅的東西。
 
 獨立成一個模組是因為**兩邊都要用**：`sessions.create()` 在建立 session 前確保網路與代理
 就位，`reconciler` 負責把漂掉的狀態收斂回來。放在任何一邊都會讓另一邊反向 import。
 
 ## 這裡的規矩，每一條都是量過或踩過的
 
-⚠ **`create` → `connect` → `start`，順序不可以動。** `init-firewall.sh` 放行的是
+⚠ **session 需要的每一張網路，都要在 `start` 之前就位。** `init-firewall.sh` 放行的是
   「entrypoint 跑到那一刻的直連網段快照」，**之後才 `network connect` 的網路不在放行清單
   裡**——介面有了、路由有了，但封包被 REJECT，而且**永遠不會好**（reconciler 補得了網路，
-  補不了 iptables，防火牆不會重跑）。這是 `sessions.create()` 那邊的責任，寫在這裡是因為
-  讀這個模組的人一定會想「為什麼不乾脆事後掛」。
+  補不了 iptables，防火牆不會重跑）。使用者網路是靠 `containers.create(network=…)` 在建立
+  當下就掛上的（比事後 connect 更早，滿足這條）；日後若有人要加第二張網，只能加在
+  `create` 與 `start` 之間，不可以挪到 `start` 之後。`test_create_ordering` 釘著這件事。
 
 ⚠ **同名網路並發建立時 daemon 端強制唯一**（兩發同時打，一個成功、一個收 `already
   exists`）。所以「已存在」要當成成功——多個 web worker 會同時走這條路。
@@ -80,8 +90,13 @@ def owner_of(obj) -> int | None:
 class PoolExhausted(RuntimeError):
     """docker 的位址池用完了，建不出新的 network。
 
-    ⚠ 這個要與其他錯誤分開講：使用者看到「建立 session 失敗」時，該去清網路而不是去查
-      GitLab。docker 自己的訊息是 `all predefined address pools have been fully subnetted`。
+    ⚠ **這一種要與其他錯誤分開講，而且不可以提 GitLab。** 網路是每一場 session 的前提
+      （不分有沒有設 PAT、GitLab 開不開），所以撞到它的人看到的症狀是「開不了 session」
+      ——把他導去查 GitLab 就是導去錯的方向。docker 自己的訊息是
+      `all predefined address pools have been fully subnetted`。
+
+    ⚠ **接到它的呼叫端不可以退回共用網路。** 讓 session 開不起來並講出下一步是正確的
+      行為；找一張共用的網把人塞進去會無聲地取消掉整個隔離設計（ADR 0016）。
     """
 
 
@@ -117,7 +132,11 @@ def _test_label() -> dict:
 # --- 網路 ---------------------------------------------------------------------
 
 def ensure_network(client: docker.DockerClient, user_id: int):
-    """確保這個使用者的網路存在，回傳它。
+    """確保這個使用者的網路存在，回傳它。**無條件**，不看 GitLab 開不開、不看有沒有 PAT。
+
+    新建出來的網路會順手把 jaeger 接上去（見 `attach_jaeger`）。**只在真的新建時接**：
+    每次呼叫都接的話，每開一場 session 就多一次 inspect，而既有網路漏接的情況由 preflight
+    與 reconciler 那兩道掃描收斂。
 
     ⚠ 「已存在」當成功再查一次——多個 worker 會同時走這條路（見模組 docstring）。
     ⚠ 位址池滿要拋 `PoolExhausted` 而不是原始的 `APIError`，呼叫端才講得出正確的下一步。
@@ -127,7 +146,7 @@ def ensure_network(client: docker.DockerClient, user_id: int):
     if existing:
         return existing
     try:
-        return client.networks.create(
+        net = client.networks.create(
             name, driver="bridge",
             labels={config.NETWORK_LABEL_KEY: config.NETWORK_LABEL_VALUE,
                     config.PROXY_OWNER_LABEL: str(user_id),
@@ -143,9 +162,102 @@ def ensure_network(client: docker.DockerClient, user_id: int):
         if "address pools" in msg:
             raise PoolExhausted(
                 f"docker 的位址池已用完，建不出 {name}。這是**整台機器**共用的資源"
-                f"（每個 compose 專案各佔一格），清掉沒在用的 network，"
-                f"或在 daemon.json 調 default-address-pools。") from e
+                f"（每個 compose 專案各佔一格，而每個開著 session 的使用者佔一張），"
+                f"清掉沒在用的 network，或在 daemon.json 調 default-address-pools。") from e
         raise
+    attach_jaeger(client, [name])
+    return net
+
+
+def attach_jaeger(client: docker.DockerClient, net_names) -> int:
+    """把 jaeger 接到這幾張網路上（還沒接的才接）。回傳這次接了幾張。
+
+    **規約：需要 jaeger 的那一方，負責把 jaeger 接到自己的網路上。** jaeger 自己那份
+    compose 只建它自己的網（`opentelemetry/jaeger-compose.yaml`），不去借別人的——借來的
+    網路必須先存在，那就是先前「一定要先起 claude-pty 再起 jaeger」那個開機順序陷阱的
+    來源。同一顆容器可以同時掛多張網，接上不影響它原本那張。人的那條路
+    （`dev-container/run-ncr-dev-container.sh`）用的是同一條規約。
+
+    ⚠ **每一張使用者網路都要接。** 漏掉一張的症狀是那個人的 session 完全沒有 trace，
+      而 **OTLP 是 fail-open——從頭到尾沒有任何錯誤訊息**（2026-08-07 實測）。所以接線點
+      有三個：這張網剛建好時（`ensure_network`）、控制平面啟動時（`sessions.preflight`）、
+      以及 reconciler 每一輪（涵蓋「jaeger 比網路晚起來」）。
+    ⚠ **jaeger 不在就安靜跳過**：它是選配設施，不是缺陷。任何失敗都不可以影響 session
+      建立或控制平面啟動，所以整支 best-effort、不拋。
+    """
+    from urllib.parse import urlparse
+    attached = 0
+    try:
+        jname = urlparse(config.OTEL_ENDPOINT).hostname
+        if not jname:
+            return 0
+        jg = client.containers.get(jname)
+        on = set(jg.attrs["NetworkSettings"]["Networks"])
+    except Exception:      # noqa: BLE001 — jaeger 不在／問不到＝這輪沒事做，見 docstring
+        return 0
+    for name in net_names:
+        if name in on:
+            continue
+        with suppress(Exception):      # noqa: BLE001 — 一張接不上不影響其他張
+            client.networks.get(name).connect(jg.id)
+            print(f"[claude-pty] jaeger 接上 {name}（否則該網路的 trace 靜默不送）",
+                  flush=True)
+            attached += 1
+    return attached
+
+
+def jaeger_name() -> str | None:
+    """jaeger 的容器名（＝ OTEL_ENDPOINT 的 hostname）。解不出來回 `None`。"""
+    from urllib.parse import urlparse
+    return urlparse(config.OTEL_ENDPOINT).hostname or None
+
+
+def only_jaeger_left(net) -> bool:
+    """這張網路上除了 jaeger 之外，還有沒有別的容器。
+
+    ⚠ **回收前一定要問這個。** `attach_jaeger` 讓 jaeger 掛在每一張使用者網路上，而
+      **掛著的容器會讓 `network.remove()` 直接失敗**——沒有這道判斷的話，每一張使用者
+      網路都變成永遠收不掉，位址池只出不進，而症狀要等到「開不了 session」才出現
+      （2026-08-07 寫隔離測試時就是被清理階段的失敗抓到的）。
+    ⚠ 必須先 `reload()`：`networks.list()` 回來的物件，`Containers` 是空的。
+    """
+    with suppress(Exception):     # noqa: BLE001 — 問不到就當「還有人在」，寧可不收
+        net.reload()
+        attached = {c.get("Name") for c in (net.attrs.get("Containers") or {}).values()}
+        return not (attached - {jaeger_name()})
+    return False
+
+
+def detach_jaeger(client: docker.DockerClient, net_name: str) -> None:
+    """把 jaeger 從這張網路上拔下來。best-effort。
+
+    只在**確定要收掉這張網**的時候呼叫（見 `only_jaeger_left`）——拔了卻沒收成，那個
+    使用者的 trace 會靜靜停掉，要等 reconciler 下一輪的接線掃描才補回來。
+    """
+    name = jaeger_name()
+    if not name:
+        return
+    with suppress(Exception):     # noqa: BLE001 — jaeger 不在、早就沒接，都不是問題
+        client.networks.get(net_name).disconnect(name)
+
+
+def jaeger_on_network(client: docker.DockerClient, net_name: str) -> bool:
+    """jaeger 此刻在不在這張網路上。問不到一律回 False。
+
+    ⚠ 用途是**讓 telemetry 的座標說實話**。控制平面探得到 jaeger（`_jaeger_reachable`）
+      證明的是「控制平面自己那張網到得了」，per-user 之後那跟 session 那張網完全是兩回事
+      ——只憑探測就設 OTEL env 的話，會得到「畫面說有在錄、實際一筆都沒有」，而那比探測
+      失敗更難查。
+    """
+    from urllib.parse import urlparse
+    try:
+        jname = urlparse(config.OTEL_ENDPOINT).hostname
+        if not jname:
+            return False
+        jg = client.containers.get(jname)
+        return net_name in set(jg.attrs["NetworkSettings"]["Networks"])
+    except Exception:      # noqa: BLE001 — 問不到＝當成沒接上（不送，勝過送去沒人接的地方）
+        return False
 
 
 def remove_network(client: docker.DockerClient, user_id: int) -> bool:

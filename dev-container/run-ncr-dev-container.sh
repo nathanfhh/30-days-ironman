@@ -266,14 +266,28 @@ done
 
 # Telemetry → Jaeger（traces）。只在 jaeger 容器活著時開啟：OTLP 匯出本身是非同步、
 # fail-open，設了沒人收也不會弄壞 claude，但 gating 免掉重試噪音，而且啟動時就把
-# 「這場有沒有在錄」講清楚。Jaeger 掛在 gitlab-proxy 那張 network 上（見
-# jaeger-compose.yaml），所以上面接網成功時，容器內用 http://jaeger:4317 直達，防火牆不用動。
+# 「這場有沒有在錄」講清楚。
+#
+# ⚠ **Jaeger 只掛它自己那張網（`ncr-telemetry`），要送 trace 的人負責把它接過來**
+#   ——見 opentelemetry/jaeger-compose.yaml 檔頭的網路規約。這條路徑送 trace 的容器待在
+#   gitlab-proxy 那張網上（上面 --network 那段），所以這裡把 jaeger 也接上去，接完
+#   容器內就能用 http://jaeger:4317 直達，防火牆不用動。
+# ⚠ **一定要在 docker run 之前接。** 限制模式放行的是 entrypoint 起跑那一刻的直連網段
+#   快照，容器起來之後才接的網路封包會被 REJECT，而且永遠不會好。
+# ⚠ 已經接過就會回「already exists」，那是成功不是錯誤——所以吞掉輸出、看後面那道
+#   驗證的結果，不看這一行的 exit code。
 #
 # 只送 traces：span 上就帶著 token 數，足夠做每角色歸因；metrics/logs 設 none，
 # 不送 Jaeger 收不了的資料。
 TELEMETRY_ENV=()
 if [ "$(docker inspect -f '{{.State.Running}}' jaeger 2>/dev/null)" = "true" ]; then
     if docker network inspect gitlab-proxy >/dev/null 2>&1; then
+        docker network connect gitlab-proxy jaeger >/dev/null 2>&1 || true
+    fi
+    # 真的接上了嗎。**問實際狀態，不看上面那行的 exit code**——它在「已經接過」時也會
+    # 非零，而那是成功。接不上就走下面的 else，把原因講出來而不是靜靜不錄。
+    if docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' \
+           jaeger 2>/dev/null | grep -qw gitlab-proxy; then
         # Resource attributes：黏在該場所有 span 上的標籤，事後分析就按它們切。
         # skill.version 自動抓——每筆 trace 記著「哪一版 skill 產生的」，是前後比對的錨。
         # experiment 由使用者指定，一場標一組實驗代號：
@@ -305,9 +319,10 @@ if [ "$(docker inspect -f '{{.State.Running}}' jaeger 2>/dev/null)" = "true" ]; 
         echo "📊 Telemetry 已配置 → Jaeger（jaeger:4317）· UI http://localhost:16686 · 送不送由啟動選單決定"
         echo "   resource: ${RES}"
     else
-        echo "⚠️  jaeger 在跑，但 gitlab-proxy network 不存在，容器接不到它 → 本場不錄。"
-        echo "   jaeger-compose 掛的就是那張網，這個狀態不該出現；重建："
-        echo "   docker compose -f opentelemetry/jaeger-compose.yaml up -d --force-recreate"
+        echo "⚠️  jaeger 在跑，但接不到 gitlab-proxy network → 本場不錄。"
+        echo "   這條路徑的容器待在 gitlab-proxy 那張網上，jaeger 必須也接上去才收得到。"
+        echo "   先確認那張網在（沒有就 docker network create gitlab-proxy），再手動接："
+        echo "   docker network connect gitlab-proxy jaeger"
     fi
 else
     echo "ℹ️  Jaeger 未啟動 → 本場不錄 telemetry（要錄：docker compose -f opentelemetry/jaeger-compose.yaml up -d）"

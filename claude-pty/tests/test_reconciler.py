@@ -317,6 +317,77 @@ try:
     check("登錄保留下來，下一輪可以重試", still_live)
     check("**沒有**寫進歷史（不可以宣告一個沒發生的結束）", not archived)
 
+    # --- 期望狀態有兩份：網路看 session，代理才看 GitLab（ADR 0016）----------------
+    #
+    # ⚠ 這一段用**假 client**，不建真的網路。它驗的是「餵給 `_reap_user_networks` 的是哪
+    #   一個集合」這個純邏輯，而那正是會寫錯的地方。用真 daemon 反而讓訊號更模糊：網路上
+    #   還有容器時 docker 本來就會拒絕移除，於是**寫錯了也看起來沒事**。
+    #
+    # ⚠ 錯法與後果：`active` 以前只在 `gitlab_enabled()` 時才算，其餘一律空集合。網路升格
+    #   成「每一場 session 的家」之後，那個寫法會讓 **GitLab 關掉的部署每輪去刪一次活著
+    #   session 底下的網路**。docker 會擋下實際刪除，所以症狀只是 log 噪音——最容易被忽略、
+    #   而且在容器剛收掉的空窗期真的會刪成功的那種錯。
+    print("\n== GitLab 關閉時，活著 session 的網路不可以被收掉 ==")
+
+    class _FakeNet:
+        def __init__(self, name, uid):
+            self.name, self.removed = name, False
+            self.attrs = {"Labels": {config.PROXY_OWNER_LABEL: str(uid)},
+                          # 夠舊：不讓 ORPHAN_GRACE 變成「沒被刪」的真正原因，否則這條
+                          # 測試會在錯誤的理由下變綠。
+                          "Created": "2020-01-01T00:00:00Z"}
+
+        def remove(self):
+            self.removed = True
+
+    class _NetOnlyClient:
+        """只回答「有哪些 per-user 網路」；代理一顆都沒有。"""
+
+        def __init__(self, nets):
+            outer_nets = nets
+
+            class _N:
+                def list(self, **kw):
+                    return list(outer_nets)
+
+            class _C:
+                def list(self, **kw):
+                    return []
+
+            self.networks, self.containers = _N(), _C()
+
+    class _LiveC:
+        status = "running"
+
+    _NET_UID = _sysuid
+
+    def _converge_with(gitlab_on, live):
+        """跑一輪收斂，回傳那張網路有沒有被收掉。"""
+        net = _FakeNet(f"{config.USER_NETWORK_PREFIX}{_NET_UID}", _NET_UID)
+        saved = config.GITLAB_HOST
+        config.GITLAB_HOST = "gitlab.example.com" if gitlab_on else ""
+        try:
+            reconciler._converge_proxies(_NetOnlyClient([net]), live,
+                                         _passthrough_isolated, lambda: True)
+        finally:
+            config.GITLAB_HOST = saved
+        return net.removed
+
+    with db.session_scope() as s:
+        s.add(SessionRow(id="netkeep0001", container_name="claude-pty-netkeep",
+                         user_id=_NET_UID, status="running", workdir="/tmp"))
+    _live = {"claude-pty-netkeep": _LiveC()}
+    check("🔴 GitLab 關閉 + 有活著的 session → 網路留著",
+          not _converge_with(gitlab_on=False, live=_live))
+    check("GitLab 開啟 + 有活著的 session → 網路一樣留著",
+          not _converge_with(gitlab_on=True, live=_live))
+    # 反向：沒有任何活著的 session，網路就該收（不然位址池會慢慢被吃光）。這條同時證明
+    # 上面兩條不是因為「_reap 根本沒在動」才綠的。
+    with db.session_scope() as s:
+        s.delete(s.get(SessionRow, "netkeep0001"))
+    check("🔴 沒有 session 了 → 網路被收掉（證明上面不是因為 reap 沒作用才綠）",
+          _converge_with(gitlab_on=False, live={}))
+
 finally:
     print("== 清理 ==")
     with __import__("contextlib").suppress(Exception):

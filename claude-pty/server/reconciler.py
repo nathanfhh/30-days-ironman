@@ -212,41 +212,53 @@ def reconcile_once(client: docker.DockerClient | None = None,
 
 def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
                       leading=None) -> tuple[int, int]:
-    """把 per-user GitLab 代理與網路收斂到期望狀態（ADR 0016）。回傳 (收掉幾顆, 修好幾顆)。
+    """把 per-user 網路與 GitLab 代理收斂到期望狀態（ADR 0016）。回傳 (收掉幾顆, 修好幾顆)。
 
-    期望狀態很簡單：**有活著的 session 且 PAT 可用的使用者，才該有網路與代理。**
+    **期望狀態有兩個，不是一個**，而且條件不同：
+
+      · **網路** — 有活著的 session 的使用者就該有。**不看 GitLab 開不開、不看 PAT。**
+      · **代理** — 上面再加上「GitLab 功能開著」且「他的 PAT 可用」。
+
     形狀與 k8s 的 Deployment 相同——定期看一眼，該在而不在就補，不該在就收。
 
-    ⚠ **功能被關掉時這支照跑**，不是不呼叫（呼叫端也不該加 `if gitlab_enabled()`）。
-      那時期望狀態是「一顆都不該有」，所以這一輪負責收乾淨；`active` 會是空集合，
-      於是每顆代理都落進「沒人用」、每張網路都被回收，補建迴圈什麼都不做。
-      跳過的話，那些代理會**帶著 PAT 永遠留在機器上**，還繼續佔著位址池。
+    ⚠ **這兩個期望狀態必須分開算。** 網路現在是每一場 session 的前提（session 容器以它
+      為 `network` 參數建立），而代理仍然是 GitLab 專屬的。用同一個集合去驅動兩者的話，
+      GitLab 關掉的部署會每一輪都去刪**活著 session 底下的網路**——docker 會因為還有容器
+      掛著而拒絕，所以症狀只是每 30 秒一次的 log 噪音，但空窗期真的會刪掉。
+
+    ⚠ **GitLab 功能被關掉時這支照跑**，不是不呼叫（呼叫端也不該加 `if gitlab_enabled()`）。
+      那時**代理**的期望狀態是「一顆都不該有」，所以這一輪負責收乾淨；`active_gitlab` 是
+      空集合，於是每顆代理都落進「沒人用」，補建迴圈什麼都不做。跳過的話，那些代理會
+      **帶著 PAT 永遠留在機器上**，還繼續佔著位址池。**但網路不受影響**（見上）。
 
     ⚠ **「有活著的 session」不可以只看 `live` 快照。** `live` 是輪初拿的，而代理與網路是
       即時查詢——使用者上一場剛結束、下一場正在建立時會誤判成「沒有 session」，於是收掉
-      正要被接上的代理。判準要**含 DB 裡 `status=creating` 且在寬限期內的列**。
+      正要被用到的網路。判準要**含 DB 裡 `status=creating` 且在寬限期內的列**。
 
     ⚠ **PAT 讀不到時的處置要分辨三態**（`auth.gitlab_pat_state`）：
       · `"none"`（明確清除）→ **移除代理**。「我覺得外洩了」必須立刻生效。
       · `"unreadable"`（換過 `SECRET_KEY`）→ **什麼都不做**。整站的 PAT 會一起解不開，
         當成「沒設」就是把所有還在服務中的代理一起收掉。
       這兩者的差別是這整段最重要的一條規矩，**不可以退回成「讀不到就當沒設」**。
+      ⚠ 這三態只影響**代理**。網路不受它影響——PAT 解不開的人照樣要有地方開 session。
 
     ⚠ **設定新舊問容器自己**（`/_state`），不另存狀態：DB 會漂，label 建立後改不了。
     ⚠ 過期時**熱重載不重建**：重建會斷掉這個使用者其他 session 正在進行的 git 操作。
     """
     # 誰有活著的 session：live 快照 ∪ DB 裡還在建立寬限期內的列。
-    # ⚠ 功能被關掉時這裡是**空集合**，於是下面每一顆代理都落進「沒人用」而被收掉、
-    #   每一張網路都被回收，補建迴圈（`active - seen`）則什麼都不做。關閉＝收乾淨，
-    #   不是「停止管理」——停止管理會讓帶著 PAT 的容器孤兒化。
-    active: set[int] = set()
-    if config.gitlab_enabled():
-        with session_scope() as s:
-            for row in s.query(SessionRow).all():
-                c = live.get(row.container_name)
-                if ((c is not None and c.status in ALIVE_STATES)
-                        or _is_creating_within_grace(row)):
-                    active.add(row.user_id)
+    # ⚠ **無條件計算**，這是**網路**的期望狀態（見 docstring）。
+    active_sessions: set[int] = set()
+    with session_scope() as s:
+        for row in s.query(SessionRow).all():
+            c = live.get(row.container_name)
+            if ((c is not None and c.status in ALIVE_STATES)
+                    or _is_creating_within_grace(row)):
+                active_sessions.add(row.user_id)
+    # **代理**的期望狀態：再加上「功能開著」這個前提。關掉時是空集合，於是下面每一顆
+    # 代理都落進「沒人用」而被收掉，補建迴圈（`active_gitlab - seen`）什麼都不做。
+    # 關閉＝收乾淨，不是「停止管理」——停止管理會讓帶著 PAT 的容器孤兒化。
+    active_gitlab = active_sessions if config.gitlab_enabled() else set()
+    active = active_gitlab           # 以下的代理迴圈一律讀這個
 
     removed = converged = 0
     seen: set[int] = set()
@@ -381,7 +393,18 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
         except docker.errors.NotFound:
             continue                      # session 剛好在這幾行之間沒了，下輪再看
 
-    removed += _reap_user_networks(client, active, isolated, lead)
+    # ⚠ 網路吃的是 `active_sessions`（無條件），**不是** `active`／`active_gitlab`。
+    #   餵錯的話 GitLab 關掉的部署會每輪去刪活著 session 底下的網路，見 docstring。
+    removed += _reap_user_networks(client, active_sessions, isolated, lead)
+    # jaeger 的兜底接線：涵蓋「jaeger 比使用者網路晚起來」。新建的網路由 `ensure_network`
+    # 當場接、控制平面啟動時 `preflight` 掃一輪，但那兩個都是**事件驅動**的——jaeger 在
+    # 兩者之間重啟的話，沒有任何人會回頭補。而漏接的症狀是那個人完全沒有 trace，且
+    # **OTLP fail-open，沒有任何錯誤訊息**。這裡每輪一次差集，成本是一次 inspect。
+    # ⚠ best-effort，不計入 converged：它不是「修好一顆」，接不上也不該讓這輪看起來失敗。
+    if lead():
+        with suppress(Exception):   # noqa: BLE001 — jaeger 是選配設施，見 attach_jaeger
+            user_proxy.attach_jaeger(
+                client, [n.name for n in user_proxy.list_networks(client)])
     return removed, converged
 
 
@@ -447,8 +470,12 @@ def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated,
                         leading=None) -> int:
     """收掉沒人用的 per-user 網路（釋放位址池）。
 
-    ⚠ **寬限期依網路自己的 `Created`，不是代理的**：在「建好網路」與「建好代理」之間網路
-      是空的，那時**沒有代理可以查年齡**——用代理的年齡判斷就會把剛建好的網路收掉。
+    ⚠ **`active` 必須是「有活著 session 的人」（`active_sessions`），不是「該有代理的人」。**
+      網路是每一場 session 的家，跟 GitLab 開不開、有沒有 PAT 完全無關。餵成後者的話，
+      GitLab 關掉的部署每一輪都會嘗試刪掉活著 session 底下的網路（見 `_converge_proxies`
+      的 docstring）。
+    ⚠ **寬限期依網路自己的 `Created`，不是代理的**：在「建好網路」與「建好容器」之間網路
+      是空的，那時**沒有東西可以查年齡**——用代理的年齡判斷就會把剛建好的網路收掉。
     ⚠ 網路上還有容器時 docker 會拒絕移除，那是對的：交給下一輪。
     """
     reaped = 0
@@ -469,6 +496,15 @@ def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated,
             continue
         if age_seconds(net.attrs.get("Created", "")) < config.ORPHAN_GRACE:
             continue
+        # ⚠ **jaeger 掛在每一張使用者網路上**（`attach_jaeger`），而掛著的容器會讓
+        #   `network.remove()` 直接失敗。少了這兩行，每一張網路都收不掉——位址池只出不進，
+        #   而症狀要等到「開不了 session」才出現，那時已經完全看不出源頭。
+        # ⚠ 判準是「**除了 jaeger 之外**沒有別人」，不是「一顆都沒有」。真的還有 session
+        #   容器掛著時就別動它：不拔 jaeger、也不 remove，交給下一輪（那條規矩沒變）。
+        #   先拔再發現收不掉的話，那個使用者的 trace 會靜靜停掉。
+        if not user_proxy.only_jaeger_left(net):
+            continue
+        user_proxy.detach_jaeger(client, net.name)
         with suppress(docker.errors.NotFound, docker.errors.APIError):
             if isolated(f"收掉沒人用的網路 {net.name}", net.remove) is not STUCK:
                 reaped += 1

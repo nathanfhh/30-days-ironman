@@ -334,17 +334,24 @@ MOUNTS = {} if os.environ.get("CLAUDE_PTY_NO_MOUNTS") else {
 # 見 TEST_LABEL_DEFAULT_KEY 那段。
 TEST_MARK = os.environ.get("CLAUDE_PTY_TEST_MARK")   # 測試設為 "1"，正式部署不設
 
-# --- per-user GitLab 代理（ADR 0016）------------------------------------------------
+# --- per-user 網路與 GitLab 代理（ADR 0016）-----------------------------------------
 #
-# 每個設了 PAT 的使用者有一個自己的 docker network（`claude-pty-user-{id}`）與一顆 nginx
-# （network alias 固定叫 `gitlab-proxy`）。他的所有 session 都掛在那個網路上，容器裡的
-# git 與 API 呼叫裸打不帶 auth，由代理蓋上**他自己的** PAT。
+# 每個**開過 session 的**使用者有一張自己的 docker network（`claude-pty-user-{id}`），
+# 他所有的 session 都住在上面。設了 PAT 的人，那張網上還會多一顆 nginx（network alias
+# 固定叫 `gitlab-proxy`）：容器裡的 git 與 API 呼叫裸打不帶 auth，由代理蓋上**他自己的**
+# PAT。
 #
-# ⚠ **為什麼是 per-user 而不是 per-session**：nginx 的 `limit_req_zone` 是 per-instance，
+# ⚠ **網路不綁 GitLab。** 網路是 session 的家，代理只是掛在上面的其中一樣東西——
+#   GitLab 功能整個關掉、或這個人沒設 PAT，網路照建。反過來寫（沒 PAT 就不建網路）
+#   會讓那些人的 session 沒有網路可加入，退回共用網路或預設 bridge，隔離當場破掉。
+# ⚠ **為什麼代理是 per-user 而不是 per-session**：nginx 的 `limit_req_zone` 是 per-instance，
 #   一個人開 N 場就是 N 顆 nginx、N 個獨立的計數桶，`10r/s` 對 GitLab 變成 `N×10r/s`
 #   ——等於沒有限流，而且越是「同時很多」的情境越失效。那不是調參數修得好的，是拓樸
 #   問題。收斂成 per-user 之後，桶才對得上「人」這個單位。
 # ⚠ 跨使用者的隔離**來自網路邊界，不是防火牆規則**，所以 `unrestricted` profile 也成立。
+# ⚠ **一人一張網，而位址池是整台機器共用的**（預設 31 張，見 README 的「同時在線人數的
+#   上限」）。這是這個拓樸的代價，而它是有意識付的：用完的時候 session 開不起來並講出
+#   下一步，勝過偷偷把人塞回共用網路。
 
 # 這套東西要代理的 GitLab 主機名（不含 https:// 與結尾斜線）。
 #
