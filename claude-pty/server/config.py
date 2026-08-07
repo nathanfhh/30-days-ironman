@@ -284,7 +284,7 @@ INIT_FIREWALL_BIND = "/usr/local/bin/init-firewall.sh"
 def user_space(user_id: int, *, host: bool = True) -> str:
     """某個使用者的空間根目錄。
 
-    用 **id 不是 username**：帳號不能刪只能停用（ADR 0010），username 不可回收但也不是
+    用 **id 不是 username**：帳號不能刪（ADR 0010，退場是改掉密碼），username 不可回收但也不是
     穩定的錨（未來若允許改名，目錄會跟著漂）。id 是 FK、是真正穩定的那一個。
 
     `host=True` 回傳要交給 docker daemon 的路徑，`False` 回傳控制平面自己讀寫的路徑

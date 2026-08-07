@@ -350,7 +350,7 @@ check("rename 合法欄位仍然可用",
 print("== 撤銷存取權時，已經連上的終端也要斷（review 2026-07-26）==")
 # ⚠ cookie / token 失效要到**下一次 HTTP 請求**才擋得住，而已經升級完成的 ttyd WebSocket
 #   不會再走 nginx 的 auth_request——連線活著的期間，對方手上就是一個可互動的 shell。
-#   「停用帳號」那條早就想到這件事並收掉 view；「重設密碼」與「改自己的密碼」漏了，
+#   曾有一條「停用帳號」路徑早就想到這件事並收掉 view；「重設密碼」與「改自己的密碼」漏了，
 #   而後者的典型情境正是「我懷疑被盜了」。
 from server import app as _app_mod  # noqa: E402
 from server import views as _views_mod  # noqa: E402

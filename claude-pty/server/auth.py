@@ -256,18 +256,18 @@ def set_ttyd_bin(user_id: int, value: str) -> dict:
 
 
 def list_users() -> list[dict]:
-    """**全部**帳號，含已停用的。
+    """**全部**帳號。
 
-    ⚠ 停用的不可以濾掉。停用是這個系統唯一的退場方式（沒有刪除，見 ADR 0010），名單
-      上看不到他就沒有人能把他復用回來；他過去開的 session 歷史也是永久保存的，篩選
-      用的下拉少了他，那些紀錄就永遠查不到。
+    ⚠ 退場過的（被 admin 改掉密碼的）不可以濾掉——本來也沒有可以濾的旗標。帳號不能
+      刪（ADR 0010），名單上看不到他就沒有人能把新密碼給他讓他回來；他過去的
+      session 歷史也是永久保存的，少了他那些紀錄就對不到人。
     """
     with session_scope() as s:
         return [_to_dict(u) for u in s.query(User).order_by(User.username).all()]
 
 
 def page_users(limit: int, offset: int = 0) -> tuple[list[dict], int]:
-    """一頁帳號 + 總筆數（排序、含已停用的規則同 list_users）。
+    """一頁帳號 + 總筆數（排序、不濾人的規則同 list_users）。
 
     總數在同一個交易裡算，不是拿 len() 去數這一頁——那會回報成「共 10 筆」。
     """
