@@ -643,6 +643,26 @@ def change_own_password():
     return "", 204
 
 
+@app.put("/api/users/me/token")
+def set_own_token():
+    """存自己的 CLI 憑證（`claude setup-token` 的輸出）。body: {"token": "..."}
+
+    PUT 語意：重貼就是整個換掉，沒有「部分更新」。存進去的值**不再吐回來**——GET 只有
+    「已設定／未設定」（見 credentials_state），要用新的就再貼一次。
+    """
+    body = _body()
+    _reject_unknown(body, {"token"})
+    auth.set_cli_token(g.user["id"], body.get("token"))
+    return "", 204
+
+
+@app.delete("/api/users/me/token")
+def clear_own_token():
+    """清掉自己的 CLI 憑證。之後開新 session 會被擋（引導重新設定）；已在跑的不受影響。"""
+    auth.clear_cli_token(g.user["id"])
+    return "", 204
+
+
 @app.post("/api/users/<int:uid>/password")
 @admin_only
 def admin_change_password(uid: int):
@@ -697,7 +717,7 @@ def list_sessions():
     # ⚠ count 要吃同一組 filters，否則總筆數多報、頁碼算錯、最後一頁是空白
     return jsonify(sessions=items, total=manager.count(user_id=uid, filters=filters),
                    limit=limit, offset=offset,
-                   credentials=sessions_mod.credentials_state())
+                   credentials=sessions_mod.credentials_state(g.user["id"]))
 
 
 @app.get("/api/sessions/history")
@@ -717,7 +737,7 @@ def list_history():
     items, total = manager.history(user_id=uid, limit=limit, offset=offset,
                                    filters=_filters_from_args())
     return jsonify(sessions=items, total=total, limit=limit, offset=offset,
-                   credentials=sessions_mod.credentials_state())
+                   credentials=sessions_mod.credentials_state(g.user["id"]))
 
 
 @app.get("/api/sessions/<sid>")

@@ -8,9 +8,8 @@
 # 設定檔：從 .env.example 複製成 .env 再填（SECRET_KEY / HOST_REPO_ROOT / DOCKER_GID /
 # APP_UID）。完整步驟見 README 的「部署」一節。
 #
-# 前置：Claude 憑證要在 host 上就位，否則 session 內的 claude 是登出狀態、改用按量計價。
-#   macOS 鎖在 Keychain，跑 ./refresh-credentials.sh 抽到 ~/.claude-pty/；
-#   Linux 的 ~/.claude/.credentials.json 是真檔，隨既有的 ~/.claude 掛載直接進去。
+# 憑證不在部署層：每個人登入網頁後，把自己 `claude setup-token` 的輸出貼到帳號管理頁
+# （加密存 DB、開場時以環境變數交給 session）。host 上不需要準備任何憑證檔。
 #
 # 建立第一個管理員（容器起來後）：
 #   docker compose exec control python -m server.cli create-admin alice
@@ -24,9 +23,7 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         # 容器內 app 使用者的 uid。**必須等於 host 上那些掛進來的檔案的擁有者**：
-        # ~/.claude/.credentials.json 是 0600，只有擁有者讀得到——uid 對不上的話控制平面
-        # 判定「憑證讀不到」，建立 session 會被 _guard_credentials 直接擋下。
-        # ./data（SQLite）同理，擁有者要是這個 uid 才寫得進去。
+        # ./data（SQLite）的擁有者要是這個 uid 才寫得進去；per-user 空間同理。
         # 查法：`id -u`（Docker Desktop 走 VM 的 uid 對映，維持預設 1000 即可）。
         APP_UID: ${APP_UID:-1000}
         # 這一版是哪個 commit（頁尾顯示用）。由 deploy/redeploy.sh 算好 export 進來
@@ -56,17 +53,6 @@ services:
     init: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # 存在性檢查用（build_run_kwargs 會先 isfile/isdir 才決定掛不掛，ADR 0009）：
-      # ⚠ **維持唯讀**。這一隻同時掛著 docker.sock，能寫進 ~/.claude 等於能改你 host 上
-      #   Claude Code 的設定，而它本來就能起特權容器——兩件事疊起來的爆炸半徑是整台機器。
-      # ⚠ ADR 0016 之後 **session 已經完全不掛這個目錄了**（狀態改走 per-user 空間）。
-      #   控制平面留著它只為了一件事：`credential_sources()` 的第二個來源
-      #   （Linux 原生的 ~/.claude/.credentials.json）要檢查存在性、也要當掛載來源。
-      - ${HOME}/.claude:${HOME}/.claude:ro
-      # refresh-credentials.sh 抽出來的 OAuth 憑證。以**同一個路徑**掛進來，讓
-      # config.CREDENTIALS_HOST 同時當「給 daemon 的 host 路徑」與「自己檢查存在性的路徑」。
-      # 少了它 session 會以登出狀態啟動、改用 API 按量計價（見 config.CREDENTIALS_HOST）。
-      - ${HOME}/.claude-pty:${HOME}/.claude-pty:ro
       # 注意：compose 的相對路徑以本檔所在目錄為基準，deploy/ 的 .. 是 claude-pty，
       # repo 根要再上一層（entrypoint.sh 在 <repo>/dev-container/）。
       - ../..:${HOST_REPO_ROOT:-/repo}:ro
@@ -80,8 +66,7 @@ services:
       # 不是 isdir：空殼＝不掛，A4 軌道 gate 不過、自動跳過。
       - ${HOME}/semgrep-rules:${HOME}/semgrep-rules:ro
       # per-user 的 agent 狀態空間（ADR 0016）。**可寫**——控制平面要在裡面建目錄、
-      # 寫 .claude.json 種子。這與上面 ~/.claude 維持
-      # ro 不衝突：那是**你的** host 設定，這是**它自己管**的目錄。
+      # 寫 .claude.json 種子。host 自己的 ~/.claude 完全不進來：session 的狀態全在這裡。
       # 以同一個路徑掛進來，host 與 self 兩個視角才對得上（見下方 CLAUDE_PTY_SPACE_SELF）。
       - ${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}:${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}
       # registry（SQLite）的持久化。放在本檔旁邊的 ./data/，不用 named volume——
@@ -153,11 +138,6 @@ services:
     command: ["python", "-m", "server.reconciler"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${HOME}/.claude:${HOME}/.claude:ro
-      # refresh-credentials.sh 抽出來的 OAuth 憑證。以**同一個路徑**掛進來，讓
-      # config.CREDENTIALS_HOST 同時當「給 daemon 的 host 路徑」與「自己檢查存在性的路徑」。
-      # 少了它 session 會以登出狀態啟動、改用 API 按量計價（見 config.CREDENTIALS_HOST）。
-      - ${HOME}/.claude-pty:${HOME}/.claude-pty:ro
       # 注意：compose 的相對路徑以本檔所在目錄為基準，deploy/ 的 .. 是 claude-pty，
       # repo 根要再上一層（entrypoint.sh 在 <repo>/dev-container/）。
       - ../..:${HOST_REPO_ROOT:-/repo}:ro

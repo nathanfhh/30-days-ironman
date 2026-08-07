@@ -74,7 +74,7 @@ except OSError:
 
 def _page(template: str, active: str, **extra):
     # 憑證狀態在伺服端就算好：招牌上的徽章第一次繪製就是正確的，不會先閃一個
-    # 「訂閱計價」再被 JS 改成警示。帳號管理頁沒有輪詢，也只有這條路能拿到它。
+    # 預設樣式再被 JS 改成警示。帳號管理頁沒有輪詢，也只有這條路能拿到它。
     return render_template(
         template,
         user=g.user,
@@ -83,7 +83,7 @@ def _page(template: str, active: str, **extra):
         min_password_length=config.MIN_PASSWORD_LENGTH,
         name_max=config.NAME_MAX,
         username_max=config.USERNAME_MAX,
-        credentials=sessions_mod.credentials_state(),
+        credentials=sessions_mod.credentials_state(g.user["id"]),
         # 招牌徽章的鍵：這套東西只驅動 claude 一種 CLI。
         default_cli="claude",
         **extra,

@@ -19,11 +19,10 @@
     </span>
   </div>
   <nav class="masthead__nav">
-    {# 計價徽章。這不是裝飾：少了 Claude 的訂閱憑證，session 照樣開得起來、跑得好好的，
-       只是容器裡是登出狀態、改用 API 按量計價——畫面上只有 Claude 自己一行小字，帳單
-       卻是真的（2026-07-26 的事故）。`_guard_credentials` 只擋得住「建立」那一刻，
-       已經在跑的 session 憑證到期不會有任何徵兆，所以狀態得常駐在招牌上。
-       到期前 14 天起轉警示色：refreshToken 的到期日是**算得出來的**，沒道理讓人事後才知道。
+    {# 憑證徽章：這個人設定 CLI 憑證了沒（setup-token，見 sessions.credentials_state）。
+       沒設的話新 session 一開場就停在登入提示，所以狀態常駐在招牌上、紅著提醒；
+       token 的到期**不可預告**（它不揭露壽命），detail 直接寫明「過期的症狀是開場
+       失敗、當下該重跑 setup-token 再貼一次」。
        圖示與顏色全由 CSS 依 data-state 決定（見 .cred）——伺服端與 15 秒輪詢的 JS
        都只負責給 state / label / detail 三個值，不各自挑圖示。
        role="status" 讓輪詢改寫時螢幕閱讀器會念出來（aria-live=polite，不打斷）。

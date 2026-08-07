@@ -1,29 +1,50 @@
-"""憑證狀態的 regression：credentials_state() / _guard_credentials()。
+"""憑證的 regression：setup-token 是唯一來源（存取、注入、守門、狀態）。
 
-    uv run --with flask --with docker python tests/test_credentials.py
+    uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
+        --with cryptography python tests/test_credentials.py
 
-為什麼要有這支：2026-07-26 的事故是「session 全部靜靜改用 API 按量計價」，沒有任何錯誤、
-只有帳單。這裡守的是那條防線本身——判定要對，而且到期是**預告得到的**（days_left）。
+守的性質：
+  🔴 憑證只有一個來源——這個人貼進來的 setup-token（加密存 DB）。**沒有讀 host
+     憑證檔的後路**：那是一條平常不走、出事才走、而且沒人測過的路徑。
+  🔴 明文不落地：DB 裡是密文，API 不吐回，畫面只有「已設定／未設定」。
+  🔴 沒設就在 create() 入口擋下，錯誤訊息講得出下一步。
 
-⚠ 全程只碰 tmpdir：這支測試絕不可讀到真的 ~/.claude/.credentials.json，那是使用者的憑證。
+⚠ 舊版此檔測的是「讀 host 憑證檔」的整套判定（days_left 預警、快照 stale、雙來源
+  優先序、ro/rw 掛載模式）。那套機制整組退場，逐條處置記在檔尾的對照表。
 """
 import json
 import os
 import shutil
 import sys
 import tempfile
-import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import config
-from server.sessions import (
+from server import config  # noqa: E402
+
+TMP = tempfile.mkdtemp(prefix="cred-test-")
+os.environ["CLAUDE_PTY_DB_PATH"] = os.path.join(TMP, "t.db")
+config.DB_PATH = os.environ["CLAUDE_PTY_DB_PATH"]
+config.DB_URL = f"sqlite:///{config.DB_PATH}"
+config.SECRET_KEY = "cred-test-secret"
+# HOST_HOME 指進 tmpdir：這支測試絕不可讀到使用者的真實家目錄。下面還會另外
+# **釘住**「就算那裡有一份憑證檔也沒人去讀」。
+config.HOST_HOME = os.path.join(TMP, "home")
+
+from server import auth, crypto, db  # noqa: E402
+from server.db import session_scope  # noqa: E402
+from server.models import User  # noqa: E402
+from server.sessions import (  # noqa: E402
     Profile,
     SessionError,
+    SessionManager,
     _guard_credentials,
     build_run_kwargs,
-    claude_credentials_state as credentials_state,
-    credentials_state as all_credentials_state,
+    claude_credentials_state,
+    credentials_state,
 )
+
+db.reset_engine()
+db.init_db()
 
 _pass = _fail = 0
 def check(label, ok):
@@ -33,218 +54,131 @@ def check(label, ok):
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
 
 
-TMP = tempfile.mkdtemp(prefix="cred-test-")
-# 隔離：兩個來源都指進 tmpdir。HOST_HOME 決定第二來源（~/.claude/.credentials.json），
-# 沒改的話這支會去讀使用者真正的憑證檔——測試不可以碰那個檔。
-config.CREDENTIALS_HOST = os.path.join(TMP, "extracted.json")
-config.HOST_HOME = os.path.join(TMP, "home")
-LIVE = os.path.join(config.HOST_HOME, ".claude", ".credentials.json")
-os.makedirs(os.path.dirname(LIVE))
+uid = auth.create_user("cred-user", "cred-password-1")["id"]
+TOKEN = "sk-ant-oat01-test-token-value"
 
-
-def write(path, *, days=30, plan="max", refresh_exp=True, access_hours=1):
-    """寫一份憑證檔。days 是 refreshToken 距今的天數（可為負＝已過期）。
-
-    多加 3600 秒是為了讓 days_left 的無條件捨去落在整數上：credentials_state() 算的是
-    `(rexp - now) // 86400`，剛好整數天的話會因為執行期間過了幾毫秒而掉一天。
-
-    access_hours 是 accessToken 距今的小時數（可為負＝已過期）。對**快照**來說那不是
-    無害的：見 claude_credentials_state 裡 stale 的說明。
-    """
-    oauth = {"accessToken": "x", "refreshToken": "x",
-             "expiresAt": int((time.time() + access_hours * 3600) * 1000)}
-    if plan is not None:
-        oauth["subscriptionType"] = plan
-    if refresh_exp:
-        oauth["refreshTokenExpiresAt"] = int((time.time() + days * 86400 + 3600) * 1000)
-    with open(path, "w") as f:
-        json.dump({"claudeAiOauth": oauth}, f)
-
-
-def clear():
-    for p in (config.CREDENTIALS_HOST, LIVE):
-        if os.path.exists(p):
-            os.remove(p)
-
-
-print("== 沒有憑證：擋下來，而且說得夠白 ==")
-clear()
-st = credentials_state()
-check("ok=False", st["ok"] is False)
-check("state=bad", st["state"] == "bad")
-# label 講的是**後果**（按量計價），不是原因——原因在 detail。畫面上人只會掃過 label。
-check("label 提到按量計價", "按量計價" in st["label"])
-check("label 講明是哪個 agent", st["label"].startswith("Claude"))
-check("days_left=None", st["days_left"] is None)
+print("== 沒設 token：狀態說得夠白，create() 入口就擋 ==")
+st = claude_credentials_state(uid)
+check("ok=False / state=bad", st["ok"] is False and st["state"] == "bad")
+check("label 講明是哪個 agent、什麼問題", st["label"] == "Claude 未設定憑證")
+check("detail 講得出下一步（setup-token → 帳號頁）",
+      "setup-token" in st["detail"] and "帳號管理" in st["detail"])
+check("detail 講得出後果（未登入啟動、停在登入提示）",
+      "未登入" in st["detail"] and "登入提示" in st["detail"])
 try:
-    _guard_credentials()
-    check("_guard_credentials 沒憑證要 raise", False)
+    _guard_credentials(uid)
+    check("_guard_credentials 沒 token 要 raise", False)
 except SessionError as e:
-    check("_guard_credentials 沒憑證 raise SessionError", True)
-    check("錯誤訊息指向 refresh-credentials.sh", "refresh-credentials.sh" in str(e))
+    check("_guard_credentials 沒 token raise SessionError", True)
+    check("錯誤訊息指向 setup-token 與帳號頁",
+          "setup-token" in str(e) and "帳號管理" in str(e))
 
-print("== 正常的憑證：安靜地報訂閱計價 ==")
-clear()
-write(config.CREDENTIALS_HOST, days=30)
-st = credentials_state()
-check("ok=True", st["ok"] is True)
-check("state=ok", st["state"] == "ok")
-check("days_left=30", st["days_left"] == 30)
-check("plan=max", st["plan"] == "max")
-check("label 帶 agent 名與方案", st["label"] == "Claude 訂閱 · max")
-# 兩個到期時刻原樣往前送（epoch 毫秒），格式化是瀏覽器的事——控制平面在容器裡是 UTC，
-# 它排出來的時間不屬於任何人。這裡只確認「有送、而且沒被換算過」。
-with open(config.CREDENTIALS_HOST) as f:
-    raw = json.load(f)["claudeAiOauth"]
-stamps = {s["label"]: s["at"] for s in st["stamps"]}
-check("存取權杖時刻原樣送出（epoch 毫秒）", stamps["存取權杖"] == raw["expiresAt"])
-check("續期權杖時刻原樣送出", stamps["續期權杖"] == raw["refreshTokenExpiresAt"])
-_guard_credentials()          # 不該 raise；raise 的話這支測試直接掛掉
+print("== 守門接在 create() 的入口上（不是只有函式自己對）==")
+# 不打 docker：守門在任何容器動作**之前**就要擋下，所以 _docker 沒被碰到才是對的。
+class _Boom:
+    def __getattr__(self, name):
+        raise AssertionError("guard 之前不該碰 docker")
+mgr = SessionManager.__new__(SessionManager)
+mgr._docker = _Boom()
+try:
+    mgr.create(user_id=uid)
+    check("create() 沒 token 要 raise", False)
+except SessionError:
+    check("create() 沒 token 在入口就 raise（沒碰到 docker）", True)
+
+print("== 設 token：加密入庫、狀態翻綠、env 注入 ==")
+auth.set_cli_token(uid, "  " + TOKEN + "\n")   # 前後空白要被剝掉（終端複製常帶）
+with session_scope() as s:
+    enc = s.get(User, uid).cli_token_enc
+check("DB 裡存的是密文，讀不出明文", enc is not None and TOKEN not in enc)
+check("解密回原值（空白已剝）", crypto.decrypt(enc) == TOKEN)
+check("auth.cli_token 回明文", auth.cli_token(uid) == TOKEN)
+st = claude_credentials_state(uid)
+check("ok=True / state=ok", st["ok"] is True and st["state"] == "ok")
+check("label＝已設定（沒有天數——token 的到期不可知，沒得預警）",
+      st["label"] == "Claude 憑證已設定")
+check("detail 預告失效的症狀（開場失敗）與處置（重跑 setup-token 再貼）",
+      "開場失敗" in st["detail"] and "setup-token" in st["detail"])
+_guard_credentials(uid)     # 不該 raise；raise 的話這支測試直接掛掉
 check("_guard_credentials 放行", True)
 
-print("== 到期前示警：門檻是 CREDENTIALS_WARN_DAYS（含）==")
-# 這條是這次功能的重點。到期**算得出來**，所以畫面該在到期前就開始講，而不是等某天
-# 開的 session 全部靜靜轉成按量計價才發現。門檻兩側各驗一次，免得日後改成 `<` 沒人知道。
-for days, want in ((15, "ok"), (14, "warn"), (1, "warn")):
-    clear()
-    write(config.CREDENTIALS_HOST, days=days)
-    st = credentials_state()
-    check(f"剩 {days} 天 → state={want}", st["state"] == want)
-    if want == "warn":
-        check(f"剩 {days} 天 → label 講剩幾天", st["label"] == f"Claude 憑證剩 {days} 天")
-        check(f"剩 {days} 天 → ok 仍為 True（還能用，只是要換了）", st["ok"] is True)
+env = build_run_kwargs("c", "sid1", Profile(), uid).get("environment", {})
+check("🔴 env 注入 CLAUDE_CODE_OAUTH_TOKEN（憑證交給 CLI 的唯一管道）",
+      env.get("CLAUDE_CODE_OAUTH_TOKEN") == TOKEN)
 
-print("== refreshToken 已過期：等同沒有憑證 ==")
-clear()
-write(config.CREDENTIALS_HOST, days=-3)
-st = credentials_state()
-check("ok=False", st["ok"] is False)
-check("state=bad", st["state"] == "bad")
-check("days_left 為負（不是 None）", st["days_left"] is not None and st["days_left"] < 0)
-check("detail 說是過期", "過期" in st["detail"])
-
-print("== 快照的存取權杖過期 → warn，不可以繼續顯示綠燈 ==")
-# 探索性測試 2026-07-26 打出來的：徽章 ok／「還有 26 天」，而容器裡的 agent 是
-# `401 OAuth access token has been revoked`。徽章原本只看 refreshToken 的到期日，
-# 但 CREDENTIALS_HOST 是唯讀掛進容器的**凍結快照**——host 換發一次它就作廢，實際壽命
-# 與 refreshToken 的 26 天無關。存取權杖已過期至少證明「這份落後於 host 了」。
-clear()
-write(config.CREDENTIALS_HOST, days=26, access_hours=-3)
-st = credentials_state()
-check("state=warn（不是 ok）", st["state"] == "warn")
-check("ok 仍為 True（續期權杖沒過期，不是 bad）", st["ok"] is True)
-check("label 講的是快照過期", "快照" in st["label"])
-check("detail 指向重跑 refresh-credentials.sh",
-      "refresh-credentials.sh" in st["detail"])
-check("days_left 仍照實回報，沒有為了改狀態而扭曲數字", st["days_left"] == 26)
-
-print("== 但可寫的真檔（~/.claude 內的）存取權杖過期是常態，不可以誤報 ==")
-# Linux 上那個檔是 claude 自己就地換發的，過期本來就會自己補回來。
-clear()
-write(LIVE, days=26, access_hours=-3)
-st = credentials_state()
-check("state=ok", st["state"] == "ok")
-check("沒有被標成 stale", not st.get("stale"))
-
-print("== 快照的存取權杖還沒過期就是正常的 ok ==")
-clear()
-write(config.CREDENTIALS_HOST, days=26, access_hours=+3)
-st = credentials_state()
-check("state=ok", st["state"] == "ok")
-check("沒有被標成 stale", not st.get("stale"))
-
-print("== 缺 refreshTokenExpiresAt：不可以因為讀不到就亂報警 ==")
-# 沒有到期欄位＝不知道何時到期，不等於快到期。報 warn 會讓人白跑一趟 Keychain。
-clear()
-write(config.CREDENTIALS_HOST, refresh_exp=False)
-st = credentials_state()
-check("state=ok", st["state"] == "ok")
-check("days_left=None", st["days_left"] is None)
-check("沒有續期權杖那一行（tooltip 就不會出現）",
-      "續期權杖" not in {s["label"] for s in st["stamps"]})
-
-print("== 空檔要當成「沒有」，不是「壞掉的憑證」 ==")
-# ⚠ ~/.claude/.credentials.json 常常是空檔——它同時是巢狀 mount 的落點，由
-#   refresh-credentials.sh 以 `: >` 建出來。當成壞檔的話，畫面會說「讀不到或格式不對」
-#   而不是「未登入」，把人指向去修一個根本沒壞的檔案。
-#   腳本的 pick() 用 `[ -s ]`（非空才算），伺服端必須同一個語意。
-clear()
-open(LIVE, "w").close()                     # 空的落點
-st = credentials_state()
-check("只有空落點 → 當成找不到憑證", st["detail"] == "找不到任何憑證")
-check("不會說成「格式不對」", "格式不對" not in st["detail"])
-
-print("== 壞掉的檔：當成沒有，並且指出是哪個檔 ==")
-clear()
-with open(config.CREDENTIALS_HOST, "w") as f:
-    f.write("{ not json")
-st = credentials_state()
-check("ok=False", st["ok"] is False)
-check("detail 帶上路徑（不然不知道要去修哪一個）",
-      config.CREDENTIALS_HOST in st["detail"])
-
-print("== 兩個來源的優先序：與 refresh-credentials.sh 的 pick() 一致 ==")
-# ⚠ 順序必須跟腳本一樣（抽出來的優先），否則 `--check` 報的會是一份跟 session 實際
-#   吃到的不同的憑證——那種不一致查起來要人命。
-clear()
-write(LIVE, days=30, plan="pro")
-st = credentials_state()
-check("只有 ~/.claude 那份時用它（Linux 的正常情況）", st["plan"] == "pro")
-check("detail 指明來源是 ~/.claude", "~/.claude" in st["detail"])
-write(config.CREDENTIALS_HOST, days=30, plan="max")
-st = credentials_state()
-check("兩份都在時用抽出來的那份（與 build_run_kwargs 疊加的方向一致）",
-      st["plan"] == "max")
-
-print("== 憑證掛進容器：掛哪一份、用什麼模式（ADR 0016）==")
-# ⚠ 這裡曾經是 `_require_credentials_mountpoint()` 的測試。憑證以前是**巢狀** bind mount
-#   （疊在 ~/.claude 之上），runc 不會替你在 host 上建 mountpoint，缺席就 exit 125，所以
-#   要先擋下來。ADR 0016 之後憑證掛進 `/home/nathan/.claude-creds/`——那個目錄在 image 裡
-#   不存在，docker 是在**容器 rootfs 內**建目錄鏈，不是巢狀掛載，整個問題連同那個函式一起
-#   消失（refresh-credentials.sh 的 ensure_mountpoint() 同步退場）。
-#
-# 接手的是這一條：**掛哪一份、什麼模式**。規則是「這個檔是不是真相來源」而不是看平台：
-#   快照 → ro（容器換發的結果寫回一份 host 根本不讀的副本，沒有意義）
-#   真檔 → rw（Linux 上 session 是**唯一**的換發者，掛 ro 就是數小時後全部登出）
+print("== 🔴 沒有讀 host 憑證檔的後路 ==")
+# 在 HOST_HOME 放一份「看起來完全有效」的舊式憑證檔：狀態、守門、掛載**全部**不理它。
+live = os.path.join(config.HOST_HOME, ".claude", ".credentials.json")
+os.makedirs(os.path.dirname(live), exist_ok=True)
+with open(live, "w") as f:
+    json.dump({"claudeAiOauth": {"accessToken": "x", "refreshToken": "x"}}, f)
+auth.clear_cli_token(uid)
+st = claude_credentials_state(uid)
+check("🔴 host 上有憑證檔，狀態照樣是未設定（不讀它）", st["ok"] is False)
+try:
+    _guard_credentials(uid)
+    check("🔴 守門也不理那個檔", False)
+except SessionError:
+    check("🔴 守門也不理那個檔", True)
 _saved_mounts = config.MOUNTS
 try:
-    config.MOUNTS = {"/shared": {"bind": "/shared", "mode": "rw"}}   # 非空才會掛憑證
-    clear()
-    write(config.CREDENTIALS_HOST)                    # 只有快照（macOS 的形狀）
-    vols = build_run_kwargs("c", "s", Profile(), 1)["volumes"]
-    check("快照掛 **ro**", vols.get(config.CREDENTIALS_HOST)
-          == {"bind": config.CREDENTIALS_BIND, "mode": "ro"})
-
-    clear()
-    write(LIVE)                                       # 只有真檔（Linux 原生的形狀）
-    vols = build_run_kwargs("c", "s", Profile(), 1)["volumes"]
-    check("真檔掛 **rw**（session 是唯一的換發者）", vols.get(LIVE)
-          == {"bind": config.CREDENTIALS_BIND, "mode": "rw"})
-
-    # 落點必須是「專屬目錄底下的單一檔案」。⚠ 絕不可以改成掛整個 ~/.claude-pty 目錄：
-    # 非容器化執行時那裡面還有 secret.key（cookie 的簽章金鑰）與預設的
-    # SQLite registry，掛進 session 等於把簽章金鑰和整個資料庫發給每一個使用者。
-    check("落點在專屬目錄底下，掛的是單一檔案",
-          config.CREDENTIALS_BIND == config.CREDENTIALS_DIR_BIND + "/.credentials.json")
-    check("掛的來源是檔案不是目錄", os.path.isfile(LIVE))
-
-    write(config.CREDENTIALS_HOST, plan="max")        # 兩份都在
-    vols = build_run_kwargs("c", "s", Profile(), 1)["volumes"]
-    check("兩份都在時掛快照那份——與招牌徽章讀的是同一份（分岔就會「畫面說有、容器沒吃到」）",
-          config.CREDENTIALS_HOST in vols and LIVE not in vols)
-
-    clear()
-    vols = build_run_kwargs("c", "s", Profile(), 1)["volumes"]
-    check("一份都沒有就不掛（擋下建立是 _guard_credentials 的職責，不是這裡)",
-          not any(v["bind"] == config.CREDENTIALS_BIND for v in vols.values()))
+    config.MOUNTS = {"/shared": {"bind": "/shared", "mode": "rw"}}
+    kw = build_run_kwargs("c", "sid2", Profile(), uid)
+    check("🔴 volumes 沒有任何 .credentials 掛載",
+          all(".credentials" not in v.get("bind", "")
+              for v in kw["volumes"].values()) and live not in kw["volumes"])
+    check("🔴 env 也沒有半個憑證（沒設就是沒設，不是空字串）",
+          "CLAUDE_CODE_OAUTH_TOKEN" not in kw.get("environment", {}))
 finally:
     config.MOUNTS = _saved_mounts
 
+print("== token 的輸入驗證：擋的是「貼錯東西」，不是猜格式 ==")
+for bad, why in [(123, "非字串"), (None, "None"), ("", "空字串"), ("   \n", "只有空白"),
+                 ("a b", "帶空白（多半整段輸出都貼進來了）"),
+                 ("line1\nline2", "多行"), ("tok\ten", "控制字元"),
+                 ("x" * 4097, "長度爆表")]:
+    try:
+        auth.set_cli_token(uid, bad)
+        check(f"{why} → AuthError", False)
+    except auth.AuthError:
+        check(f"{why} → AuthError", True)
+check("被擋下之後狀態仍是未設定（不會寫進去一半）",
+      claude_credentials_state(uid)["ok"] is False)
+# 不驗前綴：token 格式是上游的事，隨版本會變。單行可見字元就收。
+auth.set_cli_token(uid, "some-future-token-format")
+check("不寫死前綴（格式是上游的事）", auth.cli_token(uid) == "some-future-token-format")
+
+print("== 清除與換金鑰的降級 ==")
+auth.clear_cli_token(uid)
+check("清除後回 None", auth.cli_token(uid) is None)
+auth.set_cli_token(uid, TOKEN)
+_saved_key = config.SECRET_KEY
+try:
+    config.SECRET_KEY = "rotated-secret"
+    check("換 SECRET_KEY → 解不開一律當「沒設」（畫面引導重貼，不是 500）",
+          auth.cli_token(uid) is None and claude_credentials_state(uid)["ok"] is False)
+finally:
+    config.SECRET_KEY = _saved_key
+check("金鑰換回來，舊密文又解得開（沒被覆寫）", auth.cli_token(uid) == TOKEN)
+
 print("== credentials_state()：形狀是 {cli: state} ==")
-both = all_credentials_state()
+both = credentials_state(uid)
 check("只有 claude 一把鑰匙", set(both) == {"claude"})
 check("brand 正確（畫面的品牌標誌靠它）", both["claude"]["brand"] == "anthropic")
+check("stamps 是空清單（沒有時刻可標，但形狀與畫面契約不變）",
+      both["claude"]["stamps"] == [])
 
+# ── 舊斷言對照表（閘 4：說得出每一條是「對象消失」還是「換人守」）─────────────────
+# 換人守：
+#   ·「沒憑證擋下 + 訊息講下一步」→ 本檔前兩段（訊息從 refresh 腳本改指 setup-token）
+#   ·「壞值不炸、當成沒設」→「清除與換金鑰的降級」段（crypto.decrypt 回 None）
+#   ·「形狀 {cli: state}／brand」→ 最末段原樣保留
+#   ·「畫面說有 vs 容器吃到」的一致性 → 狀態與注入讀同一個欄位（cli_token），由
+#     「設 token」段的 state=ok + env 注入同值釘住
+# 對象消失（讀檔機制整組退場，含其輸入面）：
+#   · days_left 門檻預警／stamps 時刻——token 到期不可知，能力失去，README 記症狀
+#   · 快照 stale／雙來源優先序／ro-rw 掛載模式／空檔＝沒有／壞 JSON 指路徑——
+#     沒有檔案就沒有這些狀態；「不讀檔」本身升格為 🔴 斷言
 shutil.rmtree(TMP, ignore_errors=True)
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)

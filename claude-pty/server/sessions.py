@@ -10,7 +10,6 @@ ttyd 與就緒偵測共用 docker-py 的 `attach_socket`（見下方 attach 段�
 
 from __future__ import annotations
 
-import base64
 import datetime as _dt
 import json
 import os
@@ -27,6 +26,7 @@ import docker
 from sqlalchemy.exc import IntegrityError
 
 from . import config
+from . import auth as auth_mod
 from .db import session_scope
 from .models import (
     END_TERMINATED,
@@ -389,167 +389,62 @@ class SessionNotFound(SessionError):
     """找不到 session，或請求者無權存取（兩者刻意回同一種錯，不洩漏存在性）。"""
 
 
-CREDENTIALS_WARN_DAYS = 14      # 到期前多久開始在招牌上示警
-
-# ⚠ 這裡曾經有 `_require_credentials_mountpoint()`：憑證以前是**巢狀** bind mount
-#   （疊在 ~/.claude 這個 mount 之上），而新版 runc（openat2 + securejoin）拒絕在 rootfs
-#   之外建立 mountpoint，落點不存在時容器直接 exit 125。ADR 0016 之後憑證掛進
-#   `/home/nathan/.claude-creds/`——那個目錄在 image 裡不存在，docker 是在**容器 rootfs
-#   內**建目錄鏈，不是巢狀掛載，於是整個問題連同那個函式一起消失。
-#   `deploy/refresh-credentials.sh` 的 ensure_mountpoint() 也同步退場。
-
-
-def _credentials_badge(state: dict) -> dict:
-    """替憑證事實補上畫面直接用的 `state` / `label`。
-
-    分級只寫這一份：招牌的 Jinja 與每 15 秒輪詢的 JS 都只讀 `state`，不各自判斷天數
-    門檻——同一條規則寫在兩種語言裡遲早會走鐘。
-
-    label 一律帶上 agent 名稱；已經給了就不覆蓋（不同失敗要講不同的話）。
-    """
-    name = state["cli_label"]
-    if not state["ok"]:
-        # 讀不到與過期在後果上是同一件事：容器裡會是登出狀態，於是按量計價。
-        # label 講後果（那才是要人動起來的理由），原因留在 detail 給 tooltip。
-        state["state"] = "bad"
-        state.setdefault("label", f"{name} 未登入 · 按量計價")
-    elif state.get("stale"):
-        # 快照的存取權杖已經過期——見 claude_credentials_state 裡那段說明。續期權杖還有
-        # 很多天，所以不是 bad；但它也不是 ok，因為容器**現在**很可能就登不進去。
-        state["state"] = "warn"
-        state["label"] = f"{name} 憑證快照過期"
-    elif state["days_left"] is not None and state["days_left"] <= CREDENTIALS_WARN_DAYS:
-        state["state"] = "warn"
-        state["label"] = f"{name} 憑證剩 {state['days_left']} 天"
-    else:
-        state["state"] = "ok"
-        state["label"] = f"{name} 訂閱" + (f" · {state['plan']}" if state["plan"] else "")
-    return state
-
-
-def _jwt_claims(token: str) -> dict:
-    """取 JWT 的 payload。
-
-    ⚠ **不驗簽章**，也不該驗：這裡拿到的東西只用來「顯示」——方案名稱、到期時刻。
-      沒有任何授權決定建立在它上面（授權是 OpenAI 那端的事）。真要驗還得有公鑰、
-      還得處理輪替，為了畫面上兩行字不划算。
-    """
-    try:
-        seg = token.split(".")[1]
-        return json.loads(base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4)))
-    except Exception:      # noqa: BLE001 —— 格式不對就是沒有，不該讓一顆徽章弄掛整頁
-        return {}
-
+# ⚠ 這裡曾經有 `_require_credentials_mountpoint()`：憑證以前是以檔案掛進容器的，
+#   巢狀 bind mount 在新版 runc（openat2 + securejoin）上落點不存在就 exit 125。
+#   現在憑證走環境變數（CLAUDE_CODE_OAUTH_TOKEN，見 build_run_kwargs），整個檔案
+#   掛載的問題類別連同那個函式一起消失。
 
 _CLAUDE_BASE = {"cli": "claude", "cli_label": "Claude", "brand": "anthropic"}
 
 
-def _stamp(label: str, ms) -> dict | None:
-    """tooltip 上的一行時刻。`ms` 是 epoch 毫秒，缺就回 None（呼叫端會濾掉）。
+def claude_credentials_state(user_id: int | None) -> dict:
+    """這個人開 session 時，Claude Code 拿不拿得到登入憑證。
 
-    **不在這裡格式化**：控制平面跑在容器裡、時區是 UTC，排出來的時間不屬於任何人。
-    交給瀏覽器用使用者自己的時區與語系（見 app.js 的 credTipText）。
+    憑證＝他自己貼進來的 setup-token（`claude setup-token` 的輸出，加密存 DB、開場時
+    以環境變數交給容器）。**唯一來源**，控制平面不讀 host 上的任何憑證檔——「檔案在
+    就順便用」是一條平常不走、出事才走、而且沒人測過的路徑。
+
+    只有兩種狀態：已設定／未設定。token 的到期時刻**不可知**（它不揭露自己的壽命），
+    所以沒有「剩 N 天」的預警——過期不會有任何預告，**症狀是開場失敗**（終端裡只會
+    看到登入提示）。detail 把這件事講在前面，事到臨頭那句話就是操作指南。
+
+    解不開（換過 SECRET_KEY）與沒設過**刻意同一種畫面**：對使用者的正確指示都是
+    同一句「重新貼一次」。
+
+    每次呼叫都重讀 DB，不快取：他剛在帳號頁貼完，招牌 15 秒內就該轉綠。
     """
-    return {"label": label, "at": int(ms)} if ms else None
+    token = auth_mod.cli_token(user_id) if user_id is not None else None
+    if token is None:
+        return {**_CLAUDE_BASE, "ok": False, "state": "bad",
+                "label": "Claude 未設定憑證", "stamps": [],
+                "detail": "在 host 上執行 `claude setup-token`，把輸出貼到"
+                          "帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態"
+                          "啟動，開場只會看到登入提示。"}
+    return {**_CLAUDE_BASE, "ok": True, "state": "ok",
+            "label": "Claude 憑證已設定", "stamps": [],
+            "detail": "token 過期不會有預告，症狀是**新開的 session 開場失敗**"
+                      "（終端停在登入提示）。遇到就在 host 重跑 `claude setup-token`，"
+                      "把新的貼回帳號管理頁。已在跑的 session 不受影響。"}
 
 
-def claude_credentials_state() -> dict:
-    """Claude Code 在容器裡會不會有登入憑證，以及那份憑證還能撐多久。
-
-    兩個來源，任一個有就行——清單在 `config.credential_sources()`，**與實際掛進容器的
-    那一份是同一條規則**（見該函式；分開寫就會出現「畫面說有、容器沒吃到」）：
-      1. `config.CREDENTIALS_HOST`——deploy/refresh-credentials.sh 從 Keychain 抽出來的。
-      2. `~/.claude/.credentials.json` 本身——Linux 原生就是這個檔；macOS 上則是
-         dev-container 的 run script 跑著的時候才存在（它 exit 會刪掉）。
-
-    `days_left` 是 refreshToken 的剩餘天數，**到期是預告得到的**——畫面因此能在到期前就
-    開始提醒。這件事很重要：`_guard_credentials` 只在「建立 session」那一刻擋，已經在跑
-    的 session 憑證失效不會有任何徵兆，只會靜靜轉成按量計價（2026-07-26 的事故）。
-
-    每次呼叫都重讀檔案，不快取：refresh-credentials.sh 是在 host 上隨時可能跑的，
-    快取只會讓畫面繼續報一個已經不成立的狀態。
-    """
-    for path, src, snapshot in config.credential_sources():
-        # ⚠ 空檔要當成「不存在」，不是「壞掉的憑證」——與 refresh-credentials.sh 的
-        #   pick()（用 `[ -s ]`）保持一致。~/.claude/.credentials.json 常常是**空檔**：
-        #   它同時是巢狀 mount 的落點，由那支腳本以 `: >` 建出來。當成壞檔的話，畫面與
-        #   _guard_credentials 會說「讀不到或格式不對」而不是「未登入」，把人指向去修一個
-        #   根本沒壞的檔案。腳本裡那句「兩邊必須一致」講的就是這件事。
-        try:
-            if not os.path.isfile(path) or os.path.getsize(path) == 0:
-                continue
-        except OSError:
-            continue
-        try:
-            # JSON 規格本身就是 UTF-8；不指定的話走 locale 預設，而容器裡沒設 LANG
-            with open(path, encoding="utf-8") as f:
-                oauth = json.load(f).get("claudeAiOauth") or {}
-        except (OSError, ValueError) as e:
-            return _credentials_badge({**_CLAUDE_BASE, "ok": False, "plan": None,
-                                       "days_left": None, "stamps": [],
-                                       "detail": f"{src} 讀不到或格式不對（{path}）：{e}"})
-        plan = oauth.get("subscriptionType") or None
-        # 只看 refreshToken 有沒有過期：accessToken 過期是常態，容器內會自己換發。
-        rexp = (oauth.get("refreshTokenExpiresAt") or 0) / 1000
-        # 無條件捨去：剩 1.9 天就說 1 天。估剩餘時間寧可少報。
-        days_left = int((rexp - time.time()) // 86400) if rexp else None
-        # 兩個都列是有意的：存取權杖過期是常態（容器內自己換發），續期權杖過期才要動手。
-        stamps = [s for s in (_stamp("存取權杖", oauth.get("expiresAt")),
-                              _stamp("續期權杖", oauth.get("refreshTokenExpiresAt"))) if s]
-        common = {**_CLAUDE_BASE, "plan": plan, "days_left": days_left, "stamps": stamps}
-        if rexp and rexp < time.time():
-            return _credentials_badge({
-                **common, "ok": False,
-                "detail": f"{src} 的 refreshToken 已過期"
-                          f"——請在 host 上重新登入後再跑一次 refresh-credentials.sh"})
-        # ⚠ **快照的 accessToken 過期不是常態**，儘管一般情況下它是。
-        #
-        #   上面那句「accessToken 過期是常態，容器內會自己換發」只對**可寫的真檔**成立。
-        #   `CREDENTIALS_HOST` 是 refresh-credentials.sh 從 Keychain 抽出來的凍結副本，而且
-        #   由 build_run_kwargs 以 **mode:"ro"** 蓋在容器的 ~/.claude/.credentials.json 上：
-        #   換發的結果寫不回去。更關鍵的是換發會**輪替** refreshToken——host 上的 Claude
-        #   Code 每換發一次，這份快照握的那一把就當場作廢。
-        #
-        #   於是實際壽命是「host 下次換發之前」（可能只有幾分鐘），而 days_left 講的是
-        #   refreshToken 的到期日（可能還有 26 天）。徽章原本只看後者，就會在容器裡明明
-        #   `401 OAuth access token has been revoked` 的時候顯示綠燈——探索性測試
-        #   2026-07-26 實測：徽章 ok/26 天，容器內 agent 要求重新 /login。
-        #
-        #   accessToken 已過期至少證明「這份快照落後於 host」，那正是要人重跑腳本的訊號。
-        aexp = (oauth.get("expiresAt") or 0) / 1000
-        stale = bool(snapshot and aexp and aexp < time.time())
-        return _credentials_badge({
-            **common, "ok": True, "stale": stale,
-            "detail": (f"{src}（{plan or '?'}）的存取權杖已過期。這份是唯讀快照，容器內"
-                       f"換發不回來，host 換發過一次它就作廢——請重跑 "
-                       f"deploy/refresh-credentials.sh 取一份新的。"
-                       if stale else f"{src}（{plan or '?'}）")})
-    return _credentials_badge({**_CLAUDE_BASE, "ok": False, "plan": None,
-                               "days_left": None, "stamps": [],
-                               "detail": "找不到任何憑證"})
-
-
-def credentials_state() -> dict:
+def credentials_state(user_id: int | None) -> dict:
     """憑證狀態（招牌徽章用）。形狀維持 {cli: state}，讀取端以 cli 為鍵。"""
-    return {"claude": claude_credentials_state()}
+    return {"claude": claude_credentials_state(user_id)}
 
 
-def _guard_credentials() -> None:
-    """沒有憑證就不要建 session。
+def _guard_credentials(user_id: int | None) -> None:
+    """沒設 token 就不要建 session。
 
-    ⚠ 少了憑證**不是**「開起來會壞掉」——claude 照樣跑，只是登出狀態下退回按量計價的
-    「API Usage Billing」，畫面上只有一行小字，而帳單是真的。2026-07-26 就是這樣：
-    `~/.claude/.credentials.json` 的生命週期屬於 run script（exit 時 trap 刪掉），
-    沒有 run script 在跑的時候經 API 開的 session 全部靜靜變成按量計費。
-    所以這裡選擇擋下來而不是警告——看得見的失敗遠比看不見的帳單好。
+    沒有憑證，claude 照樣起得來——只是登出狀態，終端裡停在登入提示，開不了場。
+    在「建立」這一刻擋下來，錯誤訊息才有地方告訴人下一步是什麼；放行的話，同一個
+    事實要到開了終端才發現，而那個畫面不會解釋原因。
     """
-    state = claude_credentials_state()
+    state = claude_credentials_state(user_id)
     if state["ok"]:
         return
     raise SessionError(
-        f"找不到可用的 Claude 憑證（{state['detail']}）。沒有它 session 會以登出狀態啟動，"
-        f"並改用 API 按量計價而不是你的訂閱。請在 host 上執行 "
-        f"`claude-pty/deploy/refresh-credentials.sh` 之後再試。")
+        "尚未設定 Claude 憑證。請在 host 上執行 `claude setup-token`，"
+        "把輸出貼到帳號管理頁的「CLI 憑證」再開。")
 
 
 def ensure_system_user() -> int:
@@ -892,9 +787,11 @@ class SessionManager:
                user_id: int | None = None,
                display_name: str | None = None) -> dict:
         profile = profile or Profile.from_dict(None)
-        if profile.cli == "claude":
-            _guard_credentials()      # 沒憑證就別開，見該函式
         user_id = user_id or ensure_system_user()
+        if profile.cli == "claude":
+            # 沒憑證就別開，見該函式。system 帳號也一樣要有 token——它沒有例外，
+            # 只是沒有人幫它貼而已。
+            _guard_credentials(user_id)
         sid = uuid.uuid4().hex[:12]
         # sid 永遠在 container 名稱裡（那是 nginx 路由與 attach 的錨），使用者取的名字
         # 只是接在後面讓 `docker ps` 認得出來——不取代 sid，也不參與任何比對。
@@ -1531,33 +1428,6 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         "pids_limit": config.PIDS_LIMIT,
     }
     volumes = {**config.MOUNTS, **config.user_mounts(user_id)}
-    # 憑證掛**單一檔案**進一個專屬目錄（`.claude-creds/`），不是疊在狀態目錄裡面。
-    # 那個目錄在 image 內不存在，所以 docker 是在容器 rootfs 內建目錄鏈——不是巢狀
-    # bind mount，也就沒有「落點不在 host 上就 exit 125」的 runc 問題（ADR 0016）。
-    #
-    # ⚠ **絕不可以改成掛整個 `~/.claude-pty` 目錄。** 非容器化執行時（HOST_HOME ==
-    #   _SELF_HOME）那裡面還有 `secret.key`（cookie 的簽章金鑰）與預設的
-    #   SQLite registry——掛進 session 等於把簽章金鑰和整個資料庫發給每個使用者。
-    #
-    # 不併進 config.MOUNTS 是因為它是「跑的當下才存在」的檔：refresh-credentials.sh 抽完
-    # 才有，而 config 是 import 時求值的。少了它 session 不是壞掉、而是靜靜退回按量計價
-    # （見 config.CREDENTIALS_HOST）——所以在這裡每次重挑。
-    #
-    # 模式看的是「這個檔是不是真相來源」而不是平台，規則寫在 config.credential_sources()：
-    # 快照 → ro（寫回去沒有意義），真檔 → rw（session 是唯一的換發者）。
-    if config.MOUNTS:
-        for path, _src, snapshot in config.credential_sources():
-            # getsize 要包 OSError：路徑在 isfile 與 getsize 之間可能被 run script 的
-            # trap 刪掉（macOS 上那個檔的生命週期本來就不是我們的）。
-            # `claude_credentials_state()` 那邊早就這樣寫了，這裡要對稱。
-            try:
-                usable = os.path.isfile(path) and os.path.getsize(path) > 0
-            except OSError:
-                continue
-            if usable:
-                volumes[path] = {"bind": config.CREDENTIALS_BIND,
-                                 "mode": "ro" if snapshot else "rw"}
-                break
 
     # SSH agent 轉發（opt-in，ADR 0012）。在 escape hatch 之前處理：它是**部署層**的能力，
     # 不隨 profile 或 entrypoint 變——「這台開了轉發」就是每個 session 都有。
@@ -1642,17 +1512,20 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         # ⚠ 人自己開容器時不設它（預設 0.0.0.0），run script 的 `-p` 才轉得進去；
         #   docker 的 port forwarding 連的是容器內的介面，綁 loopback 會讓 UI 打不開。
         "NCR_MITM_WEB_BIND": "127.0.0.1",
-        # per-user 狀態空間（ADR 0016）。**這兩個 env 是整個機制的關鍵**：
-        #   CLAUDE_CONFIG_DIR         → transcript / settings / skills / .claude.json 全部
-        #                               改看這個目錄（實測：設了之後 host 的 ~/.claude 一次
-        #                               都不會被開）。不設的話 .claude.json 會落在容器
-        #                               writable layer，換一顆容器就沒了。
-        #   CLAUDE_SECURESTORAGE_CONFIG_DIR → 憑證**目錄**（檔名 .credentials.json 寫死在
-        #                               CLI 裡，只有目錄可指）。與狀態目錄分開，才能一邊
-        #                               per-user rw、一邊共用唯讀。
+        # per-user 狀態空間（ADR 0016）。**這個 env 是整個機制的關鍵**：
+        #   CLAUDE_CONFIG_DIR → transcript / settings / skills / .claude.json 全部改看
+        #   這個目錄（實測：設了之後 host 的 ~/.claude 一次都不會被開）。不設的話
+        #   .claude.json 會落在容器 writable layer，換一顆容器就沒了。
         "CLAUDE_CONFIG_DIR": config.CLAUDE_CONFIG_BIND,
-        "CLAUDE_SECURESTORAGE_CONFIG_DIR": config.CREDENTIALS_DIR_BIND,
     }
+
+    # 登入憑證：這個人貼進來的 setup-token，以環境變數交給 CLI。**唯一來源**——不掛
+    # 任何 host 憑證檔（模型欄位 cli_token_enc 那段講了為什麼不留後路）。
+    # create() 的 _guard_credentials 已經擋過「沒設」，這裡拿不到只剩競態（guard 之後
+    # 才被清掉）——照樣不注入，讓終端停在登入提示，那是誠實的失敗畫面。
+    token = auth_mod.cli_token(user_id)
+    if token:
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = token
 
     # 模型與思考深度：entrypoint.sh 把它翻成 `--model` / `--effort`，這裡只放進 env。
     env["NCR_MODEL"] = profile.model

@@ -11,7 +11,7 @@ import unicodedata
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
-from . import config
+from . import config, crypto
 from .db import session_scope
 from .models import User
 
@@ -276,6 +276,49 @@ def page_users(limit: int, offset: int = 0) -> tuple[list[dict], int]:
         rows = (s.query(User).order_by(User.username)
                 .limit(limit).offset(offset).all())
         return [_to_dict(u) for u in rows], total
+
+
+def set_cli_token(user_id: int, token) -> None:
+    """存這個人的 CLI 授權 token（`claude setup-token` 的輸出），加密後入庫。
+
+    驗證只做「這像不像一個 token」的最低限度：單行、可見 ASCII、長度合理。**不驗前綴
+    也不打外部服務**——格式是上游的事，隨版本會變；真偽只有開場時才知道（token 失效
+    的症狀就是開場失敗，見 claude_credentials_state 的 detail）。
+    """
+    if not isinstance(token, str):
+        raise AuthError("token 必須是字串")
+    token = token.strip()
+    if not token:
+        raise AuthError("token 是空的——請貼上 `claude setup-token` 的完整輸出")
+    if len(token) > 4096:
+        raise AuthError("token 長得不像話（超過 4096 字元），請確認貼的是 token 本身")
+    if not all(33 <= ord(ch) <= 126 for ch in token):
+        # 換行／空白／控制字元都擋：這個值會進容器的環境變數，而多行的「token」幾乎
+        # 一定是整段終端輸出連說明文字一起貼進來了。
+        raise AuthError("token 只能是單行可見字元——看起來貼進來的不只 token 本身")
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None:
+            raise AuthError("使用者不存在")
+        user.cli_token_enc = crypto.encrypt(token)
+
+
+def clear_cli_token(user_id: int) -> None:
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None:
+            raise AuthError("使用者不存在")
+        user.cli_token_enc = None
+
+
+def cli_token(user_id: int) -> str | None:
+    """解密回明文 token；沒設過或解不開都回 None（crypto.decrypt 的既定語意——
+    SECRET_KEY 換過之後舊密文就是「沒設」，畫面會引導重貼，不會炸）。"""
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None or user.cli_token_enc is None:
+            return None
+        return crypto.decrypt(user.cli_token_enc)
 
 
 # 這裡**刻意沒有 delete_user()，也沒有「停用」**。

@@ -783,7 +783,7 @@
       lastRows = data.sessions;
       (showHistory ? renderHistory : render)(data.sessions, data.offset);
       renderPager(data);
-      // 招牌上的計價徽章搭列表的順風車更新（兩支列表端點都會帶 credentials）。
+      // 招牌上的憑證徽章搭列表的順風車更新（兩支列表端點都會帶 credentials）。
       // 沒有它的話，憑證是在「這一頁開著的期間」到期的，畫面就永遠停在載入當下的狀態。
       renderCredBadge(data.credentials);
       // 列表每 15 秒才對齊一次，標上取得時刻才知道眼前這份有多新

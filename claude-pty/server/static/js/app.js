@@ -1735,7 +1735,7 @@ function credWhen(ms) {
  * 2026-07-26 那次事故裡一直沒有人發現的那一段。 */
 let CRED = {};
 
-/* 招牌上的計價徽章：顯示**目前選中的那個 agent** 的憑證狀態。
+/* 招牌上的憑證徽章：顯示**目前選中的那個 agent** 的憑證狀態。
  * 一顆膠囊跟著選單走，而不是並排兩顆——招牌的水平空間是有限的（見斷點那段的實測），
  * 而你在看的當下只關心正要開的那一個。
  * 圖示與顏色都在 CSS（.cred 的 data-state），這裡只搬狀態值。 */
@@ -1763,7 +1763,7 @@ function paintCred(el, d) {
   }
   const label = el.querySelector(".cred__label");
   // ⚠ 只守這一行：元素是 role="status"（aria-live=polite），**文字**變動會讓螢幕閱讀器
-  //   再念一次，即使寫進去的字串一模一樣——每 15 秒念一次計價狀態。
+  //   再念一次，即使寫進去的字串一模一樣——每 15 秒念一次憑證狀態。
   //   反過來說，data-* 與 aria-hidden 的品牌標誌不會被念，那些不能一起擋掉：
   //   先前把它們也放進同一個 return 條件，結果首次載入（值與伺服端一致）品牌標誌
   //   永遠不會被注入。
@@ -1815,7 +1815,7 @@ function swapCred(el, d) {
     setTimeout(() => {
       if (gen !== CRED_SWAP_GEN) return;
       delete el.dataset.swap;
-      // 寬度交還給內容：文字會被輪詢改寫（「剩 3 天」→「未登入 · 按量計價」），
+      // 寬度交還給內容：文字會被輪詢改寫（「已設定」↔「未設定憑證」），
       // 留著寫死的 px 會讓它從此對不上自己的內容。
       el.style.width = "";
     }, CRED_IN_MS);
@@ -1897,16 +1897,12 @@ async function doLogout() {
   location.href = "/login";
 }
 
-/* ── 設定對話框：終端程式（ttyd）與 GitLab PAT ────────────────────────────────
+/* ── 設定對話框：終端程式（ttyd） ────────────────────────────────────────────
  * 原本是 session 頁上一塊展開的面板，兩個問題：
  *   · 它與篩選共用 `.filters__grid`（auto-fit 的多欄格線），而這裡只有兩格——於是
  *     右邊永遠空一大塊，而空白在**設定**這種面板上讀起來像「有東西沒載出來」。
  *   · 它只存在於 session 頁。設定是跟著**身分**走的東西，換頁不該消失。
  * 改成從身分下拉叫出的對話框：單欄、寬度自己說了算，而且每一頁都在。
- *
- * ⚠ PAT 那塊是**重寫**不是搬家。舊的把整段安全警語常駐在畫面上（scope 怎麼勾、外流了
- *   怎麼辦、git 網址怎麼寫），三行擋路的字沒有人看。現在只留「現在就影響行為」的，
- *   其餘進 tooltip；沒設 PAT 的人另外給一則**做得到的下一步**，而不是一句狀態。
  */
 function settingsModal() {
   const wrap = document.createElement("div");
@@ -1937,8 +1933,7 @@ function settingsModal() {
    *   掛在 wrap 上的 keydown 就永遠收不到，Esc 形同不存在（實測：開啟後 activeElement
    *   是 BODY、按 Esc 沒反應；點進輸入框之後才關得掉）。
    *   同檔的 `dialog()` 兩件事都做對了，這裡比照它——包含「離開時把監聽器拿掉」。
-   * ⚠ 初始焦點放關閉鍵而不是 PAT 輸入框：輸入框在讀到現況之前是停用的（聚焦不上去），
-   *   而且把游標直接丟進一個要填憑證的欄位，對「只是想看一眼設定」的人是打擾。 */
+   * 初始焦點放關閉鍵（唯一一定聚焦得上的控件——picker 要等 /api/prefs 回來才建）。 */
   const onKey = (e) => { if (e.key === "Escape") close(); };
   const close = () => {
     document.removeEventListener("keydown", onKey);

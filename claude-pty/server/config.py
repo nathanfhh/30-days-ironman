@@ -189,24 +189,6 @@ TTYD_BIND = os.environ.get("CLAUDE_PTY_TTYD_BIND", "127.0.0.1")
 # 供 nginx / 管理畫面組 URL 用；容器化時設為控制平面的容器名。
 TTYD_HOST = os.environ.get("CLAUDE_PTY_TTYD_HOST", "127.0.0.1")
 
-# OAuth 憑證的來源檔（由 deploy/refresh-credentials.sh 在 **host** 上產生）。
-#
-# ⚠ 不能直接靠 `~/.claude/.credentials.json`：macOS 上那個檔的生命週期是
-#   dev-container 的 run script 的——它啟動時從 Keychain 抽出來寫，**exit 時 trap 刪掉**。
-#   沒有 run script 在跑的時候它根本不存在，容器裡的 Claude Code 於是退回按量計價的
-#   「API Usage Billing」而不是 Max 訂閱，而且畫面上只有一行小字，不會有任何錯誤
-#   （2026-07-26 實測：unrestricted / 不帶任何旗標都一樣，與 model/effort 無關）。
-#   所以憑證放在 ~/.claude-pty/ 底下——不在 ~/.claude 內，run script 的 trap 碰不到。
-#
-# ⚠ 檔名是 **`.credentials.json`（有前置點）**，因為它是以「目錄」的形式交給 CLI 的
-#   （見 CREDENTIALS_BIND / CLAUDE_SECURESTORAGE_CONFIG_DIR，ADR 0016）——CLI 在那個目錄裡
-#   找的就是這個檔名。2026-07-28 之前叫 `credentials.json`（無點），舊檔留著不會有作用。
-#
-# 控制平面以**同一個路徑**掛進自己的容器（見 docker-compose control 的 volumes），
-# 所以這個字串同時是「給 daemon 的 host 路徑」與「自己檢查存在性的路徑」，不需要 _SELF 版本。
-CREDENTIALS_HOST = os.environ.get(
-    "CLAUDE_PTY_CREDENTIALS", f"{HOST_HOME}/.claude-pty/.credentials.json")
-
 # --- per-user 的 agent 狀態空間（ADR 0016）------------------------------------------
 #
 # 每個使用者一個目錄，以 CLAUDE_CONFIG_DIR 把 CLI 的整份狀態（transcript、settings、
@@ -232,12 +214,6 @@ SPACE_SELF = os.environ.get("CLAUDE_PTY_SPACE_SELF", SPACE_HOST)
 SESSION_UID = int(os.environ.get("CLAUDE_PTY_SESSION_UID", "1001"))
 
 CLAUDE_CONFIG_BIND = "/home/nathan/.claude"
-# 憑證**單獨**一個目錄，與狀態目錄分開（CLI 允許兩者各自指定）。這個目錄在 image 裡不存在，
-# 所以掛單檔進去時 docker 是在容器 rootfs 內建目錄鏈——**不是巢狀 bind mount**，也就沒有
-# 「落點不在 host 上就 exit 125」的 runc 問題（那正是舊版 _require_credentials_mountpoint
-# 在防的事，已隨 ADR 0016 退場）。
-CREDENTIALS_DIR_BIND = "/home/nathan/.claude-creds"
-CREDENTIALS_BIND = f"{CREDENTIALS_DIR_BIND}/.credentials.json"
 # 容器內那個「寫了要留著」的根目錄。**dev-container 的兩條路徑都落在它底下**：
 #   · capture 的 .mitm  → `<根>/mitm`（entrypoint.sh 的 CAPTURE_DIR）
 #   · 審查報告的 archive → `<根>/{group}/{repo}/…`（skill 的 workspace-paths）
@@ -303,39 +279,6 @@ TEST_MARK = os.environ.get("CLAUDE_PTY_TEST_MARK")   # 測試設為 "1"，正式
 INIT_FIREWALL_SH_SELF = os.path.join(_SELF_REPO_ROOT, "dev-container", "init-firewall.sh")
 INIT_FIREWALL_SH = os.path.join(HOST_REPO_ROOT, "dev-container", "init-firewall.sh")
 INIT_FIREWALL_BIND = "/usr/local/bin/init-firewall.sh"
-
-
-def credential_sources() -> tuple[tuple[str, str, bool], ...]:
-    """Claude 憑證的來源，依優先序：`(路徑, 來源說明, 是不是凍結快照)`。
-
-    **這是唯一一份清單**，兩個地方共用：招牌徽章（sessions.claude_credentials_state）
-    與實際掛進容器的那一個（sessions.build_run_kwargs）。
-    曾經各寫各的，於是「畫面說有憑證」與「容器真的吃到哪一份」可以分岔——而分岔的症狀是
-    靜靜地按量計價，不是錯誤訊息。
-
-    第三個欄位決定**掛載模式**（ADR 0016），規則是「這個檔是不是真相來源」而不是看平台：
-      - 快照（macOS 從 Keychain 抽出的那份）→ **ro**。容器換發的結果寫回一份 host 不讀的
-        副本沒有意義，而 host 換發一次它就作廢（招牌的「憑證快照過期」偵測就是為此）。
-      - 真檔（Linux 原生的 ~/.claude/.credentials.json）→ **rw**。那邊 session 是**唯一**
-        的換發者（headless server 上沒人在跑互動 claude），掛 ro 就是數小時後全部登出。
-
-    ⚠ 必須是函式不是常數：測試會在 import 之後改寫 `config.HOST_HOME` /
-      `config.CREDENTIALS_HOST` 來把兩個來源都指進 tmpdir（test_credentials.py），
-      常數會凍結在 import 當下的值。
-
-    ⚠ 曾經想把這個旗標改成「看平台」：理由是 macOS 上 `~/.claude/.credentials.json` 也是
-      Keychain 的衍生副本（run script 啟動時抽出、exit 時 trap 刪掉），不該算真檔。
-      **那是錯的，而且會弄壞招牌**——這個旗標同時被 stale 偵測用（`claude_credentials_state`
-      只對快照檢查「存取權杖過期」），把 live 檔標成快照，它每次過期都會亮黃燈，而那對
-      可寫的檔案是常態、不是問題。
-      掛載模式那一側的結論本來就對：**live 檔兩個平台都該 rw**。Linux 上它是真相來源；
-      macOS 上它雖然不是 Keychain 的真相，但**是同時在跑的那些容器共用的那一份**，
-      容器換發後寫回去對它們有意義。ro 反而讓換發失效。
-      （容器換發會不會讓 host 的 Keychain 那把被輪替作廢？會——但那與 ro/rw 無關，
-      ro 擋得住寫回、擋不住 refresh 請求本身。）
-    """
-    return ((CREDENTIALS_HOST, "refresh-credentials.sh 抽出的憑證", True),
-            (os.path.join(HOST_HOME, ".claude", ".credentials.json"), "~/.claude 內的憑證", False))
 
 
 def user_space(user_id: int, *, host: bool = True) -> str:

@@ -21,7 +21,6 @@
 四項合起來就是互斥語意的完整清單。）
 """
 import datetime as _dt
-import json
 import os
 import sys
 import tempfile
@@ -39,18 +38,17 @@ config.DB_URL = f"sqlite:///{os.environ['CLAUDE_PTY_DB_PATH']}"
 config.SECRET_KEY = "mutex-secret"
 config.MOUNTS = {}
 
-# 憑證來源 stub 進 tmpdir（同 test_create_ordering：測試不得依賴 host 狀態）
-config.CREDENTIALS_HOST = os.path.join(_tmp, ".credentials.json")
 config.HOST_HOME = _tmp
-with open(config.CREDENTIALS_HOST, "w", encoding="utf-8") as _f:
-    json.dump({"claudeAiOauth": {
-        "accessToken": "x", "refreshToken": "x",
-        "expiresAt": int((time.time() + 3600) * 1000),
-        "refreshTokenExpiresAt": int((time.time() + 30 * 86400) * 1000),
-        "subscriptionType": "max"}}, _f)
 
 db.reset_engine()
 db.init_db()
+
+# 憑證＝DB 裡的 setup-token（唯一來源，D 階段起不再讀任何 host 憑證檔）。
+# 這批測試的 session 都掛在 system 使用者名下，給它種一個測試值就過得了 create() 的守門。
+from server import auth as _auth_seed  # noqa: E402
+from server import sessions as _sessions_seed  # noqa: E402
+
+_auth_seed.set_cli_token(_sessions_seed.ensure_system_user(), "sk-test-setup-token")
 
 from server import auth, reconciler  # noqa: E402
 from server.sessions import SessionError, SessionManager  # noqa: E402
@@ -112,6 +110,7 @@ class _FakeClient:
 
 print("== 配額：兩個執行緒搶最後一個名額，只能有一個成功 ==")
 uid = auth.create_user("mutex-user", "mutex-password-1")["id"]
+auth.set_cli_token(uid, "sk-test-setup-token")   # 憑證守門在 create() 入口，配額才是本段主角
 _orig_max = config.MAX_SESSIONS
 config.MAX_SESSIONS = 1
 results: list[str] = []

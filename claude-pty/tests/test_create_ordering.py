@@ -33,23 +33,17 @@ config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
 config.SECRET_KEY = "create-order-secret"
 config.MOUNTS = {}
 
-# 憑證來源指進 tmpdir 並放一份假憑證：這支測試驗的是**呼叫序**，不該因 host 上
-# 有沒有真憑證而紅綠（`_guard_credentials` 在 create() 的入口就會擋）。兩個來源
-# 都要指走——CREDENTIALS_HOST 指向假檔，HOST_HOME 指向 tmpdir 讓第二來源撲空。
-import json    # noqa: E402
-import time    # noqa: E402
-
-config.CREDENTIALS_HOST = os.path.join(_tmp, ".credentials.json")
 config.HOST_HOME = _tmp
-with open(config.CREDENTIALS_HOST, "w", encoding="utf-8") as _f:
-    json.dump({"claudeAiOauth": {
-        "accessToken": "x", "refreshToken": "x",
-        "expiresAt": int((time.time() + 3600) * 1000),
-        "refreshTokenExpiresAt": int((time.time() + 30 * 86400) * 1000),
-        "subscriptionType": "max"}}, _f)
 
 db.reset_engine()
 db.init_db()
+
+# 憑證＝DB 裡的 setup-token（唯一來源，D 階段起不再讀任何 host 憑證檔）。
+# 這批測試的 session 都掛在 system 使用者名下，給它種一個測試值就過得了 create() 的守門。
+from server import auth as _auth_seed  # noqa: E402
+from server import sessions as _sessions_seed  # noqa: E402
+
+_auth_seed.set_cli_token(_sessions_seed.ensure_system_user(), "sk-test-setup-token")
 
 from server import auth  # noqa: E402
 from server.sessions import SessionManager  # noqa: E402
@@ -194,6 +188,7 @@ class FakeClient:
 
 try:
     uid = auth.create_user("order-user", "create-order-pw-1")["id"]
+    auth.set_cli_token(uid, "sk-test-setup-token")   # create() 入口先驗憑證，這裡測的是後面的順序
 
     rec = _Rec()
     mgr = SessionManager()

@@ -7,6 +7,37 @@
 
 
   <section class="panel">
+    <div class="section-head" style="margin-bottom:var(--space-2)">
+      <h2 class="panel__title" style="margin:0">CLI 憑證</h2>
+      {# 狀態 chip 由 JS 依 #cred-data 畫（同招牌徽章的資料，不另打一趟 API）。 #}
+      <span id="token-state"></span>
+    </div>
+    <p class="panel__lede">
+      在 host 上執行 <code>claude setup-token</code>，把輸出貼進來。之後開的 session 用它
+      登入；<strong>token 過期不會有預告</strong>——症狀是新開的 session 停在登入提示，
+      遇到就重跑一次指令、把新的貼回這裡（已在跑的 session 不受影響）。
+    </p>
+    <form id="token-form">
+      <div class="form-row">
+        <div class="field" style="flex:1">
+          <label class="label" for="cli-token">setup-token</label>
+          {# type=password：貼進來的是憑證，畫面上不該讀得出來（旁邊有人、截圖、錄影）。
+         存進去之後也**不吐回來**：這一欄永遠是空的，placeholder 講狀態。 #}
+          <input class="input" id="cli-token" type="password" autocomplete="off"
+                 placeholder="貼上 claude setup-token 的輸出">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn--primary" type="submit" id="token-save" disabled>
+          <i class="fa-solid fa-id-card"></i> 儲存</button>
+        <button class="btn" type="button" id="token-clear" hidden>
+          <i class="fa-solid fa-eraser"></i> 清除</button>
+      </div>
+    </form>
+  </section>
+
+
+  <section class="panel">
     <h2 class="panel__title">變更我的密碼</h2>
     <form id="pw-form">
       <div class="form-row">
@@ -119,6 +150,43 @@
     document.getElementById("pick-role").addEventListener("change", paintRole);
     paintRole();
   }
+  // CLI 憑證：狀態 chip 讀招牌那份 #cred-data（同一個真相，不另打 API）；
+  // 儲存／清除之後整頁重載——徽章、chip、按鈕三處狀態同源重畫，比逐一手改可靠。
+  {
+    const tokenInput = document.getElementById("cli-token");
+    const saveBtn = document.getElementById("token-save");
+    const clearBtn = document.getElementById("token-clear");
+    const stateEl = document.getElementById("token-state");
+    let credOk = false;
+    try {
+      credOk = JSON.parse(document.getElementById("cred-data").textContent).claude.ok;
+    } catch { /* 讀不到就當未設定：畫面只是少一顆綠 chip，功能照常 */ }
+    stateEl.innerHTML = credOk
+      ? '<span class="chip" data-tone="ok">已設定</span>'
+      : '<span class="chip" data-tone="error">未設定</span>';
+    clearBtn.hidden = !credOk;
+    tokenInput.addEventListener("input", () => {
+      saveBtn.disabled = !tokenInput.value.trim();
+    });
+    document.getElementById("token-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await api("/api/users/me/token", { method: "PUT",
+                                           body: { token: tokenInput.value } });
+        toast("憑證已儲存", "success", { body: "之後開的 session 會用它登入" });
+        setTimeout(() => location.reload(), 900);
+      } catch (ex) { toastError("儲存憑證", ex); }
+    });
+    clearBtn.addEventListener("click", async () => {
+      try {
+        await api("/api/users/me/token", { method: "DELETE" });
+        toast("憑證已清除", "warning",
+              { body: "之後開新 session 會被擋下，重新貼上即可；已在跑的不受影響" });
+        setTimeout(() => location.reload(), 900);
+      } catch (ex) { toastError("清除憑證", ex); }
+    });
+  }
+
   // 改密碼：兩次輸入一致且達長度下限才讓按鈕可按（後端仍會自己驗一次）
   const MIN_PW = {{ min_password_length }};
   const oldPw = document.getElementById("old-pw");

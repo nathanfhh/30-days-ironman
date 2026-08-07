@@ -53,7 +53,7 @@ def _sandboxed_home() -> str:
     ⚠ 這不是潔癖，是踩過的坑（2026-07-25）：原本直接以可寫方式掛 `~/.claude`，而這個
     測試會啟動**真的** claude CLI。CLI 起來後會去 refresh OAuth token，測試隨即把容器
     砍掉——`.credentials.json` 就被留在「token 已清空」的狀態，host 上的 Claude Code 跟著
-    顯示 login expired，只能重新從 Keychain 導出。
+    顯示 login expired，只能重新登入一次。
 
     測試對使用者環境的破壞性副作用永遠不可接受，即使機率很低：跑測試的人不會預期
     自己因此被登出，而且症狀出現時離原因已經很遠了。

@@ -11,7 +11,7 @@ _tmp = tempfile.mkdtemp(prefix="claude-pty-profmap-")
 os.environ["CLAUDE_PTY_DB_URL"] = f"sqlite:///{os.path.join(_tmp, 'test.db')}"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import config, db  # noqa: E402
+from server import auth, config, db  # noqa: E402
 from server.sessions import Profile, build_run_kwargs  # noqa: E402
 
 config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
@@ -56,11 +56,11 @@ check("env 帶 NET/CAPTURE/SCOPE/MARK + 模型設定", env == {
     # mitmweb UI 收回容器 loopback：網頁 session 在共用網段上，兄弟容器不該連得到
     # 那個顯示未脫敏流量的畫面（人自己開容器時不設，run script 的 -p 才轉得進去）
     "NCR_MITM_WEB_BIND": "127.0.0.1",
-    # per-user 狀態空間（ADR 0016）。這兩個**不是**給 entrypoint.sh 的，是給 CLI 本身的，
+    # per-user 狀態空間（ADR 0016）。這個**不是**給 entrypoint.sh 的，是給 CLI 本身的，
     # 所以不隨 profile 變、每一場都在。
     # 少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器 writable layer，換一顆容器就沒了。
+    # （憑證不在這份裡：這個 user 沒設 setup-token，而沒設就**不注入**——見下方憑證段。）
     "CLAUDE_CONFIG_DIR": "/home/nathan/.claude",
-    "CLAUDE_SECURESTORAGE_CONFIG_DIR": "/home/nathan/.claude-creds",
     "NCR_MODEL": "opus", "NCR_EFFORT": "high"})
 # restricted 是預設，所以這裡要有 firewall 需要的能力（下面 restricted 段落再驗一次細節）
 check("預設帶 cap_add=[NET_ADMIN]（restricted 套 iptables 需要）",
@@ -231,12 +231,28 @@ try:
     check("狀態目錄掛成容器的 ~/.claude（rw）",
           vols.get(os.path.join(root, "claude"))
           == {"bind": "/home/nathan/.claude", "mode": "rw"})
-    # 這兩個 env 是整個機制的關鍵：少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器
+    # 這個 env 是整個機制的關鍵：少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器
     # writable layer，換一顆容器就沒了（而且完全無聲）。
     check("env 指定 CLAUDE_CONFIG_DIR 指向那個目錄",
           env.get("CLAUDE_CONFIG_DIR") == "/home/nathan/.claude")
-    check("env 把憑證目錄**獨立**指開（才能一邊 per-user、一邊共用）",
-          env.get("CLAUDE_SECURESTORAGE_CONFIG_DIR") == "/home/nathan/.claude-creds")
+
+    print("== 憑證＝這個人的 setup-token，只走環境變數、不掛任何檔案 ==")
+    # 有設 → 注入 CLAUDE_CODE_OAUTH_TOKEN；沒設 → 這個鍵**不存在**（不是空字串——
+    # 空值會蓋掉 image/env 鏈上任何同名變數，並讓 CLI 看到一個「設了但壞的」憑證）。
+    # _UID=7 是假 id（DB 裡沒這個人）——token 要掛在真實使用者上才存得進去
+    _tok_uid = auth.create_user("pm-token-user", "pm-token-password-1")["id"]
+    auth.set_cli_token(_tok_uid, "sk-test-oauth-token")
+    env_tok = build_run_kwargs("c", "sid-tok", Profile(), _tok_uid).get("environment", {})
+    check("🔴 有 token → 以 CLAUDE_CODE_OAUTH_TOKEN 交給 CLI",
+          env_tok.get("CLAUDE_CODE_OAUTH_TOKEN") == "sk-test-oauth-token")
+    auth.clear_cli_token(_tok_uid)
+    env_none = build_run_kwargs("c", "sid-tok2", Profile(), _tok_uid).get("environment", {})
+    check("🔴 沒 token → 這個鍵不存在", "CLAUDE_CODE_OAUTH_TOKEN" not in env_none)
+    check("🔴 憑證不再以檔案掛載（volumes 裡沒有 .credentials）",
+          all(".credentials" not in str(v) for kwv in (env_tok, env_none) for v in kwv)
+          and all(".credentials" not in b.get("bind", "")
+                  for b in build_run_kwargs("c", "sid-tok3", Profile(), _tok_uid)
+                                          .get("volumes", {}).values()))
     check("持久化空間掛在 ~/persistent-data",
           vols.get(os.path.join(root, "persistent-data"))
           == {"bind": "/home/nathan/persistent-data", "mode": "rw"})
@@ -386,8 +402,10 @@ if os.path.isfile(_ep) and os.path.isfile(_run):
     # 變數，人類路徑就會跟著改變行為——那就是「有偏差」了。
     check("entrypoint.sh 完全不碰 CLAUDE_CONFIG_DIR（否則人類路徑會被牽連）",
           "CLAUDE_CONFIG_DIR" not in _ep_src)
-    check("entrypoint.sh 完全不碰 CLAUDE_SECURESTORAGE_CONFIG_DIR",
-          "CLAUDE_SECURESTORAGE_CONFIG_DIR" not in _ep_src)
+    # entrypoint 可以**讀**它（沒憑證時的友善警告本來就在人類路徑上），但不可以改寫——
+    # 賦值等於在控制平面看不到的地方換憑證。
+    check("entrypoint.sh 不改寫 CLAUDE_CODE_OAUTH_TOKEN（讀可以，賦值不行）",
+          "CLAUDE_CODE_OAUTH_TOKEN=" not in _ep_src)
     # run script 掛的仍然是 host 上**正式的那一份**，不是 per-user 空間。
     check("run script 仍掛 host 正式的 ~/.claude", "-v ~/.claude:" in _run_src)
     check("run script 仍掛 host 正式的 ~/.claude.json", "-v ~/.claude.json:" in _run_src)

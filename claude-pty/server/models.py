@@ -73,6 +73,11 @@ class User(Base):
     # 一個 DB 端的預設值才填得進去（純 Python 端的 default 對 ALTER 無效）。
     password_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1")
+    # 貼進來的 CLI 授權 token（host 上 `claude setup-token` 的輸出），以 crypto.encrypt
+    # 加密後存放；NULL＝沒設過。**這是 session 取得憑證的唯一來源**——控制平面不讀
+    # host 上的任何憑證檔（那種「有的話就順便用」的後路，是一條平常不走、出事才走、
+    # 而且沒人測過的路徑）。Fernet 密文是 base64 字串，Text 直接存（見 crypto.encrypt）。
+    cli_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 這個人開終端時要用哪一顆 ttyd（C 版 `ttyd` / Rust 重寫 `ttyd-rust`），由管理畫面的
     # 「設定」切換。**做成 per-user 而不是全域**：它的用途是 A/B 比較，全域的話一個人切換
     # 會把別人正在比的終端一起換掉。NULL＝沒設過 → 用 config.TTYD_BIN_DEFAULT。

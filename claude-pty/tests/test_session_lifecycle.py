@@ -40,22 +40,16 @@ from server import config, db  # noqa: E402
 
 config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
 
-# 憑證來源 stub 進 tmpdir：這支測的不是憑證，不該因 host 上有沒有真憑證而紅綠
-# （`_guard_credentials` 在 create() 的入口就會擋）。兩個來源都要指走——
-# CREDENTIALS_HOST 指向假檔，HOST_HOME 指向 tmpdir 讓第二來源撲空。
-import json as _json_cred   # noqa: E402
-import time as _time_cred   # noqa: E402
-
-config.CREDENTIALS_HOST = os.path.join(_tmp, ".credentials.json")
 config.HOST_HOME = _tmp
-with open(config.CREDENTIALS_HOST, "w", encoding="utf-8") as _f_cred:
-    _json_cred.dump({"claudeAiOauth": {
-        "accessToken": "x", "refreshToken": "x",
-        "expiresAt": int((_time_cred.time() + 3600) * 1000),
-        "refreshTokenExpiresAt": int((_time_cred.time() + 30 * 86400) * 1000),
-        "subscriptionType": "max"}}, _f_cred)
 db.reset_engine()
 db.init_db()
+
+# 憑證＝DB 裡的 setup-token（唯一來源，D 階段起不再讀任何 host 憑證檔）。
+# 這批測試的 session 都掛在 system 使用者名下，給它種一個測試值就過得了 create() 的守門。
+from server import auth as _auth_seed  # noqa: E402
+from server import sessions as _sessions_seed  # noqa: E402
+
+_auth_seed.set_cli_token(_sessions_seed.ensure_system_user(), "sk-test-setup-token")
 
 from server.sessions import DRIVER_MARKER, Profile, SessionManager  # noqa: E402
 
