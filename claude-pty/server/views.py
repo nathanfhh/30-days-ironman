@@ -210,11 +210,19 @@ def _alive_view(session_id: str) -> dict | None:
 
 def _ttyd_argv(port: int, container_name: str, session_id: str,
                ttyd_bin: str | None = None) -> list[str]:
+    # C 版或 Rust 版，由**開這個終端的人**的偏好決定（users.ttyd_bin，管理畫面的
+    # 「設定」可切）。一律經 ttyd_bin_or_default() 收斂：這個值會變成 argv[0]，
+    # 不認得的字串（白名單改過、DB 留著舊值）必須退回預設，不可以直接拿去 exec。
+    binary = config.ttyd_bin_or_default(ttyd_bin)
     return [
-        # C 版或 Rust 版，由**開這個終端的人**的偏好決定（users.ttyd_bin，管理畫面的
-        # 「設定」可切）。一律經 ttyd_bin_or_default() 收斂：這個值會變成 argv[0]，
-        # 不認得的字串（白名單改過、DB 留著舊值）必須退回預設，不可以直接拿去 exec。
-        config.ttyd_bin_or_default(ttyd_bin),
+        binary,
+        # 伺服器端標題：**只有支援的 binary 才帶**（能力旗標 config.TTYD_TITLE_CAPABLE）。
+        # 它直接換掉 ttyd 宣告給 client 的標題——命令列一個字都不上線，標題只剩這一場
+        # 的編號。C 版沒有這個選項（帶了會拒起），那個洞在 C 版仍然存在、只是被下面的
+        # titleFixed 蓋住畫面——這是兩顆 binary 的實質差異之一，選 binary 的人應該知道
+        # 自己在選什麼（設定畫面與 README 都要講）。
+        *(["--title", f"agent-tty · {session_id}"]
+          if binary in config.TTYD_TITLE_CAPABLE else []),
         "-p", str(port),
         "-i", config.TTYD_BIND,        # 非容器化＝loopback；容器化＝0.0.0.0（僅內部網路，ADR 0009）
         "-b", f"/session/{session_id}",  # base-path，配合 nginx 子路徑路由
@@ -228,10 +236,9 @@ def _ttyd_argv(port: int, container_name: str, session_id: str,
         #   顯示別的字。所以這一行買到的是「分頁標題、瀏覽紀錄、截圖裡看不到」，
         #   買不到「沒有送出去」。
         #
-        # ⚠ 真正的修法是**伺服器端**的 `--title`：它直接換掉宣告出去的標題，命令列
-        #   一個字都不上線。那是 Rust 版才有的選項，C 版沒有——所以這是兩顆 binary
-        #   的實質差異之一，不是「快一點慢一點」而已。接上之後這一行仍然留著
-        #   （C 版仍靠它遮），但 Rust 版那條路要改走 `--title`。
+        # ⚠ 真正的修法是上面那個**伺服器端**的 `--title`（Rust 版已接上）。這一行
+        #   仍然無條件留著：C 版只有它可靠（遮畫面聊勝於無）；Rust 版帶著也無妨——
+        #   兩個值是同一個字串，client 端不會蓋出不一樣的東西。
         "-t", f"titleFixed=agent-tty · {session_id}",
         # 讓使用者選得到文字。Claude Code 的 TUI 會開啟滑鼠追蹤（實測 ?1000/?1002/?1003/
         # ?1006 全開），一開啟，拖曳就被當成應用程式的滑鼠事件送進 TUI，終端不再拿它來

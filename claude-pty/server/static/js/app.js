@@ -1920,6 +1920,10 @@ function settingsModal() {
             <span class="settings__note">只影響之後開的終端，已經在跑的不會被換掉</span>
           </div>
           <div id="pick-ttyd" class="settings__control"></div>
+          <p class="settings__note" style="margin:var(--space-2) 0 0">
+            兩顆有一個實質差異：Rust 版的網頁標題由伺服器端換掉，命令列不會送到瀏覽器；
+            C 版只是把畫面上的標題蓋掉，完整命令仍然送給每一個連上的分頁。
+          </p>
         </section>
       </div>
       <div class="modal__actions">

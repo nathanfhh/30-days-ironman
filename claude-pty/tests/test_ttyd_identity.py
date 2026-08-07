@@ -87,6 +87,24 @@ try:
     check("不認得的值 → 退回預設，不可以照著 exec",
           views._ttyd_argv(41000, "c", "sid", "rm -rf /")[0] == config.TTYD_BIN_DEFAULT)
 
+    print("== 伺服器端 --title：只有支援的 binary 才帶（發表阻擋項）==")
+    # Rust 版由伺服器端換掉宣告出去的標題——命令列一個字都不上線；C 版沒有這個選項
+    # （帶了會拒起），它的標題只是被 client 端的 titleFixed 蓋住畫面。
+    rust = views._ttyd_argv(41000, "claude-pty-xyz789", "xyz789", "ttyd-rust")
+    c = views._ttyd_argv(41000, "claude-pty-xyz789", "xyz789", "ttyd")
+    check("🔴 Rust 版帶 --title", "--title" in rust)
+    _title = rust[rust.index("--title") + 1] if "--title" in rust else ""
+    check("🔴 --title 只含這一場的編號，命令列一個字都不上線",
+          "xyz789" in _title and "docker" not in _title and "attach" not in _title
+          and "claude-pty-xyz789" not in _title)
+    check("--title 與 titleFixed 是同一個字串（兩條路顯示一致）",
+          f"titleFixed={_title}" in rust)
+    check("🔴 C 版不帶 --title（沒有這個選項，帶了會拒起）", "--title" not in c)
+    check("C 版仍靠 titleFixed 蓋畫面",
+          any(a.startswith("titleFixed=") for a in c))
+    check("能力旗標是 binary 名不是顯示標籤（防有人拿 \"Rust\" 字樣判斷）",
+          config.TTYD_TITLE_CAPABLE <= set(config.TTYD_BINS))
+
     print("== 邊界 ==")
     check("pid=None → False", _is_our_ttyd(None) is False)
     check("pid=0 → False", _is_our_ttyd(0) is False)
