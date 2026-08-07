@@ -261,9 +261,28 @@ def jaeger_on_network(client: docker.DockerClient, net_name: str) -> bool:
 
 
 def remove_network(client: docker.DockerClient, user_id: int) -> bool:
-    """收掉這個使用者的網路。還有容器掛著時 docker 會拒絕——那是對的，交給呼叫端下輪再試。"""
+    """收掉這個使用者的網路。還有容器掛著時 docker 會拒絕——那是對的，交給呼叫端下輪再試。
+
+    ⚠ **先把 jaeger 拔下來。** `ensure_network` 會把它接上每一張使用者網路，而**掛著的
+      容器會讓 `remove()` 直接失敗**（`has active endpoints (name:"jaeger")`）。少了這一步，
+      使用者網路永遠收不掉，位址池只出不進，而症狀要等到某天「開不了 session」才浮現。
+      拔的動作放在這裡而不是各呼叫端：這是「移除一張使用者網路」唯一的 by-uid 入口，
+      不變式跟著操作走才不會有人漏掉（reconciler 走的是 Network 物件那條，它自己也做了
+      同一件事，見 `_reap_user_networks`）。
+    ⚠ 只拔 jaeger。**真的還有 session 容器掛著時仍然要失敗**——那是「這一輪還不能收」的
+      正確訊號，不可以為了讓 remove 成功而去踢掉別人的容器。所以拔之前先問
+      `only_jaeger_left`：還有別人在就**不拔也不收**，原樣讓 docker 拒絕。先拔再發現收不掉
+      的話，那個使用者的 trace 會靜靜停掉，要等 reconciler 下一輪才補回來。
+    """
+    name = network_name(user_id)
     try:
-        client.networks.get(network_name(user_id)).remove()
+        net = client.networks.get(name)
+    except docker.errors.NotFound:
+        return False
+    if only_jaeger_left(net):
+        detach_jaeger(client, name)
+    try:
+        net.remove()
         return True
     except docker.errors.NotFound:
         return False

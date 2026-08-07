@@ -330,12 +330,19 @@ try:
     print("\n== GitLab 關閉時，活著 session 的網路不可以被收掉 ==")
 
     class _FakeNet:
-        def __init__(self, name, uid):
+        def __init__(self, name, uid, attached=()):
             self.name, self.removed = name, False
             self.attrs = {"Labels": {config.PROXY_OWNER_LABEL: str(uid)},
                           # 夠舊：不讓 ORPHAN_GRACE 變成「沒被刪」的真正原因，否則這條
                           # 測試會在錯誤的理由下變綠。
-                          "Created": "2020-01-01T00:00:00Z"}
+                          "Created": "2020-01-01T00:00:00Z",
+                          # 誰還掛在這張網上。回收前會問這個（`only_jaeger_left`）：
+                          # jaeger 不算數（它是我們自己接上去的），別人算。
+                          "Containers": {f"c{i}": {"Name": n}
+                                         for i, n in enumerate(attached)}}
+
+        def reload(self):
+            pass
 
         def remove(self):
             self.removed = True
@@ -361,9 +368,9 @@ try:
 
     _NET_UID = _sysuid
 
-    def _converge_with(gitlab_on, live):
+    def _converge_with(gitlab_on, live, attached=()):
         """跑一輪收斂，回傳那張網路有沒有被收掉。"""
-        net = _FakeNet(f"{config.USER_NETWORK_PREFIX}{_NET_UID}", _NET_UID)
+        net = _FakeNet(f"{config.USER_NETWORK_PREFIX}{_NET_UID}", _NET_UID, attached)
         saved = config.GITLAB_HOST
         config.GITLAB_HOST = "gitlab.example.com" if gitlab_on else ""
         try:
@@ -387,6 +394,13 @@ try:
         s.delete(s.get(SessionRow, "netkeep0001"))
     check("🔴 沒有 session 了 → 網路被收掉（證明上面不是因為 reap 沒作用才綠）",
           _converge_with(gitlab_on=False, live={}))
+    # jaeger 掛在每一張使用者網路上，它**不算**「還有人在用」——不然每一張網都永遠收不掉，
+    # 位址池只出不進。反過來，真的還有容器掛著就不可以收。
+    check("🔴 只剩 jaeger 掛著 → 照收（否則位址池只出不進）",
+          _converge_with(gitlab_on=False, live={}, attached=("jaeger",)))
+    check("🔴 還有別的容器掛著 → 不收，交給下一輪",
+          not _converge_with(gitlab_on=False, live={},
+                             attached=("jaeger", "claude-pty-someone")))
 
 finally:
     print("== 清理 ==")
