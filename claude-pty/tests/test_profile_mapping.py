@@ -251,6 +251,23 @@ try:
     auth.clear_cli_token(_tok_uid)
     env_none = build_run_kwargs("c", "sid-tok2", Profile(), _tok_uid).get("environment", {})
     check("🔴 沒 token → 這個鍵不存在", "NCR_TOKEN_FILE" not in env_none)
+
+    # 🔴 env 那條是**逃生口**（fd 依賴一個官方沒有文件的機制，見 config.TOKEN_DELIVERIES）。
+    #    它必須真的把值放進環境——這條測的正是「退路本身是通的」。退路壞掉而沒人發現，
+    #    等於沒有退路。
+    auth.set_cli_token(_tok_uid, "sk-test-oauth-token")
+    env_env = build_run_kwargs("c", "sid-tok3", Profile(token_delivery="env"),
+                               _tok_uid).get("environment", {})
+    check("🔴 選 env → 值真的進環境變數（退路要是通的）",
+          env_env.get("CLAUDE_CODE_OAUTH_TOKEN") == "sk-test-oauth-token")
+    check("🔴 選 env → 就不再送路徑（同一個秘密不要躺兩個地方）",
+          "NCR_TOKEN_FILE" not in env_env)
+    # 🔴 兩條路互斥：fd 那條不可以順手也把值放進環境。
+    env_fd = build_run_kwargs("c", "sid-tok4", Profile(token_delivery="fd"),
+                              _tok_uid).get("environment", {})
+    check("🔴 選 fd → 值不在 env 的任何一個欄位裡",
+          all("sk-test-oauth-token" not in str(x) for kv in env_fd.items() for x in kv))
+    auth.clear_cli_token(_tok_uid)
     check("🔴 憑證不再以檔案掛載（volumes 裡沒有 .credentials）",
           all(".credentials" not in str(v) for kwv in (env_tok, env_none) for v in kwv)
           and all(".credentials" not in b.get("bind", "")

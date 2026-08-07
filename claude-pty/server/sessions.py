@@ -15,6 +15,7 @@ import io
 import json
 import os
 import re
+import socket
 import sys
 import tarfile
 import tempfile
@@ -387,6 +388,9 @@ class Profile:
     # 模型與思考深度：`claude --model` / `--effort` 的合法別名（見 config.CLAUDE_MODELS）
     model: str = config.DEFAULT_MODEL
     effort: str = config.DEFAULT_EFFORT
+    # 憑證怎麼交給 CLI：fd（預設，值不進環境）或 env（官方文件寫過的退路）。
+    # 這不是偏好題，是 fd 那條壞掉時的逃生口——見 config.TOKEN_DELIVERIES。
+    token_delivery: str = config.DEFAULT_TOKEN_DELIVERY
 
     @classmethod
     def from_dict(cls, d: dict | None) -> Profile:
@@ -398,12 +402,14 @@ class Profile:
             telemetry=_as_bool(d.get("telemetry"), config.DEFAULT_TELEMETRY),
             model=d.get("model", config.DEFAULT_MODEL),
             effort=d.get("effort", config.DEFAULT_EFFORT),
+            token_delivery=d.get("token_delivery", config.DEFAULT_TOKEN_DELIVERY),
         )
 
     def as_dict(self) -> dict:
         return {"cli": self.cli, "network": self.network,
                 "capture": self.capture, "telemetry": self.telemetry,
-                "model": self.model, "effort": self.effort}
+                "model": self.model, "effort": self.effort,
+                "token_delivery": self.token_delivery}
 
 
 def _stored_profile(profile: Profile) -> dict:
@@ -426,8 +432,11 @@ class SessionNotFound(SessionError):
 #   （中間曾經改走環境變數；那條路解掉了掛載問題，卻讓值出現在 `docker inspect` 與每一個
 #     子行程的環境裡。現在的做法兩個都避開，見 config.SESSION_TOKEN_FILE。）
 
-def _put_cli_token(container, user_id: int) -> bool:
+def _put_cli_token(container, user_id: int, delivery: str) -> bool:
     """把這個人的 CLI 憑證寫進容器自己的 writable layer，回傳有沒有真的寫。
+
+    `delivery == "env"` 時**什麼都不做**：那條路的值已經在 build_run_kwargs 放進環境了，
+    這裡再送一份只會讓同一個秘密多躺一個地方。
 
     **不經環境變數**，理由見 `config.SESSION_TOKEN_FILE`。tar 裡直接帶 uid 與 0600：
     entrypoint 以 `config.SESSION_UID` 執行，root 寫的檔它讀不到。
@@ -436,6 +445,8 @@ def _put_cli_token(container, user_id: int) -> bool:
       的失敗；為此讓整場開不起來不成比例。
     ⚠ 例外只印型別不印訊息——put_archive 的錯誤訊息可能回夾 payload。
     """
+    if delivery != "fd":
+        return False
     token = auth_mod.cli_token(user_id)
     if not token:
         return False
@@ -756,6 +767,36 @@ def preflight() -> list[str]:
             f"session network {config.SESSION_NETWORK} 確認/建立失敗（{type(e).__name__}）"
             f"——restricted 與 telemetry 的 session 都會開不起來。"
             f"手動補：docker network create {config.SESSION_NETWORK}")
+    # Telemetry 的接線：**jaeger 不歸我們管，但「它到不到得了」是我們的問題。**
+    #
+    # jaeger 由另一份 compose 起（opentelemetry/jaeger-compose.yaml），而那份只接**一張**網。
+    # 實測踩到的狀態：它接在「人自己跑容器」那條路用的網上，於是網頁這條路三方互不相通
+    # ——控制平面探測 gaierror、session 也送不到。而 **OTLP 是 fail-open，從頭到尾沒有任何
+    # 錯誤訊息**，畫面上只是永遠沒有 trace（2026-08-07 實測）。
+    #
+    # 所以由需要它的這一方主動接上去。同一顆容器可以同時掛多張網，接上不影響它原本那張。
+    #   · SESSION_NETWORK      — session 真正送 trace 的地方
+    #   · 控制平面自己這幾張   — `_jaeger_reachable()` 從這裡發出探測
+    #
+    # ⚠ 兩邊**都要**。只接 session 那張的話探測會失敗 → 控制平面判定「送不到」→ 根本不設
+    #   OTEL env，於是 session 明明到得了卻不送。**探測與現實脫節，比探測失敗更難查。**
+    # ⚠ jaeger 不在就安靜跳過：它是選配設施，不是缺陷。整段包在 suppress 裡——這是錦上
+    #   添花，任何失敗都不該影響控制平面啟動。
+    with suppress(Exception):  # noqa: BLE001 — 見上
+        from urllib.parse import urlparse
+        _jname = urlparse(config.OTEL_ENDPOINT).hostname
+        if _jname:
+            _c = docker.from_env(timeout=config.DOCKER_TIMEOUT)
+            _jg = _c.containers.get(_jname)
+            _want = {config.SESSION_NETWORK}
+            with suppress(Exception):      # 沒跑在容器裡（本機開發）就只接 session 那張
+                _me = _c.containers.get(socket.gethostname())
+                _want |= set(_me.attrs["NetworkSettings"]["Networks"])
+            for _net in _want - set(_jg.attrs["NetworkSettings"]["Networks"]):
+                with suppress(docker.errors.APIError):
+                    _c.networks.get(_net).connect(_jg.id)
+                    print(f"[claude-pty] jaeger 接上 {_net}（否則 trace 靜默不送）", flush=True)
+
     # ⚠ **這裡刻意沒有「位址池餘裕」的預先檢查。** 曾經寫過一版：啟動時試建 N 個 network
     #   再刪掉，建不出來就警告。它有兩個問題，而且都是自找的：
     #     · `preflight()` 在 **import `server.app` 時**就跑——每一個 web worker、reconciler、
@@ -981,7 +1022,7 @@ class SessionManager:
             # ⚠ **憑證要在 start 之前送進去，而且只能在 create 之後。** put_archive 需要
             #   一顆已經存在的容器，而 entrypoint 一跑起來就會去讀它。中間這個縫隙是唯一
             #   的窗口。失敗不中斷：拿不到憑證的終端會停在登入提示，那是誠實的失敗畫面。
-            _put_cli_token(container, user_id)
+            _put_cli_token(container, user_id, run_profile.token_delivery)
             # ⚠ **就是這裡，不能更晚。** 見上面那段：防火牆放行的是 entrypoint 起跑那一刻
             #   的路由快照，`start` 之後才接的網路永遠通不了。
             has_proxy = False
@@ -1781,9 +1822,16 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     # 的說明，以及 _put_cli_token）。不掛任何 host 憑證檔（模型欄位 cli_token_enc
     # 那段講了為什麼不留後路）。
     # create() 的 _guard_credentials 已經擋過「沒設」，這裡拿不到只剩競態（guard 之後
-    # 才被清掉）——照樣不注入路徑，讓終端停在登入提示，那是誠實的失敗畫面。
-    if auth_mod.cli_token(user_id):
-        env["NCR_TOKEN_FILE"] = config.SESSION_TOKEN_FILE
+    # 才被清掉）——照樣什麼都不放，讓終端停在登入提示，那是誠實的失敗畫面。
+    #
+    # ⚠ 兩條路，per-session 選（見 config.TOKEN_DELIVERIES）：`fd` 這裡只放**路徑**，
+    #   值由 create() 用 put_archive 送進去；`env` 是把值直接放進環境的退路。
+    _token = auth_mod.cli_token(user_id)
+    if _token:
+        if profile.token_delivery == "env":
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = _token
+        else:
+            env["NCR_TOKEN_FILE"] = config.SESSION_TOKEN_FILE
 
     # 模型與思考深度：entrypoint.sh 把它翻成 `--model` / `--effort`，這裡只放進 env。
     env["NCR_MODEL"] = profile.model

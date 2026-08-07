@@ -53,6 +53,17 @@
         <label class="label" for="name">名稱</label>
         <input class="input" id="name" maxlength="{{ name_max }}" placeholder="例：重構登入流程">
       </div>
+      {# 憑證交付：**這不是偏好題，是逃生口。** 預設那條（檔案描述符）依賴一個官方沒有
+         寫進文件的機制，所以要留一個當場切得回去的開關；否則哪天它在版本升級後消失，
+         使用者只會看到「每一場新 session 都要求登入」，而唯一的解法是等維護者改程式、
+         重新部署。
+         hint 必須把**什麼時候該切**講出來，不能只說兩者差在哪——少了那句話，這個開關
+         對使用者就只是一個看不懂的選項。 #}
+      <div class="field">
+        <span class="label">憑證交付</span>
+        <div id="pick-token-delivery"></div>
+        <span class="field__hint">預設不讓憑證進容器的環境變數。此法官方無文件、實測可用；若新 session 開始要求登入，改用環境變數。</span>
+      </div>
       <div class="form-actions form-actions--center">
         <button class="btn btn--primary" type="submit" id="create-btn"><i class="fa-solid fa-plus"></i> 建立 Session</button>
       </div>
@@ -191,6 +202,14 @@
       name: "Telemetry",
       hint: "探不通就不送",
       offIcon: "fa-chart-line", onIcon: "fa-chart-line",
+    }),
+    // ⚠ off 一樣是安全那端（見上面三個開關的註解）：fd 不讓憑證進環境變數。
+    //   on 是**逃生口**，不是「另一種風格」——所以 onLabel 直接寫它的代價。
+    token_delivery: createSwitch(document.getElementById("pick-token-delivery"), {
+      off: "fd", on: "env", initial: "fd",
+      name: "憑證交付",
+      offLabel: "檔案描述符", onLabel: "環境變數",
+      offIcon: "fa-shield-halved", onIcon: "fa-rotate-left", hint: "官方文件寫過的退路",
     }),
   };
 
@@ -936,6 +955,7 @@
             telemetry: pickers.telemetry.value === "1",
             model: pickers.model.value,
             effort: pickers.effort.value,
+            token_delivery: pickers.token_delivery.value,
           },
         },
       });

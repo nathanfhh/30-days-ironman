@@ -220,18 +220,17 @@ a:hover { color: var(--color-accent-hover); }
   font-size: 14.5px;
 }
 
-/* 導覽列上每一顆膠囊的高度。分段控制、憑證徽章、主題 picker、身分、登出——它們是同一
+/* 導覽列上每一顆膠囊的高度。分段控制、憑證徽章、主題 picker、身分——它們是同一
    排、同一種東西（可操作的膠囊），高度就該是同一個值。
    ⚠ 先前是五個各自長大的數字：43.8 / 31.3 / 50.6 / 38 / 38（2026-07-26 實測），
      連垂直位置都五個不同，因為每個都是用自己的 padding 撐出來的。改成統一由高度決定、
      padding 只管左右，之後改字級或內距就不會又各走各的。
-   2.375rem（38px）沿用 .whoami／.masthead__logout 本來就在用的值。 */
+   2.375rem（38px）沿用 .whoami 本來就在用的值。 */
 .masthead { --control-h: 2.375rem; }
 .masthead .navseg,
 .masthead .cred,
 .masthead #theme-picker .picker__button,
-.masthead .whoami,
-.masthead .masthead__logout {
+.masthead .whoami {
   height: var(--control-h);
   box-sizing: border-box;
 }
@@ -1342,9 +1341,16 @@ button.tip, a.tip, .tip button, .tip a { cursor: pointer; }
   letter-spacing: 0.01em;
   margin: 0 0 var(--space-4);
 }
-/* 面板標題底下的說明段。限寬是刻意的：整行橫跨螢幕的說明文字沒人讀得下去。 */
+/* 面板標題底下的說明段。限寬是刻意的：整行橫跨螢幕的說明文字沒人讀得下去。
+ *
+ * ⚠ **負的上邊距只在「緊接在 `.panel__title` 之後」時才給**（見下面那條相鄰選擇器）。
+ *   它本來寫在這條通用規則裡，於是任何**不是**貼著標題的用法都會被往上拉：跟在
+ *   `.section-head` 後面就疊到標題與右上角的 chip 上，跟在 `<form>` 後面就壓到送出鍵。
+ *   兩處都真的踩到過（2026-08-07），而且兩次的第一反應都是「在那個地方補一個 inline
+ *   style 蓋掉」——那是把陷阱留在原地，讓下一個人再踩一次。
+ *   把條件寫進選擇器，這個 class 才變回「安全的預設」。 */
 .panel__lede {
-  margin: calc(var(--space-4) * -1 + 2px) 0 var(--space-4);
+  margin: 0 0 var(--space-4);
   /* 不另設 max-width：外層 .shell 已經把版面收在 1320px 內，這裡再限 62ch 只會在右邊
      留下一大片空白，看起來像沒寫完。行長的控制交給容器，不是每段文字各自為政。 */
   color: var(--color-text-muted);
@@ -1368,6 +1374,18 @@ button.tip, a.tip, .tip button, .tip a { cursor: pointer; }
   color: var(--color-text-primary);
 }
 .panel__lede strong { color: var(--color-text-primary); font-weight: 600; }
+/* 貼著標題時才收緊：標題自己的 margin-bottom 對一段小字太鬆，看起來會像兩塊東西。 */
+.panel__title + .panel__lede { margin-top: calc(var(--space-4) * -1 + 2px); }
+
+/* 可點擊複製的 code（`data-copy`，見 app.js 的委派處理）。
+   ⚠ 要**看起來**可點，否則沒有人會去點——游標、底線提示、hover 都給，
+     不然這個功能等於不存在。 */
+.panel__lede code[data-copy] {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--color-border-strong);
+  transition: background 120ms ease, color 120ms ease;
+}
+.panel__lede code[data-copy]:hover { background: var(--color-surface-raised); color: var(--color-accent); }
 
 /* 產出的 token。字要可全選、可換行——一長串不換行會把面板撐爆。 */
 .token-out {
@@ -2663,8 +2681,11 @@ button.drawer__hint:focus-visible { outline: 2px solid var(--color-accent); outl
 .btn--inert { opacity: .55; }
 .btn--inert:hover { opacity: .7; }
 
+/* ⚠ 上緣要比欄位之間的間距**明顯大**。這一排不是表單的下一格，是「填完了，送出」——
+   用一樣的間距會讓送出鍵讀成最後一個欄位的一部分，尤其上面那一格帶了說明文字時，
+   按鈕看起來像貼在說明上。 */
 .form-actions { display: flex; gap: var(--space-3); justify-content: flex-end;
-                margin-top: var(--space-4); }
+                margin-top: var(--space-6); }
 .form-actions--center { justify-content: center; }
 
 /* ── 主題切換的同心圓過渡（View Transition API）────────────────────────────────

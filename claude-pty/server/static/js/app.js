@@ -2045,3 +2045,26 @@ function initAccountMenu() {
   });
   window.addEventListener("resize", () => { if (open) anchorPanel(btn, menu, { matchWidth: true }); });
 }
+
+/* ── 點一下複製 ────────────────────────────────────────────────────────────────
+ * 用委派而不是逐個綁：這些 `<code data-copy>` 散在各頁的說明文字裡，而說明文字是
+ * 最常被改的東西——逐個綁的話，下一個人加一段說明就會忘記綁，而且不綁**看起來一樣**。
+ *
+ * ⚠ 非 HTTPS 或權限被拒時 `navigator.clipboard` 不可用。那時不要只說「複製失敗」——
+ *   把內容留在畫面上讓人自己選取，總比一句失敗然後什麼都不能做好（同 sessions.html
+ *   的 copyPath 與 account.html 既有的做法）。
+ */
+document.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-copy]");
+  if (!el) return;
+  // data-copy 有值就用它，沒有就用元素自己的文字——後者讓 `<code data-copy>x</code>`
+  // 這種最常見的寫法不必把同一段字寫兩遍（寫兩遍就會有一天只改到一邊）。
+  const text = el.dataset.copy || el.textContent.trim();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("已複製", "success", { body: text, duration: 3000 });
+  } catch {
+    toast("無法自動複製", "warning", { body: `請手動選取：${text}`, duration: 10000 });
+  }
+});

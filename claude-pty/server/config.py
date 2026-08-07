@@ -80,14 +80,30 @@ DEFAULT_EFFORT = os.environ.get("CLAUDE_PTY_DEFAULT_EFFORT", "high")
 # 意外的代價：15 秒對正常操作綽綽有餘（建立容器不走這條，它有自己的長 timeout）。
 DOCKER_TIMEOUT = float(os.environ.get("CLAUDE_PTY_DOCKER_TIMEOUT", "15"))
 
-# session 容器要加入的 docker network（restricted 需要它才有直連網段可放行；telemetry 需要
-# 它才到得了 jaeger）。
-# ⚠ 用 `.strip() or` 而不是 `get(k, default)`：compose 傳的是 `${VAR:-<預設>}`，若哪天
-#   改成 `${VAR:-}` 就會傳空字串進來，get() 會原樣回空字串。
-#   這樣寫也讓**預設值只有這一處**，compose 不必再抄一份。
-SESSION_NETWORK = os.environ.get("CLAUDE_PTY_NETWORK", "").strip() or "claude-pty-sessions"
-# jaeger 也要在上面，否則 telemetry 靜默斷掉（OTLP 是 fail-open，不會有任何錯誤）。
-# ⚠ jaeger 定義在 **dev-container/jaeger-compose.yaml**，不在 deploy/docker-compose.yml
+# --- session 容器的網路歸屬（ADR 0016）---------------------------------------------
+#
+# **每個使用者一張網，他的 session 全部住在上面**（名字見下方 `USER_NETWORK_PREFIX`）。
+# 沒有任何跨使用者共用的 session 網路——這是隔離的來源。
+#
+# ⚠ 這裡曾經有 `SESSION_NETWORK`（`claude-pty-sessions`），所有人的 session 共用一張。
+#   那張網上跨使用者是**互通的**：restricted 的容器內有 iptables 擋出網，擋不住同網段
+#   互連；unrestricted 連那層都沒有。2026-08-07 實測（兩個使用者各開一場，在其中一顆起
+#   listener、從另一顆連過去）確認收得到。而且更糟的是 `build_run_kwargs` 只在
+#   restricted 或 telemetry 時設 network，**unrestricted 且不送 telemetry 的 session 落在
+#   docker 預設 `bridge`**——那張網住著這台機器上每一顆沒指定網路的容器，不只是別人的
+#   session。所以現在**四種 profile 組合一律指定 network**，見 build_run_kwargs。
+#
+# ⚠ **任何情況下都不得退回共用網路。** 位址池滿時正確的行為是讓 session 開不起來並把
+#   下一步講清楚（見 user_proxy.PoolExhausted），不是找一張共用的網把它塞進去——那會
+#   把上面那個洞無聲地打回來。
+LEGACY_SESSION_NETWORK = "claude-pty-sessions"
+# `CLAUDE_PTY_NETWORK` 已經沒有作用。**留著只為了偵測「有人還在設它」**：一個被靜靜
+# 忽略的旋鈕是最難查的那種（設定了、重啟了、什麼都沒變，而且沒有任何訊息）。
+# preflight 看到它有值就報一行，見 sessions.preflight。
+LEGACY_NETWORK_ENV = os.environ.get("CLAUDE_PTY_NETWORK", "").strip()
+# jaeger 要在**每一張使用者網路**上，否則那些 session 的 telemetry 靜默斷掉（OTLP 是
+# fail-open，不會有任何錯誤）。接線由控制平面負責，見 user_proxy.attach_jaeger。
+# ⚠ jaeger 定義在 **opentelemetry/jaeger-compose.yaml**，不在 deploy/docker-compose.yml
 #   裡；它是**人的路徑也在用**的共用 infra。改那個檔要一併驗人的路徑。
 OTEL_ENDPOINT = os.environ.get("CLAUDE_PTY_OTEL_ENDPOINT", "http://jaeger:4317")
 # 脫敏 addon：repo 的 `mitm/`（claude-pty 的同 repo 兄弟目錄），用相對路徑、不依賴
@@ -240,6 +256,26 @@ SESSION_UID = int(os.environ.get("CLAUDE_PTY_SESSION_UID", "1001"))
 #   所以 `_put_cli_token` 的 tar 會連同 `cpty/` 這個目錄一起送，並且把它設成他的。
 SESSION_TOKEN_DIR = "/run/cpty"
 SESSION_TOKEN_FILE = SESSION_TOKEN_DIR + "/token"
+
+# 憑證怎麼交給 CLI。**兩條路都留著，per-session 可選。**
+#
+#   fd  — 走上面那個檔案 + file descriptor（預設）。憑證不進環境，`docker inspect`、
+#         `/proc/1/environ`、子行程的環境都看不到值。
+#   env — 直接放進 `CLAUDE_CODE_OAUTH_TOKEN` 環境變數（原本的做法）。
+#
+# ⚠ **為什麼安全的那條不是唯一一條**：fd 依賴的
+#   `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR` **沒有寫進官方文件**——它存在、Anthropic
+#   自家的網頁版也在用（issue #57925 的環境資訊裡就有），但那是內部實作，一次版本升級
+#   就可能消失或改名，而症狀會是「所有新 session 都要求登入」。env 那條是文件寫過的路。
+#   押在一個沒有文件的機制上，就該留一條有文件的退路，而且要讓人**當場切得回去**，
+#   不是等我改完程式再重新部署。
+# ⚠ 這個開關**不是**安全與否的偏好題，是「新的那條還通不通」的逃生口。預設一律 fd；
+#   選 env 的時機只有一個：fd 那條壞了。畫面上的文案要這樣寫，不要寫成「兩種風格」。
+TOKEN_DELIVERIES = ("fd", "env")
+DEFAULT_TOKEN_DELIVERY = os.environ.get("CLAUDE_PTY_TOKEN_DELIVERY", "fd")
+if DEFAULT_TOKEN_DELIVERY not in TOKEN_DELIVERIES:      # 打錯字不可以靜靜落到危險的那邊
+    raise SystemExit(f"CLAUDE_PTY_TOKEN_DELIVERY 只能是 {' / '.join(TOKEN_DELIVERIES)}"
+                     f"（拿到 {DEFAULT_TOKEN_DELIVERY!r}）")
 
 CLAUDE_CONFIG_BIND = "/home/nathan/.claude"
 # 容器內那個「寫了要留著」的根目錄。**dev-container 的兩條路徑都落在它底下**：

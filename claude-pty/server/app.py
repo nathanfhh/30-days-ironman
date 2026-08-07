@@ -189,6 +189,8 @@ def _require_json_for_writes():
 _ENUMS = {
     "cli": ("claude",),        # 這套東西只驅動 claude 一種 CLI
     "network": ("restricted", "unrestricted"),
+    # 憑證交付方式。**不是偏好題，是 fd 那條壞掉時的逃生口**——見 config.TOKEN_DELIVERIES。
+    "token_delivery": config.TOKEN_DELIVERIES,
 }
 
 # 模型與思考深度的白名單：值是 `claude --model` / `--effort` 的別名（實測 v2.1.207 的

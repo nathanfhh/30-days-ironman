@@ -75,7 +75,9 @@ services:
       # ⚠ 掛的是**目錄**不是單一檔案：SQLite 走 WAL，執行中會在同一層另外產生
       #   `-wal` 與 `-shm`；只掛檔案的話那兩個會落在容器層，容器一重建就連同未 checkpoint
       #   的交易一起消失。單檔 bind mount 另有 inode 問題（SQLite 重建檔案時 mount 會失聯）。
-      - ./data:/data
+      # ⚠ host 這一側可用 .env 的 CLAUDE_PTY_DATA_DIR 換位置（見 .env.example）。容器內那
+      #   一側**固定 /data**，兩隻服務與 CLAUDE_PTY_DB_PATH 都依賴它。
+      - ${CLAUDE_PTY_DATA_DIR:-./data}:/data
     environment:
       # --- 路徑解耦：傳給 daemon 的必須是 **host** 路徑（ADR 0009）---
       CLAUDE_PTY_HOST_HOME: ${HOME}
@@ -139,7 +141,7 @@ services:
       # 注意：compose 的相對路徑以本檔所在目錄為基準，deploy/ 的 .. 是 claude-pty，
       # repo 根要再上一層（entrypoint.sh 在 <repo>/dev-container/）。
       - ../..:${HOST_REPO_ROOT:-/repo}:ro
-      - ./data:/data          # 與 control 同一份 SQLite（見上方說明）
+      - ${CLAUDE_PTY_DATA_DIR:-./data}:/data   # 與 control 同一份 SQLite（見上方說明）
     environment:
       CLAUDE_PTY_HOST_HOME: ${HOME}
       CLAUDE_PTY_HOST_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
