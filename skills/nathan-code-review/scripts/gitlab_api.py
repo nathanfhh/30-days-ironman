@@ -67,7 +67,7 @@ API_BASE_ENV = "NCR_GITLAB_API_BASE"
 
 # The literal segment GitLab inserts between the project path and the resource
 # type. Splitting on it is the only reliable way to recover a project path that
-# is several namespaces deep (e.g. his/abc/abc-backend).
+# is several namespaces deep (e.g. platform/api/api-backend).
 MR_URL_SEPARATOR = "/-/merge_requests/"
 
 # 30s: GitLab答覆 discussions 分頁在大型 MR 上可能需要數秒，但超過 30 秒幾乎都是
@@ -172,7 +172,7 @@ def warn(message: str) -> None:
 def parse_mr_url(mr_url: str) -> dict[str, Any]:
     """Split a merge request URL into host, project path and iid.
 
-    https://gitlab.example.com/his/abc/abc-backend/-/merge_requests/61
+    https://gitlab.example.com/platform/api/api-backend/-/merge_requests/61
             └───── host ─────┘ └─── project path ───┘             └iid┘
 
     Credentials embedded in the URL (`https://user:token@host/...`) are stripped

@@ -78,6 +78,24 @@ class User(Base):
     # host 上的任何憑證檔（那種「有的話就順便用」的後路，是一條平常不走、出事才走、
     # 而且沒人測過的路徑）。Fernet 密文是 base64 字串，Text 直接存（見 crypto.encrypt）。
     cli_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 這個人的 GitLab Personal Access Token（ADR 0016），同樣以 crypto 加密後存放；
+    # NULL＝沒設過。**與 cli_token_enc 用不同的導出金鑰**（crypto.Purpose.GITLAB_PAT）——
+    # 兩者的爆炸半徑不同：CLI token 開得了的是這套系統替你呼叫的那家 AI 供應商，
+    # PAT 是你在 GitLab 上的身分。共用一把金鑰等於讓其中一邊的密文可以解另一邊。
+    # ⚠ 明文只走一條路：讀出來 → 渲染成 nginx.conf → put_archive 進代理容器。
+    #   不進環境變數、不落 host 磁碟、`docker inspect` 也看不到（ADR 0016 的整個前提）。
+    gitlab_pat_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 這個人的代理**連續起不來**時，nginx 自己說的最後一句話（ADR 0016）。NULL＝沒問題。
+    #
+    # ⚠ 這是**診斷麵包屑，不是權威狀態**——與「設定的新舊一律問容器自己」那條規矩不衝突，
+    #   但界線要講清楚：**沒有任何判斷會讀這一欄**（收斂看的是 docker 的實況與 `/_state`），
+    #   它只負責把「本來只在容器 log 裡的一句話」搬到人看得到的地方。所以它就算過時也不會
+    #   讓系統做錯決定，最壞只是畫面上多留一句已經修好的錯誤——而代理恢復的那一輪就會清掉。
+    # ⚠ 存在的理由：代理起不來時，使用者看到的是「GitLab 連不到」，然後去查 token、查網路、
+    #   查 GitLab 是不是掛了——**唯一指得到真正原因的那句話卻只在容器 log 裡**
+    #   （最典型的是 `[emerg] host not found in upstream`＝主機名設錯）。沒有這一欄，
+    #   那是一個會讓人往完全錯的方向查很久的失敗。
+    gitlab_proxy_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 這個人開終端時要用哪一顆 ttyd（C 版 `ttyd` / Rust 重寫 `ttyd-rust`），由管理畫面的
     # 「設定」切換。**做成 per-user 而不是全域**：它的用途是 A/B 比較，全域的話一個人切換
     # 會把別人正在比的終端一起換掉。NULL＝沒設過 → 用 config.TTYD_BIN_DEFAULT。
@@ -171,6 +189,14 @@ class Session(Base):
     # 沒有它就答不出「那場是哪一版工具鏈」——2026-07-26 實際發生過 session 跑在 13 天前
     # 的 image 上而畫面完全看不出來。存 UTC（UtcDateTime 會把任何時區換算過去）。
     image_created_at: Mapped[_dt.datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    # 這一場**開場的那一刻**有沒有接上擁有者的 GitLab 代理網路（ADR 0016）。
+    # ⚠ 這是快照，**不可變**，而且事後補不上：網路必須在容器 `start` 之前接，防火牆放行的
+    #   是那一刻的路由快照。所以「後來才設了 PAT」救不了已經在跑的場。
+    # ⚠ 它**不等於**「這場現在能不能用 GitLab」。那要兩個事實一起看：這一欄（有沒有路）
+    #   ＋ 擁有者現在還有沒有 PAT（路的另一端在不在）。只看這一欄，使用者清掉 PAT 之後
+    #   畫面會一直說「可用」而 git 全部失敗。見 ADR 0016「畫面要讀兩個事實」。
+    # NULL＝這一欄上線之前建立的舊列，「不知道」——畫面不要把它畫成「未啟用」。
+    gitlab_proxy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="sessions")
     views: Mapped[list[View]] = relationship(
@@ -217,6 +243,10 @@ class SessionHistory(Base):
     # 歷史紀錄的用途就是回頭比較，這兩個是「那場的環境長什麼樣」最基本的兩個座標。
     cli_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     image_created_at: Mapped[_dt.datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    # 歸檔時把 Session.gitlab_proxy 原樣搬過來（ADR 0016）。時間視角不同：session 結束後
+    # 已經沒有「現在能不能用」，只剩「期間曾不曾啟用」，所以歷史這一欄自己就是完整答案。
+    # NULL＝欄位上線前的舊紀錄，不畫 icon——把不知道畫成暗燈是在謊稱「確定沒啟用」。
+    gitlab_proxy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     ended_at: Mapped[_dt.datetime] = mapped_column(
         UtcDateTime, nullable=False, default=utcnow, index=True)
     # terminated（使用者明確終止）/ exited（自行結束）/ gone（container 從外部消失）

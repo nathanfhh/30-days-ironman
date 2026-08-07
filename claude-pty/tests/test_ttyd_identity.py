@@ -98,7 +98,7 @@ try:
           set(views._TTYD_EXTRAS) == set(config.TTYD_BINS))
     check("🔴 共用模板是兩邊的交集：C argv ＝ Rust argv 去掉特有段（只差 argv[0]）",
           c[1:] == [a for a in rust[1:]
-                    if a not in ("--title", "agent-tty · xyz789", "--auth-url",
+                    if a not in ("--title", "claude-pty · xyz789", "--auth-url",
                                  "--auth-cache-ttl",
                                  str(config.TTYD_AUTH_CACHE_TTL))
                     and not a.startswith("http://127.0.0.1:")])
@@ -149,3 +149,32 @@ finally:
 
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)
+
+
+# ── 就緒探測：兩顆 binary 的回應都要認得出來 ────────────────────────────────────
+#
+# 這一段是踩出來的。就緒檢查不帶 cookie 打一個 HTTP 請求，原本要求「200 而且內容含
+# ttyd」。Rust 版掛上 --auth-url 之後，那個沒有身分的請求會被它自己的授權層擋掉，回
+# 401——於是就緒檢查永遠失敗、pid 永遠寫不進去，畫面上看到的是「另一個 worker 正在
+# 建立終端」，而且會一直卡著。
+#
+# 判準改成看 `server: ttyd/` 標頭：兩顆都送它，而且 401 的回應裡也有。
+print("== 就緒探測認得出 401（有裝授權的那顆）==")
+
+_C_HEAD = (b"HTTP/1.0 200 OK\r\nserver: ttyd/1.7.7-40e79c7 (libwebsockets/4.3.3)\r\n"
+           b"content-type: text/html\r\n\r\n<!DOCTYPE html>")
+_RUST_HEAD = (b"HTTP/1.0 401 Unauthorized\r\nserver: ttyd/2.0.0-a627556 (rust)\r\n"
+              b"content-length: 0\r\n\r\n")
+_OTHER = b"HTTP/1.0 200 OK\r\nserver: nginx/1.27\r\ncontent-type: text/html\r\n\r\n<html>"
+
+
+def _accepts(head: bytes) -> bool:
+    """把 _is_ttyd_serving 的判準抽出來測，不必真的起一顆 binary。
+    ⚠ 這裡複製判準是刻意的：它要跟著 views.py 一起改，改了這支才會紅。"""
+    return head.startswith(b"HTTP/1.") and b"server: ttyd/" in head.lower()
+
+
+check("🔴 C 版的 200 認得出來", _accepts(_C_HEAD))
+check("🔴 Rust 版的 401 也認得出來（授權擋下探測，不代表它沒起來）", _accepts(_RUST_HEAD))
+check("🔴 別人的服務佔了這個 port 不能誤判成就緒", not _accepts(_OTHER))
+check("空回應不算就緒", not _accepts(b""))

@@ -84,7 +84,7 @@ def rejected(as_admin=True, **kw):
 print("== 白名單驗證 ==")
 check("合法組合通過驗證（不是「不等於 400」那種弱斷言）",
       rejected(model="opus", effort="high") is None)
-check("不存在的模型 → 400", (rejected(model="gpt-9-nope") or (0,))[0] == 400)
+check("不存在的模型 → 400", (rejected(model="nope-9") or (0,))[0] == 400)
 check("不存在的 effort → 400", (rejected(model="opus", effort="turbo") or (0,))[0] == 400)
 
 # 🔴 malformed 輸入不可以變成 500（dict/list 對 frozenset 取雜湊會 TypeError）。

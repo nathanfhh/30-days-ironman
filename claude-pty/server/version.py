@@ -95,7 +95,7 @@ def summary() -> dict:
     """
     sha = os.environ.get("CLAUDE_PTY_GIT_SHA") or _git_from_worktree()
     mods = [{
-        "name": "agent-tty",
+        "name": "claude-pty",
         "version": _own_version(),
         "commit": sha,
         # ⚠ 這裡放的是**建置時間**不是 commit 時間。要回答的是「這個 image 是什麼時候建

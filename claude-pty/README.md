@@ -1,4 +1,4 @@
-# agent-tty（claude-pty）
+# claude-pty
 
 多人共用的網頁終端控制平面：每個人登入後開自己的 session（一場 = 一顆 container），
 在瀏覽器裡直接操作容器內的 Claude Code。斷線、關瀏覽器、換一台電腦，回來還是同一場
@@ -22,7 +22,7 @@ nginx → ttyd → `docker attach`，**不經過 Flask**。授權掛在 nginx �
 
 ```bash
 cd deploy
-cp .env.example .env      # 填 SECRET_KEY / HOST_REPO_ROOT / DOCKER_GID / APP_UID
+cp .env.example .env      # 填 CLAUDE_PTY_SECRET_KEY / HOST_REPO_ROOT / DOCKER_GID / APP_UID
 ./redeploy.sh             # build + 起 control / reconciler / nginx
 docker compose exec control python -m server.cli create-admin alice   # 第一個管理員
 ```
@@ -56,6 +56,9 @@ docker compose exec control python -m server.cli create-admin alice   # 第一�
   回來——那正是這套系統唯一的退場機制，也同時是一個要交給管理員的權力
 - session 之間有隔離（一場一容器、per-user 狀態空間、擁有權檢查），但**隔離不等於
   營運者碰不到**。per-user 空間就在部署機的檔案系統上，transcript 與流量錄製都在裡面
+- GitLab token 同理：它不進 session 容器（見下），但那擋的是**容器裡的 AI**，不是營運者
+  ——它與 CLI 憑證用同一顆資料庫、同一把 `SECRET_KEY` 導出的金鑰（只是各自不同的
+  導出用途，兩者的密文不能互解）
 
 ## 憑證：每個人自己的 setup-token
 
@@ -66,6 +69,83 @@ docker compose exec control python -m server.cli create-admin alice   # 第一�
 **token 過期不會有預告。** 它不揭露自己的壽命，所以畫面上只有「已設定／未設定」，
 沒有「剩幾天」。症狀是**新開的 session 停在登入提示、開不了場**；遇到就重跑一次
 `claude setup-token`、把新的貼回帳號頁。已經在跑的 session 不受影響。
+
+## GitLab：每個人一顆代理，token 不進 session
+
+**預設關閉**，在 `deploy/.env` 填 `CLAUDE_PTY_GITLAB_HOST` 才會啟用（不含 `https://`
+與結尾斜線）。沒填的話這一整套完全不存在——不建任何東西，帳號頁也不會出現這一塊。
+
+開了之後，每個在帳號頁貼了 Personal Access Token 的人，會拿到**一顆自己的 nginx 與一張
+自己的 docker network**，他所有的 session 都掛在上面：
+
+```
+network claude-pty-user-{id}  ┌ 他的 session A ─┐
+                              ├ 他的 session B ─┼─► gitlab-proxy（alias）──► 你的 GitLab
+                              └ 他的 session C ─┘   一顆，握他自己的 token
+```
+
+session 裡的 git 與 API 呼叫**不帶任何憑證**，由那顆代理蓋章。所以：
+
+- **token 不進 session 容器**——不在環境變數、不在掛載、`docker inspect` 也看不到。
+  容器裡的 AI 用得到你的 GitLab，但拿不走鑰匙
+- **誰的 session 用誰的 token**，GitLab 那一端的操作紀錄記的是本人
+- clone 用**正規網址就好**：`https://…` 與 `git@…` 都會被自動改寫成走代理
+  （不要把 remote 寫成代理位址——那個名字只在 session 裡解得開）
+- 直接打 API 的話，位址在容器的 **`NCR_GITLAB_API_BASE`** 環境變數裡（例如
+  `curl "$NCR_GITLAB_API_BASE/api/v4/user"`）。**不要寫死** `http://gitlab-proxy:5678`
+  ——alias 與埠都是部署者可以改的（見 `.env.example`），寫死之後改了就是靜默失效
+- 只有白名單上的 API 端點通得過，其餘一律 403
+
+### 為什麼是「每人一顆」而不是「每場一顆」
+
+nginx 的限流計數桶是 **per-instance** 的。一場一顆的話，一個人開 N 場就有 N 個各自獨立
+的桶——`10r/s` 對 GitLab 變成 `N×10r/s`，**限流形同虛設，而且「同時開很多場」正是它最該
+發揮作用卻最失效的情境**。那不是把數字調小能修的（上限仍然是 `N×`），是拓樸問題。
+完整推理見 [ADR 0016](docs/adr/0016-per-user-gitlab-proxy.md)。
+
+### 換 token 的時候會發生什麼
+
+分界線是**那一場開場時有沒有接上代理網路**，不是「帳號現在有沒有 token」：
+
+| 你做的事 | 開場時接上了的 session | 開場時沒接上的 session |
+|---|---|---|
+| 換一把新的 | 一個對帳週期內改用新的 | 沒有效果 |
+| 清除 | 代理被收掉，**當場**不能用 | 沒有效果 |
+| 清除之後再填一把 | **會恢復**，用新的那一把 | 沒有效果 |
+
+網路必須在容器啟動**之前**接上（防火牆放行的是那一刻的路由快照），所以最後一欄事後補
+不上——設定 token 之前開的 session 要重開一場才有 GitLab。
+
+⚠ 最容易誤解的是第三列。外洩時的自然反應是「清掉、換一把新的」，而那**不會**把舊的
+session 關在外面：它們斷一個對帳週期，然後拿到新的 token。所以：
+
+> **輪替 token 不等於隔離一場你不信任的 session。要隔離那場，就終止那場。**
+
+### 代理起不來的時候
+
+沒有代理**不會**讓 session 開不起來——GitLab 不通是這場少一個功能，不是這場沒用。
+但降級不等於沉默：代理連續三輪起不來時，帳號頁會直接顯示 nginx 自己說的那句話。
+
+這條訊號存在的理由很具體：設定錯的時候（最常見的是 `CLAUDE_PTY_GITLAB_HOST` 打錯或
+DNS 解不到），nginx 在啟動時解析 upstream 就會拒絕啟動，於是每輪重啟、每輪再死。
+使用者看到的症狀卻只是「GitLab 連不到」，會去查自己的 token——**而答案一直只在容器
+log 裡**。把那句話端到畫面上，才不會讓人往完全錯的方向查半小時。
+
+修好之後會自動恢復，訊息也會自己消失。
+
+### 已知限制
+
+- **不支援 git-lfs**：LFS 的 batch API 回的是外部 href（可能直指物件儲存），nginx 改不掉。
+  有用 LFS 的 repo 會靜默壞掉
+- **每個「同時有 session 在跑的 GitLab 使用者」佔一張 docker network**，而位址池是
+  **整台機器共用**的（每個 compose 專案都佔一格）。沒有 session 就會回收，所以消耗量
+  等於**同時在線**的人數；真的用完會在建立的當下報錯並講出下一步
+- session 存活期間，裡面的東西仍能透過代理做**白名單允許的任何事**。買到的是「帶不走」
+  與「範圍收斂」，不是「不能濫用」
+
+> 這與 `gitlab-proxy/`（本 repo 的另一個目錄）是**兩套東西**：那顆是單人單機用的一顆
+> 共用代理，這一套是多人環境用的、每個人自己一顆。兩者不必同時跑。
+> API 白名單在兩邊各有一份，改一邊記得看另一邊。
 
 ## 終端程式：兩顆 ttyd，差異不是快慢
 
@@ -127,3 +207,7 @@ PTY 是字元流，圖片拖不進終端。補法：終端抽屜的迴紋針鈕�
 tests/run-all.sh          # 快速組（不需要 docker）
 tests/run-all.sh --all    # 全部（需要 docker；ttyd 在 PATH 上則含真終端測試）
 ```
+
+GitLab 代理有兩支：`test_gitlab_proxy_conf.py`（離線，驗設定產生與「token 不進 session
+容器」）與 `test_user_proxy.py`（需要 docker，真的建容器、真的熱重載、真的用
+`docker inspect` 確認 token 沒外露）。後者不需要連得到任何 GitLab。

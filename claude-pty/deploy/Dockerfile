@@ -145,9 +145,9 @@ ENV CLAUDE_PTY_CONTROL_HOST=0.0.0.0
 #   2. **/data volume 的擁有者**：named volume 首次建立時會沿用 image 內該路徑的
 #      ownership，所以這裡先 chown；但**既有的 volume 不會被追溯修改**，升級既有部署
 #      要手動 chown 一次（指令見 README）。
-# ⚠ uid 要與 host 上那些掛進來的檔案的擁有者一致，否則讀不到：`~/.claude/.credentials.json`
-#   是 0600（讀不到＝控制平面判定「憑證讀不到」，建立 session 全被擋），bind mount 的
-#   deploy/data 同理。compose 從 .env 的 APP_UID 帶進來（Linux 填 `id -u`），見 ADR 0009。
+# ⚠ uid 要與 host 上那些掛進來的目錄的擁有者一致，否則寫不進去：bind mount 的
+#   deploy/data（SQLite）與 per-user 空間（0700）都吃這個。compose 從 .env 的 APP_UID
+#   帶進來（Linux 填 `id -u`），見 ADR 0009。
 ARG APP_UID=1000
 RUN useradd -m -u ${APP_UID} app \
     && mkdir -p /data \

@@ -109,12 +109,13 @@ MITM_ADDON_BIND = "/home/nathan/ncr-mitm"
 
 # --- SSH agent 轉發：預設關，由部署者明確開啟（ADR 0011）------------------------------
 #
-# 為什麼不像 CLI 憑證（~/.claude）那樣預設掛：兩者的爆炸半徑不同。
-#   - CLI 憑證只能用來呼叫那家 AI 供應商的 API。而且共用它本來就是這個系統的前提——
-#     ADR 0007 的對話續命錨點就是那份共用的 ~/.claude，拿掉它整個產品不成立。
-#   - SSH agent 可以拿去認證**任何主機**（內網 git、正式機、任何信任那把 key 的地方），
-#     而且是以「你」的身分。開了它就等於把那個能力發給每一個能建立 session 的人
-#     ——沒有租戶隔離（architecture.md §7），這件事沒有辦法只給一個人。
+# 為什麼 CLI 憑證可以預設就有、SSH agent 卻要人明確打開：兩者的爆炸半徑不同，
+# 而且**歸屬不同**。
+#   - CLI 憑證是**每個人自己的**：他貼進網頁的 token，加密存在資料庫、開場時只送進
+#     他自己那一場。用途也只有一個，呼叫那家 AI 供應商的 API。
+#   - SSH agent 是**部署層共用的一把能力**：它可以認證任何一台信任那把 key 的主機
+#     （內網 git、正式機、跳板機），而且是以「你」的身分。開了它，每一個能建立
+#     session 的人都拿得到同一把，沒有辦法只給其中一個人。
 #
 # 所以是 opt-in：`CLAUDE_PTY_SSH_AUTH_SOCK` 填 **host 上** agent socket 的路徑（由 daemon
 # 解讀，ADR 0009），不填就完全不掛。掛的落點是 /ssh/ssh_sock，image 的 ENV SSH_AUTH_SOCK
@@ -127,9 +128,9 @@ SSH_AUTH_SOCK_HOST = os.environ.get("CLAUDE_PTY_SSH_AUTH_SOCK", "").strip()
 # 容器內的落點。與 image 的 ENV 同值——改這裡就要改 image，兩邊不對上等於沒掛。
 SSH_AUTH_SOCK_BIND = "/ssh/ssh_sock"
 
-# ⚠ CLI 憑證掛得理所當然，不表示它安全：**任何能開 session 的人都拿得到它們**（同上，
-#   沒有租戶隔離）。把帳號開給誰，等於把這些憑證交給誰——這是開帳號時就要做的信任判斷，
-#   不是可以事後補救的東西。
+# ⚠ CLI 憑證雖然是 per-user 的，仍然不表示「營運者碰不到」：它們用同一把由 SECRET_KEY
+#   導出的金鑰加密，拿到設定檔加資料庫就全部解得開，而管理員還能代改任何人的密碼。
+#   把帳號開給誰，等於請他信任你——這是開帳號時就要做的判斷，不是事後補得回來的。
 
 # trivy 漏洞 DB 的快取目錄（與 run script 掛同一份，見下方 MOUNTS）。
 # HOST 版供掛載（daemon 解讀）、SELF 版供控制平面自己 mkdir（ADR 0009）。
@@ -279,8 +280,122 @@ MOUNTS = {} if os.environ.get("CLAUDE_PTY_NO_MOUNTS") else {
 # 見 TEST_LABEL_DEFAULT_KEY 那段。
 TEST_MARK = os.environ.get("CLAUDE_PTY_TEST_MARK")   # 測試設為 "1"，正式部署不設
 
+# --- per-user GitLab 代理（ADR 0016）------------------------------------------------
+#
+# 每個設了 PAT 的使用者有一個自己的 docker network（`claude-pty-user-{id}`）與一顆 nginx
+# （network alias 固定叫 `gitlab-proxy`）。他的所有 session 都掛在那個網路上，容器裡的
+# git 與 API 呼叫裸打不帶 auth，由代理蓋上**他自己的** PAT。
+#
+# ⚠ **為什麼是 per-user 而不是 per-session**：nginx 的 `limit_req_zone` 是 per-instance，
+#   一個人開 N 場就是 N 顆 nginx、N 個獨立的計數桶，`10r/s` 對 GitLab 變成 `N×10r/s`
+#   ——等於沒有限流，而且越是「同時很多」的情境越失效。那不是調參數修得好的，是拓樸
+#   問題。收斂成 per-user 之後，桶才對得上「人」這個單位。
+# ⚠ 跨使用者的隔離**來自網路邊界，不是防火牆規則**，所以 `unrestricted` profile 也成立。
+
+# 這套東西要代理的 GitLab 主機名（不含 https:// 與結尾斜線）。
+#
+# ⚠ **預設是空字串，代表整個功能關閉**：一顆代理都不會建，設定頁會說「部署者尚未設定
+#   GitLab 主機」，git URL 也不會被改寫。這是刻意的——預設值若是一個看起來像真的網域，
+#   沒設定的部署會真的去建代理、對著別人的主機打，然後回一堆指不到原因的錯。
+#   要用就在 `.env` 明確填上自己的（`deploy/.env.example` 有說明）。
+GITLAB_HOST = os.environ.get("CLAUDE_PTY_GITLAB_HOST", "").strip()
+# git over SSH 的主機名，**只**用於把 `git@host:` / `ssh://git@host/` 改寫成走代理。
+# 多數部署與上面同一個，所以預設沿用；分成兩個旋鈕是因為有些組織把 SSH 掛在別的名字
+# （`git.example.com` 對 `gitlab.example.com`），那時只改一個會讓 SSH 形式靜靜不改寫。
+GITLAB_SSH_HOST = os.environ.get("CLAUDE_PTY_GITLAB_SSH_HOST", "").strip() or GITLAB_HOST
+
+# session 在 per-user 網路上用來找代理的名字與埠——也就是**容器裡看到的 API base**
+# （`http://gitlab-proxy:5678`）。以 env 注進 session（見 sessions.build_run_kwargs 的
+# `NCR_GITLAB_API_BASE`），呼叫端不必把它寫死。
+# ⚠ 改了 alias 就等於改了容器裡那個名字，所有寫死 `gitlab-proxy` 的呼叫端都要跟著改，
+#   而症狀是安靜的（DNS 解不到 → 連線失敗，看不出是名字換了）。
+PROXY_ALIAS = os.environ.get("CLAUDE_PTY_GITLAB_PROXY_ALIAS", "").strip() or "gitlab-proxy"
+PROXY_PORT = int(os.environ.get("CLAUDE_PTY_GITLAB_PROXY_PORT", "5678"))
+# 容器裡看到的 API base。衍生值，**不要另外開一個 env**——兩個來源就會漂。
+PROXY_BASE_URL = f"http://{PROXY_ALIAS}:{PROXY_PORT}"
+
+# 代理容器的 image。與 `gitlab-proxy/docker-compose.yml`（獨立版那套）用同一顆，
+# 兩邊的 nginx 行為才對得起來。
+# ⚠ 用 `.strip() or` 而不是 `os.environ.get(k, default)`：compose 傳的是
+#   `${CLAUDE_PTY_GITLAB_PROXY_IMAGE:-}`——沒設時它給的是**空字串**而不是「沒有這個變數」，
+#   `get()` 會原樣回空字串，於是 image 名稱變成 ""。這在 compose 那種寫法下是預設會踩到
+#   的，不是邊角情境。
+# ⚠ 要**可重現**的部署請在 `.env` 釘 digest（`nginx@sha256:…`）。這裡不預設釘一個，
+#   是因為釘死的 digest 會隨時間變成「沒有人知道為什麼是這一顆」的常數。
+PROXY_IMAGE = (os.environ.get("CLAUDE_PTY_GITLAB_PROXY_IMAGE", "").strip()
+               or "nginx:alpine")
+# 一顆只轉發 HTTP 的 nginx，資源給得比 session 小得多。**要給**：沒有上限的話一個失控的
+# clone 就能把 host 的記憶體吃光，而它不是使用者看得到的東西。
+# ⚠ 不可以太小：git clone 大 repo 時 nginx 仍有 socket buffer 與 TLS 狀態。
+PROXY_MEM_LIMIT = os.environ.get("CLAUDE_PTY_GITLAB_PROXY_MEM_LIMIT", "128m")
+PROXY_PIDS_LIMIT = int(os.environ.get("CLAUDE_PTY_GITLAB_PROXY_PIDS_LIMIT", "64"))
+
+# 代理容器與網路的命名。**決定性**——收的時候不必先查 label 就找得到。
+PROXY_NAME_PREFIX = "claude-pty-gitlab-u"
+USER_NETWORK_PREFIX = "claude-pty-user-"
+if TEST_MARK:
+    # 🛡 **測試與正式 stack 共用同一顆 dockerd，而 docker 的名稱是整台機器共用的命名
+    #   空間。** 這兩個名字由 **DB 的 user id** 組出來，而測試用的是全新的暫存 DB
+    #   （id 從 1 發）——必然撞上正式 stack 的 user-1。三種撞法各自的後果：
+    #     · `containers.get(name)`   → 撿到**正式的**那一顆，接著被當成自己的來熱重載
+    #     · `networks.create(name)`  → 409 Conflict，補建路徑整條走不下去
+    #     · `remove_container(name)` → 刪掉**正在服務**的代理
+    #   ⚠ label 的 allow-list（測試的 scoped client）擋得住**發現**（list），擋不住
+    #     **按名字定址**的操作——那是兩個不同的面，必須分別關掉，只做一邊等於沒做。
+    #   依 TEST_MARK 自動切開而不是要各測試自己設：漏設是靜默的，而代價是刪掉別人的東西。
+    PROXY_NAME_PREFIX = "claude-pty-test-gitlab-u"
+    USER_NETWORK_PREFIX = "claude-pty-test-user-"
+
+# 代理自己的 label。⚠ **絕不可以用 SESSION_LABEL_KEY/VALUE**：那會讓它進到 reconciler 的
+# `live` map，而它在 registry 裡沒有對應列 → ORPHAN_GRACE 之後被 `_remove_orphans` 當孤兒
+# 刪掉，中途還會被狀態刷新迴圈寫進別人的 docker_state。
+PROXY_LABEL_KEY = "claude-pty.gitlab-proxy"
+PROXY_LABEL_VALUE = "1"
+PROXY_OWNER_LABEL = "claude-pty.owner"          # 值是 user_id，收斂時用來對應使用者
+PROXY_FILTERS = {"label": f"{PROXY_LABEL_KEY}={PROXY_LABEL_VALUE}"}
+# per-user 網路也標起來，才掃得到「該回收的空網路」（不然要靠名字前綴猜）。
+NETWORK_LABEL_KEY = "claude-pty.user-network"
+NETWORK_LABEL_VALUE = "1"
+NETWORK_FILTERS = {"label": f"{NETWORK_LABEL_KEY}={NETWORK_LABEL_VALUE}"}
+
+# 代理容器的額外 `/etc/hosts` 條目，格式 `name:ip`，逗號分隔。**預設空的。**
+#
+# 逃生口，不是正常部署會用到的東西。情境：開發時用 SSH 隧道把 GitLab 轉到自己機器的
+# 127.0.0.1:443，並在 host 的 `/etc/hosts` 指過去讓自己的 curl／git 走得通。
+# **Docker Desktop 的 DNS 會把 host 的 /etc/hosts 帶進容器**，於是代理也把 GitLab 解析成
+# `127.0.0.1`＝它自己的 loopback＝沒有人在聽，每個請求都是 502。對策是明確告訴代理該連
+# 去哪：`CLAUDE_PTY_GITLAB_PROXY_EXTRA_HOSTS=gitlab.example.com:host-gateway`
+# （`host-gateway` 是 docker 認得的特殊值，指向 host 本身）。
+#
+# ⚠ **這是一個能讓代理指向任意主機的旋鈕。** 它只由部署者設定（環境變數，使用者碰不到），
+#   但設錯就是把所有人的 PAT 送到別的地方去。不需要就別設。
+PROXY_EXTRA_HOSTS = {
+    kv.split(":", 1)[0].strip(): kv.split(":", 1)[1].strip()
+    for kv in os.environ.get("CLAUDE_PTY_GITLAB_PROXY_EXTRA_HOSTS", "").split(",")
+    if ":" in kv
+}
+
+# PAT 的長度上限。用途不是安全（字元集才是），而是**清楚**：貼錯東西（整份檔案、一段
+# JSON）時直接在入口回 400，不要加密存起來再讓人納悶為什麼 session 裡不能用。
+# GitLab 自己發的 PAT 是 26 字元左右；留大幅餘裕給其他形式的 token。
+GITLAB_PAT_MAX = int(os.environ.get("CLAUDE_PTY_GITLAB_PAT_MAX", "512"))
+
+# 代理**連續**起不來幾輪之後，才把錯誤訊息端到畫面上（`users.gitlab_proxy_error`）。
+# ⚠ 不是 1：代理偶爾重啟一輪是正常的（重新部署、daemon 抖動），每一次都對使用者喊
+#   「你的 GitLab 壞了」就是狼來了——喊久了真的壞掉時沒有人會看。
+# ⚠ 也不能太大：這條訊號要救的是「設定錯了、而且永遠不會自己好」那一類（最典型的是主機名
+#   打錯 → nginx 啟動時解不開 upstream → 每輪重啟、每輪再死）。3 輪 ≈ 90 秒，夠濾掉抖動，
+#   又不會讓人對著完全錯的方向查半小時。
+PROXY_FAIL_THRESHOLD = int(os.environ.get("CLAUDE_PTY_GITLAB_PROXY_FAIL_THRESHOLD", "3"))
 
 
+def gitlab_enabled() -> bool:
+    """部署者有沒有設定 GitLab 主機——**整個功能的總開關**。
+
+    沒設就不建網路、不建代理、不改寫 git URL、設定頁不收 PAT。每個入口各自判斷會漂，
+    收斂成一支：呼叫端問這個，不要自己 `if config.GITLAB_HOST`。
+    """
+    return bool(GITLAB_HOST)
 
 
 # init-firewall.sh 也跟著 bind-mount（比照 entrypoint.sh）：改政策不必重新 build image。

@@ -234,7 +234,7 @@ def _rust_extras(session_id: str) -> list[str]:
       一次（取捨見 config.TTYD_AUTH_CACHE_TTL）。0＝不帶＝每請求都問。
     """
     extras = [
-        "--title", f"agent-tty · {session_id}",
+        "--title", f"claude-pty · {session_id}",
         # ttyd 與控制平面在同一個容器（views 由 control 自己 spawn），loopback 即達；
         # 非容器化執行時 Flask 同樣聽 CONTROL_PORT。
         "--auth-url",
@@ -276,7 +276,7 @@ def _ttyd_argv(port: int, container_name: str, session_id: str,
         # ⚠ 真正的修法是**伺服器端**的 `--title`（Rust 版已接上，見 _rust_extras）。
         #   這一行仍然無條件留著：C 版只有它可靠（遮畫面聊勝於無）；Rust 版帶著也
         #   無妨——兩個值是同一個字串，client 端不會蓋出不一樣的東西。
-        "-t", f"titleFixed=agent-tty · {session_id}",
+        "-t", f"titleFixed=claude-pty · {session_id}",
         # 讓使用者選得到文字。Claude Code 的 TUI 會開啟滑鼠追蹤（實測 ?1000/?1002/?1003/
         # ?1006 全開），一開啟，拖曳就被當成應用程式的滑鼠事件送進 TUI，終端不再拿它來
         # 選取——畫面上的文字變成完全無法複製。這兩個選項讓修飾鍵可以繞過追蹤：
@@ -393,6 +393,13 @@ def _is_ttyd_serving(port: int, session_id: str) -> bool:
     只檢查「port 開著」不夠：那個 port 可能早被無關的服務佔住（我們的 ttyd 其實綁失敗
     正在退出），readiness 會誤判成功、之後 nginx 就把使用者導到別人的服務上（review M6）。
     ttyd 以 -b /session/<sid> 掛在子路徑下，故用該路徑取回應來驗明正身。
+
+    ⚠ **身分看 `server` 標頭，不看首頁內容；狀態碼放寬到「回得出 HTTP 就算」。**
+      這道探測不帶 cookie，而 Rust 版掛著 `--auth-url`——它會照規矩把這個沒有身分的
+      請求擋下來，回 `401` 加 `server: ttyd/…`。用「200 且內容含 ttyd」當判準的話，
+      **有裝授權的那顆永遠通不過就緒檢查**，pid 寫不進去，那一列就永遠停在
+      「另一個 worker 正在建立」，而畫面上看到的是終端開不起來。
+      401 不是壞消息，它同時證明了兩件事：服務起來了，而且它的授權層是活的。
     """
     try:
         with socket.create_connection((_probe_host(), port), timeout=1.0) as sock:
@@ -401,8 +408,11 @@ def _is_ttyd_serving(port: int, session_id: str) -> bool:
             head = sock.recv(4096)
     except OSError:
         return False
-    # ttyd 的首頁標題固定為 "ttyd - Terminal"；200 且含此字樣才算是我們的服務
-    return head.startswith(b"HTTP/1.") and b" 200 " in head[:20] and b"ttyd" in head
+    if not head.startswith(b"HTTP/1."):
+        return False
+    # 兩顆 binary 都會送 `server: ttyd/<版本>`，那是比首頁內容更穩的識別：
+    # 它在 401 的回應裡也在，而首頁內容只有放行時才有。
+    return b"server: ttyd/" in head.lower()
 
 
 def _wait_ready(port: int, pid: int, session_id: str, timeout: float = 5.0) -> bool:

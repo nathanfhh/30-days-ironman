@@ -204,6 +204,54 @@ try:
     check("containers.create 在 container.start 之前",
           0 <= rec.index("containers.create") < rec.index("container.start"))
 
+    # --- GitLab 代理接上網路的時機（ADR 0016）------------------------------------
+    #
+    # 上面那段只證明 create 與 start 是拆開的。**拆開是手段，不是目的**——目的是中間那個
+    # 縫隙，而縫隙裡要發生的事就是 `network.connect`。少了下面這幾條，有人把 connect 挪到
+    # start 之後（看起來更「自然」：容器都起來了再接網路）測試照樣全綠，而真實後果是那些
+    # session 的 GitLab **永遠**不通：init-firewall 放行的是 entrypoint 起跑那一刻的直連
+    # 網段快照，之後才接上的網路封包被 REJECT，而 reconciler 補得了網路、補不了 iptables。
+    # 那個壞法沒有錯誤訊息，只有「連不到」。
+    print("\n== 代理網路必須在 create 之後、start 之前接上 ==")
+    config.GITLAB_HOST = "gitlab.example.com"
+    auth.set_gitlab_pat(uid, "glpat-OrderingTestOnly01")
+
+    rec2 = _Rec()
+    mgr2 = SessionManager()
+    mgr2._docker = FakeClient(rec2)        # noqa: SLF001 — 就是要換掉它
+    mgr2.create(user_id=uid)
+    print("  " + " → ".join(rec2.calls))
+
+    i_netcreate = rec2.index("network.create")
+    i_create = rec2.index("containers.create")
+    i_connect = rec2.index("network.connect")
+    i_start = rec2.index("container.start")
+
+    check("網路先建起來（要接的東西得先存在）", 0 <= i_netcreate < i_create)
+    check("代理容器也在 session 容器之前就備好",
+          0 <= rec2.index("proxy.start") < i_create)
+    check("🔴 network.connect 在 containers.create **之後**", 0 <= i_create < i_connect)
+    check("🔴 network.connect 在 container.start **之前**"
+          "——挪到 start 之後就是永久且無聲的失效", 0 <= i_connect < i_start)
+    check("🔴 設定用 put_archive 送進代理，而且在它啟動之前"
+          "（bind mount 的話之後就換不掉，熱重載的前提沒了）",
+          "proxy.put_archive" in rec2.calls
+          and rec2.index("proxy.put_archive") < rec2.index("proxy.start"))
+
+    # 沒設 PAT 的人：**完全不建**代理，但 session 照樣要開得起來（降級不中斷）。
+    print("\n== 沒有 PAT：不建代理，但 session 照開 ==")
+    auth.set_gitlab_pat(uid, "")
+    rec3 = _Rec()
+    mgr3 = SessionManager()
+    mgr3._docker = FakeClient(rec3)        # noqa: SLF001
+    mgr3.create(user_id=uid)
+    print("  " + " → ".join(rec3.calls))
+    check("🔴 session 照樣建起來並啟動（GitLab 不通是少一個功能，不是這場沒用）",
+          "containers.create" in rec3.calls and "container.start" in rec3.calls)
+    check("一顆代理都沒建", "proxy.create" not in rec3.calls)
+    check("一張網路都沒建", "network.create" not in rec3.calls)
+    check("也沒有接任何網路", "network.connect" not in rec3.calls)
+
 finally:
     __import__("shutil").rmtree(_tmp, ignore_errors=True)
 

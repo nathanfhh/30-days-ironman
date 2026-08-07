@@ -108,9 +108,9 @@ try:
         print("== 未登入時被導向登入頁 ==")
         page.goto(f"{BASE}/", wait_until="domcontentloaded")
         check("導向 /login", page.url.endswith("/login"))
-        # ⚠ 這條原本比對 "claude"，但產品早就改名成 agent-tty（內部識別字仍是 claude-pty）
+        # ⚠ 這條原本比對 "claude"，但產品早就改名成 claude-pty（內部識別字仍是 claude-pty）
         #   ——斷言沒跟著改，於是這支 e2e 一直是紅的。改成比對現在真正的品牌字樣。
-        check("登入頁顯示品牌", "agent-tty" in page.inner_text(".gate__mark").lower())
+        check("登入頁顯示品牌", "claude-pty" in page.inner_text(".gate__mark").lower())
 
         print("== 錯誤帳密顯示錯誤訊息、不放行 ==")
         page.fill("#username", "e2e-user")

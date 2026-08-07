@@ -1,4 +1,4 @@
-/* agent-tty 控制台共用腳本：API 封裝、主題套用、小工具。無框架、無建置步驟。 */
+/* claude-pty 控制台共用腳本：API 封裝、主題套用、小工具。無框架、無建置步驟。 */
 
 /** HTML 逸出：所有進到 innerHTML 的動態值都必須經過（session id / 使用者名稱皆為外部資料）。 */
 function esc(v) {
@@ -205,7 +205,7 @@ function toastAfterNav(title, level = "info", body = "") {
 
 
 /* ── 品牌標誌（內嵌 SVG）────────────────────────────────────────────────────────
- * Font Awesome 沒有 Anthropic / OpenAI 的圖示，且品牌標誌不該相依外部 CDN。
+ * Font Awesome 沒有 Anthropic 的圖示，且品牌標誌不該相依外部 CDN。
  * 一律以 fill="currentColor" 繪製：顏色由 CSS 的 color 繼承，因此**深色/淺色主題
  * 自動適配、不需要各準備一份**（換主題只改 --color-* 變數，標誌跟著變）。
  */
@@ -1591,45 +1591,7 @@ async function applyTheme(id, origin) {
   }
 }
 
-/** 「還有多久」／「多久以前」，語意化到分鐘。
- *  ⚠ 與 relTime() 分開：那支只講過去（「3 分鐘前」），這裡兩個方向都要，而且**要到分鐘**
- *    ——「1 小時後」對一個 89 分鐘後才重置的區間是誤導，人會據此決定現在要不要繼續跑。 */
-function relWhen(iso) {
-  const ms = new Date(iso).getTime() - Date.now();
-  if (Number.isNaN(ms)) return "";
-  const future = ms > 0;
-  let m = Math.round(Math.abs(ms) / 60000);
-  if (m < 1) return future ? "即將重置" : "剛剛";
-  const d = Math.floor(m / 1440); m -= d * 1440;
-  const h = Math.floor(m / 60); m -= h * 60;
-  const parts = [];
-  if (d) parts.push(`${d} 天`);
-  if (h) parts.push(`${h} 小時`);
-  // 天數夠多時分鐘是雜訊；只有在一天之內才需要精確到分
-  if (m && !d) parts.push(`${m} 分鐘`);
-  // ⚠ 用空白接，不要直接串起來——「3 天11 小時」會黏成一團（實測看到的就是這樣）
-  return parts.join(" ") + (future ? "後" : "前");
-}
 
-/** 重置券還剩多久到期 → 緊急度。回 "" 表示還早，不必特別標。
- *
- *  ⚠ 券**會過期而且過期就沒了**，所以「哪一張要先用掉」是看這一塊的唯一理由。只給一句
- *    「3 天後到期」等於要人自己讀字比大小——真正會被漏掉的那張（今天就到期）長得跟
- *    還有一個月的那張一模一樣。這裡把剩餘時間換成看得見的三段。
- *
- *  以**剩餘整天數**分桶（floor）：0 天（含已過期）＝紅框＋脈動、1–2 天＝紅框、
- *  3 天＝橘框、4 天以上＝原樣。負數落在第一桶是刻意的：拿到手上這份快照時剛過期的券，
- *  該是最醒目的那張，而不是靜靜掉回原樣。 */
-function ticketExpiry(iso) {
-  if (!iso) return "";
-  const ms = new Date(iso).getTime() - Date.now();
-  if (Number.isNaN(ms)) return "";
-  const days = Math.floor(ms / 86400000);
-  if (days < 1) return "critical";
-  if (days < 3) return "urgent";
-  if (days < 4) return "soon";
-  return "";
-}
 
 function initTheme() {
   const saved = localStorage.getItem(THEME_STORAGE_KEY) || "instrument";

@@ -14,7 +14,7 @@ import json
 import pytest
 from conftest import Reply
 
-MR_URL = "https://gitlab.example.com/his2/group/repo/-/merge_requests/92"
+MR_URL = "https://gitlab.example.com/grp/group/repo/-/merge_requests/92"
 
 
 # --------------------------------------------------------------------------
@@ -26,7 +26,7 @@ class TestParseMrUrl:
     def test_splits_host_project_and_iid(self, gitlab_api):
         target = gitlab_api.parse_mr_url(MR_URL)
         assert target["host"] == "gitlab.example.com"
-        assert target["project_path"] == "his2/group/repo"
+        assert target["project_path"] == "grp/group/repo"
         assert target["iid"] == 92
         assert target["api_base"] == "https://gitlab.example.com/api/v4"
 
@@ -75,7 +75,7 @@ class TestUrlCredentialsAreStripped:
     """URL 裡夾帶的帳密不得流進任何輸出欄位、報告或錯誤訊息。"""
 
     SECRET = "s3cr3tT0ken"
-    URL = f"https://someone:{SECRET}@gitlab.example.com/his2/group/repo/-/merge_requests/92"
+    URL = f"https://someone:{SECRET}@gitlab.example.com/grp/group/repo/-/merge_requests/92"
 
     def test_the_host_carries_no_credentials(self, gitlab_api):
         target = gitlab_api.parse_mr_url(self.URL)
@@ -142,7 +142,7 @@ class TestExtractAttachments:
         target = gitlab_api.parse_mr_url(MR_URL)
         [attachment] = gitlab_api.extract_attachments(self.DESCRIPTION, target)
         assert attachment["url"] == (
-            "https://gitlab.example.com/api/v4/projects/his2%2Fgroup%2Frepo"
+            "https://gitlab.example.com/api/v4/projects/grp%2Fgroup%2Frepo"
             "/uploads/deadbeef/%E8%A6%8F%E6%A0%BC.md"
         )
         assert "/api/v4/" in attachment["url"]
@@ -456,14 +456,14 @@ class TestApiBaseOverride:
     帶空值會被 GitLab 當成無效憑證 401。
     """
 
-    MR = "https://gitlab.example.com/his/abc/abc-backend/-/merge_requests/61"
+    MR = "https://gitlab.example.com/platform/api/api-backend/-/merge_requests/61"
 
     def test_override_replaces_scheme_and_host_only(self, gitlab_api, monkeypatch):
         monkeypatch.setenv("NCR_GITLAB_API_BASE", "http://gitlab-proxy:5678/")
         target = gitlab_api.parse_mr_url(self.MR)
         assert target["api_base"] == "http://gitlab-proxy:5678/api/v4"
         # path 與 iid 仍來自 MR URL，不受 override 影響
-        assert target["project_path_encoded"] == "his%2Fabc%2Fabc-backend"
+        assert target["project_path_encoded"] == "platform%2Fapi%2Fapi-backend"
         assert target["iid"] == 61
 
     def test_without_override_base_is_derived_from_the_url(self, gitlab_api, monkeypatch):

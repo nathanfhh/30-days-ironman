@@ -146,7 +146,7 @@ print("== profile 的列舉白名單（_ENUMS 是唯一的驗證關口）==")
 # `SessionManager.create(profile=...)` 完全不驗，任何字串都會被塞進 env 送進容器——
 # HTTP 層這道檢查就是唯一的關口，而它先前一條測試都沒有（review 2026-07-25 指出）。
 for field, bad in [("cli", "bash"), ("network", "wide-open"),
-                   ("model", "gpt-4"), ("effort", "ultra")]:
+                   ("model", "nope-9"), ("effort", "nope")]:
     r = ca.post("/api/sessions", json={"profile": {field: bad}})
     body = r.get_json() or {}
     check(f"profile.{field}={bad!r} → 400 且訊息列出合法值",

@@ -25,7 +25,7 @@ from dataclasses import dataclass, replace
 import docker
 from sqlalchemy.exc import IntegrityError
 
-from . import config
+from . import config, crypto, gitlab_proxy, user_proxy
 from . import auth as auth_mod
 from .db import session_scope
 from .models import (
@@ -254,6 +254,9 @@ def _archive_txn(sids: list[str], reason: str, actor: dict | None = None) -> int
                 ready_at=row.ready_at,               # 沒帶就算不出「這場啟動花多久」
                 cli_version=row.cli_version,         # 那場是用哪一版開起來的
                 image_created_at=row.image_created_at,
+                # 這場當初有沒有接上 GitLab 代理（ADR 0016）。原樣搬過來——歷史的時間視角
+                # 沒有「現在能不能用」，只剩「期間曾不曾啟用」，所以這一欄自己就是答案。
+                gitlab_proxy=row.gitlab_proxy,
                 ended_at=utcnow(),
                 ended_reason=reason,
                 ended_by_user_id=actor["id"] if actor else None,
@@ -304,8 +307,9 @@ def parse_docker_time(raw: str | None) -> _dt.datetime | None:
 def age_seconds(iso_ts: str) -> float:
     """docker 物件（container / network）建立至今幾秒。
 
-    ⚠ 住在這裡而不是 reconciler：reconciler 用它判斷孤兒的寬限期，而 reconciler 已經
-      import sessions，放那邊就得反向 import。
+    ⚠ 住在這裡而不是 reconciler：reconciler 用它判斷孤兒的寬限期、`_ensure_user_proxy`
+      用它分辨「別的 worker 正在建」與「上次建到一半留下的」，而 reconciler 已經 import
+      sessions，放那邊就得反向 import。
 
     ⚠ 解析失敗回 `inf`（＝很舊）。呼叫端一律是「夠舊才動它」，所以這個 fallback 的錯誤
       方向是**提早把還在建立中的容器當成半成品刪掉**，而且不會有任何錯誤訊息。它之所以
@@ -318,6 +322,30 @@ def age_seconds(iso_ts: str) -> float:
     if parsed is None:
         return float("inf")
     return (utcnow() - parsed).total_seconds()
+
+
+def is_stale_half_built(container) -> bool:
+    """這顆 `created` 的代理容器是不是「上次建到一半留下的」，而不是「別人正在建」。
+
+    `created` 有兩種來源、外觀完全一樣：`create_container` 完成但 `put_archive` 還沒跑
+    （`/etc/nginx` 還是 image 的預設設定），或 `put_archive` 完成但 `start` 還沒跑。
+    分不出來，所以一律當半成品收掉重建——**但只有夠舊的才收**。還新的話那是別的 worker
+    正在建（同一時間兩場 session 是常態），碰它就是把人家建到一半的容器刪掉。
+
+    ⚠ **判準只有這一份。** 兩個地方會問這個問題，而且問的是同一件事：
+      `sessions._ensure_user_proxy`（建 session 時撞到）與 `reconciler._converge_proxies`
+      （背景巡邏撞到）。各寫一份的話，只要有一邊加了條件而另一邊沒跟，同一顆容器會被
+      兩條路做出相反的結論。
+
+    ⚠ **只抽判準，不抽時序**：sessions 收掉之後**當場**重建，reconciler 是**下一輪**才補。
+      那個差異是刻意的，見 reconciler 那段的說明，不要一起收斂。
+
+    ⚠ 住在 sessions.py 是因為它依賴 `age_seconds`，而 `user_proxy` **不能** import
+      sessions（sessions 在模組層 import user_proxy，反向會是循環）。
+    """
+    if container.status != "created":
+        return False
+    return age_seconds(container.attrs.get("Created", "")) >= config.ORPHAN_GRACE
 
 
 def _is_creating_within_grace(row) -> bool:
@@ -422,7 +450,7 @@ def claude_credentials_state(user_id: int | None) -> dict:
                           "啟動，開場只會看到登入提示。"}
     return {**_CLAUDE_BASE, "ok": True, "state": "ok",
             "label": "Claude 憑證已設定", "stamps": [],
-            "detail": "token 過期不會有預告，症狀是**新開的 session 開場失敗**"
+            "detail": "token 過期不會有預告，症狀是新開的 session 開場失敗"
                       "（終端停在登入提示）。遇到就在 host 重跑 `claude setup-token`，"
                       "把新的貼回帳號管理頁。已在跑的 session 不受影響。"}
 
@@ -884,6 +912,13 @@ class SessionManager:
                 # 會是 root:root，容器內的 nathan 寫不進去，restricted 每次都卡滿 120 秒逾時。
                 with suppress(OSError):
                     os.makedirs(config.TRIVY_CACHE_SELF, exist_ok=True)
+            # 這個使用者的 GitLab 代理與網路（ADR 0016）。**要在建容器之前**——待會兒要在
+            # `start` 之前把容器接上那個網路，網路得先存在。
+            #
+            # 沒設 PAT 的人**什麼都不建**：建一顆沒憑證的代理只會把錯誤從「連不到」變成
+            # 401，而 401 更難懂（使用者會以為 token 錯了，其實是根本沒設）。
+            user_net = self._ensure_user_proxy(user_id)
+
             # ADR 0001：`docker run -dit`，PID 1 為目標互動程式，PTY 由 dockerd 持有。
             #
             # ⚠ **這裡是 `create` + `start` 而不是 `run`，順序是硬要求。**
@@ -898,6 +933,18 @@ class SessionManager:
             run_kwargs = build_run_kwargs(name, sid, run_profile, user_id)
             run_kwargs.pop("detach", None)
             container = self._docker.containers.create(config.IMAGE, **run_kwargs)
+            # ⚠ **就是這裡，不能更晚。** 見上面那段：防火牆放行的是 entrypoint 起跑那一刻
+            #   的路由快照，`start` 之後才接的網路永遠通不了。
+            has_proxy = False
+            if user_net is not None:
+                try:
+                    user_net.connect(container.id)
+                    has_proxy = True
+                except Exception as e:  # noqa: BLE001 — 一律降級，不中斷（見下）
+                    # GitLab 不通是「這場少一個功能」，不是「這場沒用」。
+                    # ⚠ 例外訊息可能夾帶設定內容（因而夾帶 PAT），只印型別。
+                    print(f"[claude-pty] ⚠ session {sid} 接不上使用者網路"
+                          f"（{type(e).__name__}）：本場 git / API 走不了代理", flush=True)
             container.start()
             with suppress(docker.errors.APIError):
                 self._docker.api.resize(container.id, height=rows, width=cols)  # 開機為 0x0
@@ -909,7 +956,14 @@ class SessionManager:
                 # 失敗而害 session 開不起來（見各自的 helper）。
                 row.image_created_at = self._image_created_at()
                 row.cli_version = self._cli_version(container, profile.cli)
+                # 這一場當初有沒有配到 GitLab 代理（ADR 0016）。畫面照這一欄講「有沒有
+                # 路」，不照「這個帳號現在有沒有設 PAT」講——後者中途會變，而網路接上與否
+                # 是開場那一刻就定死的。
+                row.gitlab_proxy = has_proxy
         except Exception:
+            # ⚠ **代理不在這裡收**：它是 per-user 的，不屬於這一場——這一場失敗不代表使用者
+            #   的其他 session 不需要它。沒人用的代理由 reconciler 依「這個使用者還有沒有
+            #   活著的 session」回收。
             # 依 id 清理；container 物件可能因回應中斷而拿不到 → 再依「決定性的容器名」
             # 兜一次，否則會留下帶憑證卻無人追蹤的容器（review H2）。
             if container is not None:
@@ -931,6 +985,81 @@ class SessionManager:
         threading.Thread(target=self._await_ready, args=(sid,), daemon=True).start()
 
         return self.status(sid)
+
+    def _ensure_user_proxy(self, user_id: int):
+        """確保這個使用者的 GitLab 代理與網路就位，回傳那個 network（沒有就 `None`）。
+
+        ⚠ **任何失敗都只警告，不往上拋。** GitLab 不通是「這場少一個功能」，不是「這場
+          沒用」——為了它讓整個 session 開不起來是錯的取捨。失敗的原因多半是外部的
+          （image 沒拉到、位址池滿、GitLab 的主機名解不開讓 nginx 拒絕啟動）。
+        ⚠ 代理已經在跑但設定過期時**熱重載**，不重建：重建會斷掉這個使用者**其他** session
+          正在進行的 git 操作。
+        ⚠ 失敗時要**確保沒有留下半顆**：`create` 成功但 `start` 失敗會留下一顆 `created`
+          狀態、且設定裡已經有 PAT 的容器。
+        """
+        if not config.gitlab_enabled():
+            return None                      # 部署者沒設 GitLab 主機＝整個功能關閉
+        if auth_mod.gitlab_pat_state(user_id) != "ok":
+            return None
+        pat = auth_mod.gitlab_pat(user_id)
+        if not pat:
+            return None                      # 三態與明文之間的競態（剛好被清掉），視同沒設
+        # 「本次呼叫親手建出來的那一顆」——補償只清得掉它，見下面 except 那段。
+        mine: str | None = None
+        try:
+            net = user_proxy.ensure_network(self._docker, user_id)
+            existing = user_proxy.find(self._docker, user_id)
+            if existing is None:
+                cid, won = user_proxy.create_or_adopt(self._docker, user_id, pat)
+                mine = cid if won else None      # 撞名撿到別人的 → 不是我的，別記
+            elif existing.status == "created":
+                # ⚠ **`created` 不可以直接 start。** 它有兩種來源，而外觀完全一樣：
+                #   · `create_container` 完成、`put_archive` 還沒跑 → `/etc/nginx` 是
+                #     **image 的預設設定**
+                #   · `put_archive` 完成、`start` 還沒跑 → 設定是對的
+                #   start 第一種的後果是**永久的殭屍**：nginx 用預設設定開在 80，容器狀態
+                #   變成 `running` 看起來很健康，但 `gitlab-proxy:5678` 連不上；而
+                #   reconciler 此後只會走 running 分支、`/_state` 問不到，依「問不到就別
+                #   亂動」永遠不修。要等這個人**下次再開一場**才會被救回來。
+                #
+                # ⚠ 判準與 reconciler 共用同一支（`is_stale_half_built`）：**夠舊**才當
+                #   半成品收掉重建。還新的話那是**別的 worker 正在建**（同一時間兩場
+                #   session 是常態），碰它就是把人家建到一半的容器刪掉——那正是
+                #   `create_or_adopt` 吸收 409 要防的事，在這裡自己再造一次就沒有意義了。
+                if is_stale_half_built(existing):
+                    user_proxy.remove(self._docker, user_id)
+                    cid, won = user_proxy.create_or_adopt(self._docker, user_id, pat)
+                    mine = cid if won else None
+            elif existing.status != "running":
+                # exited：設定已經在它裡面，直接 start——不必再碰 PAT。
+                self._docker.api.start(existing.id)
+            elif user_proxy.running_state(self._docker, user_id) != gitlab_proxy.fingerprint(pat):
+                user_proxy.reload(self._docker, user_id, pat)
+            return net
+        except user_proxy.PoolExhausted as e:
+            # 這一種要單獨講：該去清 docker network，不是去查 GitLab。
+            print(f"[claude-pty] ⚠ {e}", flush=True)
+            return None
+        except Exception as e:  # noqa: BLE001 — 見 docstring：一律降級不中斷
+            # ⚠ 例外訊息可能夾帶設定內容（因而夾帶 PAT）——只印型別。
+            print(f"[claude-pty] ⚠ 使用者 {user_id} 的 GitLab 代理無法就緒"
+                  f"（{type(e).__name__}）：新開的 session 沒有 git / API 代理", flush=True)
+            with suppress(Exception):
+                # ⚠ 「半顆」的判準是**「是不是我這次建的」**，不是「問不問得到 /_state」，
+                #   也不是年齡。
+                #   · 用 `/_state` 問不到當判準 → 會把「健康的 running 代理、但 exec 剛好
+                #     失敗」也算進去，而觸發這條補償的例外（daemon 抖動）與 exec 失敗高度
+                #     相關。那樣會 force-remove 一顆正在服務**這個人其他 session** 的代理。
+                #   · 用年齡當判準 → **自己**留下的半顆要等滿 ORPHAN_GRACE 才被 reconciler
+                #     收，而且擋不住「另一個 worker 正在建、還停在 created」那顆。
+                #   「是不是我建的」既精確又即時。
+                # ⚠ `create_or_adopt` 內部失敗（put_archive／start）會自己收乾淨，所以那條
+                #   路徑不靠這裡——這裡守的是「建好之後、回到這裡之前」才出事的情況。
+                if mine is not None:
+                    half = user_proxy.find(self._docker, user_id)
+                    if half is not None and half.id == mine and half.status != "running":
+                        user_proxy.remove(self._docker, user_id)
+            return None
 
     def wait_ready(self, sid: str, timeout: float | None = None) -> bool:
         """等到 TUI 可以吃按鍵為止。兩段式，取代先前的固定延遲：
@@ -1428,6 +1557,24 @@ def _to_dict(row: SessionRow, live_state: str | None = None,
         # 前端要照實說「尚未確認」——把沒問到過畫成「剛剛確認」是這個欄位存在的反面。
         "state_checked_at": (row.state_checked_at.isoformat()
                              if row.state_checked_at else None),
+        # GitLab 代理（ADR 0016）。**兩個事實一起給，因為單獨任一個都會說謊**：
+        #   · gitlab_proxy      ＝這場**當初**有沒有接上代理網路。不可變（網路必須在容器
+        #                         start 之前接），所以事後補 token 救不了已經在跑的場。
+        #   · gitlab_pat_set    ＝擁有者**現在**還有沒有 token，也就是那條路的另一端在不在。
+        # 只看前者：使用者清掉 token 之後畫面會一直說「可用」而 git 全部失敗。
+        # 只看後者：事後補 token 會讓畫面對著一場根本沒接上網路的 session 說「可用」。
+        # ⚠ gitlab_proxy 為 None＝這個欄位上線前建立的舊列，是「不知道」。呼叫端不可以
+        #   把它畫成「未啟用」——那是在謊稱一件沒有人查證過的事。
+        # ⚠ 走**已經載進來的** `row.user`，不要呼叫 `auth.gitlab_pat_state(row.user_id)`：
+        #   後者每一列會自己開一次 `session_scope`，而 `_to_dict` 是在列表的交易**裡面**
+        #   逐列跑的——那是 N+1，而且是在 SQLite 上對同一個檔案開巢狀交易。這條路上的
+        #   「順手多問一次 DB」正是先前把控制平面打成 `database is locked` 的形狀。
+        #   `is_readable` 不把明文交出去，答案與三態的 `ok` 一致。
+        "gitlab_proxy": row.gitlab_proxy,
+        "gitlab_pat_set": bool(
+            config.gitlab_enabled() and row.user is not None
+            and crypto.is_readable(row.user.gitlab_pat_enc,
+                                   purpose=crypto.Purpose.GITLAB_PAT)),
         **({"ready": ready} if ready is not None else {}),
     }
 
@@ -1447,6 +1594,10 @@ def _history_to_dict(row: SessionHistory) -> dict:
         "cli_version": row.cli_version,
         "image_created_at": (row.image_created_at.isoformat()
                              if row.image_created_at else None),
+        # 期間**曾不曾**啟用 GitLab 代理（ADR 0016）。歷史只有這一個事實——session 都結束
+        # 了，沒有「現在能不能用」可言，所以這裡不像執行中那樣需要配一個 gitlab_pat_set。
+        # None＝欄位上線前的舊紀錄：不知道，不要畫成「未啟用」。
+        "gitlab_proxy": row.gitlab_proxy,
         "ended_at": row.ended_at.isoformat(),
         "ended_reason": row.ended_reason,
         # 誰按的終止。NULL＝不是人為（exited / gone）或舊紀錄。
@@ -1574,6 +1725,8 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         "CLAUDE_CONFIG_DIR": config.CLAUDE_CONFIG_BIND,
     }
 
+    env.update(_gitlab_env())
+
     # 登入憑證：這個人貼進來的 setup-token，以環境變數交給 CLI。**唯一來源**——不掛
     # 任何 host 憑證檔（模型欄位 cli_token_enc 那段講了為什麼不留後路）。
     # create() 的 _guard_credentials 已經擋過「沒設」，這裡拿不到只剩競態（guard 之後
@@ -1611,6 +1764,64 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     kwargs["volumes"] = volumes
     kwargs["environment"] = env
     return kwargs
+
+
+def _gitlab_env() -> dict:
+    """讓 session 裡的 git 與 API 呼叫自己走上代理（ADR 0016）。純函式，不碰 docker。
+
+    部署者沒設 GitLab 主機時回空 dict——什麼都不注入，session 完全不知道有這回事。
+
+    ⚠ **沒有 URL 改寫，per-user 代理在實務上等於不能用。** 每個人、每份既有 repo、每一段
+      複製貼上的指令，寫的都是 `https://<你的 gitlab>/x/y.git`，而那個位址在 session 裡是
+      **直接失敗的**（防火牆不放行直連 443，那正是設計要的）。沒有改寫的話，使用者得手動
+      把每一個 remote 換成代理位址——而他第一次遇到的症狀是 `Failed to connect`，完全看不
+      出要去改 URL。
+
+    ⚠ 用 **`GIT_CONFIG_*` 環境變數**而不是寫 `~/.gitconfig`：後者要嘛動到兩條路徑共用的
+      `entrypoint.sh`（人自己開容器那條會被牽連），要嘛落進 per-user 空間變成一份會跟著
+      漂的檔案。env 只影響網頁開的 session，人的路徑一個字都不會變。
+
+    ⚠ **不分 profile、也不看有沒有 PAT。** 沒有代理時，改寫的結果是「連不到代理」而不是
+      「連不到 GitLab」——兩者都失敗，但前者的訊息裡有 `gitlab-proxy` 這個字，使用者一搜
+      就找得到答案（去設定頁填 PAT）。
+
+    ⚠ **SSH 的兩種寫法也要改寫，不是只有 https。** 網頁開的 session 裡 SSH agent 預設不掛
+      （ADR 0011）、防火牆也不放行 22，所以 `git@host:group/repo.git` 原本是**必定失敗**
+      的，而症狀（`Permission denied (publickey)`）完全指不到「該用 https」。
+
+    ⚠ `insteadOf` 是**多值鍵**，同一個 key 可以給多個值；`GIT_CONFIG_KEY_n` 重複同一個
+      key 名稱就是這個意思。
+
+    ⚠ scp-like 的 `git@host:` 結尾**必須是冒號**，不是斜線：`git@host:group/repo.git`
+      改寫後要成為 `<代理>/group/repo.git`。寫成 `git@host/` 不會有任何錯誤訊息，只是
+      靜靜不改寫。
+
+    ⚠ https 那條結尾的斜線**不可以拿掉**：沒有它就變成前綴比對，
+      `https://<你的 gitlab>.evil.example/…` 會被改寫成走代理——冒牌主機的請求被導進去，
+      而代理會替它蓋上真的 PAT。
+    """
+    if not config.gitlab_enabled():
+        return {}
+    base = config.PROXY_BASE_URL
+    key = f"url.{base}/.insteadOf"
+    env = {
+        # 容器裡看到的 API base。呼叫端（curl、任何腳本）不必把 `gitlab-proxy:5678` 寫死。
+        # ⚠ git **不吃**這個變數，它走的是下面那組 GIT_CONFIG；反過來 curl 也不吃 git 的
+        #   設定。兩者各有一條路，這是刻意的。
+        "NCR_GITLAB_API_BASE": base,
+        "GIT_CONFIG_COUNT": "3",
+        "GIT_CONFIG_KEY_0": key,
+        "GIT_CONFIG_VALUE_0": f"https://{config.GITLAB_HOST}/",
+        "GIT_CONFIG_KEY_1": key,
+        "GIT_CONFIG_VALUE_1": f"git@{config.GITLAB_SSH_HOST}:",
+        "GIT_CONFIG_KEY_2": key,
+        "GIT_CONFIG_VALUE_2": f"ssh://git@{config.GITLAB_SSH_HOST}/",
+    }
+    # ⚠ 已知的小落差：`dev-container/entrypoint.sh` 有一處把 alias 寫死在 `NO_PROXY` 裡
+    #   （只錄模型 API 的那個錄製範圍）。改了 `CLAUDE_PTY_GITLAB_PROXY_ALIAS` 之後那一處
+    #   不會跟著改，代理的流量會多繞一次 mitm。**只影響錄製時的路徑，不影響能不能通**，
+    #   所以留著不動；真要改 alias 的人請一併看那一行。
+    return env
 
 
 def _otel_env(sid: str) -> dict:

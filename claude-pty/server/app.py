@@ -713,6 +713,34 @@ def clear_own_token():
     return "", 204
 
 
+@app.put("/api/users/me/gitlab-pat")
+def set_own_gitlab_pat():
+    """設定／清除自己的 GitLab PAT（ADR 0016）。body: `{"pat": "..."}`
+
+    **空字串＝清除**，所以沒有對應的 DELETE——畫面上「把輸入框清空後儲存」就是使用者心裡
+    的清除動作，開兩個入口只會讓人猜哪一個才算數。
+
+    PUT 語意：重貼就是整個換掉。存進去的值**不再吐回來**，GET 只有「已設定／未設定」
+    （見 `auth._to_dict` 的 `gitlab_pat_configured`）。
+
+    ⚠ 清除是**立即生效**的：下一輪對帳會把這個人的代理收掉，他所有在跑的 session 當場
+      失去 GitLab。填一把新的回去則會在一輪之內重新武裝——包括那些舊的 session。
+      這是刻意的，見 ADR 0016 的「輪替語意」。
+    ⚠ **代理不在這裡建**。這條只動 DB；建立與收斂一律走 reconciler 與 `sessions.create()`
+      那兩條路。在請求路徑上開容器會讓一個 PUT 卡在 docker 上，而且失敗時該怎麼回答也
+      講不清楚（DB 存了但代理沒起來，算成功還是失敗？）。
+    """
+    if not config.gitlab_enabled():
+        # 部署者沒設 GitLab 主機就不收——存進去也沒有任何東西會用它，而畫面會顯示
+        # 「已設定」，那是騙人的。
+        return jsonify(error="這套部署沒有設定 GitLab 主機（CLAUDE_PTY_GITLAB_HOST），"
+                             "無法使用 GitLab 代理"), 400
+    body = _body()
+    _reject_unknown(body, {"pat"})
+    auth.set_gitlab_pat(g.user["id"], body.get("pat", ""))
+    return "", 204
+
+
 @app.post("/api/users/<int:uid>/password")
 @admin_only
 def admin_change_password(uid: int):

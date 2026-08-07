@@ -113,7 +113,16 @@ def sessions_page():
 
 @web.get("/account")
 def account_page():
-    return _page("account.html", active="account")
+    # GitLab 那一塊的兩個事實都在伺服端算好：這套部署有沒有開這個功能，以及這個人設過沒。
+    # ⚠ 只給**狀態**，永遠不給值（連密文都不出去）——見 auth._to_dict。
+    return _page("account.html", active="account",
+                 gitlab_enabled=config.gitlab_enabled(),
+                 gitlab_host=config.GITLAB_HOST,
+                 gitlab_pat_set=auth.get_user(g.user["id"])["gitlab_pat_configured"],
+                 # 代理**連續**起不來時 nginx 說的那句話（診斷麵包屑，見
+                 # auth.gitlab_proxy_error）。沒有它，使用者只會看到「GitLab 連不到」，
+                 # 然後往 token／網路／GitLab 是不是掛了這些錯的方向查。
+                 gitlab_proxy_error=auth.gitlab_proxy_error(g.user["id"]))
 
 
 @web.get("/healthz")

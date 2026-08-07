@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}帳號 · agent-tty{% endblock %}
+{% block title %}帳號 · claude-pty{% endblock %}
 
 {% block body %}
 <div class="shell">
@@ -22,7 +22,8 @@
         <div class="field" style="flex:1">
           <label class="label" for="cli-token">setup-token</label>
           {# type=password：貼進來的是憑證，畫面上不該讀得出來（旁邊有人、截圖、錄影）。
-         存進去之後也**不吐回來**：這一欄永遠是空的，placeholder 講狀態。 #}
+             存進去之後也不吐回來：這一欄永遠是空的，狀態只能靠 placeholder 講——
+             所以它由 JS 依「設過沒」改寫，不然兩種狀態在這一格裡長得一模一樣。 #}
           <input class="input" id="cli-token" type="password" autocomplete="off"
                  placeholder="貼上 claude setup-token 的輸出">
         </div>
@@ -35,6 +36,70 @@
       </div>
     </form>
   </section>
+
+
+  {% if gitlab_enabled %}
+  <section class="panel">
+    <div class="section-head" style="margin-bottom:var(--space-2)">
+      <h2 class="panel__title" style="margin:0">GitLab 憑證</h2>
+      <span id="pat-state">
+        {% if gitlab_proxy_error %}<span class="chip" data-tone="error">代理起不來</span>
+        {% elif gitlab_pat_set %}<span class="chip" data-tone="ok">已設定</span>
+        {% else %}<span class="chip" data-tone="error">未設定</span>{% endif %}
+      </span>
+    </div>
+    {# ⚠ 代理連續起不來時，把 nginx 自己說的那句話端出來，而且**排在最上面**。
+       它回答的是「我明明設好了，為什麼不能用」——而這一頁其他所有東西（chip 說已設定、
+       欄位有遮罩）都在說「一切正常」。訊息是容器 log 的最後一行，不含設定檔內容，
+       所以不會漏出 token（見 reconciler._note_proxy_down）。 #}
+    {% if gitlab_proxy_error %}
+    <p class="panel__lede" data-tone="warn">
+      <strong>你的代理起不來，所以 GitLab 現在不通。</strong>
+      這多半是<strong>部署設定</strong>的問題，不是你的 token——先看這一句再決定要不要重貼：
+      {# 機器訊息與人話之間要斷行：它常常長到換兩行，接著又緊跟建議，
+         連在一起會讓人分不出哪裡是 nginx 說的、哪裡是我們說的。 #}
+      <br><code>{{ gitlab_proxy_error }}</code><br>
+      出現 <code>host not found in upstream</code> 就是部署的
+      <code>CLAUDE_PTY_GITLAB_HOST</code> 設錯或解不到，請找管理者。
+      修好之後會自動恢復，這則訊息也會自己消失。
+    </p>
+    {% endif %}
+    <p class="panel__lede">
+      你自己的 <strong>{{ gitlab_host }}</strong> Personal Access Token（需要 <code>api</code>
+      scope）。你開的 session 會接上一顆<strong>只屬於你</strong>的代理，由它蓋章——
+      <strong>token 不會進入 session 容器</strong>，裡面的 AI 用得到你的 GitLab，
+      卻讀不到這把鑰匙。clone 用正規網址就好（<code>https://…</code> 與 <code>git@…</code>
+      都會自動改寫成走代理）。請用專門建立、scope 最小、有到期日的 token。
+    </p>
+    <form id="pat-form">
+      <div class="form-row">
+        <div class="field" style="flex:1">
+          <label class="label" for="gitlab-pat">Personal Access Token</label>
+          {# 同 CLI 憑證那一格：type=password、存進去不吐回來，所以欄位永遠是空的，
+             「設過沒」只能靠 placeholder 講，不然兩種狀態看起來一模一樣。 #}
+          <input class="input" id="gitlab-pat" type="password" autocomplete="off"
+                 placeholder="{% if gitlab_pat_set %}••••••••••••••••••••（已設定，貼新的可覆寫）{% else %}貼上 GitLab 的 Personal Access Token{% endif %}">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn--primary" type="submit" id="pat-save" disabled>
+          <i class="fa-solid fa-key"></i> 儲存</button>
+        <button class="btn" type="button" id="pat-clear" {% if not gitlab_pat_set %}hidden{% endif %}>
+          <i class="fa-solid fa-eraser"></i> 清除</button>
+      </div>
+    </form>
+    {# ⚠ 這段講的是**輪替語意**，是這個面板最容易被誤解的一件事。分界線在「那一場開場時
+       有沒有接上代理網路」，不在「帳號現在有沒有 PAT」——見 ADR 0016。
+       ⚠ `margin-top` 要明寫：`.panel__lede` 帶**負的上邊距**（它是設計來緊貼在標題底下的
+          那一段），直接用在表單後面會把這一塊拉上去疊在儲存／清除按鈕上。 #}
+    <p class="panel__lede" data-tone="warn" style="margin-top:var(--space-4)">
+      換一把新的：已接上代理的 session 會在一個對帳週期內改用新的。清除：它們當場失去
+      GitLab，<strong>再填回去會恢復</strong>。所以——<strong>輪替 token 不等於隔離一場你
+      不信任的 session；要隔離那場，就終止那場。</strong>
+      設定 token 之前開的 session 沒接上代理，事後補不上，要開新的一場。
+    </p>
+  </section>
+  {% endif %}
 
 
   <section class="panel">
@@ -165,6 +230,9 @@
       ? '<span class="chip" data-tone="ok">已設定</span>'
       : '<span class="chip" data-tone="error">未設定</span>';
     clearBtn.hidden = !credOk;
+    // 已設定時把 placeholder 換成遮罩。欄位本身永遠是空的（存進去不吐回來），
+    // 沒有這一步，「設過」與「沒設過」在這一格裡看起來完全一樣。
+    if (credOk) tokenInput.placeholder = "••••••••••••••••••••（已設定，貼新的可覆寫）";
     tokenInput.addEventListener("input", () => {
       saveBtn.disabled = !tokenInput.value.trim();
     });
@@ -186,6 +254,42 @@
       } catch (ex) { toastError("清除憑證", ex); }
     });
   }
+
+  // GitLab PAT。與 CLI 憑證那一塊同一套做法：狀態在伺服端算好（chip 與 placeholder 都是
+  // 模板畫的，不會先閃一個預設值），存／清之後整頁重載讓三處狀態同源重畫。
+  // ⚠ 空字串＝清除，所以清除也走 PUT，沒有 DELETE 端點（見 app.set_own_gitlab_pat）。
+  {% if gitlab_enabled %}
+  {
+    const patInput = document.getElementById("gitlab-pat");
+    const patSave = document.getElementById("pat-save");
+    const patClear = document.getElementById("pat-clear");
+
+    const putPat = (pat) => api("/api/users/me/gitlab-pat", { method: "PUT", body: { pat } });
+
+    patInput.addEventListener("input", () => {
+      patSave.disabled = !patInput.value.trim();
+    });
+    document.getElementById("pat-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await putPat(patInput.value);
+        toast("GitLab 憑證已儲存", "success",
+              { body: "已接上代理的 session 會在一個對帳週期內改用新的；"
+                      + "還沒接上的要開新的一場" });
+        setTimeout(() => location.reload(), 900);
+      } catch (ex) { toastError("儲存 GitLab 憑證", ex); }
+    });
+    patClear.addEventListener("click", async () => {
+      try {
+        await putPat("");
+        toast("GitLab 憑證已清除", "warning",
+              { body: "你的代理會被收掉，所有 session 當場失去 GitLab；"
+                      + "再填一把回去它們會恢復" });
+        setTimeout(() => location.reload(), 900);
+      } catch (ex) { toastError("清除 GitLab 憑證", ex); }
+    });
+  }
+  {% endif %}
 
   // 改密碼：兩次輸入一致且達長度下限才讓按鈕可按（後端仍會自己驗一次）
   const MIN_PW = {{ min_password_length }};

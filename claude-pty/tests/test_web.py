@@ -322,7 +322,7 @@ for path, need_login in (("/login", False), ("/", True), ("/account", True)):
     cli = _cf if need_login else app.test_client()
     html = cli.get(path).get_data(as_text=True)
     check(f"{path} 有頁尾", 'data-testid="footer"' in html)
-    check(f"{path} 列出 agent-tty 本體", "agent-tty" in html)
+    check(f"{path} 列出 claude-pty 本體", "claude-pty" in html)
     check(f"{path} 列出兩顆 ttyd", "ttyd（C）" in html and "ttyd（Rust）" in html)
 
 # ⚠ 問不到就必須**說「未知」**，不可以印一個看起來合理的值。頁尾唯一的用途就是回答
@@ -343,7 +343,7 @@ try:
     os.environ["CLAUDE_PTY_GIT_SHA"] = ""
     os.environ["CLAUDE_PTY_BUILT_AT"] = ""
     _version_mod.summary.cache_clear()
-    _own = {m["name"]: m for m in _version_mod.summary()["modules"]}["agent-tty"]
+    _own = {m["name"]: m for m in _version_mod.summary()["modules"]}["claude-pty"]
     # 開發環境有 .git 時會退回問工作區（刻意的便利，容器裡兩個條件都不成立）。
     # 要守的是「值必須有來源」——不是 build arg 就是工作區，不可以是編出來的。
     import subprocess as _sp

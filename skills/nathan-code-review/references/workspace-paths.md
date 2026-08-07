@@ -16,7 +16,7 @@ report ends up quoting a path that only exists on the review machine.
   own branch checked out. Sharing a directory means two reviews fighting over
   `git checkout`. One MR, one directory.
 - **Why `{group}`?** The same repository name lives under different groups
-  (`his/abc-backend` and `lis/abc-backend`); the repo name alone collides.
+  (`alpha/api-backend` and `beta/api-backend`); the repo name alone collides.
 - **Why `/tmp`?** The clone is a work copy, used and discarded. `/tmp` is cleared
   on reboot, so there is no cleanup mechanism to build or forget to run.
 
@@ -107,7 +107,7 @@ $HOME/ncr/{group}/{subgroup}/{repo}/
 ```
 
 Mirror the project path exactly as GitLab has it, however many levels deep. A
-project at `his/abc/abc-backend` archives to `$HOME/ncr/his/abc/abc-backend/`.
+project at `platform/api/api-backend` archives to `$HOME/ncr/platform/api/api-backend/`.
 
 ### Filenames
 

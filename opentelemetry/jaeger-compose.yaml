@@ -46,7 +46,12 @@ services:
       start_period: 60s
       retries: 3
     networks:
-      - gitlab-proxy
+      # 要收得到 trace，jaeger 必須跟**送 trace 的那些容器**在同一個網路上。
+      # 預設是 claude-pty 的 session network（`claude-pty-sessions`）；跑 dev-container
+      # 那條路徑、或想沿用別組 compose 建好的網路時，在 .env 覆寫 JAEGER_NETWORK。
+      # ⚠ 那個網路必須**先存在**（external）。claude-pty 的控制平面啟動時會建它，
+      #   所以順序是：先起 claude-pty，再起這個。反過來會得到「network not found」。
+      - trace
 
 volumes:
   jaeger-badger:
@@ -55,5 +60,7 @@ volumes:
     name: jaeger-badger
 
 networks:
-  gitlab-proxy:
-    external: true     # gitlab-proxy 那組 compose 建的；借用、不擁有
+  trace:
+    # 借用、不擁有：這個網路由送 trace 的那一方建立，這裡只是接上去。
+    external: true
+    name: ${JAEGER_NETWORK:-claude-pty-sessions}

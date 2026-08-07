@@ -49,7 +49,7 @@ and into every error message quoting the URL back.
 ## Parsing the URL
 
 ```
-https://gitlab.example.com/his/abc/abc-backend/-/merge_requests/61
+https://gitlab.example.com/platform/api/api-backend/-/merge_requests/61
         └──── host ─────┘ └── project path ──┘                └iid┘
 ```
 

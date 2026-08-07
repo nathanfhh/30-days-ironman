@@ -22,11 +22,11 @@ class TestLocalPathDetection:
     @pytest.mark.parametrize(
         "path",
         [
-            "/tmp/ncr/his2-repo-mr92/repo",
-            "/home/nathan/ncr/report.json",
-            "/Users/nathan/work/repo/app.py",
+            "/tmp/ncr/grp-repo-mr92/repo",
+            "/home/dev/ncr/report.json",
+            "/Users/dev/work/repo/app.py",
             "/var/folders/x1/tmpabc/report.md",
-            "~/ncr/his2/repo",
+            "~/ncr/grp/repo",
             "$HOME/ncr/report.json",
             r"C:\work\repo\app.py",
             "D:/work/repo/app.py",
@@ -205,12 +205,12 @@ class TestRendering:
     ):
         from conftest import SCRIPTS
 
-        report["findings"][0]["fix"] = "見 /Users/nathan/ncr/scan.json 的完整輸出"
+        report["findings"][0]["fix"] = "見 /Users/dev/ncr/scan.json 的完整輸出"
         template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
         markdown = render_report.render(report, template)
 
         violations = render_report.find_local_paths(markdown, report)
-        assert [v.path for v in violations] == ["/Users/nathan/ncr/scan.json"]
+        assert [v.path for v in violations] == ["/Users/dev/ncr/scan.json"]
 
 
 class TestSummary:

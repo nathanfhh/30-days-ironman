@@ -11,7 +11,7 @@ import unicodedata
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
-from . import config, crypto
+from . import config, crypto, gitlab_proxy
 from .db import session_scope
 from .models import User
 
@@ -300,7 +300,7 @@ def set_cli_token(user_id: int, token) -> None:
         user = s.get(User, user_id)
         if user is None:
             raise AuthError("使用者不存在")
-        user.cli_token_enc = crypto.encrypt(token)
+        user.cli_token_enc = crypto.encrypt(token, purpose=crypto.Purpose.CLI_TOKEN)
 
 
 def clear_cli_token(user_id: int) -> None:
@@ -318,7 +318,102 @@ def cli_token(user_id: int) -> str | None:
         user = s.get(User, user_id)
         if user is None or user.cli_token_enc is None:
             return None
-        return crypto.decrypt(user.cli_token_enc)
+        return crypto.decrypt(user.cli_token_enc, purpose=crypto.Purpose.CLI_TOKEN)
+
+
+# --- GitLab PAT（ADR 0016）---------------------------------------------------------
+
+def set_gitlab_pat(user_id: int, value) -> None:
+    """設定／清除這個人的 GitLab PAT。**空字串（或只有空白）＝清除。**
+
+    清除只有這一種方式，不另外做 DELETE 端點——畫面上「把輸入框清空後儲存」就是使用者
+    心裡的清除動作，兩個入口只會讓人猜哪一個才算數。
+
+    ⚠ 值一律 strip 再落地：PAT 從剪貼簿貼進來很容易帶到換行或尾隨空白，而它最後會被塞進
+      HTTP 標頭——帶著 `\\n` 的字串放進標頭是會出事的（標頭注入），而症狀是「一模一樣的
+      token 用 curl 可以、在這裡不行」。
+    ⚠ **字元集在這個入口就要擋**（`gitlab_proxy.validate_pat`），不能只在產生 nginx 設定時
+      擋。只擋產生端的話：畸形的值會被加密存起來、設定頁顯示「已設定」，然後每一顆代理
+      都靜靜地建不起來——使用者看到「設定頁說有、session 說沒有」，而**沒有任何地方會告訴
+      他那個值不合法**。擋在入口才有人看得到 400。
+    ⚠ **絕不記錄這個值**：不 print、不寫 log、不放進例外訊息。
+    """
+    if not isinstance(value, str):
+        raise AuthError("PAT 必須是字串")
+    value = value.strip()
+    if value:
+        # 空字串是「清除」，不是一個要驗的 PAT——先判空再驗，順序不能反。
+        try:
+            value = gitlab_proxy.validate_pat(value)
+        except gitlab_proxy.PatRejected as e:
+            raise AuthError(str(e)) from e
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None:
+            raise AuthError("使用者不存在")
+        user.gitlab_pat_enc = (
+            crypto.encrypt(value, purpose=crypto.Purpose.GITLAB_PAT) if value else None)
+
+
+def gitlab_pat(user_id: int) -> str | None:
+    """這個人的 PAT 明文；沒設過、或解不開（換過 SECRET_KEY）都回 `None`。
+
+    ⚠ **要分辨「沒設」與「解不開」請用 `gitlab_pat_state()`。** 這支刻意不分辨——它回答的
+      是「拿不拿得到值來用」，兩種情形都是拿不到。但 reconciler 的收斂**必須**分辨，
+      那是另一個問題。
+    ⚠ 取到之後只能往 `put_archive` 去，不可以落進任何 log、環境變數、或 `docker inspect`
+      看得到的地方。
+    """
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None or user.gitlab_pat_enc is None:
+            return None
+        return crypto.decrypt(user.gitlab_pat_enc, purpose=crypto.Purpose.GITLAB_PAT)
+
+
+def gitlab_pat_state(user_id: int) -> str:
+    """`"ok"` / `"none"` / `"unreadable"`——**這三態的差別決定 reconciler 刪不刪代理**。
+
+    | 回傳 | DB 的樣子 | reconciler 該做什麼 |
+    |---|---|---|
+    | `"ok"` | 有值且解得開 | 確保代理在、設定是最新的 |
+    | `"none"` | `NULL`（使用者**明確清除**，或從沒設過） | **移除代理**——「我覺得外洩了」要立刻生效 |
+    | `"unreadable"` | 有值但解不開（**換過 `SECRET_KEY`**） | **什麼都不做** |
+
+    ⚠ **為什麼一定要分辨。** 「讀不到就不刪任何還能用的東西」這條規則本身是對的：換一次
+      `SECRET_KEY` 會讓**所有人**的 PAT 一起解不開，拿它當期望狀態就是把所有還在服務中的
+      代理一起收掉。但同一條規則會讓「清除 PAT」不再立即生效——而那是安全需求。
+      **兩者的衝突只能靠分辨解決，不能選一邊。**
+
+    ⚠ **第三種情況**：欄位有值但被手動改壞。它會落在 `"unreadable"`，於是代理帶著舊 PAT
+      服務到 session 結束。方向是保守的（不會誤刪還能用的東西），**這是想過之後接受的，
+      不是漏判**——使用者在設定頁重新輸入一次就回到 `"ok"`。
+
+    ⚠ 使用者不存在時回 `"none"`：對呼叫端而言「這個人沒有可用的 PAT」是同一件事。
+    """
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None or user.gitlab_pat_enc is None:
+            return "none"
+        return ("ok" if crypto.is_readable(user.gitlab_pat_enc,
+                                           purpose=crypto.Purpose.GITLAB_PAT)
+                else "unreadable")
+
+
+def gitlab_proxy_error(user_id: int) -> str | None:
+    """這個人的代理**連續**起不來時，nginx 自己說的最後一句話；沒問題就回 `None`。
+
+    由 reconciler 在跨過 `config.PROXY_FAIL_THRESHOLD` 輪之後寫入、代理恢復的那一輪清掉
+    （見 `reconciler._note_proxy_down` / `_note_proxy_ok`）。
+
+    ⚠ **這是診斷麵包屑，不是權威狀態**：沒有任何判斷會讀它，它只負責把「本來只在容器
+      log 裡的一句話」端到人看得到的地方。之所以需要，是因為代理起不來時使用者看到的
+      症狀是「GitLab 連不到」，而那個症狀會把他導向完全錯的排查方向（去查 token、
+      查網路、查 GitLab 是不是掛了）。
+    """
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        return user.gitlab_proxy_error if user else None
 
 
 # 這裡**刻意沒有 delete_user()，也沒有「停用」**。
@@ -345,5 +440,12 @@ def _to_dict(user: User) -> dict:
         # 這個人開終端時要用哪一顆 ttyd（見 config.TTYD_BINS）。一律經收斂函式，
         # 讓沒設過（NULL）與白名單改掉之後留下的舊值都退回預設。
         "ttyd_bin": config.ttyd_bin_or_default(user.ttyd_bin),
+        # 有沒有設過 GitLab PAT（ADR 0016）。**只給狀態，永遠不給值**——明文不用說，
+        # 連密文都不出去。這裡是唯一出口，所以這條規矩只要守住這一行。
+        # ⚠ 用 `is_readable` 而不是 `bool(user.gitlab_pat_enc)`：換過 SECRET_KEY 之後欄位
+        #   仍然有值但已經解不開，那時的事實是「不能用」。顯示成「已設定」會讓人以為好好
+        #   的，然後去 GitLab 查一把完全正常的 token。
+        "gitlab_pat_configured": crypto.is_readable(
+            user.gitlab_pat_enc, purpose=crypto.Purpose.GITLAB_PAT),
         "created_at": user.created_at.isoformat(),
     }

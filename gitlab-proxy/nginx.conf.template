@@ -91,6 +91,12 @@ http {
         # 對照 skills/nathan-code-review/scripts/gitlab_api.py 的七個子指令。
         # 加端點時，這裡與該 skill 的 references/gitlab-api.md 要一起改。
         #
+        # ⚠ SYNC: claude-pty/server/gitlab_proxy.py 的 _API_LOCATIONS
+        #   同一份白名單在那邊還有第二份——claude-pty 的 per-user 代理是用 Python 依 token
+        #   現算 nginx.conf，不是展開這份 template，所以沒辦法共用同一份。**改這裡就要改
+        #   那裡**，漏掉的症狀是「獨立代理這條路通、網頁 session 那條 403」，而且兩邊各自
+        #   看起來都沒問題。
+        #
         # 兩個 nginx 的坑，寫在前面免得踩：
         #   1. location ~ 的 regex 不能用大括號量詞。`[0-9a-f]{32}` 會讓設定解析器
         #      把 `{` 當成 block 開頭，啟動時報 unknown directive。所以用 `+`。

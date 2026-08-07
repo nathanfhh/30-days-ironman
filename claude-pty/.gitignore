@@ -1,7 +1,11 @@
 # SQLite registry（deploy/docker-compose.yml 以 bind mount 掛給 control 與 reconciler）。
-# 裡面是密碼雜湊、session 歷史與初始 prompt 原文——即使是 hash 也不進版控。
+# 裡面是密碼雜湊、加密後的 CLI 授權 token 與 session 歷史——即使加密過也不進版控。
 # 連 -wal / -shm 一起擋：它們是同一份資料還沒 checkpoint 的部分。
 deploy/data/
+
+# 部署用的 .env。裡面是 SECRET_KEY，而上面那些 token 密文都是由它導出的金鑰加密的，
+# 兩個湊在一起就等於明文。進版控的是 deploy/.env.example。
+deploy/.env
 
 __pycache__/
 *.py[cod]

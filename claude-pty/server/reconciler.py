@@ -25,7 +25,7 @@ from contextlib import suppress
 import docker
 
 
-from . import config, views
+from . import auth, config, gitlab_proxy, user_proxy, views
 from .db import init_db, session_scope
 from .models import (
     END_EXITED,
@@ -33,6 +33,7 @@ from .models import (
     END_IDLE,
     STATUS_EXITED,
     Lease,
+    User,
     View,
     utcnow,
 )
@@ -43,6 +44,7 @@ from .sessions import (
     _is_ready,
     age_seconds,
     archive,
+    is_stale_half_built,
     stamp_ready_if_first,
 )
 
@@ -102,7 +104,8 @@ def reconcile_once(client: docker.DockerClient | None = None,
     stats = {"gone": 0, "exited_removed": 0, "views_cleaned": 0,
              "orphan_containers": 0, "idle_reclaimed": 0,
              "states_refreshed": 0, "ready_stamped": 0,
-             "containers_stuck": 0}
+             "containers_stuck": 0,
+             "proxies_removed": 0, "proxies_converged": 0}
 
     # ⚠ 這一發是**整輪唯一不可失敗**的 docker 呼叫：它一次拿回所有容器的狀態，不是
     #   per-container，所以它掛掉代表 daemon 整體有問題（那時本來也做不了任何事）。
@@ -194,7 +197,282 @@ def reconcile_once(client: docker.DockerClient | None = None,
     # --- 5) idle 回收（預設停用，見 config 說明）--------------------------------------
     stats["idle_reclaimed"] = _reclaim_idle(client, _isolated) if _leading() else 0
 
+    # --- 6) per-user GitLab 代理與網路（ADR 0016）------------------------------------
+    # 放在最後：它的期望狀態依賴「誰還有活著的 session」，而上面幾步剛好在收斂那件事。
+    # ⚠ **關掉這個功能時也要跑**（不是 `if gitlab_enabled()` 才跑）：那時的期望狀態是
+    #   「一顆代理與一張網路都不該有」，所以這一輪負責把既有的收乾淨。跳過的話，部署者
+    #   拿掉 CLAUDE_PTY_GITLAB_HOST 之後，那些代理會**帶著 PAT 永遠留在機器上**，
+    #   而且繼續佔著位址池——沒有任何東西會再回頭看它們。
+    removed, converged = _converge_proxies(client, live, _isolated, _leading)
+    stats["proxies_removed"] = removed
+    stats["proxies_converged"] = converged
+
     return stats
+
+
+def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
+                      leading=None) -> tuple[int, int]:
+    """把 per-user GitLab 代理與網路收斂到期望狀態（ADR 0016）。回傳 (收掉幾顆, 修好幾顆)。
+
+    期望狀態很簡單：**有活著的 session 且 PAT 可用的使用者，才該有網路與代理。**
+    形狀與 k8s 的 Deployment 相同——定期看一眼，該在而不在就補，不該在就收。
+
+    ⚠ **功能被關掉時這支照跑**，不是不呼叫（呼叫端也不該加 `if gitlab_enabled()`）。
+      那時期望狀態是「一顆都不該有」，所以這一輪負責收乾淨；`active` 會是空集合，
+      於是每顆代理都落進「沒人用」、每張網路都被回收，補建迴圈什麼都不做。
+      跳過的話，那些代理會**帶著 PAT 永遠留在機器上**，還繼續佔著位址池。
+
+    ⚠ **「有活著的 session」不可以只看 `live` 快照。** `live` 是輪初拿的，而代理與網路是
+      即時查詢——使用者上一場剛結束、下一場正在建立時會誤判成「沒有 session」，於是收掉
+      正要被接上的代理。判準要**含 DB 裡 `status=creating` 且在寬限期內的列**。
+
+    ⚠ **PAT 讀不到時的處置要分辨三態**（`auth.gitlab_pat_state`）：
+      · `"none"`（明確清除）→ **移除代理**。「我覺得外洩了」必須立刻生效。
+      · `"unreadable"`（換過 `SECRET_KEY`）→ **什麼都不做**。整站的 PAT 會一起解不開，
+        當成「沒設」就是把所有還在服務中的代理一起收掉。
+      這兩者的差別是這整段最重要的一條規矩，**不可以退回成「讀不到就當沒設」**。
+
+    ⚠ **設定新舊問容器自己**（`/_state`），不另存狀態：DB 會漂，label 建立後改不了。
+    ⚠ 過期時**熱重載不重建**：重建會斷掉這個使用者其他 session 正在進行的 git 操作。
+    """
+    # 誰有活著的 session：live 快照 ∪ DB 裡還在建立寬限期內的列。
+    # ⚠ 功能被關掉時這裡是**空集合**，於是下面每一顆代理都落進「沒人用」而被收掉、
+    #   每一張網路都被回收，補建迴圈（`active - seen`）則什麼都不做。關閉＝收乾淨，
+    #   不是「停止管理」——停止管理會讓帶著 PAT 的容器孤兒化。
+    active: set[int] = set()
+    if config.gitlab_enabled():
+        with session_scope() as s:
+            for row in s.query(SessionRow).all():
+                c = live.get(row.container_name)
+                if ((c is not None and c.status in ALIVE_STATES)
+                        or _is_creating_within_grace(row)):
+                    active.add(row.user_id)
+
+    removed = converged = 0
+    seen: set[int] = set()
+    # ⚠ 每顆之前再確認一次租約還是自己的。理由與主迴圈那條 `if not _leading(): break`
+    #   相同，而這一段更需要：卡住的容器每顆吃滿 DOCKER_TIMEOUT，幾顆就超過租約 TTL。
+    #   重新部署讓新舊 reconciler 短暫並存時，過期的那一份會拿著輪初的快照做**依名稱**的
+    #   `remove(uid)`——而那個名字此刻可能已經是新 leader 剛補建好的那一顆。
+    lead = leading or (lambda: True)
+
+    for c in user_proxy.list_all(client):
+        if not lead():
+            break
+        if c.labels.get(config.TEST_LABEL_KEY):
+            # 測試建立的：它不在**我們的** DB 裡是正常的（對稱於 _remove_orphans 那道檢查）
+            continue
+        uid = user_proxy.owner_of(c)
+        if uid is None:
+            # label 壞掉／不是數字：認不出主人就沒有人管得了它，**而它握著一把 PAT**。
+            with suppress(docker.errors.NotFound):
+                if isolated(f"收掉認不出主人的代理 {c.name}",
+                            client.api.remove_container, c.id, force=True) is not STUCK:
+                    removed += 1
+            continue
+        seen.add(uid)
+        try:
+            if uid not in active:
+                # 沒有活著的 session 了。⚠ 寬限期依**代理自己**的 Created：剛建好、session
+                #   還在路上的那一刻不可以收（同 _remove_orphans 的理由）。
+                if age_seconds(c.attrs.get("Created", "")) < config.ORPHAN_GRACE:
+                    continue
+                if isolated(f"收掉沒人用的代理 {c.name}",
+                            user_proxy.remove, client, uid) is not STUCK:
+                    removed += 1
+                continue
+
+            state = auth.gitlab_pat_state(uid)
+            if state == "none":
+                # 使用者明確清除了 PAT → 立刻失效（這是安全需求，見 docstring）
+                if isolated(f"使用者 {uid} 已清除 PAT，收掉代理",
+                            user_proxy.remove, client, uid) is not STUCK:
+                    removed += 1
+                continue
+            if state != "ok":
+                continue                  # unreadable：什麼都不做
+
+            if c.status == "created":
+                # **半成品**：`create_container` 成功但 `put_archive`／`start` 沒走完就被
+                # 中斷。它的 `/etc/nginx` 可能還是 image 的預設設定——直接 start 起來的話
+                # `/_state` 會 404、`running_state` 永遠回 None，而「問不到就別亂動」那條
+                # 規則會讓它**永遠卡在這裡**。
+                # ⚠ 所以夠舊的 created 一律當半成品收掉，交給補建路徑重來一次。判準與
+                #   `sessions._ensure_user_proxy` 共用同一支，還新就別碰（那是別人正在建）。
+                # ⚠ 補的是**下一輪**，不是這一輪：上面已經 `seen.add(uid)`，而補建迴圈跑的
+                #   是 `active - seen`。所以收掉到補回來之間有一個 RECONCILE_INTERVAL 的
+                #   空窗。不改成本輪就補是刻意的——那要嘛得在迴圈中途改 `seen`（邊走邊改
+                #   判斷依據），要嘛得把移除與補建耦合起來，兩者都比等一輪糟。
+                if not is_stale_half_built(c):
+                    continue
+                if isolated(f"收掉半成品代理 {c.name}",
+                            user_proxy.remove, client, uid) is not STUCK:
+                    removed += 1
+                continue
+            if c.status in ("dead", "removing"):
+                # ⚠ 這兩種**啟動不起來**，不可以歸到下面的「直接 start」。start 一顆 dead
+                #   容器必定失敗 → 每輪 `containers_stuck` +1 → 而它永遠不會被收掉重建，
+                #   於是這個人的 GitLab **永久失效直到有人手動 rm**。罕見，但這一整段存在
+                #   的理由就是堵「永久且無聲的失效」，自己留一條就沒有意義了。
+                if isolated(f"收掉 {c.status} 的代理 {c.name}",
+                            user_proxy.remove, client, uid) is not STUCK:
+                    removed += 1
+                continue
+            if c.status not in ALIVE_STATES:
+                # exited：設定已經在它裡面，直接 start——不必再碰 PAT。
+                # ⚠ **先把它上次為什麼死講出來，再重啟。** 有一整類原因是重啟救不了的，
+                #   最常見的是「代理裡解不出 GitLab 的主機名」——nginx 在啟動時就要解析
+                #   upstream，解不開直接 `[emerg] host not found in upstream` 拒絕啟動。
+                #   那時這條分支會**每輪重啟一次、每輪再死一次**，而唯一的觀測訊號是
+                #   `proxies_converged` 在跳——看起來像在收斂，其實是無聲的無窮迴圈。
+                #   設定錯誤要讓人看得到，不然它會一直被當成「暫時的」。
+                _note_proxy_down(c, uid, isolated)
+                if isolated(f"重啟代理 {c.name}", client.api.start, c.id) is not STUCK:
+                    converged += 1
+                continue
+            if c.status != "running":
+                continue                  # restarting／paused：這輪先放著
+
+            # 走到這裡代理是 running＝這一輪它是好的。把連續失敗計數與畫面上那句錯誤清掉。
+            _note_proxy_ok(uid)
+
+            pat = auth.gitlab_pat(uid)
+            if not pat:
+                continue                  # 與 state 之間的競態，下輪再看
+            want = gitlab_proxy.fingerprint(pat)
+            got = isolated(f"問代理 {c.name} 在跑什麼",
+                           user_proxy.running_state, client, uid)
+            if got is STUCK or got is None:
+                continue                  # 問不到就別亂動
+            # ⚠ 判 `is True`，不是 `is not STUCK`。`reload()` 有三種結局：成功回 `True`、
+            #   **失敗回 `False`**（`nginx -t` 沒過／`mv` 失敗）、被 `_isolated` 攔下回
+            #   `STUCK`。只排除 STUCK 的話 `False` 也會被算成「重載了」——而那正是最需要
+            #   被看見的情況：設定換不上去，指紋永遠不收斂，每輪重跑一次，而唯一的觀測
+            #   訊號在說「有重載」。假捷報比沒有訊號更糟。
+            if got != want and isolated(f"熱重載代理 {c.name}",
+                                        user_proxy.reload, client, uid, pat) is True:
+                converged += 1
+        except docker.errors.NotFound:
+            continue                      # 目標剛好在這幾行之間被收掉了，下輪再看
+
+    # 該有代理卻一顆都沒有的使用者：補建。
+    # ⚠ 這一輪不可省——上面只走「已經存在的代理」，任何讓容器整個消失的路徑（手動 rm、
+    #   建到一半失敗）都會變成永久且無聲的失效。
+    for uid in sorted(active - seen):
+        if not lead():
+            break
+        if auth.gitlab_pat_state(uid) != "ok":
+            continue
+        pat = auth.gitlab_pat(uid)
+        if not pat:
+            continue
+        # ⚠ **不可以寫成 `suppress(NotFound)`**：`ImageNotFound` 是 `NotFound` 的子類，
+        #   而 `_isolated` 對 `NotFound` 是**刻意 re-raise** 的。代理 image 沒拉到時，
+        #   補建會每輪被無聲吞掉——而這一段存在的理由正是要堵「永久且無聲的失效」。
+        # ⚠ `PoolExhausted` 不必在這裡接：`_isolated` 的 `except Exception` 會先吃掉它
+        #   並印出訊息（那個訊息本身就講了該去清 network）。
+        try:
+            if isolated(f"補建使用者 {uid} 的代理",
+                        _create_proxy, client, uid, pat) is not STUCK:
+                converged += 1
+        except docker.errors.ImageNotFound:
+            print(f"[reconciler] ⚠ 代理 image 不在本機（{config.PROXY_IMAGE[:60]}），"
+                  f"使用者 {uid} 的 GitLab 功能無法恢復——先 docker pull 它", flush=True)
+        except docker.errors.NotFound:
+            continue                      # session 剛好在這幾行之間沒了，下輪再看
+
+    removed += _reap_user_networks(client, active, isolated, lead)
+    return removed, converged
+
+
+# 每個使用者的代理「連續」幾輪沒活著。**刻意留在記憶體、不落 DB**：
+#   · reconciler 由租約保證同一時間只有一個實例，所以這個計數天生只有一個來源
+#   · 它是過程量不是事實——重啟 reconciler 之後從零開始數正是**對的**行為
+#   · 少一個 schema 欄位，也少一條要同步的狀態
+# 落到 DB 的只有跨過門檻之後的**結論**（`users.gitlab_proxy_error`），那是給人看的。
+_proxy_fails: dict[int, int] = {}
+
+
+def _note_proxy_down(c, uid: int, isolated) -> None:
+    """代理這一輪被發現沒活著：記一次；連續夠多次就把原因端到畫面上。
+
+    ⚠ **為什麼不是第一次就報。** 代理偶爾重啟一輪是正常的（重新部署、daemon 抖動），
+      每次都對使用者喊「你的 GitLab 壞了」就是狼來了。這條訊號要救的是另一類：設定錯了、
+      而且**永遠不會自己好**——最典型的是主機名打錯，nginx 啟動時解不開 upstream 就拒絕
+      啟動，於是每輪重啟、每輪再死，而 `proxies_converged` 每輪 +1 看起來還像在收斂。
+
+    ⚠ **只取 nginx 自己的最後一行並截短。** 它的 `[emerg]` 訊息格式是
+      `[emerg] … in <檔名>:<行號>`，**不含檔案內容**，所以不會漏出 PAT。整份 log 就不一定
+      （日後若有人在代理裡加了會回顯設定的東西），所以不整包搬。
+    ⚠ 讀不到 log 不是錯——這只是診斷，不可以因為它讓收斂停手。
+    """
+    n = _proxy_fails[uid] = _proxy_fails.get(uid, 0) + 1
+    logs = isolated(f"讀代理 {c.name} 的 log", c.logs, tail=5)
+    lines = ([] if logs is STUCK or not logs
+             else logs.decode(errors="replace").strip().splitlines())
+    said = lines[-1][:200] if lines else ""
+    print(f"[reconciler] ⚠ 代理 {c.name} 沒活著（連續第 {n} 輪）"
+          f"{'：' + said if said else ''}", flush=True)
+    if n < config.PROXY_FAIL_THRESHOLD:
+        return
+    # 跨過門檻：把原因寫到使用者看得到的地方。沒有這一步，他看到的只有「GitLab 連不到」，
+    # 然後去查 token、查網路、查 GitLab 是不是掛了——真正的答案卻一直只在容器 log 裡。
+    with suppress(Exception), session_scope() as s:
+        user = s.get(User, uid)
+        if user is not None:
+            user.gitlab_proxy_error = said or "代理起不來，而且容器沒有留下訊息"
+
+
+def _note_proxy_ok(uid: int) -> None:
+    """代理這一輪是好的：把連續計數與畫面上那句錯誤一起清掉。
+
+    ⚠ **清除要無條件做**，不可以只在「這一輪剛好報過錯」時做。要判斷「先前有沒有報過」
+      就得再存一份狀態，而那份狀態一旦與 DB 不同步（reconciler 一重啟就會），畫面上那句
+      早就修好的錯誤會永遠留著——使用者會照著它去改一個本來就正確的設定。
+    """
+    _proxy_fails.pop(uid, None)
+    with suppress(Exception), session_scope() as s:
+        user = s.get(User, uid)
+        if user is not None and user.gitlab_proxy_error is not None:
+            user.gitlab_proxy_error = None
+
+
+def _create_proxy(client: docker.DockerClient, user_id: int, pat: str) -> str:
+    """補建一顆代理（連同它的網路）。給 `_converge_proxies` 用，讓那一行讀得下去。"""
+    user_proxy.ensure_network(client, user_id)
+    return user_proxy.create(client, user_id, pat)
+
+
+def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated,
+                        leading=None) -> int:
+    """收掉沒人用的 per-user 網路（釋放位址池）。
+
+    ⚠ **寬限期依網路自己的 `Created`，不是代理的**：在「建好網路」與「建好代理」之間網路
+      是空的，那時**沒有代理可以查年齡**——用代理的年齡判斷就會把剛建好的網路收掉。
+    ⚠ 網路上還有容器時 docker 會拒絕移除，那是對的：交給下一輪。
+    """
+    reaped = 0
+    lead = leading or (lambda: True)
+    for net in user_proxy.list_networks(client):
+        if not lead():
+            break                     # 租約中途被接手就停手（同 _converge_proxies）
+        # ⚠ 跳過帶測試標記的——與 `_converge_proxies`、`_remove_orphans` 那兩道檢查對稱。
+        #   少了這道就是**正式的 reconciler 會去收測試建的網路**：測試那側的隔離只擋得住
+        #   測試自己呼叫的那一輪，擋不住背景常駐的那一份。多半被 ORPHAN_GRACE 擋著，
+        #   所以症狀是「偶爾、在慢的那次才紅」——那種 flaky 最難查。
+        # ⚠ 網路的 label 要走 `attrs["Labels"]`：docker-py 的 `Network` **沒有** `.labels`
+        #   （容器才有），而沒帶 label 時那個值是 `None` 不是 `{}`。
+        if (net.attrs.get("Labels") or {}).get(config.TEST_LABEL_KEY):
+            continue
+        uid = user_proxy.owner_of(net)
+        if uid is not None and uid in active:
+            continue
+        if age_seconds(net.attrs.get("Created", "")) < config.ORPHAN_GRACE:
+            continue
+        with suppress(docker.errors.NotFound, docker.errors.APIError):
+            if isolated(f"收掉沒人用的網路 {net.name}", net.remove) is not STUCK:
+                reaped += 1
+    return reaped
 
 
 def _stamp_ready_backstop(live: dict, isolated) -> int:

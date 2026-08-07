@@ -59,10 +59,10 @@ admin = auth.create_user("e2e-admin", "e2e-password-1", is_admin=True)
 
 # 兩個模型字串：一個**真實長度**（放得下，不該被切），一個刻意超長（一定被切）。
 # 兩邊都要驗——只驗「長的會切」的話，把 chip 調到 5.6rem 那種連真實字串都塞不下的
-# 寬度也會全綠，而那正是使用者回報的畫面（只看得到 `gpt-…`）。
+# 寬度也會全綠，而那正是使用者回報的畫面（只看得到開頭幾個字）。
 # （chip 畫的就是 profile.model 的字串，不查任何目錄。）
-REAL = "gpt-5.6-terra"          # 實測自然寬度 133.8px；chip 是 auto + max-width 11rem（176px）
-TOO_LONG = "gpt-5.6-terra-preview-2026-07"
+REAL = "claude-sonnet-5-preview"          # 實測自然寬度 133.8px；chip 是 auto + max-width 11rem（176px）
+TOO_LONG = "claude-sonnet-5-preview-2026-07-31"
 
 now = utcnow()
 # 名稱欄同理：第一列取一個放不進欄寬的名字（一定被切），第二列不取名（沿用 12 碼 sid，
@@ -169,15 +169,15 @@ with sync_playwright() as pw:
     check("🔴 chip 本身不裁切，否則 ::after 的提示會被切掉一半",
           bool(m) and m["chipOverflow"] != "hidden")
     # ⚠ 下伸部：`.chip` 是 line-height:1，文字盒剛好等於字級，配上 overflow:hidden 會把
-    #   g／p 的尾巴切掉（使用者回報 `gpt-` 的 g 少半截）。這條守的是「文字盒比字級高」。
+    #   g／p 的尾巴切掉（實測有下伸部的字會少半截）。這條守的是「文字盒比字級高」。
     check("🔴 文字盒容得下下伸部（line-height > font-size）",
           bool(m) and m["lineHeight"] > m["fontSize"] + 1)
 
     print("== 真實長度的 slug：**不該**被切（chip 寬度要夠）==")
-    # 只驗「長的會切」的話，把寬度改回連 `gpt-5.6-terra` 都塞不下也會全綠，
-    # 而那正是使用者看到的畫面（只剩 `gpt-…`，等於什麼都沒說）。
+    # 只驗「長的會切」的話，把寬度改回連真實長度的模型名都塞不下也會全綠，
+    # 而那正是使用者看到的畫面（只剩開頭幾個字，等於什麼都沒說）。
     r = page.evaluate(PROBE, ["model", 1])
-    check("🔴 `gpt-5.6-terra` 完整顯示，沒有被切", bool(r) and r["clipped"] is False)
+    check("🔴 真實長度的模型名完整顯示，沒有被切", bool(r) and r["clipped"] is False)
     check("🔴 沒被切就不掛 tooltip", bool(r) and r["hasTip"] is False and r["tip"] is None)
 
     print("== 整張表：**只有**刻意超長的那顆可以被切 ==")

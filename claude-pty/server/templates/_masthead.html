@@ -1,6 +1,6 @@
 <header class="masthead">
   <div class="masthead__brand">
-    <span class="masthead__title">agent<em>-tty</em></span>
+    <span class="masthead__title">claude<em>-pty</em></span>
     <span class="masthead__kicker">控制平台</span>
     {# 分段控制而不是兩個裸連結：這兩個是**同一組互斥的去處**，做成連結的話跟旁邊的
        登出、主題長得一樣，得讀完字才知道哪個是「我現在在哪」。
@@ -33,15 +33,19 @@
        ⚠ 時刻是 epoch 毫秒、不在這裡排版：控制平面跑在容器裡、時區是 UTC，排出來的
          時間不屬於任何人。 #}
     <script type="application/json" id="cred-data">{{ credentials|tojson }}</script>
-    <span class="cred tip tip--wide tip--left" id="cred-badge" role="status" tabindex="0"
-          data-cli="{{ default_cli }}"
-          data-state="{{ credentials[default_cli].state }}"
-          data-tip="{{ credentials[default_cli].detail }}">
+    {# 做成連結而不是 span：這顆在未設定時是紅的、在抱怨一件事，而**能解決那件事的地方
+       只有帳號頁**。讓抱怨的東西自己就是去處，比要人自己找一次少一步。
+       已設定時同樣連過去——那裡也是換 token 的地方，不必為兩種狀態做兩種行為。
+       role="status" 保留（輪詢改寫時要念出來）；tabindex 拿掉，連結本身就進得了焦點序。 #}
+    <a class="cred tip tip--wide tip--left" id="cred-badge" role="status" href="/account"
+       data-cli="{{ default_cli }}"
+       data-state="{{ credentials[default_cli].state }}"
+       data-tip="{{ credentials[default_cli].detail }}">
       {# 品牌標誌由 JS 注入（SVG path 只有一份，在 app.js 的 BRAND_PATHS）。
          沒有 JS 時徽章仍讀得懂——文字本來就帶著 agent 名稱。 #}
       <span class="cred__brand" aria-hidden="true"></span>
       <span class="cred__label">{{ credentials[default_cli].label }}</span>
-    </span>
+    </a>
     {# 不標「主題」二字：picker 自己的按鈕上就有調色盤圖示與目前主題名，
        多一個標籤只是重複。無障礙靠 aria-label（見 app.js 的 theme picker）。 #}
     {# 寬度寫在 CSS（#theme-picker）而不是 style 屬性：窄視窗的 media query 要放開它，

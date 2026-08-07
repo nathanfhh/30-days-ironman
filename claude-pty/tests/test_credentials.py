@@ -91,7 +91,12 @@ auth.set_cli_token(uid, "  " + TOKEN + "\n")   # 前後空白要被剝掉（終�
 with session_scope() as s:
     enc = s.get(User, uid).cli_token_enc
 check("DB 裡存的是密文，讀不出明文", enc is not None and TOKEN not in enc)
-check("解密回原值（空白已剝）", crypto.decrypt(enc) == TOKEN)
+check("解密回原值（空白已剝）",
+      crypto.decrypt(enc, purpose=crypto.Purpose.CLI_TOKEN) == TOKEN)
+# 🔴 跨用途解不開：CLI token 與 GitLab PAT 用不同的導出金鑰（crypto.Purpose）。共用一把
+# 的話，其中一種用途的密文可以拿去解另一種——而兩者的爆炸半徑與撤銷方式並不相同。
+check("🔴 拿 GITLAB_PAT 的金鑰解 CLI token 的密文＝解不開",
+      crypto.decrypt(enc, purpose=crypto.Purpose.GITLAB_PAT) is None)
 check("auth.cli_token 回明文", auth.cli_token(uid) == TOKEN)
 st = claude_credentials_state(uid)
 check("ok=True / state=ok", st["ok"] is True and st["state"] == "ok")
