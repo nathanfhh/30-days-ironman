@@ -4,7 +4,7 @@
   1. 多 worker 下若每個 worker 各跑一份對帳，它們會在 DB 上互撞；單一 owner 最乾淨。
   2. 它不在 web 請求路徑上——這正好解掉 ADR 0006 review 留下的 S1（對帳持鎖阻塞請求）。
 
-DB 只是便利/路由層，真相在 container + 那份掛進去的設定目錄（ADR 0007；ADR 0016 之後
+DB 只是便利/路由層，真相在 container + 那份掛進去的設定目錄（ADR 0007；ADR 0014 之後
 是 per-user 的 `user-{id}/claude`），故漂移一律以 dockerd 為準修正，且修正過程不會影響
 任何對話的可續性。
 
@@ -111,7 +111,7 @@ def reconcile_once(client: docker.DockerClient | None = None,
         all=True, filters=config.SESSION_FILTERS)}
 
     def _isolated(label: str, fn, *a, **kw):
-        """跑一個可能卡住的 docker 呼叫；壞掉只影響這一顆容器，不讓整輪陣亡（ADR 0013）。
+        """跑一個可能卡住的 docker 呼叫；壞掉只影響這一顆容器，不讓整輪陣亡（ADR 0012）。
 
         ⚠ 這裡要接的是 **Exception 而不是 docker.errors.APIError**。2026-07-27 那次全站
           停擺就是這個差別：一顆容器卡在 `removing`，`remove_container` 丟的是 urllib3 的
@@ -133,7 +133,7 @@ def reconcile_once(client: docker.DockerClient | None = None,
                   flush=True)
             return STUCK
 
-    # --- 0) 把「最後一次問到 dockerd 的狀態」寫進 DB（ADR 0013）-----------------------
+    # --- 0) 把「最後一次問到 dockerd 的狀態」寫進 DB（ADR 0012）-----------------------
     # 列表只讀這兩欄、不自己打 docker，所以這一步就是列表的資料來源。用上面那份 live
     # map，不額外打任何 per-container 呼叫。
     now = utcnow()
@@ -182,7 +182,7 @@ def reconcile_once(client: docker.DockerClient | None = None,
         with suppress(Exception):
             archive([sid], END_EXITED if container_id else END_GONE)
 
-    # --- 2) 補上沒人記過的「就緒」時刻（ADR 0013）--------------------------------------
+    # --- 2) 補上沒人記過的「就緒」時刻（ADR 0012）--------------------------------------
     stats["ready_stamped"] = _stamp_ready_backstop(live, _isolated)
 
     # --- 3) 清掉已自行退出的 view（釋放 port）----------------------------------------
@@ -201,7 +201,7 @@ def _stamp_ready_backstop(live: dict, isolated) -> int:
     """替「還沒被記過就緒」的 session 補記 ready_at。
 
     正常路徑是 `create()` 那條背景執行緒當場記（那最即時）；這裡撿的是它死掉的情形
-    ——控制平面重啟、OOM kill 都會讓它消失。列表改成純讀 DB 之後（ADR 0013），沒有人補
+    ——控制平面重啟、OOM kill 都會讓它消失。列表改成純讀 DB 之後（ADR 0012），沒有人補
     的話那些 session 會**永遠**顯示未就緒，而它們其實好好地跑著。
 
     只問「還沒記過的」那幾列，而且每顆都包在 isolated 裡：一顆卡住的容器不影響其他顆。

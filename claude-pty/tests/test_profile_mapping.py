@@ -18,7 +18,7 @@ config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
 db.reset_engine()
 db.init_db()
 config.MOUNTS = {}  # 隔離：不讓共用掛載干擾 volumes 斷言（per-user 的那組也吃這個開關）
-_UID = 7            # per-user 空間用的假 user id（ADR 0016）
+_UID = 7            # per-user 空間用的假 user id（ADR 0014）
 
 _pass = _fail = 0
 def check(label, ok):
@@ -56,7 +56,7 @@ check("env 帶 NET/CAPTURE/SCOPE/MARK + 模型設定", env == {
     # mitmweb UI 收回容器 loopback：網頁 session 在共用網段上，兄弟容器不該連得到
     # 那個顯示未脫敏流量的畫面（人自己開容器時不設，run script 的 -p 才轉得進去）
     "NCR_MITM_WEB_BIND": "127.0.0.1",
-    # per-user 狀態空間（ADR 0016）。這個**不是**給 entrypoint.sh 的，是給 CLI 本身的，
+    # per-user 狀態空間（ADR 0014）。這個**不是**給 entrypoint.sh 的，是給 CLI 本身的，
     # 所以不隨 profile 變、每一場都在。
     # 少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器 writable layer，換一顆容器就沒了。
     # （憑證不在這份裡：這個 user 沒設 setup-token，而沒設就**不注入**——見下方憑證段。）
@@ -112,7 +112,7 @@ check("env NCR_CAPTURE=1", env["NCR_CAPTURE"] == "1")
 #    read——容器卡在啟動，而畫面上只看得到「一直在建立中」。
 check("🔴 capture 開著時一定帶 NCR_CAPTURE_SCOPE（否則容器卡在 read）",
       env.get("NCR_CAPTURE_SCOPE") in ("all", "model", "1", "2"))
-# ADR 0007 的落盤要求還在，但落點改成 per-user（ADR 0016）——見下方「per-user 狀態空間」
+# ADR 0007 的落盤要求還在，但落點改成 per-user（ADR 0014）——見下方「per-user 狀態空間」
 # 段落。這裡 MOUNTS 是空的（測試隔離），所以連 addon 都不會掛，只驗 env 與 port。
 # ADR 0008：port 屬 on-demand view 範疇，create 不再發布 host port
 check("create 不再發布 host port", "ports" not in kw)
@@ -137,7 +137,7 @@ check("預設為 opus / high",
 check("as_dict 往返保留 model/effort",
       _P.from_dict({"model": "sonnet", "effort": "max"}).as_dict()["effort"] == "max")
 
-print("== SSH agent 轉發：預設關，設了才掛（opt-in，ADR 0012）==")
+print("== SSH agent 轉發：預設關，設了才掛（opt-in，ADR 0011）==")
 # 預設關這件事要有斷言守著：它掛的是「能以你的身分認證任何主機」的東西，
 # 哪天有人手滑給 SSH_AUTH_SOCK_HOST 一個預設值，這裡要立刻紅。
 check("預設不掛（連 mounts 這個 key 都不出現）",
@@ -211,9 +211,9 @@ for label, raw, want in [
 for bad in (None, "", "not-a-time", "2026-13-45T99:99:99Z"):
     check(f"解不出來回 None：{bad!r}", parse_docker_time(bad) is None)
 
-print("\n== per-user 狀態空間（ADR 0016）==")
+print("\n== per-user 狀態空間（ADR 0014）==")
 # ⚠ 這裡原本是 `_symlink_overlays` 的回歸測試（把 host ~/.claude 底下的 symlink 逐一疊回
-#   容器內）。ADR 0016 之後 host 的 ~/.claude 完全不進 session，那個函式連同它那顆 runc
+#   容器內）。ADR 0014 之後 host 的 ~/.claude 完全不進 session，那個函式連同它那顆 runc
 #   地雷（在 dangling symlink 上建 mountpoint，新版 runc 會間歇性拒絕）一起退場。
 import tempfile  # noqa: E402
 
@@ -388,8 +388,8 @@ finally:
     config.MOUNTS, config.SPACE_HOST, config.SPACE_SELF = _saved
     __import__("shutil").rmtree(_space, ignore_errors=True)
 
-print("\n== run script 的行為必須零偏差（ADR 0016 的硬約束）==")
-# ⚠ ADR 0016 把「run script 沒有受影響」列為硬約束，但那原本只靠讀 diff 推論。這裡把它
+print("\n== run script 的行為必須零偏差（ADR 0014 的硬約束）==")
+# ⚠ ADR 0014 把「run script 沒有受影響」列為硬約束，但那原本只靠讀 diff 推論。這裡把它
 #   釘成測試：兩條路徑**共用同一份 entrypoint.sh**（ADR 0006 的 SSOT），所以只要那份檔案
 #   裡沒有 per-user 的概念，人類跑 run script 的那條路就不可能被這次改動碰到。
 _repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

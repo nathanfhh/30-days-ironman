@@ -26,7 +26,7 @@ from server import config, db  # noqa: E402
 config.ENTRYPOINT = None  # 走 entrypoint.sh（不覆蓋）
 # 只掛 stub claude（免 token），不掛 ~/.claude；entrypoint.sh 由 build_run_kwargs bind-mount repo 版。
 config.MOUNTS = {STUB: {"bind": "/home/nathan/.local/bin/claude", "mode": "ro"}}
-# ⚠ per-user 空間也要指進 tmpdir（ADR 0016）。這支的 MOUNTS **非空**，所以 create() 會真的
+# ⚠ per-user 空間也要指進 tmpdir（ADR 0014）。這支的 MOUNTS **非空**，所以 create() 會真的
 #   跑 provision_user_space——不隔離的話它會在使用者**真實的家目錄**底下建出 user-N/，
 #   那正是 CLAUDE.md 禁止清單第五條（測試不可以碰使用者的真實檔案）。
 #   後果不只是「多一個目錄」：留下的 owner.json 記的擁有者是這支測試的 system，與正式 DB 的

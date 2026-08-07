@@ -13,8 +13,8 @@ dependencies = [
     # ⚠ 下限 6.0：`Process.net_connections()` 是 6.0 才用的名字（5.x 叫 connections()），
     #   而呼叫它的那段包在 suppress 裡——裝到 5.9.x 會靜靜少掉「監聽位址」與「連線數」。
     "psutil>=6.0",
-    # 使用者自備 GitLab PAT 的靜態加密（ADR 0017）。金鑰由 SECRET_KEY 以 HKDF 導出，
-    # 不引入第二個秘密——見 server/crypto.py。用 Fernet 而不自刻 AES-GCM：
+    # 使用者貼進來的 CLI 授權 token 的靜態加密（ADR 0014）。金鑰由 SECRET_KEY 以 HKDF
+    # 導出，不引入第二個秘密——見 server/crypto.py。用 Fernet 而不自刻 AES-GCM：
     # nonce 重用與版本標記的坑不值得自己踩。
     "cryptography>=42",
 ]

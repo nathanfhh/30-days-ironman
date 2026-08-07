@@ -76,7 +76,7 @@ DEFAULT_EFFORT = os.environ.get("CLAUDE_PTY_DEFAULT_EFFORT", "high")
 # 所有走 docker API 的呼叫的上限（秒）。docker-py 預設是 **60**，而那個值在這裡是錯的：
 # 一顆卡住的容器（實測 2026-07-27：卡在 `removing` 40 分鐘，daemon 對它的 inspect/logs
 # 一律不回應）會讓每一次呼叫等滿 60 秒——reconciler 整輪陣亡、web 的 thread 被吃光。
-# 縮短不能解決連坐（那要靠「列表只讀 DB」+ 逐顆隔離，ADR 0013），但它決定了單一次
+# 縮短不能解決連坐（那要靠「列表只讀 DB」+ 逐顆隔離，ADR 0012），但它決定了單一次
 # 意外的代價：15 秒對正常操作綽綽有餘（建立容器不走這條，它有自己的長 timeout）。
 DOCKER_TIMEOUT = float(os.environ.get("CLAUDE_PTY_DOCKER_TIMEOUT", "15"))
 
@@ -103,11 +103,11 @@ CLAUDE_MITM_SELF = os.path.join(_SELF_REPO_ROOT, "mitm")   # 存在性檢查用
 # 對不上就是「錄了個寂寞」，而且沒有任何錯誤訊息。
 MITM_ADDON_BIND = "/home/nathan/ncr-mitm"
 # ⚠ 這裡曾經有 MITM_OUTPUT_DIR / MITM_OUTPUT_DIR_SELF：capture 的 .mitm 共用落在
-#   host 的一個共用目錄。ADR 0016 之後那是 per-user 的（space 底下的 user-{id}/mitm，
+#   host 的一個共用目錄。ADR 0014 之後那是 per-user 的（space 底下的 user-{id}/mitm，
 #   見 user_mounts）——那個目錄裡是**完整的 API 請求本文**，共用它是先前盤點時最容易
 #   漏掉的一項。容器內的落點仍是同一個路徑，見下方 MITM_BIND。
 
-# --- SSH agent 轉發：預設關，由部署者明確開啟（ADR 0012）------------------------------
+# --- SSH agent 轉發：預設關，由部署者明確開啟（ADR 0011）------------------------------
 #
 # 為什麼不像 CLI 憑證（~/.claude）那樣預設掛：兩者的爆炸半徑不同。
 #   - CLI 憑證只能用來呼叫那家 AI 供應商的 API。而且共用它本來就是這個系統的前提——
@@ -198,7 +198,7 @@ TTYD_BIND = os.environ.get("CLAUDE_PTY_TTYD_BIND", "127.0.0.1")
 # 供 nginx / 管理畫面組 URL 用；容器化時設為控制平面的容器名。
 TTYD_HOST = os.environ.get("CLAUDE_PTY_TTYD_HOST", "127.0.0.1")
 
-# --- per-user 的 agent 狀態空間（ADR 0016）------------------------------------------
+# --- per-user 的 agent 狀態空間（ADR 0014）------------------------------------------
 #
 # 每個使用者一個目錄，以 CLAUDE_CONFIG_DIR 把 CLI 的整份狀態（transcript、settings、
 # skills、.claude.json）指過去。host 的 ~/.claude **不再進 session**。
@@ -237,7 +237,7 @@ NCR_HOME_BIND = "/home/nathan/ncr"
 # capture 的落點（entrypoint.sh 的 CAPTURE_DIR）。**衍生值，不要另外掛。**
 MITM_BIND = f"{NCR_HOME_BIND}/mitm"
 # 使用者自己的持久化空間。session 內唯一「寫了會留下來」的地方（cwd 是 writable layer，
-# 容器一收就沒）。⚠ 目前**沒有任何大小限制**，見 ADR 0016 的「暫不做磁碟配額」。
+# 容器一收就沒）。⚠ 目前**沒有任何大小限制**，見 ADR 0014 的「暫不做磁碟配額」。
 #
 # ⚠ 曾經是 `/data`，2026-07-29 改成這裡，兩個理由：
 #   1. `/data` 在**控制平面**那邊已經是 registry（SQLite）的落點——同一個字串在兩個容器裡
@@ -248,12 +248,12 @@ MITM_BIND = f"{NCR_HOME_BIND}/mitm"
 #   （在真 image 裡驗過），而錯誤訊息完全指不到原因；cwd 裡的批次刪除也會掃到它。
 DATA_BIND = "/home/nathan/persistent-data"
 
-# `.claude.json` 的最小種子（ADR 0016）。全新空間的第一場會連撞三道互動對話，而
+# `.claude.json` 的最小種子（ADR 0014）。全新空間的第一場會連撞三道互動對話，而
 # `_is_ready()` 只看「畫面靜止」——對話框畫面一樣靜止，於是初始 prompt 被打進選單裡。
 # 最惡劣的是 bypass 那道：預設選項停在「No, exit」，送出的第一個 Enter 就是結束容器。
 #
 # ⚠ 這是 CLI 的私有格式（實測 2.1.220），升版可能改名，而症狀只出現在「某個使用者的
-#   第一場」，極難聯想。image 換版時照 ADR 0016 的方法論煙測一次：**要用 entrypoint 的
+#   第一場」，極難聯想。image 換版時照 ADR 0014 的方法論煙測一次：**要用 entrypoint 的
 #   真實 argv**（`--dangerously-skip-permissions`，少了它看不到 bypass 那道），
 #   **比對字串不可以含空白**（TUI 用游標移動排版，字之間沒有真的空白字元）。
 CLAUDE_JSON_SEED = {
@@ -303,7 +303,7 @@ def user_space(user_id: int, *, host: bool = True) -> str:
 
 
 def user_mounts(user_id: int) -> dict:
-    """某個使用者的 per-user 掛載（ADR 0016）。key 是 **host 路徑**（daemon 解讀）。
+    """某個使用者的 per-user 掛載（ADR 0014）。key 是 **host 路徑**（daemon 解讀）。
 
     ⚠ 與 MOUNTS 吃**同一個** CLAUDE_PTY_NO_MOUNTS 開關。少了這一條，六個用該旗標保持
       隔離的測試檔會開始在 host 上長出 user-N 目錄，而它們正是為了「絕不碰使用者真實

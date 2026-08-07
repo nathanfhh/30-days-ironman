@@ -249,7 +249,7 @@ try:
     with __import__("contextlib").suppress(Exception):
         mgr.terminate(stuck["id"])
 
-    print("== 狀態與求證時刻要寫進 DB（列表只讀這兩欄，ADR 0013）==")
+    print("== 狀態與求證時刻要寫進 DB（列表只讀這兩欄，ADR 0012）==")
     fresh = mgr.create()
     time.sleep(1.2)
     with db.session_scope() as s:
@@ -266,7 +266,7 @@ try:
     check("list() 回得出 state_checked_at", bool(listed.get("state_checked_at")))
     check("list() 的 state 來自最後求證的值", listed.get("state") == "running")
 
-    print("== ready 補記：建立時那條執行緒死掉也要有人補（ADR 0013）==")
+    print("== ready 補記：建立時那條執行緒死掉也要有人補（ADR 0012）==")
     # 列表改成純讀 DB 之後，沒有人補 ready_at 的話這些 session 會**永遠**顯示未就緒，
     # 而它們其實好好地跑著。bash entrypoint 不會自己印 marker，這裡讓它印出來。
     from server.sessions import DRIVER_MARKER  # noqa: E402

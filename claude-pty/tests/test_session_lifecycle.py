@@ -101,7 +101,7 @@ try:
     check("新實例從 DB 讀得到同一 session", any(x["id"] == sid for x in mgr2.list()))
     check("新實例可查 status", mgr2.status(sid)["container"] == s["container"])
 
-    print("== 🔴 list() 完全不碰 docker（ADR 0013）==")
+    print("== 🔴 list() 完全不碰 docker（ADR 0012）==")
     # 曾經是「順手校正一下」：列表自己打 containers.list，未就緒的列再各打一次
     # docker logs。代價是**整張表的可用性綁在最慢的那顆容器上**——2026-07-27 一顆容器
     # 卡在 removing，這支每 15 秒被輪詢一次的端點每次都等滿 timeout，thread 被吃光，
@@ -183,7 +183,7 @@ try:
     with db.session_scope() as _s:
         rows_before = _s.query(SessionRow).count()
     ct_before = len(_leftovers())
-    # ⚠ 這裡原本注入的是 capture 落盤目錄的 makedirs 失敗。ADR 0016 之後那個目錄變成
+    # ⚠ 這裡原本注入的是 capture 落盤目錄的 makedirs 失敗。ADR 0014 之後那個目錄變成
     #   per-user 空間的一部分，改由 provision_user_space() 建——失敗注入也跟著搬過來，
     #   順便補上 provision 的失敗路徑（它跑在 create 的關鍵路徑上，之前沒有測試蓋到）。
     _f = tempfile.NamedTemporaryFile(delete=False)   # 空間根指向**檔案** → makedirs 必拋
@@ -285,7 +285,7 @@ try:
         _r = _s.get(SessionRow, "resizespy001")
         check("DB 記下最後套用的尺寸", (_r.rows, _r.cols) == (60, 180))
 
-    print("== 列表的 ready 一律讀 DB，一次 docker logs 都不打（ADR 0013）==")
+    print("== 列表的 ready 一律讀 DB，一次 docker logs 都不打（ADR 0012）==")
     # 沿革：這條原本釘的是「**已經**就緒過的列不再打 docker logs」——那時未就緒的列
     # 仍然每次都問，因為 ready_at 可能因背景執行緒逾時而永遠是 NULL。
     # 2026-07-27 之後連那條也不打了：一顆卡住的容器讓那一發 logs 等滿 timeout，

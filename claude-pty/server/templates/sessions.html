@@ -230,7 +230,7 @@
     })), cur ? cur.slug : undefined);
     rebuildEffortPicker();
     // 目錄的來源要誠實講：離線後備是「猜的」，過期的是「真的但舊」——兩者都不該
-    // 看起來像剛抓的（同列表那顆 state_checked_at 的紀律，ADR 0013）。
+    // 看起來像剛抓的（同列表那顆 state_checked_at 的紀律，ADR 0012）。
     const note = document.getElementById("model-source");
     if (note) {
       note.textContent =
@@ -470,7 +470,7 @@
   // 不回應），而那正是這個標記要讓人看見的事。
   const STALE_STATE_SECONDS = 120;
 
-  /** 這一列的狀態是幾點跟 dockerd 求證來的（ADR 0013）。回 {text, tip, stale}。 */
+  /** 這一列的狀態是幾點跟 dockerd 求證來的（ADR 0012）。回 {text, tip, stale}。 */
   function freshness(iso, nowIso) {
     // ⚠ 沒問到過**不可以**顯示成「剛剛確認」。NULL 的意思是「從來沒問到」——剛建立、
     //   或這一列建立於這個欄位存在之前。把它畫成新鮮的，等於用最有信心的樣子說謊。
@@ -566,7 +566,7 @@
       } else if (booting) {
         state = ["booting", "啟動中", "fa-solid fa-spinner fa-spin"];
       }
-      // 這一列的狀態是**幾點跟 dockerd 求證來的**（ADR 0013）。列表本身完全不打 docker，
+      // 這一列的狀態是**幾點跟 dockerd 求證來的**（ADR 0012）。列表本身完全不打 docker，
       // 所以「看起來是即時的」會是謊——一顆卡住的容器曾經讓整張表停在 40 分鐘前的樣子，
       // 而畫面上沒有任何線索。把新鮮度講出來，舊了還會自己標紅。
       const checked = freshness(s.state_checked_at, nowIso);

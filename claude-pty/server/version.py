@@ -125,5 +125,5 @@ def summary() -> dict:
     #   只是佔掉一格讓真正要看的東西變得更難找。要查的時候 `docker compose exec` 一行就有。
     # ⚠ **刻意不列 session image 的版本。** 那要打一次 docker inspect，而
     #   「每次 render 都問 dockerd」正是 2026-07-27 讓列表停擺 40 分鐘的那個形狀
-    #   （ADR 0013）。每一場用的是哪一版 image 已經逐列顯示在 session 列表上了。
+    #   （ADR 0012）。每一場用的是哪一版 image 已經逐列顯示在 session 列表上了。
     return {"modules": mods}

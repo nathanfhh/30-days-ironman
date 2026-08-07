@@ -201,7 +201,7 @@ for qs, label in (("", "無條件"), ("?cli=claude", "cli=claude"),
 check("篩過的總數確實比不篩少（否則上面整組會因為『反正全都回』而假通過）",
       hit("?capture=1")["total"] < hit("")["total"])
 
-# ADR 0013：列表不再自己問 docker，改回報「最後一次跟 dockerd 求證的時刻」。前端靠這個
+# ADR 0012：列表不再自己問 docker，改回報「最後一次跟 dockerd 求證的時刻」。前端靠這個
 # 欄位顯示新鮮度——欄位掉了的話畫面會整片變成「未確認」，而那看起來像資料壞掉。
 check("每一列都帶著 state_checked_at 欄位（可以是 null，但鍵必須在）",
       all("state_checked_at" in row for row in hit("")["sessions"]))

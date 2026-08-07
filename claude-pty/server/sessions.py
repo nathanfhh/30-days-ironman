@@ -57,7 +57,7 @@ def _close_socketio(sock) -> None:
       GC 收掉 docker-py 內部的參照環（sock._response → connection → sock）才會消失，
       而那是不定時的。
 
-    這個「晚幾秒」曾讓整站停擺 5 小時（ADR 0019）：dockerd 持續往那條沒人讀的連線灌容器
+    這個「晚幾秒」曾讓整站停擺 5 小時（ADR 0015）：dockerd 持續往那條沒人讀的連線灌容器
     輸出，208KB 的 socket 緩衝一滿，dockerd 的 attach copier 就卡在寫我們這個 fd，連鎖
     讓該容器的 stdout broadcaster 抱著 mutex 死鎖——容器輸出全凍、`docker rm` 也一起卡住。
     高輸出的 TUI 實測約 100 秒就能填滿，所以「GC 早晚會收」不是安全的假設。
@@ -94,7 +94,7 @@ def _discard_attach(sock, client) -> None:
     """attach 途中失敗時的清理：能關的都關掉，例外一律吞掉（我們正在處理另一個例外）。
 
     ⚠ 與 `close_attach()` 走同一支 `_close_socketio()`——這條失敗路徑同樣不能只關 wrapper，
-      否則洩漏的 fd 一樣會把 dockerd 的 broadcaster 拖死（ADR 0019）。
+      否則洩漏的 fd 一樣會把 dockerd 的 broadcaster 拖死（ADR 0015）。
     """
     if sock is not None:
         _close_socketio(sock)
@@ -528,7 +528,7 @@ def _claude_json_seed() -> dict:
 
 
 def provision_user_space(user_id: int, username: str) -> None:
-    """備妥某個使用者的狀態空間（ADR 0016）。idempotent，每次建立 session 都會呼叫。
+    """備妥某個使用者的狀態空間（ADR 0014）。idempotent，每次建立 session 都會呼叫。
 
     **lazy 而不是建帳號時就建**：帳號早就存在了（這個功能是後來才加的），lazy 天生
     idempotent、不需要 backfill，而且「沒開過 session 的人不佔目錄」也比較乾淨。
@@ -640,7 +640,7 @@ def provision_user_space(user_id: int, username: str) -> None:
 def preflight() -> list[str]:
     """啟動自檢：回傳需要提醒使用者的問題清單。
 
-    ⚠ **這支有副作用**：它會 `makedirs` per-user 空間的根目錄（ADR 0016）。那不是「檢查」
+    ⚠ **這支有副作用**：它會 `makedirs` per-user 空間的根目錄（ADR 0014）。那不是「檢查」
       該做的事，但必須有人做——不先建的話 dockerd 會在 bind mount 時把它建成 root:root，
       控制平面就寫不進去。放在這裡是因為它是啟動路徑上唯一跑得夠早的地方。
 
@@ -702,7 +702,7 @@ def preflight() -> list[str]:
         for host_path in config.MOUNTS:
             if not os.path.exists(host_path):
                 problems.append(f"掛載來源不存在（session 內可能缺設定/憑證）：{host_path}")
-    # per-user 空間的根目錄（ADR 0016）。這一個查的是 **SELF**——控制平面得自己在裡面
+    # per-user 空間的根目錄（ADR 0014）。這一個查的是 **SELF**——控制平面得自己在裡面
     # mkdir 與寫種子檔，所以不是「daemon 看得到就好」，是「我現在就要寫得進去」。
     # 建不出來的話每一次建立 session 都會失敗，而錯誤會出現在很後面（provision 拋出），
     # 開機就講清楚比較好。
@@ -714,7 +714,7 @@ def preflight() -> list[str]:
         except OSError as e:
             problems.append(
                 f"per-user 狀態空間不可寫（{config.SPACE_SELF}）：{e}。"
-                f"每個 session 的 ~/.claude 都住在這底下（ADR 0016），"
+                f"每個 session 的 ~/.claude 都住在這底下（ADR 0014），"
                 f"不能寫就一個 session 都建不起來。容器化部署請確認該路徑已掛進控制平面"
                 f"且擁有者是 APP_UID，並以 CLAUDE_PTY_SPACE_SELF 指明容器內看到的路徑。")
         # 控制平面建目錄用的是**它自己**的 uid，session 容器裡的寫入者則是 nathan
@@ -736,7 +736,7 @@ def preflight() -> list[str]:
             f"（預設頁大小會去撞 MAX_PAGE_SIZE 的上限檢查）。")
     if config.SSH_AUTH_SOCK_HOST:
         # 這不是「設錯了」而是「你開了一個很大的權限」——開著是合法的，但每次啟動都要
-        # 講一次：沒有租戶隔離，這把 agent 等於發給每一個能建立 session 的帳號（ADR 0012）。
+        # 講一次：沒有租戶隔離，這把 agent 等於發給每一個能建立 session 的帳號（ADR 0011）。
         problems.append(
             f"SSH agent 轉發已開啟（{config.SSH_AUTH_SOCK_HOST} → "
             f"{config.SSH_AUTH_SOCK_BIND}）：每個 session 都能以你的身分認證任何信任該 key "
@@ -759,7 +759,7 @@ def preflight() -> list[str]:
 class SessionManager:
     def __init__(self) -> None:
         # ⚠ 一定要給 timeout。docker-py 預設 60 秒，而「一顆容器卡住 → 每個呼叫等滿 60 秒
-        #   → gunicorn 的 thread 全被吃光」正是 2026-07-27 那次全站停擺的機制（ADR 0013）。
+        #   → gunicorn 的 thread 全被吃光」正是 2026-07-27 那次全站停擺的機制（ADR 0012）。
         self._docker = docker.from_env(timeout=config.DOCKER_TIMEOUT)
 
     # --- 環境快照 -------------------------------------------------------------
@@ -828,7 +828,7 @@ class SessionManager:
         slug = _slugify(display_name)
         name = f"claude-pty-{sid}-{slug}" if slug else f"claude-pty-{sid}"
         # ⚠ 這裡曾經算過一個 `capture` 旗標，只為了決定要不要先 mkdir capture 的落盤目錄。
-        #   ADR 0016 之後那個目錄是 per-user 空間的一部分，由 provision_user_space() 無條件
+        #   ADR 0014 之後那個目錄是 per-user 空間的一部分，由 provision_user_space() 無條件
         #   建出來（不分 capture 開關——少一個條件分支，也就少一個「開了錄製才發現目錄沒建」）。
 
         # telemetry：**在這裡探 jaeger 通不通，並據此決定送不送 + 座標記什麼**。
@@ -855,7 +855,7 @@ class SessionManager:
             owner = s.get(User, user_id)
             if owner is None:
                 raise SessionError(f"未知 user_id：{user_id}")
-            # 交易外要用它驗 per-user 空間的擁有者（ADR 0016）。**在這裡取出來**——
+            # 交易外要用它驗 per-user 空間的擁有者（ADR 0014）。**在這裡取出來**——
             # 出了 session_scope 之後 owner 是 detached 的，再讀屬性會炸。
             owner_username = owner.username
             active = (s.query(SessionRow)
@@ -873,7 +873,7 @@ class SessionManager:
         # 收掉可能已建立的 container——makedirs 也必須在 try 內（否則繞過補償、白佔配額）。
         container = None
         try:
-            # per-user 狀態空間（ADR 0016）：要掛的目錄，以及第一次才寫的 .claude.json 種子。
+            # per-user 狀態空間（ADR 0014）：要掛的目錄，以及第一次才寫的 .claude.json 種子。
             # ⚠ **不 suppress**：這些不是「有更好、沒有也還好」的東西——目錄缺了會讓
             #   dockerd 自己建（Linux 上是 root:root，容器寫不進去），種子缺了會讓第一場
             #   撞上 Bypass Permissions 對話而 driver 一按 Enter 就把容器結束掉。
@@ -1059,7 +1059,7 @@ class SessionManager:
     def list(self, user_id: int | None = None,
              limit: int | None = None, offset: int = 0,
              filters: Filters | None = None) -> list[dict]:
-        """列出 session。**這條路徑完全不碰 docker**（ADR 0013）。
+        """列出 session。**這條路徑完全不碰 docker**（ADR 0012）。
 
         每一列回的是「最後一次真的問到 dockerd 的狀態」加上「那是什麼時候問的」
         （`docker_state` / `state_checked_at`，由 reconciler 每輪更新），前端把新鮮度
@@ -1084,7 +1084,7 @@ class SessionManager:
         """登錄筆數（分頁用）。
 
         ⚠ 呼叫順序曾經是有意義的（`list()` 會在當頁順手對帳掉幾列，所以要先列再數）。
-          ADR 0013 之後列表不再對帳，兩者都只讀 DB，順序不影響結果。
+          ADR 0012 之後列表不再對帳，兩者都只讀 DB，順序不影響結果。
 
         ⚠ 必須套用與 list() 相同的 filters：兩者不一致的話總筆數會比實際多，
           頁碼跟著算錯，最後一頁會是空白。"""
@@ -1135,7 +1135,7 @@ class SessionManager:
     def status(self, sid: str, with_ready: bool = False) -> dict:
         """單筆查詢。這裡**仍然**問 dockerd——問的是一顆指定的容器，呼叫端要的就是它的
         當下狀態（`?wait_ready` 的輪詢靠這條）。與列表的差別是爆炸半徑：問壞了只有這一筆
-        受影響，不會讓別人的列一起看不到（ADR 0013）。
+        受影響，不會讓別人的列一起看不到（ADR 0012）。
 
         問不到時（daemon 不回應／逾時）**不拋錯**，退回 DB 記著的最後已知狀態，並讓
         `state_checked_at` 維持舊值——呼叫端因此看得出「這筆的狀態是舊的」。
@@ -1168,7 +1168,7 @@ class SessionManager:
     #   交易，讀後升級成寫的併發撞在一起，回 500 `database is locked`
     #   （busy_timeout 救不了 upgrade deadlock，那正是本專案其他熱路徑用 BEGIN IMMEDIATE
     #   的理由）。那兩欄的唯一寫入者是 reconciler，新鮮度就以對帳週期為準——列表本來就
-    #   誠實標著「幾點求證的」，多這一發寫入買到的東西遠小於它的代價（ADR 0013）。
+    #   誠實標著「幾點求證的」，多這一發寫入買到的東西遠小於它的代價（ADR 0012）。
 
     def rename(self, sid: str, display_name: str | None) -> dict:
         """改顯示名稱（container 名稱不動，理由見 app.rename_session）。"""
@@ -1185,7 +1185,7 @@ class SessionManager:
         回 `"running"` 之類的狀態字串，或 `"gone"`（container 不在了）；**問不到就回
         `None`**——呼叫端要把 None 當「不知道」而不是「壞了」，見下。
 
-        ⚠ 這**不違反 ADR 0013**，界線在「誰觸發」：那份 ADR 禁的是**列表路徑**自己打
+        ⚠ 這**不違反 ADR 0012**，界線在「誰觸發」：那份 ADR 禁的是**列表路徑**自己打
           docker（一顆卡在 `removing` 的容器曾讓全站停擺 40 分鐘）。這支只在使用者
           **明確按下開啟終端**時跑一次，卡住也只卡他自己那一次點擊。
 
@@ -1362,7 +1362,7 @@ class SessionManager:
     def _row(self, sid: str) -> dict:
         """讀一列並轉成 plain dict（脫離 ORM session，避免呼叫端碰到 detached 物件）。
 
-        `state` 先填**最後已知**的（ADR 0013）：問得到 dockerd 的呼叫端會自己蓋掉它，
+        `state` 先填**最後已知**的（ADR 0012）：問得到 dockerd 的呼叫端會自己蓋掉它，
         問不到的就以這個為準——預設值不該是「DB 以為的」而是「上次真的看到的」。
         """
         with session_scope() as s:
@@ -1393,7 +1393,7 @@ def _ready_from_row(row: SessionRow) -> bool:
       `_is_ready()` 成立的那一刻被寫進去（`_stamp_ready`，條件式 UPDATE、寫進去不會變
       回 NULL），所以這裡讀 DB 等價於當時問過 docker logs。就緒是單調的，唯一的差別是
       「什麼時候被觀察到」——正常路徑由 create 的背景執行緒當場記下，那條執行緒死掉時
-      由 reconciler 補（ADR 0013）。
+      由 reconciler 補（ADR 0012）。
     """
     return row.ready_at is not None
 
@@ -1424,7 +1424,7 @@ def _to_dict(row: SessionRow, live_state: str | None = None,
                              if row.image_created_at else None),
         "created_at": row.created_at.isoformat(),
         "last_active_at": row.last_active_at.isoformat(),
-        # `state` 是什麼時候跟 dockerd 求證來的（ADR 0013）。**None＝從來沒問到過**，
+        # `state` 是什麼時候跟 dockerd 求證來的（ADR 0012）。**None＝從來沒問到過**，
         # 前端要照實說「尚未確認」——把沒問到過畫成「剛剛確認」是這個欄位存在的反面。
         "state_checked_at": (row.state_checked_at.isoformat()
                              if row.state_checked_at else None),
@@ -1464,7 +1464,7 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
       - 預設 None → 走 image 的 entrypoint.sh，用 env 非互動答選單（第一層），並補 docker 能力（第二層，
         env 給不了的 cap_add / network / mount）。
 
-    `user_id` 決定 per-user 狀態空間掛哪一份（ADR 0016）。**只收 id、不查 DB**——這支要
+    `user_id` 決定 per-user 狀態空間掛哪一份（ADR 0014）。**只收 id、不查 DB**——這支要
     維持純函式才單元測試得動；目錄有沒有備妥是 `provision_user_space()` 的事（create 會先叫）。
     """
     kwargs: dict = {
@@ -1484,7 +1484,7 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     }
     volumes = {**config.MOUNTS, **config.user_mounts(user_id)}
 
-    # SSH agent 轉發（opt-in，ADR 0012）。在 escape hatch 之前處理：它是**部署層**的能力，
+    # SSH agent 轉發（opt-in，ADR 0011）。在 escape hatch 之前處理：它是**部署層**的能力，
     # 不隨 profile 或 entrypoint 變——「這台開了轉發」就是每個 session 都有。
     #
     # ⚠ 這一條走 `mounts` 而不是 `volumes`，兩者對「來源不存在」的行為不同：
@@ -1529,7 +1529,7 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
 
     # ⚠ 這裡曾經有 `_symlink_overlays()`：把 host `~/.claude` 底下那些指向 repo 的 symlink
     #   逐一 :ro 疊回容器內同一個路徑，好讓 statusline 與 symlink 形式的 skill 在 session
-    #   裡看得到。ADR 0016 之後 host 的 `~/.claude` 根本不進 session（狀態是 per-user 的
+    #   裡看得到。ADR 0014 之後 host 的 `~/.claude` 根本不進 session（狀態是 per-user 的
     #   全新空間），這件事沒有對象了。
     #
     #   順帶拆掉一顆地雷：那個做法要 runc 願意在一個 **dangling symlink** 上建 mountpoint，
@@ -1567,7 +1567,7 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         # ⚠ 人自己開容器時不設它（預設 0.0.0.0），run script 的 `-p` 才轉得進去；
         #   docker 的 port forwarding 連的是容器內的介面，綁 loopback 會讓 UI 打不開。
         "NCR_MITM_WEB_BIND": "127.0.0.1",
-        # per-user 狀態空間（ADR 0016）。**這個 env 是整個機制的關鍵**：
+        # per-user 狀態空間（ADR 0014）。**這個 env 是整個機制的關鍵**：
         #   CLAUDE_CONFIG_DIR → transcript / settings / skills / .claude.json 全部改看
         #   這個目錄（實測：設了之後 host 的 ~/.claude 一次都不會被開）。不設的話
         #   .claude.json 會落在容器 writable layer，換一顆容器就沒了。
@@ -1602,7 +1602,7 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         # 存在性查 *_SELF、掛載用 host 路徑（同上，ADR 0009）
         if os.path.isdir(config.CLAUDE_MITM_SELF):     # redact addon 在才掛（否則 entrypoint fail-closed 跳過）
             volumes[config.CLAUDE_MITM_HOST] = {"bind": config.MITM_ADDON_BIND, "mode": "ro"}
-        # capture 的落盤目錄已由 user_mounts() 掛成 per-user（ADR 0016）——它裡面是**完整的
+        # capture 的落盤目錄已由 user_mounts() 掛成 per-user（ADR 0014）——它裡面是**完整的
         # API 請求本文**（prompt 全文），比 transcript 更敏感，共用一個目錄是先前盤點時
         # 最容易漏掉的那一項。掛載本身無條件（不分 capture 開關），少一個條件分支。
         # mitmweb UI 不再由控制平面發布 host port（ADR 0008：ttyd/port 屬 on-demand view 範疇）；

@@ -6,7 +6,7 @@
 給的 `SocketIO` wrapper，而 `SocketIO.close()` 不關底層 fd（只做 `_decref_socketios()`）
 ——當下沒有任何錯誤，fd 要等 CPython GC 收掉 docker-py 內部的參照環才消失。那段空窗期
 dockerd 仍往那條沒人讀的連線灌容器輸出，208KB 緩衝一滿就把該容器的 stdout broadcaster
-鎖死：輸出全凍、`docker rm` 也卡住（2026-07-30 實測 5 小時，ADR 0019）。
+鎖死：輸出全凍、`docker rm` 也卡住（2026-07-30 實測 5 小時，ADR 0015）。
 
 所以這裡驗的不是「close 有沒有被呼叫」，而是**底層 fd 有沒有真的關掉**——用 socketpair
 ＋真的 `socket.SocketIO` 複製 docker-py 7.2.0 的回傳形狀，斷言關完之後 fd 不可用。

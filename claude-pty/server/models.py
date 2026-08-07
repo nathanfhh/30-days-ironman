@@ -151,7 +151,7 @@ class Session(Base):
     # 數字：restricted profile 的 trivy DB 沒命中快取時會從 1 秒暴增到 36 秒，沒有這個
     # 欄位就只能靠人盯著碼表才發現。NULL＝還沒就緒過（或建立於此欄位存在之前）。
     ready_at: Mapped[_dt.datetime | None] = mapped_column(UtcDateTime, nullable=True)
-    # 最後一次**真的問到 dockerd** 的容器狀態，與問到的時刻（ADR 0013）。
+    # 最後一次**真的問到 dockerd** 的容器狀態，與問到的時刻（ADR 0012）。
     # 列表不再自己打 docker（一顆卡住的容器會拖垮整張表），改讀這兩欄並把新鮮度顯示
     # 出來——「這是兩分鐘前跟 dockerd 求證過的」是誠實的，「看起來即時、其實卡住了」不是。
     # ⚠ **唯一的寫入者是 reconciler。** 單筆查詢（status）問到即時狀態只放進 response，

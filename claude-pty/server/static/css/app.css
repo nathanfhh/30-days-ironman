@@ -1,4 +1,4 @@
-/* agent-tty 控制台設計系統
+/* claude-pty 控制台設計系統
  *
  * 語意化 custom properties：所有顏色都以「用途」命名（--color-surface / --color-signal-running），
  * 不以色相命名（不會出現 --blue-500）。因此換主題只需覆寫這些變數的值，版面與元件零改動。
@@ -118,7 +118,7 @@ a { color: var(--color-accent); text-decoration: none; }
 a:hover { color: var(--color-accent-hover); }
 
 /* ── 版式 ───────────────────────────────────────────────────────────────────── */
-/* ⚠ `--font-display`（襯線）**只用在 agent-tty 這個名字本身**：masthead 的招牌與登入頁
+/* ⚠ `--font-display`（襯線）**只用在 claude-pty 這個名字本身**：masthead 的招牌與登入頁
    的大字。它是識別，不是「標題的樣子」。其餘一律 `--font-ui`（黑體）——中文襯線在
    20–30px 這個區間筆畫細節多，辨識比黑體慢，而那些標題是要人一眼掃過就知道下面是什麼。
    （曾經有一個泛用的 `.display` class，沒有任何使用者，已刪。） */
@@ -261,7 +261,10 @@ a:hover { color: var(--color-accent-hover); }
   font-size: 12.5px;
   white-space: nowrap;
   color: var(--color-text-secondary);
-  cursor: default;
+  /* 它是連結（去帳號頁換 token），但不要長得像連結：全站 a 有底線與強調色，
+     套在這顆膠囊上會蓋掉 data-state 的狀態色，紅的變成藍的。 */
+  text-decoration: none;
+  cursor: pointer;
   /* ⚠ **這一行是對齊用的，不是排版偏好。** flex 的 align-items:center 對齊的是**行框**，
      而 CJK 字型的上下伸部不對稱：全站的 line-height 1.7 把多出來的 leading 不平均地
      分到上下，於是文字的**墨跡**落在行框中心偏下。旁邊那顆 info 是完美的正圓（來自
@@ -909,7 +912,7 @@ a:hover { color: var(--color-accent-hover); }
    ⚠ 內容那側**不可以**改用 text-align：`.manifest__status` 是 column flex，那顆 `<i>`
      與裸文字節點（匿名 flex item）的橫向位置由 align-items 決定，text-align 對它們無效。 */
 .manifest__row--head > div:nth-child(3) { text-align: center; }
-/* 這一列的狀態是幾點跟 dockerd 求證來的（ADR 0013）。刻意壓得比狀態本身低一階：
+/* 這一列的狀態是幾點跟 dockerd 求證來的（ADR 0012）。刻意壓得比狀態本身低一階：
    平時是背景資訊，過舊時才用警示色跳出來——那時它講的是「對帳可能卡住了」。 */
 .manifest__checked {
   font-size: 11px;
@@ -984,7 +987,7 @@ a:hover { color: var(--color-accent-hover); }
   white-space: nowrap;
   text-overflow: ellipsis;
   /* ⚠ `.chip` 是 line-height:1，文字盒的高度剛好等於字級——配上這裡的 overflow:hidden，
-     g／p 的下伸部會被**裁掉**（使用者回報 `gpt-` 的 g 少半截）。1.35 讓盒子容得下升部與
+     g／p 的下伸部會被裁掉（實測有下伸部的模型名會少半截）。1.35 讓盒子容得下升部與
      下伸部；chip 高度固定 1.75rem（28px），13.5px × 1.35 ≈ 18px 仍然放得進去。 */
   line-height: 1.35;
 }
@@ -1329,7 +1332,7 @@ button.tip, a.tip, .tip button, .tip a { cursor: pointer; }
   box-shadow: var(--shadow-raised);
 }
 .panel + .panel { margin-top: var(--space-5); }
-/* 面板標題用 UI 字（黑體），不用 display 襯線。襯線在 agent-tty 那個招牌上是識別，
+/* 面板標題用 UI 字（黑體），不用 display 襯線。襯線在 claude-pty 那個招牌上是識別，
    但套到「開一個新 Session」這種指令性的標題就只是裝飾——中文襯線在這個字級下筆畫
    細節多、辨識反而慢，而這行字是要人一眼知道下面那塊在做什麼。 */
 .panel__title {
@@ -2654,7 +2657,14 @@ button.drawer__hint:focus-visible { outline: 2px solid var(--color-accent); outl
 
 
 /* 表單主要動作靠右對齊 */
-.form-actions { display: flex; justify-content: flex-end; margin-top: var(--space-4); }
+/* 看起來停用、但按得下去。用在「按了會失敗、而失敗的理由才是重點」的按鈕上：
+   真的 disabled 不發事件，使用者只得到一顆按不動的東西、沒有人告訴他為什麼。
+   ⚠ 不要加 pointer-events:none——那正好會把唯一能解釋的那次點擊也擋掉。 */
+.btn--inert { opacity: .55; }
+.btn--inert:hover { opacity: .7; }
+
+.form-actions { display: flex; gap: var(--space-3); justify-content: flex-end;
+                margin-top: var(--space-4); }
 .form-actions--center { justify-content: center; }
 
 /* ── 主題切換的同心圓過渡（View Transition API）────────────────────────────────
