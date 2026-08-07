@@ -11,11 +11,14 @@
 from __future__ import annotations
 
 import datetime as _dt
+import os
+import re
 from contextlib import suppress
 from datetime import timedelta
 from functools import wraps
 
 from flask import Flask, g, jsonify, request, session
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from . import auth, config, views
 from . import sessions as sessions_mod
@@ -163,6 +166,12 @@ def _require_json_for_writes():
       - **完全沒有 body、也沒有 Content-Type**——前端 `api()` 在沒有 body 時就是這樣送的
         （DELETE /api/sessions/<sid> 等）。`<form>` 一定會帶 Content-Type，所以擋得到。
     """
+    # 檔案上傳是**唯一**的 multipart 例外（它就是為了送 JSON 塞不下的東西而存在）。
+    # 例外收到最窄：只有這一個端點、只有真的 multipart 才放行——而且它自己還要求一個
+    # form 設不了的自訂標頭（見 upload_file），所以這裡放行的 <form> 到了那邊仍會被擋。
+    if request.endpoint == "upload_file" \
+            and (request.content_type or "").startswith("multipart/form-data"):
+        return None
     if request.method in ("POST", "PUT", "PATCH", "DELETE") \
             and request.path.startswith("/api/") \
             and not request.is_json \
@@ -233,6 +242,19 @@ def _clean_display_name(body: dict) -> str | None:
 
 class BadInput(ValueError):
     pass
+
+
+# Flask 層的整包大小上限：上傳單檔上限 + multipart 邊界/欄位的開銷。**不是**逐檔的
+# 把關（那在 upload_file），是「再大就不必收進記憶體了」的保險絲。JSON 端點的 body
+# 本來就遠小於此，不受影響。
+app.config["MAX_CONTENT_LENGTH"] = config.UPLOAD_MAX_BYTES + 1024 * 1024
+
+
+@app.errorhandler(413)
+def _too_large(e):
+    # 預設是 HTML 錯誤頁；API 的呼叫端（含前端 api()）認的是 JSON 的 error 欄位。
+    mb = config.UPLOAD_MAX_BYTES // 2**20
+    return jsonify(error=f"檔案太大（上限 {mb} MB）"), 413
 
 
 @app.errorhandler(BadInput)
@@ -422,12 +444,15 @@ def admin_only(fn):
     return _wrapped
 
 
-def _owned(sid: str) -> dict:
+def _owned(sid: str, *, peek: bool = False) -> dict:
     """取得 session 並確認擁有權（ADR 0005 authz）。
 
     非擁有者一律回 404 而非 403——不洩漏「這個 session 是否存在」。
+
+    `peek=True` 走純 DB 讀（不問 dockerd）：給只需要擁有權事實、不需要容器當下狀態
+    的呼叫端（upload_file）。auth_check 因為要回 403 不回 404，自己走 manager.peek。
     """
-    s = manager.status(sid)
+    s = manager.peek(sid) if peek else manager.status(sid)
     if s["user_id"] != g.user["id"] and not g.user["is_admin"]:
         raise SessionNotFound(f"未知 session：{sid}")
     return s
@@ -846,6 +871,76 @@ def close_session_views(sid: str):
     """提前收掉 view（正常關網頁不需要——ttyd 會自己退）。"""
     _owned(sid)
     return jsonify(closed=views.close_views(sid))
+
+
+@app.post("/api/sessions/<sid>/upload")
+def upload_file(sid: str):
+    """把一個檔案放進這場 session 的持久化目錄，回容器內路徑（Day 26 的「貼圖」）。
+
+    PTY 是字元流，二進位資料過不去——所以是「人上傳、人貼路徑」：檔案落在他的
+    persistent-data（container 一收也還在），路徑由前端複製到剪貼簿，人自己貼進終端
+    讓 AI 去讀。**這條是唯一一條使用者能往伺服器寫東西的路**，把關全在這裡：
+
+      1. 副檔名白名單（config.UPLOAD_EXTS）——收「給 AI 讀的東西」，不是任意檔案
+      2. 大小上限（config.UPLOAD_MAX_BYTES 逐檔 + MAX_CONTENT_LENGTH 整包 + nginx）
+      3. 路徑穿越：檔名只取 basename、字元白名單化、落點 realpath 必須在 uploads/ 內
+         ——三道各自獨立成立，任何一道被改壞另外兩道還在
+      4. 自訂標頭 X-Requested-With：<form> 設不了它，堵掉 multipart 例外開出來的
+         表單型 CSRF 缺口（SameSite=Lax 是 site 級的，擋不住 localhost 其他 port）
+
+    檔名加時間戳前綴：剪貼簿貼圖的檔名幾乎都叫 image.png，不加就是互相覆蓋。
+    """
+    if request.headers.get("X-Requested-With") != "fetch":
+        raise BadInput("此端點只收前端 fetch（缺 X-Requested-With 標頭）")
+    _owned(sid, peek=True)          # 擁有權是 DB 事實，不必為了收檔問 dockerd
+    f = request.files.get("file")
+    if f is None or not f.filename:
+        raise BadInput("缺少檔案欄位 file")
+    stem, dot_ext = os.path.splitext(os.path.basename(f.filename))
+    ext = dot_ext[1:].lower()
+    if ext not in config.UPLOAD_EXTS:
+        raise BadInput(f"不支援的檔案類型 .{ext or '(無副檔名)'}"
+                       f"（收：{', '.join(sorted(config.UPLOAD_EXTS))}）")
+    # 字元白名單化，**不是**擋黑名單：../、絕對路徑、控制字元、shell 特殊字元一律變 _。
+    # 貼進終端的路徑不該需要引號才安全。
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._")[:80] or "file"
+
+    updir = os.path.join(config.user_space(g.user["id"], host=False),
+                         "persistent-data", "uploads")
+    os.makedirs(updir, mode=0o700, exist_ok=True)
+    # O_EXCL 搶名：同一秒兩發（連貼兩張圖）不互相覆蓋，撞名就加序號重試。
+    base = f"{_dt.datetime.now():%Y%m%d-%H%M%S}-{stem}.{ext}"
+    for n in range(100):
+        name = base if n == 0 else f"{base[:-len(ext) - 1]}-{n}.{ext}"
+        dest = os.path.join(updir, name)
+        # 落點必須在 uploads/ 底下——檔名已經白名單化，這道是獨立的最後防線
+        if os.path.realpath(dest) != os.path.join(os.path.realpath(updir), name):
+            raise BadInput("檔名不合法")
+        try:
+            fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise BadInput("同名檔案太多，換個檔名再試")
+    written = 0
+    try:
+        with os.fdopen(fd, "wb") as out:
+            while chunk := f.stream.read(64 * 1024):
+                written += len(chunk)
+                if written > config.UPLOAD_MAX_BYTES:
+                    raise RequestEntityTooLarge()
+                out.write(chunk)
+    except Exception:
+        with suppress(OSError):
+            os.remove(dest)         # 半個檔比沒有檔糟：路徑看起來能用，內容是斷的
+        raise
+    if written == 0:
+        with suppress(OSError):
+            os.remove(dest)
+        raise BadInput("檔案是空的")
+    return jsonify(path=f"{config.DATA_BIND}/uploads/{name}", name=name,
+                   bytes=written), 201
 
 
 @app.post("/api/sessions/<sid>/resize")

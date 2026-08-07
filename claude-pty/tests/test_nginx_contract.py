@@ -56,6 +56,13 @@ check("login 有獨立限流 zone", "limit_req_zone" in code and "rate=10r/m" in
 check("429 不是 503（讓打的人知道是被限流，不是伺服器掛了）",
       "limit_req_status 429;" in code)
 
+print("== 上傳：body 上限只放寬在那一條，不是全站 ==")
+check("全站上限仍是小的（4m）", "client_max_body_size 4m;" in code)
+_up = re.search(r"location ~ \^/api/sessions/\[A-Za-z0-9\]\+/upload\$ \{([^}]*)\}", code)
+check("upload 有自己的 location", _up is not None)
+check("上限放寬在裡面（12m，略大於 Flask 端的 10MB＋multipart 開銷）",
+      _up is not None and "client_max_body_size 12m;" in _up.group(1))
+
 print("== session 編號不可猜 ==")
 # 路由只認 [A-Za-z0-9]+；sid 本體是 uuid4 的 hex 截 12 碼（48 bits 隨機）。
 # 這裡釘住「隨機來源沒有被換成可預測的東西」——流水號或時間戳都會讓

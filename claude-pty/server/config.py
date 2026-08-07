@@ -321,6 +321,25 @@ def user_mounts(user_id: int) -> dict:
         os.path.join(root, "ncr"): {"bind": NCR_HOME_BIND, "mode": "rw"},
     }
 
+# --- 檔案上傳（貼圖）----------------------------------------------------------------
+#
+# 這是**唯一一條使用者能往伺服器寫東西的路**（PTY 是字元流，二進位資料過不去，所以
+# 另開一條：人上傳 → 檔案落在他的 persistent-data → 回容器內路徑 → 人自己貼給 AI）。
+# 正因為唯一，三道防護都在這裡集中：副檔名白名單、大小上限、路徑穿越（見 app.upload_file）。
+#
+# 白名單走「收什麼」不走「擋什麼」：用途是給容器裡的 AI 讀（圖與文件），不是給網頁
+# 回放——伺服器永遠不會把這些檔案再 serve 出去，所以風險面在「寫」不在「讀」。
+UPLOAD_EXTS = frozenset(
+    e.strip().lower().lstrip(".")
+    for e in os.environ.get("CLAUDE_PTY_UPLOAD_EXTS",
+                            "png,jpg,jpeg,gif,webp,pdf,txt,md").split(",")
+    if e.strip())
+# 單檔上限。⚠ 三個地方要同向：這裡（逐檔驗）、MAX_CONTENT_LENGTH（Flask 整包上限，
+# app.py 設為此值加 multipart 開銷）、deploy/nginx.conf 的 client_max_body_size
+# （upload 那條 location）。nginx 那道要**略大於**這裡，否則使用者撞到的是 nginx 的
+# 413 HTML 頁而不是我們講得清楚的 JSON。
+UPLOAD_MAX_BYTES = int(os.environ.get("CLAUDE_PTY_UPLOAD_MAX_BYTES", str(10 * 2**20)))
+
 # spawned container 的資源限制（ADR 0004 安全輪廓）。不掛 docker socket 是「不寫」即達成。
 MEM_LIMIT = os.environ.get("CLAUDE_PTY_MEM_LIMIT", "4g")
 NANO_CPUS = int(float(os.environ.get("CLAUDE_PTY_CPUS", "2")) * 1_000_000_000)

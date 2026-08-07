@@ -1017,6 +1017,15 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
                     aria-label="放大終端字級" title="放大字級">
               <i class="fa-solid fa-plus"></i></button>
           </span>
+          <!-- 貼圖／上傳：PTY 是字元流，檔案過不去，所以「人上傳、人貼路徑」——
+               上傳完路徑自動進剪貼簿，回終端 ⌘V 就是那個路徑。也接得住直接在終端裡
+               ⌘V 一張圖（見下面掛在 iframe 文件上的 paste 監聽）。
+               accept 只是選檔視窗的 UX 過濾，白名單的真相在後端 config.UPLOAD_EXTS。 -->
+          <button class="icon-btn" data-act="upload" data-testid="drawer-upload"
+                  aria-label="上傳檔案，路徑會複製到剪貼簿" title="上傳檔案（路徑進剪貼簿）">
+            <i class="fa-solid fa-paperclip"></i></button>
+          <input type="file" hidden data-testid="drawer-file"
+                 accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md">
           <button class="btn" data-act="pop">
             <i class="fa-solid fa-arrow-up-right-from-square"></i> 新分頁</button>
           <button class="icon-btn" data-act="close" data-testid="drawer-close"
@@ -1051,6 +1060,18 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
     }
     pending.hidden = true;
     attachSizeSync();
+    // 在終端裡直接 ⌘V 一張圖：貼上事件發生在 iframe 的文件裡，父頁面收不到，
+    // 所以監聽掛進去（同源，掛得上）。**只攔有檔案的貼上**——純文字放行給 xterm，
+    // 那是正常的貼字。攔到就上傳＋把路徑放進剪貼簿，人再 ⌘V 一次貼的就是路徑。
+    try {
+      frame.contentDocument.addEventListener("paste", (e) => {
+        const f = e.clipboardData?.files?.[0];
+        if (!f) return;
+        e.preventDefault();       // 檔案終端吃不了，別讓 xterm 收到一坨 base64
+        e.stopPropagation();
+        uploadFile(f);
+      }, true);
+    } catch { /* 已被導走（非同源）——上面那段本來就會顯示終端已結束 */ }
   });
 
   /* ── 讓容器裡的 TTY 跟著抽屜的大小走 ────────────────────────────────────────
@@ -1342,26 +1363,57 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
     hintBox.addEventListener("focusout", () => { focused = false; settle(); });
   }
 
+  /** 把路徑放進剪貼簿並 toast。
+   *  ⚠ toast 掛在 document.body（見 toast()），與抽屜同層而 z-index 100 > 90，
+   *    所以蓋得住抽屜。抽屜把 `.shell` 設成 inert，但 toast 不在 .shell 裡，
+   *    仍然點得到（e2e_drawer 有一條在守這件事）。
+   *  非 HTTPS 或權限被拒時 clipboard API 不可用——把路徑講出來讓人自己選，
+   *  總比一句「複製失敗」然後什麼都不能做好（同 account.html 既有的做法）。 */
+  async function copyPath(path, title = "已複製路徑") {
+    try {
+      await navigator.clipboard.writeText(path);
+      toast(title, "success", { body: path, duration: 4000 });
+    } catch {
+      toast("無法自動複製", "warning", { body: `請手動輸入：${path}`, duration: 10000 });
+    }
+  }
+
+  /** 上傳一個檔案到這一場的持久化目錄，成功後把容器內路徑放進剪貼簿。
+   *  不走 api()：這裡是 multipart 不是 JSON。Content-Type 交給瀏覽器組（boundary），
+   *  自己設會把 boundary 弄丟。X-Requested-With 是後端要求的反 CSRF 標頭（form 設不了）。 */
+  async function uploadFile(file) {
+    if (!file) return;
+    toast("上傳中…", "info", { body: file.name, duration: 2000 });
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}/upload`, {
+        method: "POST", body: fd, credentials: "same-origin",
+        headers: { "X-Requested-With": "fetch" },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+      await copyPath(data.path, "已上傳，路徑在剪貼簿");
+    } catch (ex) {
+      toast("上傳失敗", "error", { body: ex.message, duration: 8000 });
+    }
+  }
+
+  const fileInput = wrap.querySelector('[data-testid="drawer-file"]');
+  fileInput.addEventListener("change", () => {
+    uploadFile(fileInput.files?.[0]);
+    fileInput.value = "";     // 同一個檔連傳兩次也要觸發 change
+  });
+
   wrap.addEventListener("click", async (e) => {
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (act === "close" || act === "scrim") close();
     if (act === "font+") bumpFont(1);
     if (act === "font-") bumpFont(-1);
+    if (act === "upload") fileInput.click();
     if (act === "copy-persist") {
       const btn = e.target.closest("[data-act='copy-persist']");
-      const path = btn?.dataset.copy || "";
-      try {
-        await navigator.clipboard.writeText(path);
-        // ⚠ toast 掛在 document.body（見 toast()），與抽屜同層而 z-index 100 > 90，
-        //   所以蓋得住抽屜。抽屜把 `.shell` 設成 inert，但 toast 不在 .shell 裡，
-        //   仍然點得到（e2e_drawer 有一條在守這件事）。
-        toast("已複製路徑", "success", { body: path, duration: 3000 });
-      } catch {
-        // 非 HTTPS 或權限被拒時 clipboard API 不可用——把路徑講出來讓人自己選，
-        // 總比一句「複製失敗」然後什麼都不能做好（同 account.html 既有的做法）。
-        toast("無法自動複製", "warning",
-              { body: `請手動輸入：${path}`, duration: 10000 });
-      }
+      await copyPath(btn?.dataset.copy || "");
       return;
     }
     if (act === "pop") {
