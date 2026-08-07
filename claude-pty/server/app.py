@@ -708,28 +708,30 @@ def _cut_live_terminals(uid: int) -> None:
 
 @app.post("/api/users/me/password")
 def change_own_password():
-    """改自己的密碼。**操作中的這一台不會被登出。**
+    """改自己的密碼。**這個帳號現在連著的東西，全部斷掉——包含操作中的這一台。**
 
-    改密碼會遞增 password_version，所有既有 cookie 當場失效——那是要的
-    （另一台被偷走的裝置正是換密碼的理由）。但那道失效原本連「按下送出的這一台」都
-    掃進去：回應是 204，下一個請求就 401、跳回登入頁。他剛剛才用舊密碼證明過自己是
-    本人，把他踢出去沒有換到任何安全性；而畫面上的成功提示還寫著「你在**其他裝置**的
-    登入已失效」，等於說一套做一套。所以在這裡把這張 cookie 的版本續上。
+    改密碼會遞增 password_version，所有既有 cookie 當場失效。**不為「按下送出的這一台」
+    留特例**：多一個例外就多一件要記得的事，而它換到的只是少按幾個鍵。要繼續用就重新
+    登入，那本來就是剛才那個動作的意思。
 
-      跟著死——token 是給程式用的，換密碼本來就要重新拿一張。
+    ⚠ **但 cookie 不是真正的問題。** 版本號對一條**已經升級完成的 WebSocket 沒有任何
+      效果**——授權只發生在 nginx 把連線交給 ttyd 之前，之後那條線就是一條線，不會再有
+      人回頭問它還算不算數。所以就算把 cookie 全部作廢，一個已經打開的終端分頁**還是一個
+      能打字的 shell**。換密碼的理由如果是「我懷疑被盜了」，不收那條線等於沒做。
+      收的動作在 `_cut_live_terminals`。
 
-    ⚠ **開著的終端要收掉**（見 `_cut_live_terminals`）。換密碼的理由通常就是「我懷疑被
-      盜了」，而遞增 password_version 對一條已經升級完成的 ttyd WebSocket 沒有任何效果
-      ——不收的話，攻擊者的終端分頁繼續是一個可互動的 shell。
-      這連自己這一台開著的終端一起收，那是接受的代價：容器沒事，重開抽屜就好；
-      而「哪一條 WebSocket 屬於哪一台裝置」在伺服端分不出來。
+    ⚠ 不必分辨「哪一條連線屬於哪一台裝置」——伺服端本來也分不出來，而既然登入狀態
+      全部作廢了，終端就全部收。全部登出與全部切斷是同一個決定的兩半。
+      容器不受影響：重新登入、重開抽屜，接回的還是同一場。
     """
     body = _body()
     _reject_unknown(body, {"old_password", "new_password"})
-    user = auth.change_password(g.user["id"], body.get("new_password", ""),
-                                old_password=body.get("old_password"), require_old=True)
-    session["pwv"] = user["password_version"]
+    auth.change_password(g.user["id"], body.get("new_password", ""),
+                         old_password=body.get("old_password"), require_old=True)
     _cut_live_terminals(g.user["id"])
+    # ⚠ 這一張 cookie 也作廢：session 清掉，下一個請求就會被 gate 送回登入頁。
+    #   不清的話它會帶著舊版號活到下一次請求才被擋，中間那段是說一套做一套。
+    session.clear()
     return "", 204
 
 

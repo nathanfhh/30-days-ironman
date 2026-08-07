@@ -1,4 +1,4 @@
-"""靜態加密（HKDF 導出金鑰 + Fernet）。
+"""靜態加密（HKDF 導出金鑰 + Fernet）：使用者貼進來的 CLI 授權 token。
 
 金鑰從既有的 `SECRET_KEY` 以 HKDF 導出，**不另外保管第二個秘密**——多一把金鑰就多一個
 「換了 A 忘了 B」的失效模式，而這個系統已經有一把必須跨重啟不變的金鑰了。
@@ -25,10 +25,13 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from . import config
 
-# 導出時的 domain separation。日後若有第二種用途（例如別的 CLI 的憑證），**換一個 info
-# 字串**而不是共用這一個：同一把 SECRET_KEY 底下不同用途要導出不同的金鑰，密文才不會
-# 跨用途互相解得開。字串裡的 v1 是給「換演算法時要能並存」留的餘地。
-_INFO = b"gitlab-pat-v1"
+# 導出時的 domain separation。**每一種用途一個字串，不共用**：同一把 SECRET_KEY 底下
+# 不同用途要導出不同的金鑰，否則某一種用途的密文可以拿去解另一種用途的——那等於兩者
+# 共用一把鑰匙，而它們的生命週期與外洩後果並不相同。
+# 字串裡的 v1 是給「換演算法時要能並存」留的餘地。
+# ⚠ 換這個字串＝**既有密文全部解不開**（等同換 SECRET_KEY 的效果，只是範圍限於這一種
+#   用途）。不是可以順手改的東西。
+_INFO = b"cli-token-v1"
 
 
 def _fernet() -> Fernet:

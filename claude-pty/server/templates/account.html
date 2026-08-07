@@ -167,13 +167,12 @@
         method: "POST",
         body: { old_password: oldPw.value, new_password: newPw.value },
       });
-      toast("密碼已更新", "success",
-            { body: "你在其他裝置的登入都已失效；這一台不受影響" });
-      // form.reset() 只清值——按過「顯示密碼」的欄位會維持明文，下一次輸入直接攤在
-      // 畫面上。收回遮蔽狀態必須自己來。
-      e.target.reset();
-      resetPasswordFields(oldPw, newPw, confirmPw);
-      validatePw();          // reset 後按鈕必須回到 disabled
+      // ⚠ 改密碼＝這個帳號現在連著的東西全部斷掉，**包含這一台**。所以不 reset 表單、
+      //   不留在原頁——直接送回登入頁。留在這裡的話下一個動作一定是 401，那比直接
+      //   跳轉更難懂（畫面看起來還在，按什麼都失敗）。
+      toast("密碼已更改，請重新登入", "success",
+            { body: "所有裝置的登入與開著的終端都已失效；容器不受影響，重新登入即可接回" });
+      setTimeout(() => { location.href = "/login"; }, 1200);
     } catch (ex) { toastError("更新密碼", ex); }
   });
 
@@ -286,7 +285,7 @@
           if (!pw) { toast("已取消", "info", { body: `${name} 的密碼未變動` }); return; }
           await api(`/api/users/${id}/password`, { method: "POST", body: { new_password: pw } });
           toast(`已重設 ${name} 的密碼`, "success",
-                { body: "他既有的登入 cookie 已立刻失效" });
+                { body: "他既有的登入與開著的終端都已立刻失效" });
         } else if (act === "promote" || act === "demote") {
           const up = act === "promote";
           const ok = await dialog({

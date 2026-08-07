@@ -243,8 +243,9 @@ me.post("/api/auth/login", json={"username": "selfpw", "password": PW})
 check("改之前是登入狀態", me.get("/api/auth/me").status_code == 200)
 r = me.post("/api/users/me/password", json={"old_password": PW, "new_password": PW + "x"})
 check("改密碼 → 204", r.status_code == 204)
-check("改完**還在線上**（不是靜靜地被登出）", me.get("/api/auth/me").status_code == 200)
-check("網頁也還進得去（不是被 302 回登入頁）", me.get("/").status_code == 200)
+# 🔴 改密碼＝這個帳號現在連著的東西全部斷掉，**包含按下送出的這一台**。
+check("🔴 改完這一台就登出了（API 回 401）", me.get("/api/auth/me").status_code == 401)
+check("🔴 網頁也被送回登入頁", me.get("/").status_code in (302, 401))
 other = app.test_client()
 check("但別台的舊密碼已經不能用",
       other.post("/api/auth/login", json={"username": "selfpw", "password": PW}).status_code == 400)

@@ -189,17 +189,17 @@ check("新密碼可登入", auth.authenticate("alice", "alice-new-password")["id
 # H4：改密碼要讓**先前簽發的 cookie** 全部失效——那才是這條 review 要的性質（有人偷走
 # cookie，換密碼就是要把他踢出去）。
 #
-# ⚠ 這裡原本斷言的是「改完之後 c 自己會 401」。那是代理指標不是性質：按下送出的這一台
-#   剛用舊密碼證明過自己是本人，踢掉它換不到任何安全性，畫面上的成功提示還寫著「你在
-#   **其他裝置**的登入已失效」，說一套做一套（探索性測試 2026-07-26 打出來的）。現在
-#   端點會把這一台的 cookie 重新簽一張，所以要改用「把偷到的那串字重播回去」來驗。
+# ⚠ 用「把偷到的那串字重播回去」來驗，而不是「這個 client 物件還能不能用」：後者是
+#   代理指標，實作換法時會給出錯誤的答案。這裡兩者現在剛好同時成立，但要驗的性質
+#   始終是前者——那張被複製走的 cookie 不可以再用。
 thief = app.test_client()
 thief.set_cookie("session", stolen, domain="localhost")
 check("改密碼後，先前簽發的那張 cookie 重播回去 → 401（review H4）",
       thief.get("/api/auth/me").status_code == 401)
-check("而按下送出的這一台不會被踢下線", c.get("/api/auth/me").status_code == 200)
-check("它拿到的是重新簽過的新 cookie（不是沿用舊的那一串）",
-      _session_cookie(c) not in (None, stolen))
+# 🔴 **按下送出的這一台也一樣被踢下線，沒有特例。** 改密碼的語意是「這個帳號現在
+#    連著的東西全部斷掉」；留一個例外就讓那句話變成說一套做一套，而它換到的只是
+#    少按幾個鍵。
+check("🔴 按下送出的這一台也被登出（不留特例）", c.get("/api/auth/me").status_code == 401)
 c.post("/api/auth/login", json={"username": "alice", "password": "alice-new-password"})
 check("以新密碼重新登入後恢復", c.get("/api/auth/me").status_code == 200)
 
@@ -430,8 +430,11 @@ try:
     check("改自己的密碼成功", r.status_code == 204)
     check("→ 也要收掉終端（換密碼的理由通常就是懷疑被盜）",
           _closed == [f"sess-of-{alice_id}"])
-    check("但操作中的這一台不被登出（cookie 版本有續上）",
-          cme3.get("/api/auth/me").status_code == 200)
+    # 🔴 **沒有「這一台除外」的特例。** 改密碼＝這個帳號現在連著的東西全部斷掉。
+    #    先前這裡是「操作中的這一台不被登出（cookie 版本有續上）」——那個例外換到的
+    #    只是少按幾個鍵，卻讓「全部失效」這句話變成說一套做一套。
+    check("🔴 操作中的這一台也被登出（不留特例）",
+          cme3.get("/api/auth/me").status_code == 401)
 
     _closed.clear()
     r = ca2.patch(f"/api/users/{victim_id}", json={"is_active": False})
