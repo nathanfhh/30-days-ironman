@@ -318,9 +318,11 @@ def _spawn_detached(argv: list[str]) -> int:
 
 
 # 我們自己會起的 ttyd 檔名（＝白名單本身）。**每個名字都收**，不是只收「這個人現在選的
-# 那一顆」：偏好是 per-user 的，而且切換之後先前起的程序還活著——只認一個名字的話，那些程序
-# 既不會被認成我們的（收不掉、port 永久洩漏），也不會出現在觀測頁的孤兒清單裡
-# （畫面看起來乾淨，其實有東西在跑）。
+# 那一顆」：偏好是 per-user 的，而且切換之後先前起的程序還活著——只認一個名字的話，那些
+# 程序不會被認成我們的，於是 `_kill()` 收不掉、`_process_alive()` 判它們死掉而清掉登錄列。
+# ⚠ 而**沒有任何機制會發現它們**：`_clean_views` 只走 views 列、`_remove_orphans` 只管
+#   container，沒有人依 port 或 process 掃描。那個 port 就此永久洩漏，畫面上看不出來、
+#   log 也不會說——這條白名單是唯一的把關。
 _OUR_TTYD_NAMES = frozenset(config.TTYD_BINS)
 
 

@@ -116,7 +116,9 @@ class User(Base):
 STATUS_CREATING = "creating"      # 已佔登錄、container 尚未就緒
 STATUS_RUNNING = "running"
 STATUS_EXITED = "exited"          # container 自行結束（claude /exit、crash）
-STATUS_TERMINATED = "terminated"  # 使用者明確終止
+# ⚠ **沒有 `terminated`**：使用者按終止時登錄不會停在某個狀態，而是直接離開 `sessions`
+#   （`archive()` 搬進 session_history 再刪列，ADR 0010）。要記「是被誰終止的」請用下面的
+#   END_TERMINATED——加一個 STATUS_TERMINATED 回來只會是一個沒有任何列會用到的值。
 
 # session_history.ended_reason 的合法值（ADR 0010）。與 STATUS_* 放一起，因為它們是
 # 同一件事的兩面：這裡記的是「當初為什麼離開 sessions 表」。

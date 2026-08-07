@@ -282,6 +282,10 @@ function createPicker(mount, options, initial, { search = false } = {}) {
   menu.className = "picker__menu";
   menu.setAttribute("role", "listbox");
   menu.hidden = true;
+  // ⚠ 這裡是 `className =` 不是 `classList.add`，**掛載點原本的 class 會被吃掉**。
+  //   要對 picker 外層下樣式一律另外包一層，寫在 mount 自己身上的規則永遠不會生效
+  //   ——而且它不會報錯，只會安靜地沒作用（`.settings__control` 就這樣睡了很久：
+  //   markup 有、grep 找得到，執行期卻不存在，靜態掃描對這種東西天生盲目）。
   mount.className = "picker";
   mount.append(btn, menu);
   // 讓自動化測試（tests/e2e_*.py）點得到，不必靠 class 名稱去猜結構
@@ -1724,26 +1728,6 @@ function initNavSeg() {
   });
 }
 
-/* 到期時刻排版成「2026-08-22 12:22（27 天後）」。
- *
- * ⚠ 這件事只能在瀏覽器做。控制平面跑在容器裡、時區是 UTC，它排出來的時間不屬於任何人；
- *   所以伺服端只送 epoch 毫秒（credentials_state 的 *_at），時區與語系由這裡決定。
- * 相對時間的單位隨距離換檔：剩三小時卻寫「0 天後」等於沒講。 */
-function credWhen(ms) {
-  const d = new Date(ms);
-  const abs = d.toLocaleString("zh-TW", {
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  });
-  const diff = ms - Date.now();
-  const rtf = new Intl.RelativeTimeFormat("zh-TW", { numeric: "auto" });
-  const min = diff / 60000;
-  const rel = Math.abs(min) < 60 ? rtf.format(Math.round(min), "minute")
-            : Math.abs(min) < 1440 ? rtf.format(Math.round(min / 60), "hour")
-            : rtf.format(Math.round(min / 1440), "day");
-  return `${abs}（${rel}）`;
-}
-
 /* 憑證狀態。伺服端在頁面裡先塞了一份（#cred-data），之後由列表的
  * 15 秒輪詢覆蓋——這樣「已經在跑的 session 憑證到期」不必重新整理也看得到，那正是
  * 2026-07-26 那次事故裡一直沒有人發現的那一段。 */
@@ -1846,18 +1830,16 @@ function renderCredBadge(all) {
   if (el) setCredCli(el.dataset.cli);
 }
 
-/* 依目前 agent 的 detail + stamps 重組 data-tip。
- * 掛在 mouseenter/focus 上（見 DOMContentLoaded）：相對時間會隨時間走鐘，而 tooltip
- * 只在浮出來那一刻被看到——在那一刻算，比每 15 秒重算一次省事也準。
- * stamps 的標題由伺服端給（存取權杖／續期權杖各是哪個欄位是伺服端的知識），
- * 這裡不寫死任何一種。 */
+/* 依目前 agent 的 detail 重組 data-tip。
+ * 掛在 mouseenter/focus 上（見 DOMContentLoaded）：tooltip 只在浮出來那一刻被看到，
+ * 在那一刻算就不必跟著 15 秒的輪詢一起重寫。
+ * ⚠ 文案**整句由伺服端給**（`credentials_state` 的 detail），這裡不拼裝、不寫死任何
+ *   一種說法——「憑證過期會怎樣、該做什麼」是伺服端的知識。 */
 function refreshCredTip() {
   const el = document.getElementById("cred-badge");
   if (!el) return;
   const d = CRED[el.dataset.cli];
-  const lines = [d ? d.detail : el.dataset.tip];
-  for (const s of (d && d.stamps) || []) lines.push(`${s.label} ${credWhen(s.at)}`);
-  const next = lines.filter(Boolean).join("\n");
+  const next = (d ? d.detail : el.dataset.tip) || "";
   // ⚠ 沒變就不要寫，理由與上面 label 那道守衛相同：這顆是 role="status"，而 tooltip 的
   //   文字是 `::after { content: attr(data-tip) }`——瀏覽器會把生成內容放進 a11y tree，
   //   無條件重寫等於可能讓螢幕閱讀器再念一次。同一條防線不該只套一半。
@@ -1933,7 +1915,7 @@ function settingsModal() {
             <span class="settings__label">終端程式</span>
             <span class="settings__note">只影響之後開的終端，已經在跑的不會被換掉</span>
           </div>
-          <div id="pick-ttyd" class="settings__control"></div>
+          <div id="pick-ttyd"></div>
           <p class="settings__note" style="margin:var(--space-2) 0 0">
             兩顆有一個實質差異：Rust 版的網頁標題由伺服器端換掉，命令列不會送到瀏覽器；
             C 版只是把畫面上的標題蓋掉，完整命令仍然送給每一個連上的分頁。
@@ -1988,7 +1970,7 @@ function settingsModal() {
 }
 
 /* ── 身分下拉：設定 / 登出 ─────────────────────────────────────────────────────
- * 與用量面板同一套疊放與關閉規則（fixed 座標、捕獲階段的外點關閉、Esc、resize 重算）。
+ * 與 picker 同一套疊放與關閉規則（fixed 座標、捕獲階段的外點關閉、Esc、resize 重算）。
  *
  * ⚠ 鍵盤要能用。這是 `role="menu"`，螢幕閱讀器與鍵盤使用者會預期 ↑↓ 能移動、Esc 能關、
  *   關掉之後焦點回到觸發鍵——少了最後那一項，鍵盤使用者關掉選單後焦點會掉回 <body>，
@@ -2036,7 +2018,7 @@ function initAccountMenu() {
   });
 
   // ⚠ 捕獲階段：面板內容若被重畫，冒泡時 contains() 會對已經被換掉的節點回 false
-  //   而讓選單自己關掉（picker 與用量面板踩過同一個坑）。
+  //   而讓選單自己關掉（picker 踩過同一個坑）。
   document.addEventListener("click", (e) => {
     if (open && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false);
   }, true);

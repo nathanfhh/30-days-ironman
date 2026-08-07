@@ -35,6 +35,9 @@
   /* 通知用的另外兩級。不重用 --color-accent 當 info：強調色會隨主題變（金/赭/藍），
      但「這是提示、那是警告」的語意必須跨主題一致，讀者不該還要先學這個主題的配色。 */
   --color-signal-info: #58a6ff;
+  /* ⚠ **不要拿它去跟 --color-accent 對比。** 預設主題裡 #e3b341 與 accent 的 #e0a340
+     **幾乎同色**——用「accent vs warn」去區分兩種狀態，那個區別根本看不出來，而一個
+     看不見的區別比沒有區別更糟：它會讓寫的人以為有訊號。要分就用文字或 error 色。 */
   --color-signal-warn: #e3b341;
 
   /* CLI 身分色：列表 chip 與招牌徽章共用。各主題可調成自己的色階。 */
@@ -293,8 +296,8 @@ a:hover { color: var(--color-accent-hover); }
  *   探出膠囊外面再被邊框追上——而 `.cred` **不能**加 overflow:hidden 遮它，那會把
  *   tooltip 的 ::after 一起裁掉（本檔上方那條警告，已經踩過兩次）。
  * ⚠ 寬度的兩個端點由 JS 量（見 app.js 的 swapCred）：CSS 動不了 auto。
- * ⚠ `.cred__more` 不參與。它是一顆常駐的控制項（叫出用量面板），不是「哪一個 agent」
- *   的資訊；跟著飛的話會變成連按鈕都被換掉了。
+ * ⚠ 只有「講哪一個 agent」的那幾個子元素參與。日後若在膠囊裡加常駐的控制項，
+ *   **不要**把它加進上面那組選擇器——跟著飛的話會變成連按鈕都被換掉了。
  * 減少動態：全域那條 `prefers-reduced-motion` 會關掉這裡所有 transition/animation，
  * 且 app.js 同一條件下整段跳過（只留最終狀態），不會留下半透明的中間態。 */
 .cred__brand,
@@ -323,11 +326,13 @@ a:hover { color: var(--color-accent-hover); }
 .cred__brand { display: inline-flex; align-items: center; flex: none; }
 .cred__brand:empty { display: none; }        /* JS 沒跑就不要留一塊空隙 */
 .cred__brand-svg { display: block; }
-/* 這顆的 tooltip 是三行（說明 + 存取權杖 + 續期權杖），要讓 \n 真的換行。
+/* 這顆的 tooltip 是伺服端給的一整段說明，要讓裡面的 \n 真的換行。
    ⚠ 選擇器要寫成 `.cred.tip--wide`（兩個 class）：靠的是**特異性更高**（0,2,1 對
      `.tip--wide::after` 的 0,1,1），不是靠順序。寫成 `.cred::after` 就變成同特異性，
-     而 `.tip--wide::after` 定義在本檔更後面、會反過來蓋掉它——症狀只是三行黏成一段，
-     不會有任何錯誤。（也因為贏在特異性，這條規則搬到檔案哪個位置都成立。） */
+     而 `.tip--wide::after` 定義在本檔更後面、會反過來蓋掉它——症狀只是多行黏成一段，
+     不會有任何錯誤。（也因為贏在特異性，這條規則搬到檔案哪個位置都成立。）
+   ⚠ 這是本檔**唯一**一份這個特異性教訓了（原本 `.kv__k.tip--wide` 還有一份，隨那個
+     已經沒人用的觀測頁一起刪掉）。要再寫 `.X.tip--wide::after` 時照這條的寫法。 */
 .cred.tip--wide::after { white-space: pre-line; }
 
 /* 正常時要安靜：中性色、細框、小字，而且**不放狀態圖示**——左邊已經有品牌標誌，
@@ -426,27 +431,7 @@ a:hover { color: var(--color-accent-hover); }
   padding-left: var(--space-4);
   border-left: 1px solid var(--color-border);
 }
-/* 登出與換頁是不同性質的動作（它結束整個工作階段），所以有自己的邊框、與身分膠囊
-   同高並排。平時中性——常駐的紅色按鈕只會讓人對紅色麻木，真正危險時就沒有分量了。 */
-.masthead__logout {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 2.375rem;                    /* 與 .whoami 同高，並排才齊 */
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: 999px;
-  color: var(--color-text-secondary);
-  font-size: 14px;
-  transition: color var(--transition-fast), border-color var(--transition-fast),
-              background var(--transition-fast);
-}
-.masthead__logout:hover {
-  color: var(--color-signal-error);
-  border-color: var(--color-signal-error);
-  background: color-mix(in srgb, var(--color-signal-error) 12%, transparent);
-}
-.masthead__logout:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* 登出不在這裡：它收進身分下拉，樣式走 `.menu__item--danger`（見 _masthead.html）。 */
 
 /* ── 目前登入者 ────────────────────────────────────────────────────────────────
    做成一枚膠囊而不是一段小字：這裡回答的是「我現在是誰、有什麼權限」，跟旁邊那幾個
@@ -581,59 +566,11 @@ a:hover { color: var(--color-accent-hover); }
   font-weight: 600;
   color: var(--color-text-primary);
 }
-/* 狀態徽章跟在標題後面，不另起一行：它回答的是「這一項現在怎麼樣」，
-   與標題是同一句話。 */
-.settings__state {
-  padding: 1px var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-}
-.settings__state[data-state="on"] {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-.settings__state[data-state="unknown"] {
-  border-color: var(--color-signal-warn);
-  color: var(--color-signal-warn);
-}
 .settings__note { font-size: 12.5px; color: var(--color-text-muted); line-height: 1.55; }
-/* ⓘ：把「想知道時才看」的長說明收起來。常駐在畫面上就是三行擋路的字。 */
-.settings__more { color: var(--color-text-muted); cursor: help; margin-left: 2px; }
-.settings__more:hover { color: var(--color-accent); }
-.settings__control { width: 100%; }
-/* 輸入框與它的按鈕同一行：那是同一個動作的兩半，拆兩列讀起來會斷掉。 */
-.settings__control--row { display: flex; gap: var(--space-2); }
-.settings__control--row .input { flex: 1 1 auto; min-width: 0; }
-.settings__control--row .btn { flex: none; }
-/* 兩種狀態都在，但講的是不同的事（見 settingsModal 的 showPat）：未設定講下一步，
-   已設定講「這個欄位會覆蓋、留空是清除」。
-   ⚠ **刻意不分顏色。** 曾經給已設定那則加了 `--color-signal-warn`，但：
-     · 預設主題裡 `--color-accent: #e0a340` 與 `--color-signal-warn: #e3b341` **幾乎同色**，
-       所以那個區別根本看不出來——一個看不見的區別比沒有區別更糟，它會讓人以為有訊號。
-     · 而且兩種狀態**互斥**，使用者永遠只看到其中一個，顏色差異本身不帶任何資訊。
-   要「小心」的份量交給文字（`留空送出＝清除` 是粗體）。用紅色是過度警示——這一塊在
-   每次開設定時都會出現，常駐的紅色只會讓人對紅色麻木。 */
-.settings__hint {
-  margin: 0;
-  padding: var(--space-3);
-  border-left: 3px solid var(--color-accent);
-  border-radius: var(--radius-sm);
-  background: var(--color-accent-soft);
-  color: var(--color-text-secondary);
-  font-size: 12.5px;
-  line-height: 1.6;
-}
-.settings__hint[hidden] { display: none; }
-.settings__hint code {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text-primary);
-}
+/* ⚠ 這裡曾經有 `.settings__control { width: 100% }`，掛在 picker 的**掛載點**上——而
+   `createPicker` 開頭就 `mount.className = "picker"` 把它蓋掉了，那條規則從來沒有生效過
+   （寬度本來就由 `.settings__row` 的 flex column 撐滿）。要對 picker 外層下樣式請另外
+   包一層，不要寫在 mount 身上，見 app.js 那條註解。 */
 
 /* 標題後的淡色註記（例如列表的擷取時刻）——是附註不是標題的一部分，故不繼承其字體 */
 .section-head__note {
@@ -864,8 +801,8 @@ a:hover { color: var(--color-accent-hover); }
   white-space: nowrap;
 }
 /* icon 鈕常駐顯示。曾經是 hover 才浮現（想讓列面乾淨），但代價是使用者要先把滑鼠
-   移過去才知道有這個功能——而「這一列可以改名 / 可以看當初的 prompt」正是他需要
-   先知道的事。觸控裝置更是完全沒有 hover 可言。功能不藏在互動之後。 */
+   移過去才知道有這個功能——而「這一列可以改名」正是他需要先知道的事。觸控裝置更是
+   完全沒有 hover 可言。功能不藏在互動之後。 */
 
 /* 貼在內容旁的輕量圖示鈕：不畫外框，才不會跟右側的動作鍵搶注意力 */
 .icon-btn {
@@ -1259,17 +1196,6 @@ button.tip, a.tip, .tip button, .tip a { cursor: pointer; }
 .field__hint[data-tone="warn"] { color: var(--color-signal-warn); }
 .field__hint[hidden] { display: none; }
 
-/* 需要橫向空間的欄位（設定面板的 GitLab PAT）：占滿整列。
-   ⚠ 為什麼需要：`.filters__grid--lean` 是 `auto-fill, minmax(13rem, 1fr)`，所以每一格都被
-     鎖在約 13rem——一段三行的說明文字在那個寬度下會擠成一條窄柱，讀起來很痛苦。
-   ⚠ 但**占滿整列不等於文字也拉滿**：面板寬 1200px 以上，滿版行長比窄柱更難讀。
-     所以下面另外用 max-width 把「輸入框」與「說明文字」各自收在好讀的長度。 */
-/* 輸入框與它的動作鍵並排。用 flex 不用 grid：這裡就是「一個主元素 + 一顆按鈕」，
-   按鈕照內容寬、輸入框吃掉剩下的。 */
-.field__row { display: flex; align-items: center; gap: var(--space-3); }
-.field__row .input { flex: 1 1 auto; }
-.field__row .btn { flex: 0 0 auto; }
-
 .input, .select {
   font: inherit;
   padding: var(--space-3);
@@ -1314,13 +1240,6 @@ button.tip, a.tip, .tip button, .tip a { cursor: pointer; }
 .pw__toggle:hover { color: var(--color-text-primary); background: var(--color-surface-overlay); }
 /* tabIndex=-1 讓它不進 Tab 順序，但滑鼠 focus 仍要看得出來 */
 .pw__toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-
-/* 多行輸入（初始 prompt）。只准直向縮放：橫向拖寬會撐破表單的網格。 */
-.input--area {
-  resize: vertical;
-  min-height: 4.5rem;
-  line-height: 1.55;
-}
 
 /* ── 面板 / 卡片 ────────────────────────────────────────────────────────────── */
 .panel {
@@ -1387,32 +1306,6 @@ button.tip, a.tip, .tip button, .tip a { cursor: pointer; }
 }
 .panel__lede code[data-copy]:hover { background: var(--color-surface-raised); color: var(--color-accent); }
 
-/* 產出的 token。字要可全選、可換行——一長串不換行會把面板撐爆。 */
-.token-out {
-  margin-top: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-sunken);
-  padding: var(--space-3);
-}
-.token-out[hidden] { display: none; }
-.token-out__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-2);
-}
-.token-out__exp { font-size: 12.5px; color: var(--color-text-muted); }
-.token-out__value {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.5;
-  word-break: break-all;      /* JWT 沒有空白可斷行，不強制就會撐破容器 */
-  user-select: all;           /* 點一下就整段選起來，免得手動拖曳漏字 */
-  color: var(--color-text-primary);
-}
 .btn--sm { padding: 4px 10px; font-size: 12.5px; }
 
 /* ── 登入頁：非置中對稱，刻意偏移＋大留白 ──────────────────────────────────── */
@@ -1722,16 +1615,14 @@ body:has(.drawer[data-open]) .toast-stack { top: 4.75rem; }
 }
 .filters__grid {
   display: grid;
-  /* auto-fit + minmax：窄視窗自己收成一欄，不必為這一塊再開斷點 */
+  /* auto-fit + minmax：窄視窗自己收成一欄，不必為這一塊再開斷點。
+     ⚠ **只有欄位夠多時 auto-fit 才是對的。** 要再做一個「只有一兩格」的 grid 面板時
+       改用 `auto-fill`：auto-fit 會把空軌道摺疊掉，於是「一個欄位」變成「一個 1fr 的
+       軌道」＝整列寬——一顆只有兩個選項的下拉被拉成 1238px（2026-07-27 實測）。
+       auto-fill 保留空軌道，那一格就跟這裡的欄位一樣寬；窄視窗下兩者行為相同。 */
   grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: var(--space-4);
 }
-/* 欄位很少的面板（設定只有一格）用這個。
-   ⚠ 差別只有 auto-fit → auto-fill 一個字，結果差很多：**auto-fit 會把空軌道摺疊掉**，
-     於是「一個欄位」變成「一個 1fr 的軌道」＝整列寬——一顆只有 C / Rust 兩個選項的下拉
-     被拉成 1238px（2026-07-27 實測）。auto-fill 保留空軌道，那一格就跟篩選面板裡的欄位
-     一樣寬。窄視窗下兩者都收成一欄，響應式行為完全不變。 */
-.filters__grid--lean { grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); }
 /* 起迄就是 grid 裡的兩個一般欄位，緊接在「時間範圍」後面流下去——選了自訂之後
    讀起來是連續的一句話，不必跳到另一塊區域。平時 hidden，完全不佔位。
    只給一條左邊界標示「這兩格從屬於前面那一格」，不另外開區塊。 */
@@ -1917,70 +1808,6 @@ body:has(.drawer[data-open]) .toast-stack { top: 4.75rem; }
 #filter-toggle[data-active="1"] {
   border-color: var(--color-accent);
   color: var(--color-accent);
-}
-
-/* ── 鍵值列：一行「名稱｜值」。量測值那種「欄位固定、值長短不一」的資料用它 ────── */
-.kv {
-  display: grid;
-  grid-template-columns: 8.5rem 1fr;
-  gap: var(--space-3);
-  padding: 2px 0;
-  font-size: 13px;
-}
-.kv__k { color: var(--color-text-muted); }
-/* 名稱那欄可以掛 .tip 解釋術語（RSS / VMS / fd 這些不是看兩眼就懂的東西）。
-   有說明時給一條虛線底線——沒有任何記號的話，沒人會知道那裡可以停下來看。 */
-.kv__k.tip {
-  justify-self: start;      /* 底線只跟著文字長度，不要拉滿整欄 */
-  text-decoration: underline dotted var(--color-text-muted);
-  text-underline-offset: 3px;
-  cursor: help;
-}
-/* 這些說明有分行（\n），要讓它真的斷行。
-   ⚠ 選擇器寫兩個 class 是為了**特異性更高**（0,2,1 對 .tip--wide::after 的 0,1,1），
-     不是靠順序——同 .cred.tip--wide 那條的理由。 */
-.kv__k.tip--wide::after { white-space: pre-line; }
-.kv__v { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-
-/* ── 終端程序（ttyd）觀測卡 ──────────────────────────────────────────────────────
- * 一張卡＝一個 ttyd。三種狀態各自要一眼分得出來：
- *   正常     —— 中性邊框
- *   幽靈記錄 —— 登錄有列、程序已死（佔著 port 的 UNIQUE）
- *   孤兒程序 —— 程序在跑、登錄沒有（那個 port 就此消失，沒有任何機制找得到）
- * 後兩者都用警示色：它們代表的是「對不上」，而這一頁存在的理由就是把對不上的揪出來。 */
-.ttyd {
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-sunken);
-}
-.ttyd + .ttyd { margin-top: var(--space-3); }
-.ttyd--dead, .ttyd--orphan {
-  border-color: color-mix(in srgb, var(--color-signal-error) 45%, transparent);
-}
-.ttyd__head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;                 /* 窄視窗寧可換行，也不要把 chip 擠成一團 */
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-/* 量測值分兩欄；窄視窗自動收成一欄（auto-fit 不必寫斷點） */
-/* 面板頂端的「你目前用哪一顆 ttyd」。放在最上面而不是每一列旁邊：它是**看這一頁的人**
-   的偏好（per-user，`users.ttyd_bin`），不是某個程序的屬性——每一列旁邊那顆 chip 才是
-   「這個程序實際跑的是哪一顆」，兩者可能不一樣（切換之前起的終端不會被換掉）。
-   ⚠ 這裡原本寫「整台機器的設定」，那是 env 開關時代的說法，已經不成立。 */
-.ttyd-current { margin-bottom: var(--space-3); }
-.ttyd-current__bin {
-  text-transform: none;
-  font-family: var(--font-mono);
-  opacity: 0.72;
-}
-
-.ttyd__facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  gap: 0 var(--space-5);
 }
 
 /* ── 分頁：延續看板語彙，中央是計數器而非一排頁碼按鈕 ────────────────────────── */
