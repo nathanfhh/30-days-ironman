@@ -220,8 +220,18 @@ def _ttyd_argv(port: int, container_name: str, session_id: str,
         "-b", f"/session/{session_id}",  # base-path，配合 nginx 子路徑路由
         "-W",                          # 可寫（互動需要）
         "-q",                          # 全部 client 斷線即自行退出＝關網頁自動回收（ADR 0008）
-        # ttyd 預設把「完整命令 + 容器 hostname」當網頁標題，等於把 container id 和
-        # attach 參數洩漏到分頁標題／瀏覽紀錄／截圖裡。固定成只含 sid（sid 本來就在網址）。
+        # ttyd 預設把「完整命令 + 容器 hostname」當網頁標題。
+        #
+        # ⚠ **`titleFixed` 沒有解決那件事，它只是把畫面蓋掉。** 這是 client 選項：
+        #   真正的標題（`docker attach --detach-keys=… claude-pty-<sid>` 加上容器
+        #   hostname）**在那之前就已經送給每一個連上的 client 了**，瀏覽器只是被要求
+        #   顯示別的字。所以這一行買到的是「分頁標題、瀏覽紀錄、截圖裡看不到」，
+        #   買不到「沒有送出去」。
+        #
+        # ⚠ 真正的修法是**伺服器端**的 `--title`：它直接換掉宣告出去的標題，命令列
+        #   一個字都不上線。那是 Rust 版才有的選項，C 版沒有——所以這是兩顆 binary
+        #   的實質差異之一，不是「快一點慢一點」而已。接上之後這一行仍然留著
+        #   （C 版仍靠它遮），但 Rust 版那條路要改走 `--title`。
         "-t", f"titleFixed=agent-tty · {session_id}",
         # 讓使用者選得到文字。Claude Code 的 TUI 會開啟滑鼠追蹤（實測 ?1000/?1002/?1003/
         # ?1006 全開），一開啟，拖曳就被當成應用程式的滑鼠事件送進 TUI，終端不再拿它來
