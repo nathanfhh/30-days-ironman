@@ -1,0 +1,204 @@
+# claude-pty 容器化部署（ADR 0009）。以下指令的 cwd 都是本檔所在的 deploy/。
+#
+# ⚠ **不要直接 `docker compose up -d --build`**：reconciler 共用 control 的 PID namespace，
+#   control 一停它就被連坐 SIGKILL，compose 接著要停一個已經死掉的容器有機會中止整個 up
+#   （留下殘留容器與 502）。一律走這支，它會先把 reconciler 收乾淨：
+#     ./redeploy.sh
+#
+# 設定檔：從 .env.example 複製成 .env 再填（SECRET_KEY / HOST_REPO_ROOT / DOCKER_GID /
+# APP_UID）。完整步驟見 README 的「部署」一節。
+#
+# 前置：Claude 憑證要在 host 上就位，否則 session 內的 claude 是登出狀態、改用按量計價。
+#   macOS 鎖在 Keychain，跑 ./refresh-credentials.sh 抽到 ~/.claude-pty/；
+#   Linux 的 ~/.claude/.credentials.json 是真檔，隨既有的 ~/.claude 掛載直接進去。
+#
+# 建立第一個管理員（容器起來後）：
+#   docker compose exec control python -m server.cli create-admin alice
+
+name: claude-pty
+
+services:
+  control:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        # 容器內 app 使用者的 uid。**必須等於 host 上那些掛進來的檔案的擁有者**：
+        # ~/.claude/.credentials.json 是 0600，只有擁有者讀得到——uid 對不上的話控制平面
+        # 判定「憑證讀不到」，建立 session 會被 _guard_credentials 直接擋下。
+        # ./data（SQLite）同理，擁有者要是這個 uid 才寫得進去。
+        # 查法：`id -u`（Docker Desktop 走 VM 的 uid 對映，維持預設 1000 即可）。
+        APP_UID: ${APP_UID:-1000}
+        # 這一版是哪個 commit（頁尾顯示用）。由 deploy/redeploy.sh 算好 export 進來
+        # ——容器裡沒有 .git 也沒有 git，執行期問不到。沒設就是空的，頁尾會誠實
+        # 顯示「commit 未知」而不是猜一個。
+        GIT_SHA: ${GIT_SHA:-}
+        BUILT_AT: ${BUILT_AT:-}
+        # Rust 版 ttyd 的來源與釘住的 commit。
+        # ⚠ **這裡刻意不給預設值**（冒號後面留空＝環境有設才傳、沒設就不要傳），讓
+        #   Dockerfile 的 ARG 成為唯一的釘點。原本這裡也寫了一份預設，於是：
+        #     1. 改了 Dockerfile 卻被這裡蓋回去，build 出來還是舊的那顆；
+        #     2. reconciler **沒有**這兩行，等於兩個服務用不同的 commit 建同一份 Dockerfile。
+        #   兩個症狀在畫面上都完全看不出來（2026-07-27 實測踩到）。
+        #   臨時換版在 .env 設 TTYD_RUST_REF；正式換版請改 deploy/Dockerfile 那一行。
+        TTYD_RUST_REPO:
+        TTYD_RUST_REF:
+    # ⚠ 掛 docker socket ≈ 給此容器 host root（ADR 0009 已明確接受）。控制平面本來就必須
+    #   有建立容器的權力，容器化買到的是部署一致性，**不是安全邊界**——不可在此容器內
+    #   執行任何不受信任的程式碼。降風險的實質手段是改用 rootless Docker。
+    # 非 root 執行（USER app 寫在 Dockerfile）。socket 是 srw-rw---- root:root，非 root
+    # 要讀它就得屬於該 gid：macOS Docker Desktop 是 0，Linux 多半是 docker 群組，用
+    #   DOCKER_GID=$(stat -c '%g' /var/run/docker.sock) docker compose up -d
+    # 覆寫。這不會讓「掛 socket ≈ host root」這件事消失（ADR 0009），只是縱深防禦。
+    group_add: ["${DOCKER_GID:-0}"]
+    # tini 當 PID 1：ttyd 以 double-fork 起後會 reparent 給 PID 1，而容器內 PID 1 預設是
+    # python（不會 reap 孤兒）→ ttyd 結束後變殭屍累積。init: true 讓 docker 注入 tini 負責 reap。
+    init: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 存在性檢查用（build_run_kwargs 會先 isfile/isdir 才決定掛不掛，ADR 0009）：
+      # ⚠ **維持唯讀**。這一隻同時掛著 docker.sock，能寫進 ~/.claude 等於能改你 host 上
+      #   Claude Code 的設定，而它本來就能起特權容器——兩件事疊起來的爆炸半徑是整台機器。
+      # ⚠ ADR 0016 之後 **session 已經完全不掛這個目錄了**（狀態改走 per-user 空間）。
+      #   控制平面留著它只為了一件事：`credential_sources()` 的第二個來源
+      #   （Linux 原生的 ~/.claude/.credentials.json）要檢查存在性、也要當掛載來源。
+      - ${HOME}/.claude:${HOME}/.claude:ro
+      # refresh-credentials.sh 抽出來的 OAuth 憑證。以**同一個路徑**掛進來，讓
+      # config.CREDENTIALS_HOST 同時當「給 daemon 的 host 路徑」與「自己檢查存在性的路徑」。
+      # 少了它 session 會以登出狀態啟動、改用 API 按量計價（見 config.CREDENTIALS_HOST）。
+      - ${HOME}/.claude-pty:${HOME}/.claude-pty:ro
+      # 注意：compose 的相對路徑以本檔所在目錄為基準，deploy/ 的 .. 是 claude-pty，
+      # repo 根要再上一層（entrypoint.sh 在 <repo>/dev-container/）。
+      - ../..:${HOST_REPO_ROOT:-/repo}:ro
+      # trivy DB 快取：同上，控制平面要能 mkdir 它（不能讓 daemon 隱式建立成 root:root）。
+      # 這份快取與 run script 共用，是 restricted profile 啟動快慢的關鍵——沒命中快取要
+      # 重抓約 1GB 的 DB，實測多花 36 秒。
+      - ${HOME}/.cache/ncr-trivy:${HOME}/.cache/ncr-trivy
+      # semgrep-rules（A4 SAST 軌道的規則 repo）：唯讀，供存在性檢查 + 當 session 的掛載
+      # 來源（同一路徑，ADR 0009）。host 上要**自己先 git clone**（見 docs/host-paths.md）
+      # ——不存在時 compose 會以 root 建出空目錄頂替，所以 session 那側驗的是 `.git`
+      # 不是 isdir：空殼＝不掛，A4 軌道 gate 不過、自動跳過。
+      - ${HOME}/semgrep-rules:${HOME}/semgrep-rules:ro
+      # per-user 的 agent 狀態空間（ADR 0016）。**可寫**——控制平面要在裡面建目錄、
+      # 寫 .claude.json 種子。這與上面 ~/.claude 維持
+      # ro 不衝突：那是**你的** host 設定，這是**它自己管**的目錄。
+      # 以同一個路徑掛進來，host 與 self 兩個視角才對得上（見下方 CLAUDE_PTY_SPACE_SELF）。
+      - ${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}:${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}
+      # registry（SQLite）的持久化。放在本檔旁邊的 ./data/，不用 named volume——
+      # volume 的實體在 Docker VM 內（macOS 上 host 根本看不到），備份、檢查、搬遷都得先
+      # 起一個容器把它撈出來。bind mount 之後 `deploy/data/claude-pty.db` 就是那個檔案本身。
+      # ⚠ 掛的是**目錄**不是單一檔案：SQLite 走 WAL，執行中會在同一層另外產生
+      #   `-wal` 與 `-shm`；只掛檔案的話那兩個會落在容器層，容器一重建就連同未 checkpoint
+      #   的交易一起消失。單檔 bind mount 另有 inode 問題（SQLite 重建檔案時 mount 會失聯）。
+      - ./data:/data
+    environment:
+      # --- 路徑解耦：傳給 daemon 的必須是 **host** 路徑（ADR 0009）---
+      CLAUDE_PTY_HOST_HOME: ${HOME}
+      CLAUDE_PTY_HOST_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
+      # 控制平面「自己」看得到 repo 的路徑（compose 把 repo 掛在同一個路徑）。
+      # 不設會讓 entrypoint.sh 的存在性檢查失敗 → 不掛我們的 entrypoint → session 停在
+      # 互動選單（2026-07-25 實測踩到）。
+      CLAUDE_PTY_SELF_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
+      # 控制平面自己讀寫的檔案放 volume
+      CLAUDE_PTY_DB_PATH: /data/claude-pty.db
+      CLAUDE_PTY_SECRET_KEY: ${CLAUDE_PTY_SECRET_KEY:?請設定一個穩定的隨機值（多 worker 需共用、跨重啟需不變）}
+      # 控制平面自己看到的 trivy 快取路徑（用來 mkdir）。容器內 $HOME 是 /home/app，
+      # 與掛載進來的 host 路徑不同，故必須明講。
+      CLAUDE_PTY_TRIVY_CACHE_SELF: ${HOME}/.cache/ncr-trivy
+      # 控制平面自己看到的 semgrep-rules 路徑（存在性檢查用；容器內 $HOME 是 /home/app，
+      # 預設值推不出 host 路徑，故必須明講——同 trivy cache 的理由）。
+      CLAUDE_PTY_SEMGREP_RULES_SELF: ${HOME}/semgrep-rules
+      # per-user 空間：控制平面自己看到的路徑。compose 把它掛在**同一個**路徑上，所以與
+      # CLAUDE_PTY_SPACE 同值；分成兩個變數是因為 ADR 0009 的路徑解耦（給 daemon 的與
+      # 自己 mkdir 用的可以不同），而不是因為這裡真的會不一樣。
+      CLAUDE_PTY_SPACE: ${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}
+      CLAUDE_PTY_SPACE_SELF: ${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}
+      # --- ttyd 在本容器內起，nginx 是同網路的兄弟 → 綁 0.0.0.0，port 不發布到 host ---
+      CLAUDE_PTY_TTYD_BIND: "0.0.0.0"
+      CLAUDE_PTY_TTYD_HOST: control
+      CLAUDE_PTY_BEHIND_PROXY: "1"
+      CLAUDE_PTY_CONTROL_HOST: "0.0.0.0"
+      # session 列表每頁筆數（前端以後端回報的 limit 為準）
+      CLAUDE_PTY_PAGE_SIZE: ${CLAUDE_PTY_PAGE_SIZE:-10}
+      # SSH agent 轉發（opt-in，預設關；ADR 0012）。值是 **host 上** agent socket 的路徑，
+      # 由 daemon 解讀——控制平面自己不掛也不碰它，只把路徑轉給 daemon。
+      # ⚠ 開了就是每個能建立 session 的帳號都拿得到那把 key（沒有租戶隔離）。
+      CLAUDE_PTY_SSH_AUTH_SOCK: ${CLAUDE_PTY_SSH_AUTH_SOCK:-}
+      # 只有管理員能選的模型（slug，逗號分隔）。不設＝預設值 fable。
+      CLAUDE_PTY_ADMIN_ONLY_MODELS: ${CLAUDE_PTY_ADMIN_ONLY_MODELS-fable}
+      # session 容器要加入的 network。改它的話下面的 networks: 區塊與 jaeger 的
+      # compose 都要跟著改。
+      CLAUDE_PTY_NETWORK: ${CLAUDE_PTY_NETWORK:-}
+    networks: [claude-pty-net]
+    restart: unless-stopped
+
+  # 對帳器：獨立 process（ADR 0008 階段 5）。與 control 同 image、同設定，只是換啟動命令。
+  reconciler:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        # 與 control 同一個 uid：兩隻共用同一份 ./data（SQLite），寫入者不只一個。
+        APP_UID: ${APP_UID:-1000}
+        # 這一版是哪個 commit（頁尾顯示用）。由 deploy/redeploy.sh 算好 export 進來
+        # ——容器裡沒有 .git 也沒有 git，執行期問不到。沒設就是空的，頁尾會誠實
+        # 顯示「commit 未知」而不是猜一個。
+        GIT_SHA: ${GIT_SHA:-}
+        BUILT_AT: ${BUILT_AT:-}
+    # ⚠ 共用 control 的 PID namespace：ttyd 跑在 control 容器內，reconciler 若有自己的
+    #   namespace，os.kill(pid, 0) 一律看不到那些 pid → 會把還活著的 view 記錄全部誤刪
+    #   （2026-07-25 實測）。共用後 pid 可比，_process_alive 才有意義。
+    pid: "service:control"
+    group_add: ["${DOCKER_GID:-0}"]
+    command: ["python", "-m", "server.reconciler"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.claude:${HOME}/.claude:ro
+      # refresh-credentials.sh 抽出來的 OAuth 憑證。以**同一個路徑**掛進來，讓
+      # config.CREDENTIALS_HOST 同時當「給 daemon 的 host 路徑」與「自己檢查存在性的路徑」。
+      # 少了它 session 會以登出狀態啟動、改用 API 按量計價（見 config.CREDENTIALS_HOST）。
+      - ${HOME}/.claude-pty:${HOME}/.claude-pty:ro
+      # 注意：compose 的相對路徑以本檔所在目錄為基準，deploy/ 的 .. 是 claude-pty，
+      # repo 根要再上一層（entrypoint.sh 在 <repo>/dev-container/）。
+      - ../..:${HOST_REPO_ROOT:-/repo}:ro
+      - ./data:/data          # 與 control 同一份 SQLite（見上方說明）
+    environment:
+      CLAUDE_PTY_HOST_HOME: ${HOME}
+      CLAUDE_PTY_HOST_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
+      CLAUDE_PTY_SELF_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
+      CLAUDE_PTY_DB_PATH: /data/claude-pty.db
+      CLAUDE_PTY_SECRET_KEY: ${CLAUDE_PTY_SECRET_KEY:?同上}
+      # session 容器要加入的 network。改它的話下面的 networks: 區塊與 jaeger 的
+      # compose 都要跟著改。
+      CLAUDE_PTY_NETWORK: ${CLAUDE_PTY_NETWORK:-}
+    networks: [claude-pty-net]
+    depends_on: [control]
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    # 唯一對外發布 port 的服務（ADR 0005 單一入口）。ttyd 的 port 全在內部網路，不發布。
+    # ⚠ **預設只綁 loopback**。這個站台是明文 HTTP（COOKIE_SECURE 預設 0）、沒有租戶隔離、
+    #   而且能在 host 的 dockerd 上開特權容器；SSH agent 轉發開著時還多一把能認證任何主機
+    #   的 key。要讓同網段連得到是**明確的部署決定**，在 deploy/.env 設 CLAUDE_PTY_BIND_ADDR
+    #   （見 ADR 0015），不要直接把這一行改成 "8080:8080"——那樣改不會留下任何痕跡。
+    ports:
+      - "${CLAUDE_PTY_BIND_ADDR:-127.0.0.1}:8080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro
+    networks: [claude-pty-net]
+    depends_on: [control]
+    restart: unless-stopped
+
+networks:
+  claude-pty-net:
+    name: claude-pty-net
+
+  # ⚠ **`claude-pty-sessions`（session 容器所在的 network）刻意不宣告在這裡。**
+  #   compose 只會建立「有服務引用到」的 network，而沒有任何服務用它——用它的是控制平面
+  #   另外起的 session 容器。宣告在這裡只會看起來有人負責，實際上不會被建出來
+  #   （2026-07-29 實測）。改由**控制平面啟動時確保它存在**（見 sessions.preflight），
+  #   那樣不管用什麼方式部署都成立。
+  # ⚠ telemetry：jaeger 定義在 `dev-container/jaeger-compose.yaml`，以 external 引用該
+  #   network，所以要**先起這個 stack**（控制平面會把 network 建好）再起 jaeger。
+  #   反過來的話 jaeger 起不來，而 OTLP 是 fail-open——trace 靜默消失，沒有任何錯誤。

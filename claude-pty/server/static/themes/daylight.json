@@ -1,0 +1,32 @@
+{
+  "name": "Daylight",
+  "description": "淺色主題：紙白底、靛藍強調，白天或投影時使用。",
+  "colors": {
+    "surface-sunken": "#eeeae2",
+    "surface": "#f6f3ed",
+    "surface-raised": "#fffdf9",
+    "surface-overlay": "#e9e5dc",
+    "text-primary": "#1d2128",
+    "text-secondary": "#5a6270",
+    "text-muted": "#8b93a1",
+    "border": "rgba(29, 33, 40, 0.12)",
+    "border-strong": "rgba(29, 33, 40, 0.24)",
+    "accent": "#2f5fd0",
+    "accent-hover": "#1f4bb5",
+    "accent-contrast": "#ffffff",
+    "accent-soft": "rgba(47, 95, 208, 0.10)",
+    "signal-running": "#1f8a5f",
+    "signal-idle": "#8b93a1",
+    "signal-error": "#c0392b",
+    "signal-info": "#1f6feb",
+    "signal-warn": "#bf8700",
+    "brand-claude": "#c2570c",
+    "brand-claude-soft": "rgba(194, 87, 12, 0.10)",
+    "bin-c": "#1a5fa8",
+    "bin-c-soft": "rgba(26, 95, 168, 0.10)",
+    "bin-rust": "#c2410c",
+    "bin-rust-soft": "rgba(194, 65, 12, 0.10)",
+    "shadow": "rgba(29, 33, 40, 0.16)",
+    "shadow-inset": "rgba(255, 255, 255, 0.9)"
+  }
+}

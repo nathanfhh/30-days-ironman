@@ -1,0 +1,32 @@
+{
+  "name": "Vellum",
+  "description": "暖褐深色：羊皮紙墨色底、赭紅強調，長時間注視較不刺眼。",
+  "colors": {
+    "surface-sunken": "#0e0b09",
+    "surface": "#141010",
+    "surface-raised": "#1c1715",
+    "surface-overlay": "#241d1a",
+    "text-primary": "#ece2d4",
+    "text-secondary": "#a99c8c",
+    "text-muted": "#6f6459",
+    "border": "rgba(236, 226, 212, 0.10)",
+    "border-strong": "rgba(236, 226, 212, 0.20)",
+    "accent": "#c8654a",
+    "accent-hover": "#dd7a5e",
+    "accent-contrast": "#141010",
+    "accent-soft": "rgba(200, 101, 74, 0.14)",
+    "signal-running": "#8fae63",
+    "signal-idle": "#6f6459",
+    "signal-error": "#d9534f",
+    "signal-info": "#6f9fd8",
+    "signal-warn": "#c9a227",
+    "brand-claude": "#e0975f",
+    "brand-claude-soft": "rgba(224, 151, 95, 0.14)",
+    "bin-c": "#7fa8cc",
+    "bin-c-soft": "rgba(127, 168, 204, 0.14)",
+    "bin-rust": "#d97a4e",
+    "bin-rust-soft": "rgba(217, 122, 78, 0.14)",
+    "shadow": "rgba(0, 0, 0, 0.7)",
+    "shadow-inset": "rgba(255, 255, 255, 0.03)"
+  }
+}

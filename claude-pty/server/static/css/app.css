@@ -1,0 +1,2939 @@
+/* agent-tty 控制台設計系統
+ *
+ * 語意化 custom properties：所有顏色都以「用途」命名（--color-surface / --color-signal-running），
+ * 不以色相命名（不會出現 --blue-500）。因此換主題只需覆寫這些變數的值，版面與元件零改動。
+ * 主題檔為 JSON（static/themes/*.json），由 app.js 在 runtime 套到 :root。
+ */
+
+/* ── 設計 token ─────────────────────────────────────────────────────────────── */
+:root {
+  /* 表面層級：由底到浮起 */
+  --color-surface-sunken: #06080b;
+  --color-surface: #0a0d12;
+  --color-surface-raised: #11151d;
+  --color-surface-overlay: #171c26;
+
+  /* 文字層級 */
+  --color-text-primary: #e8e4dc;
+  --color-text-secondary: #9aa1ae;
+  --color-text-muted: #5f6672;
+
+  /* 邊界：髮絲線是這個設計的骨架 */
+  --color-border: rgba(232, 228, 220, 0.09);
+  --color-border-strong: rgba(232, 228, 220, 0.18);
+
+  /* 強調色：鈉燈琥珀，儀表板指示燈的顏色 */
+  --color-accent: #e0a340;
+  --color-accent-hover: #f2b757;
+  --color-accent-contrast: #0a0d12;
+  --color-accent-soft: rgba(224, 163, 64, 0.12);
+
+  /* 狀態訊號 */
+  --color-signal-running: #4fd6a0;
+  --color-signal-idle: #7d8590;
+  --color-signal-error: #f06a52;
+  /* 通知用的另外兩級。不重用 --color-accent 當 info：強調色會隨主題變（金/赭/藍），
+     但「這是提示、那是警告」的語意必須跨主題一致，讀者不該還要先學這個主題的配色。 */
+  --color-signal-info: #58a6ff;
+  --color-signal-warn: #e3b341;
+
+  /* CLI 身分色：列表 chip 與招牌徽章共用。各主題可調成自己的色階。 */
+  --color-brand-claude: #e08a5f;
+  --color-brand-claude-soft: rgba(224, 138, 95, 0.14);
+
+  /* ttyd 是哪一顆。與 CLI 同一個層級的「類別色」——C 取 C 語言慣用的藍、Rust 取它自己的
+     鏽橘。⚠ 兩者都要避開 accent（琥珀）與 brand-claude（鮭橘），三個橘排在一起就沒有
+     層次可言了；換主題時請一併確認這件事仍然成立。 */
+  --color-bin-c: #5b9bd5;
+  --color-bin-c-soft: rgba(91, 155, 213, 0.14);
+  --color-bin-rust: #e2703a;
+  --color-bin-rust-soft: rgba(226, 112, 58, 0.14);
+
+  /* 版面尺度 */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+  --space-10: 4.5rem;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* UI 文字：黑體。先前整頁用 mono 是錯的——等寬字型多半沒有 CJK 字形，中文會 fallback
+     到系統隨機字體，字重與大小都不受控，看起來又小又雜。mono 只留給「資料」。 */
+  --font-ui: "PingFang TC", "Noto Sans TC", "Hiragino Sans", "Microsoft JhengHei",
+             -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  /* 資料：session id / container / port / 路徑——等寬才對得齊、才看得出字元差異 */
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, monospace;
+  /* 品牌字樣專用（僅 logo 與大標） */
+  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+
+  /* 陰影的顏色交給主題：深色底用濃陰影才有層次，亮色底照抄會變成一圈髒污。
+     命名沿用 --color-* 慣例，主題 JSON 就能直接覆寫。 */
+  --color-shadow: rgba(0, 0, 0, 0.8);
+  --color-shadow-inset: rgba(255, 255, 255, 0.04);
+  --shadow-raised: 0 1px 0 var(--color-shadow-inset) inset,
+                   0 12px 32px -12px var(--color-shadow);
+  --shadow-lamp: 0 0 12px currentColor;
+
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── 基礎 ───────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  /* 與 .gate 一致用 dvh：混用 vh/dvh 會讓兩者對「視窗多高」的認知差一截，
+     差額就是憑空多出來的捲軸。 */
+  min-height: 100dvh;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1; /* 表格數字等寬：時間與 id 才對得齊 */
+}
+
+/* 微粒紋理 + 暈影：讓深色底有空氣感，不是一片死黑 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -10%, var(--color-accent-soft), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+a { color: var(--color-accent); text-decoration: none; }
+a:hover { color: var(--color-accent-hover); }
+
+/* ── 版式 ───────────────────────────────────────────────────────────────────── */
+/* ⚠ `--font-display`（襯線）**只用在 agent-tty 這個名字本身**：masthead 的招牌與登入頁
+   的大字。它是識別，不是「標題的樣子」。其餘一律 `--font-ui`（黑體）——中文襯線在
+   20–30px 這個區間筆畫細節多，辨識比黑體慢，而那些標題是要人一眼掃過就知道下面是什麼。
+   （曾經有一個泛用的 `.display` class，沒有任何使用者，已刪。） */
+
+.label {
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+/* 表單欄位的標籤：使用者要**讀懂**它才知道該填什麼，不是裝飾性的分區標記。
+   全大寫加寬字距對中文沒有意義，只是讓字更難認——這裡回到正常字級與字距。 */
+.label--field {
+  font-size: 14.5px;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--color-text-secondary);
+}
+
+.mono-id {
+  font-variant-ligatures: none;
+  letter-spacing: 0.02em;
+}
+
+/* ── 骨架 ───────────────────────────────────────────────────────────────────── */
+.shell {
+  position: relative;
+  z-index: 1;
+  /* ⚠ 用 rem 不用 px。版面裡被量的東西（欄寬、gap、padding）全是 rem，而 `font-size: 16px`
+     是設在 **body** 上的——body 的字級不影響 rem，html 沒設，所以 rem 等於使用者瀏覽器的
+     預設字級，是他調得動的。這個上限若寫死 px，使用者把預設字級調到 20px 時內容需要
+     82.5rem = 1650px 卻被夾在 1320px，視窗拉多寬都溢出。 */
+  max-width: 82.5rem;                /* = 1320px @ 16px */
+  margin: 0 auto;
+  padding: 0 var(--space-5) var(--space-10);
+}
+
+.masthead {
+  position: sticky;          /* 捲動時固定在頂端 */
+  top: 0;
+  z-index: 20;
+  /* 招牌上沒有一個字是拿來複製的（品牌、分頁名、計價狀態、使用者名、登出），
+     而它們全都貼在可點的膠囊上——拖曳時反白一片藍字只是誤觸的副作用。
+     ⚠ 只關招牌：頁面其他地方（container 名稱、session id、路徑）**必須**選得起來，
+       那些是真的會被複製走的資料。 */
+  user-select: none;
+  -webkit-user-select: none;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(1.4);
+  margin-inline: calc(var(--space-5) * -1);
+  padding-inline: var(--space-5);
+  padding-top: var(--space-4);
+  display: flex;
+  /* center 而非 baseline：兩側現在都是膠囊（分段控制 / 身分 / 登出），基線對齊會讓
+     它們跟著 32px 招牌的基線走，左右兩區的垂直中心因此差了 5px（實測）。 */
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.masthead__brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+/* 與「控制平台」之間留一點空隙即可——分段控制自己就有一圈邊框，那圈框已經是視覺上的
+   分隔。（原本這裡還設了 border-left-color，但 .navseg 的 border 本來就是同一個顏色，
+   那行是零效果的死規則。） */
+.masthead__brand .navseg { margin-left: var(--space-1); }
+
+.masthead__title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  letter-spacing: -0.015em;
+  /* 招牌被 flex 壓縮時寧可溢出也不折行：折行是無聲的（1024px 下實測折成三行、高度從
+     87px 變 142px，卻沒有任何溢出可看），溢出至少看得見。 */
+  white-space: nowrap;
+}
+.masthead__title em { font-style: italic; color: var(--color-accent); }
+
+/* 品牌旁的副標。原本用 .label（12.5px、全大寫、muted 色），在 32px 的招牌旁邊小到像
+   附註——它其實是在說「這裡是什麼」，該讀得到。全大寫也拿掉：對中文沒有作用。 */
+.masthead__kicker {
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--color-border-strong);
+  align-self: center;
+}
+
+.masthead__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: 14.5px;
+}
+
+/* 導覽列上每一顆膠囊的高度。分段控制、計價徽章、主題 picker、身分、登出——它們是同一
+   排、同一種東西（可操作的膠囊），高度就該是同一個值。
+   ⚠ 先前是五個各自長大的數字：43.8 / 31.3 / 50.6 / 38 / 38（2026-07-26 實測），
+     連垂直位置都五個不同，因為每個都是用自己的 padding 撐出來的。改成統一由高度決定、
+     padding 只管左右，之後改字級或內距就不會又各走各的。
+   2.375rem（38px）沿用 .whoami／.masthead__logout 本來就在用的值。 */
+.masthead { --control-h: 2.375rem; }
+.masthead .navseg,
+.masthead .cred,
+.masthead #theme-picker .picker__button,
+.masthead .whoami,
+.masthead .masthead__logout {
+  height: var(--control-h);
+  box-sizing: border-box;
+}
+/* 高度既然由 --control-h 決定，上下 padding 就得讓位——留著的話內容會撐破固定高度。
+   左右 padding 不動，那是水平呼吸空間，與對齊無關。
+   ⚠ 只縮招牌裡的 picker：表單裡的 CLI/模型/深度是大尺寸的表單控制項，`--space-3`
+     的上下內距是它們該有的樣子，被這條掃到會整排變矮。 */
+.masthead .navseg a { height: 100%; padding-block: 0; }
+.masthead #theme-picker .picker__button { padding-block: 0; }
+
+/* 主題 picker 的寬度。原本寫在 _masthead.html 的 style 屬性裡，搬過來是為了讓下面的
+   窄視窗規則放得開它（inline style 只能用 !important 蓋）。 */
+#theme-picker { min-width: 13.5rem; }
+
+/* ── 計價徽章 ───────────────────────────────────────────────────────────────────
+ * 「這些 session 現在算誰的錢」——常駐在招牌上，理由見 _masthead.html。
+ * 圖示寫在這裡（FA 的 content 字碼，與 .picker__option 同一手法），伺服端與 JS 都
+ * 只給 data-state，不必各自知道哪一態配哪個圖示。
+ * ⚠ 不可加 overflow: hidden：說明是 .tip 的 ::after，會被連同裁掉（本檔踩過兩次）。 */
+.cred {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  cursor: default;
+  /* ⚠ **這一行是對齊用的，不是排版偏好。** flex 的 align-items:center 對齊的是**行框**，
+     而 CJK 字型的上下伸部不對稱：全站的 line-height 1.7 把多出來的 leading 不平均地
+     分到上下，於是文字的**墨跡**落在行框中心偏下。旁邊那顆 info 是完美的正圓（來自
+     Font Awesome，度量對稱），一比就看得出來。
+     實測（Linux/Chromium，8 倍截圖量墨跡 bbox）：文字墨跡比行框中心低 0.88px、圖示高
+     0.19px，兩者差 1.06px；line-height:1 之後差 0.06px。
+     為什麼 macOS 沒事：那邊拿到的是 PingFang TC，度量與 Noto Sans TC 不同——同一份 CSS
+     在兩個平台看起來不一樣，根因是字型不是版面（2026-07-28 使用者回報）。
+     `text-box: trim-both cap alphabetic` 是更正統的解法（直接裁到 cap 高度），實測同樣
+     有效，但 Firefox 尚未支援；這裡取 line-height:1，各家瀏覽器行為一致。 */
+  line-height: 1;
+  /* 狀態色的變化要有過渡：輪詢每 15 秒可能把 ok 換成 warn／bad，硬切一下比較像畫面
+     壞掉而不是「事情變了」。width 只在切換 agent 時被 JS 指定成 px（見下面那段）。 */
+  transition: color var(--transition-base), border-color var(--transition-base),
+              background var(--transition-base), width 140ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.cred::before { font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 11px; }
+
+/* ── 切換 agent 時的過渡 ────────────────────────────────────────────────────────
+ * 表單那顆 AI Agent 選單一換，這顆膠囊講的就是另一個 agent 了（品牌標誌、文字、
+ * 狀態色三樣同時換）。沒有過渡的話那是一次瞬間置換，看起來像整顆被抽掉重畫——
+ * 分不出「它換了對象」還是「它剛剛閃了一下」。
+ * 做成看板翻頁：舊的往上淡出、新的從下方浮上來，方向一致＝「同一格換了內容」。
+ *
+ * ⚠ 寬度必須**與淡出同時**跑，不能等新內容淡入才長。前後兩個字串長度可能差很多
+ *   （「Claude 訂閱 · max」vs「Claude 未登入」），慢一步的話會先看到新字
+ *   探出膠囊外面再被邊框追上——而 `.cred` **不能**加 overflow:hidden 遮它，那會把
+ *   tooltip 的 ::after 一起裁掉（本檔上方那條警告，已經踩過兩次）。
+ * ⚠ 寬度的兩個端點由 JS 量（見 app.js 的 swapCred）：CSS 動不了 auto。
+ * ⚠ `.cred__more` 不參與。它是一顆常駐的控制項（叫出用量面板），不是「哪一個 agent」
+ *   的資訊；跟著飛的話會變成連按鈕都被換掉了。
+ * 減少動態：全域那條 `prefers-reduced-motion` 會關掉這裡所有 transition/animation，
+ * 且 app.js 同一條件下整段跳過（只留最終狀態），不會留下半透明的中間態。 */
+.cred__brand,
+.cred__label,
+.cred::before {
+  transition: opacity 140ms ease, transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.cred[data-swap="out"] .cred__brand,
+.cred[data-swap="out"] .cred__label,
+.cred[data-swap="out"]::before { opacity: 0; transform: translateY(-6px); }
+/* 淡入用 animation 而不是第二個 transition 狀態：要「從下方 6px 浮上來」就得先有一幀
+   停在 translateY(6px)，用 class 切換的話得多排一次 rAF，還會跟淡出那段搶同一個屬性。 */
+.cred[data-swap="in"] .cred__brand,
+.cred[data-swap="in"] .cred__label,
+.cred[data-swap="in"]::before {
+  animation: cred-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes cred-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.cred:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* 品牌標誌：一眼認出這顆講的是哪個 agent（它會跟著表單的選擇切換）。
+   顏色用 currentColor，所以正常時是中性灰、出事時跟著整顆變紅——標誌是「誰」，
+   顏色是「狀況」，兩件事不打架。 */
+.cred__brand { display: inline-flex; align-items: center; flex: none; }
+.cred__brand:empty { display: none; }        /* JS 沒跑就不要留一塊空隙 */
+.cred__brand-svg { display: block; }
+/* 這顆的 tooltip 是三行（說明 + 存取權杖 + 續期權杖），要讓 \n 真的換行。
+   ⚠ 選擇器要寫成 `.cred.tip--wide`（兩個 class）：靠的是**特異性更高**（0,2,1 對
+     `.tip--wide::after` 的 0,1,1），不是靠順序。寫成 `.cred::after` 就變成同特異性，
+     而 `.tip--wide::after` 定義在本檔更後面、會反過來蓋掉它——症狀只是三行黏成一段，
+     不會有任何錯誤。（也因為贏在特異性，這條規則搬到檔案哪個位置都成立。） */
+.cred.tip--wide::after { white-space: pre-line; }
+
+/* 正常時要安靜：中性色、細框、小字，而且**不放狀態圖示**——左邊已經有品牌標誌，
+   再加一個打勾就是兩個圖示搶同一個位置，而「一切正常」本來就不需要圖示來說。
+   warn / bad 才給圖示：那時候多一個記號是幫忙，不是噪音。 */
+.cred[data-state="ok"]::before { content: none; }
+
+.cred[data-state="warn"] {
+  color: var(--color-signal-warn);
+  border-color: color-mix(in srgb, var(--color-signal-warn) 45%, transparent);
+}
+.cred[data-state="warn"]::before { content: "\f071"; }      /* fa-triangle-exclamation */
+
+/* 已經在按量計價了——這一態要是漏看，代價是帳單，所以給它底色與字重 */
+.cred[data-state="bad"] {
+  color: var(--color-signal-error);
+  border-color: color-mix(in srgb, var(--color-signal-error) 55%, transparent);
+  background: color-mix(in srgb, var(--color-signal-error) 12%, transparent);
+  font-weight: 600;
+}
+.cred[data-state="bad"]::before { content: "\f06a"; }       /* fa-circle-exclamation */
+
+/* ── 主要區域的分段控制 ─────────────────────────────────────────────────────── */
+.navseg {
+  /* 每一格的寬度，thumb 的定位也用它。
+     ⚠ 改文字長度時要重新量，而且要量**內容的自然寬度**（暫時把 flex 放開、設
+     width: max-content 再量）——`scrollWidth` 在內容比容器窄時會等於容器寬，量出來
+     永遠是「剛剛好」，看不出還剩多少。
+     實測（2026-07-25，本機字型）：「工作階段」需 102px、「帳號管理」需 97px。
+     8rem（128px）留下 26–31px，夠吸收字型 fallback、FontAwesome 未載入、
+     以及選中項 600 字重多出來的寬度。配合下面的 nowrap：最壞是溢出，不會折行成兩層。 */
+  --navseg-w: 8rem;
+  --navseg-gap: 2px;
+  --navseg-i: 0;                   /* 目前是第幾格；由 data-active 決定 */
+  position: relative;              /* thumb 的定位基準 */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--navseg-gap);
+  padding: 3px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface-raised);
+  align-self: center;              /* brand 區是 baseline 對齊，這顆要自己置中 */
+}
+.navseg[data-active="account"] { --navseg-i: 1; }
+/* 會滑動的底色。做成獨立元素而不是選中項的 background，是因為要動的是「位置」——
+   兩個項目各自的背景只能淡入淡出，做不出從甲滑到乙。
+   ⚠ **位置必須由 CSS（而非 JS 量測）決定**。曾經是 JS 量好寬度才定位，於是頁面首次
+   繪製時 thumb 根本不在畫面上，要等 JS——甚至等 document.fonts.ready——才冒出來，
+   每次換頁都閃一下（2026-07-25 使用者回報，修了三次都沒對）。兩格等寬之後寬度是
+   CSS 已知的常數，`data-active` 由伺服端輸出，第一幀就在正確位置。
+   JS 只負責「從上一頁的位置滑過來」，它沒跑或跑得晚，最壞也只是沒有動畫。 */
+.navseg__thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;                       /* 對齊容器的 padding */
+  width: var(--navseg-w);
+  transform: translateX(calc(var(--navseg-i) * (var(--navseg-w) + var(--navseg-gap))));
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  pointer-events: none;
+}
+/* 只在 JS 主動要做「從上一頁滑過來」時才過渡。預設無過渡，thumb 直接就在該在的位置。 */
+.navseg__thumb[data-animate] {
+  transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.navseg a {
+  position: relative;              /* 疊在 thumb 上方 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  /* 兩格等寬。不只是整齊——寬度是常數，thumb 才能純用 CSS 定位（見 .navseg__thumb），
+     移動也才是**純平移**。寬度不同的話（Sessions 114px vs 帳號 77px）左緣要跑 114px、
+     右緣只跑 77px，同一段時間內兩邊速度不同，看起來不像滑過去而像往一邊拉長
+     （2026-07-25 使用者回報「像左到右」）。 */
+  flex: 0 0 var(--navseg-w);
+  box-sizing: border-box;
+  white-space: nowrap;             /* 寧可溢出也不要折行——折行會把整個膠囊撐成兩層 */
+  padding: 6px var(--space-3);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  transition: color var(--transition-fast);
+}
+.navseg a:hover { color: var(--color-text-primary); }
+.navseg a[aria-current="page"] { color: var(--color-accent); font-weight: 600; }
+.navseg i { font-size: 12.5px; }
+
+/* ── 身分與登出（同一組）───────────────────────────────────────────────────── */
+.masthead__account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--color-border);
+}
+/* 登出與換頁是不同性質的動作（它結束整個工作階段），所以有自己的邊框、與身分膠囊
+   同高並排。平時中性——常駐的紅色按鈕只會讓人對紅色麻木，真正危險時就沒有分量了。 */
+.masthead__logout {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2.375rem;                    /* 與 .whoami 同高，並排才齊 */
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  transition: color var(--transition-fast), border-color var(--transition-fast),
+              background var(--transition-fast);
+}
+.masthead__logout:hover {
+  color: var(--color-signal-error);
+  border-color: var(--color-signal-error);
+  background: color-mix(in srgb, var(--color-signal-error) 12%, transparent);
+}
+.masthead__logout:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* ── 目前登入者 ────────────────────────────────────────────────────────────────
+   做成一枚膠囊而不是一段小字：這裡回答的是「我現在是誰、有什麼權限」，跟旁邊那幾個
+   導覽連結是不同性質的資訊，長得一樣的話會被當成又一個可點的東西。 */
+.whoami {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px var(--space-3) 4px 4px;   /* 左側窄：頭像本身已經是內縮 */
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface-raised);
+}
+.whoami__avatar {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+.whoami__name {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  max-width: 10rem;                      /* 名稱是使用者取的，長度沒有上限保證 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* admin 用強調色 + 盾牌：權限狀態要能在不讀字的情況下辨認 */
+.whoami__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.whoami__badge i { font-size: 11px; }
+
+/* 身分膠囊現在是**按鈕**（開下拉）。要看得出可點，但不能變成又一顆搶眼的按鈕——
+   它常駐在招牌上，而它的主要職責仍是「你是誰」。所以只在 hover/開啟時加深邊框。 */
+.whoami {
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.whoami:hover,
+.whoami[aria-expanded="true"] { border-color: var(--color-accent); }
+.whoami:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* 箭頭：唯一在說「這裡還有東西」的線索。開啟時翻轉，關/開一眼分得出來。 */
+.whoami__caret {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-left: 2px;
+  transition: transform var(--transition-fast);
+}
+.whoami[aria-expanded="true"] .whoami__caret { transform: rotate(180deg); }
+
+/* ── 下拉選單（身分）──────────────────────────────────────────────────────────
+   與 .picker__menu 同一套疊放規則：fixed（不被 overflow 容器裁掉）、z-index 高於
+   modal(100) 與抽屜(90)——它是從招牌叫出來的，必須疊在上面。座標由 anchorPanel() 算。 */
+.menu {
+  position: fixed;
+  z-index: 110;
+  min-width: 11rem;
+  width: max-content;
+  padding: var(--space-1);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  animation: picker-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.menu[hidden] { display: none; }
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menu__item i { width: 1rem; text-align: center; color: var(--color-text-muted); }
+.menu__item:hover { background: var(--color-surface-raised); }
+.menu__item:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+/* 登出：平時中性，hover 才轉警示色——常駐的紅色只會讓人對紅色麻木（同原本那顆按鈕）。 */
+.menu__item--danger:hover {
+  background: color-mix(in srgb, var(--color-signal-error) 12%, transparent);
+  color: var(--color-signal-error);
+}
+.menu__item--danger:hover i { color: var(--color-signal-error); }
+.menu__sep {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--color-border);
+}
+
+/* ── 設定對話框 ───────────────────────────────────────────────────────────────
+   ⚠ **單欄**。前一版把它塞進篩選列的 `auto-fit` 多欄格線，而這裡只有兩格，於是右邊
+     永遠空一大塊——空白在設定面板上讀起來像「有東西沒載出來」。每一列都是
+     「標題＋說明」在上、控制項在下，控制項自己撐滿寬度。 */
+.settings { display: flex; flex-direction: column; gap: var(--space-5); }
+.settings__row { display: flex; flex-direction: column; gap: var(--space-2); }
+.settings__head { display: flex; flex-direction: column; gap: 2px; }
+.settings__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+/* 狀態徽章跟在標題後面，不另起一行：它回答的是「這一項現在怎麼樣」，
+   與標題是同一句話。 */
+.settings__state {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.settings__state[data-state="on"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.settings__state[data-state="unknown"] {
+  border-color: var(--color-signal-warn);
+  color: var(--color-signal-warn);
+}
+.settings__note { font-size: 12.5px; color: var(--color-text-muted); line-height: 1.55; }
+/* ⓘ：把「想知道時才看」的長說明收起來。常駐在畫面上就是三行擋路的字。 */
+.settings__more { color: var(--color-text-muted); cursor: help; margin-left: 2px; }
+.settings__more:hover { color: var(--color-accent); }
+.settings__control { width: 100%; }
+/* 輸入框與它的按鈕同一行：那是同一個動作的兩半，拆兩列讀起來會斷掉。 */
+.settings__control--row { display: flex; gap: var(--space-2); }
+.settings__control--row .input { flex: 1 1 auto; min-width: 0; }
+.settings__control--row .btn { flex: none; }
+/* 兩種狀態都在，但講的是不同的事（見 settingsModal 的 showPat）：未設定講下一步，
+   已設定講「這個欄位會覆蓋、留空是清除」。
+   ⚠ **刻意不分顏色。** 曾經給已設定那則加了 `--color-signal-warn`，但：
+     · 預設主題裡 `--color-accent: #e0a340` 與 `--color-signal-warn: #e3b341` **幾乎同色**，
+       所以那個區別根本看不出來——一個看不見的區別比沒有區別更糟，它會讓人以為有訊號。
+     · 而且兩種狀態**互斥**，使用者永遠只看到其中一個，顏色差異本身不帶任何資訊。
+   要「小心」的份量交給文字（`留空送出＝清除` 是粗體）。用紅色是過度警示——這一塊在
+   每次開設定時都會出現，常駐的紅色只會讓人對紅色麻木。 */
+.settings__hint {
+  margin: 0;
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.settings__hint[hidden] { display: none; }
+.settings__hint code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+}
+
+/* 標題後的淡色註記（例如列表的擷取時刻）——是附註不是標題的一部分，故不繼承其字體 */
+.section-head__note {
+  font-family: var(--font-mono);
+  /* 「擷取於 HH:MM:SS」是判斷眼前資料有多新的依據，不是裝飾——不該小到要瞇眼看 */
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  margin-left: var(--space-3);
+}
+
+/* 歷史紀錄是唯讀的過去式，整列壓暗一階，跟進行中的一眼分得開 */
+.manifest__row--past .manifest__id { color: var(--color-text-secondary); }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.section-head__actions { display: flex; align-items: center; gap: var(--space-3); }
+/* 頁籤 + 篩選鍵：控制項與它展開的面板同一側對齊 */
+.section-head__lead { display: flex; align-items: center; gap: var(--space-3); }
+
+/* ── 頁籤：同一份清單的兩種篩選 ────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+.tabs__tab {
+  font: inherit;
+  font-size: 15px;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  position: relative;
+  transition: color var(--transition-fast);
+}
+.tabs__tab:hover { color: var(--color-text-secondary); }
+.tabs__tab[aria-selected="true"] { color: var(--color-text-primary); }
+/* 底線用 ::after 疊在 border 上，切換時滑順且不影響版面高度 */
+.tabs__tab::after {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: -1px;
+  height: 2px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transition: transform var(--transition-base);
+}
+.tabs__tab[aria-selected="true"]::after { transform: scaleX(1); }
+.tabs__tab:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+
+/* ── 時間指標欄：標籤與數值成對，兩列對齊 ─────────────────────────────────── */
+.manifest__metrics {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px var(--space-2);
+  /* 與同一列的其他欄位（狀態 13px、container 13px）同級。這兩個數字是本次新增的核心
+     資訊之一，沒有理由比旁邊的字小一號。 */
+  font-size: 13px;
+  align-content: center;
+}
+.metric__label { color: var(--color-text-muted); }
+.metric { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+/* 啟動偏慢值得一眼看出來——這個數字正是 trivy 快取有沒有命中的體溫計 */
+.metric--slow { color: var(--color-signal-warn); font-weight: 600; }
+.metric__none { color: var(--color-text-muted); }
+
+/* ── 訊號燈：狀態用光點表示，不用彩色大徽章 ─────────────────────────────────── */
+.lamp {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: currentColor;
+  color: var(--color-signal-idle);
+  box-shadow: var(--shadow-lamp);
+}
+.lamp[data-state="running"] {
+  color: var(--color-signal-running);
+  animation: lamp-pulse 2.6s ease-in-out infinite;
+}
+.lamp[data-state="exited"], .lamp[data-state="gone"] { color: var(--color-signal-error); }
+.lamp[data-state="creating"] { color: var(--color-accent); animation: lamp-pulse 900ms ease-in-out infinite; }
+
+@keyframes lamp-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+/* ── session 清單：航班看板式的 manifest，不是 bootstrap table ─────────────── */
+.manifest {
+  border-top: 1px solid var(--color-border);
+  /* 切換頁籤時整段 innerHTML 會被換掉，沒有過渡就是硬生生閃一下。這裡讓容器在換內容
+     的瞬間淡出、換完淡入——資料列本身已有 row-in 逐列進場，兩者疊起來就順了。 */
+  transition: opacity var(--transition-fast);
+}
+.manifest[data-swapping] { opacity: 0; }
+
+.manifest__row {
+  display: grid;
+  /* 序號 | 名稱＋container | 狀態 | profile 標記 | 耗時 | 時間 | 動作
+     動作鍵佔最後一欄、常駐顯示。曾經是 hover 才從右側浮出（為了省下那 200px），
+     代價是使用者得先把滑鼠移過去才知道有哪些操作，觸控裝置更是完全按不到。 */
+  /* ⚠ 不可用 `auto`：每一列都是獨立的 grid 容器，auto 軌道依各自內容決定寬度，
+     於是表頭的「PROFILE」與資料列的 chips 會算出不同的欄寬，整張表對不齊。
+     全部改用不依內容的長度（固定值 / minmax / fr），各列算出來才會一致。 */
+  grid-template-columns:
+    /* 分配原則（依實際需求，不是平均分）：
+         名稱 8.4–11.5rem — **要有上限**。它的內容長度是固定的（12 碼 hex + 編輯鍵，
+                          下面一行是 `claude-pty-<同一串 hex>`）；讓它當 1fr 的話寬螢幕下
+                          會拉到 14rem 以上，多出來的全是空白，而旁邊的設定欄同時擠成
+                          兩行（2026-07-28 使用者回報）。
+                          ⚠ 11.5rem 是**照那串固定長度的容器名抓的**（本機字型下實測
+                          11.31rem），不是一個可以當常數用的數字——字型換了就會差幾像素。
+                          差一點點沒關係：容器名有 ellipsis + tooltip 兜著，有名字的
+                          session 本來就會截斷。上限存在的理由是「別讓空白吃掉設定欄」，
+                          不是「剛好放得下」。
+         狀態 4.5rem
+         設定 20rem 起、**多的寬度給它**（1fr）— 這一欄的內容是唯一會隨資料變長的：
+                          owner + CLI + 模型 + 深度 + 三個圖示，而 chip 現在貼合內容
+                          （最寬 11rem，見 .manifest__chips-cell .chip），20rem 放不下
+                          就折成兩行、整列變高。空間要給真的會用到的人。
+         耗時 7rem   — 「啟動 5.1 秒 / 已跑 2 分 28 秒」兩行的自然寬度
+         時間 6.5rem — 同上
+         操作 19.5rem— 四顆按鈕水平排列（折行的按鈕難看也難點）。
+                     ⚠ 原本是 17.5rem，而四顆按鈕的實際內容是 **310px（19.4rem）**——
+                       最後那顆「畫面」被切掉 30px，只看得到半個「畫」字。欄寬是固定的
+                       rem，所以**每一種視窗寬度都被切**，不是窄螢幕才有。2026-07-29
+                       量到（`.manifest__actions` 的 scrollWidth 310 vs 欄寬 280）。
+       ⚠ 不可用 max-content / auto：表頭那格是空的，依內容算會是 0，跟資料列對不齊。 */
+    2.25rem minmax(8.4rem, 11.5rem) 4.5rem minmax(20rem, 1fr) 7rem 6.5rem 19.5rem;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  position: relative;
+  transition: background var(--transition-fast);
+  animation: row-in 380ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.manifest__row::before {           /* hover 時左緣亮起一道 accent 髮絲 */
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--color-accent);
+  transform: scaleY(0);
+  transition: transform var(--transition-base);
+}
+.manifest__row:hover { background: var(--color-surface-raised); }
+.manifest__row:hover::before { transform: scaleY(1); }
+
+/* 表頭：沿用資料列的格線，只換掉外觀。沒有 hover 高亮、沒有進場動畫——它不是資料。 */
+.manifest__row--head {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-strong);
+  animation: none;
+}
+.manifest__row--head > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manifest__row--head:hover { background: none; }
+.manifest__row--head:hover::before { transform: scaleY(0); }
+
+/* 歷史列沒有會浮出的動作鍵要讓位，欄數也比執行中列少一欄。
+   ⚠ 必須寫在 .manifest__row 之後：兩者特異性相同，順序決定勝負。放在前面的話這條
+   完全不生效，多出來的子元素會被 grid 擠到第二列，整張表看起來像壞掉。 */
+.manifest__row--past {
+  /* 分配原則同執行中列，但吸收多餘寬度的是 Profile 而不是名稱：實測名稱給 1fr 時
+     在 1440 視窗會撐到 412px（遠超過它需要的），而旁邊幾欄同時在溢出被截。
+       名稱  8.4–11.5rem — **與執行中表同一組數字**（顯示名稱 + `claude-pty-<12 位 hex>`，
+                        內容形狀相同）；超出的部分有 ellipsis + tooltip 兜著。
+       結束原因 7rem  — 「使用者終止」含前導 icon 實測 83px；置中之後留一點餘裕
+       Profile  1fr   — owner + 模型 + 深度 + 圖示，是唯一會隨資料變長的一欄，
+                        所以名稱讓出來的寬度**預設歸它** */
+  grid-template-columns:
+    2.25rem minmax(8.4rem, 11.5rem) 7rem minmax(22rem, 1fr) 7rem 8rem;
+}
+
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.manifest__index {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.manifest__id { font-size: 16px; font-family: var(--font-mono); }
+/* 名稱與改名鈕成一組：筆就在名字旁邊，意圖不必猜 */
+.manifest__name { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+/* 名稱與下面的 container 名一樣會超出欄寬（使用者自取的名字沒有長度上限），一樣是
+   截斷 + hover 看全名。
+   ⚠ **截斷與 tooltip 必須分兩層**（同 .manifest__meta 那條，這是同一個坑的第三次）：
+     `overflow: hidden` 會把 .tip 的 ::after 一起裁掉，兩者放同一個元素的話 tooltip
+     永遠不會出現——而「掛上了」與「看得到」是兩件事。
+   ⚠ 外層改成不裁切之後就得自己寫 `min-width: 0`：先前它靠 `overflow: hidden` 讓
+     flex 的 `min-width: auto` 變成 0 才縮得下去。拿掉 overflow 而不補這行的話，名字
+     既不會被切、還會整條**壓在隔壁的狀態欄上**——而欄寬本身不會有任何異狀（軌道是
+     寫死的 minmax 上限，量欄寬看不出來），所以 e2e 量的是「文字有沒有伸出儲存格」。 */
+.manifest__name .manifest__id { min-width: 0; }
+.manifest__id-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* icon 鈕常駐顯示。曾經是 hover 才浮現（想讓列面乾淨），但代價是使用者要先把滑鼠
+   移過去才知道有這個功能——而「這一列可以改名 / 可以看當初的 prompt」正是他需要
+   先知道的事。觸控裝置更是完全沒有 hover 可言。功能不藏在互動之後。 */
+
+/* 貼在內容旁的輕量圖示鈕：不畫外框，才不會跟右側的動作鍵搶注意力 */
+.icon-btn {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  /* muted 太淡，在一整列資料裡等於隱形——這是可以按的東西，要看得出來 */
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast),
+              opacity var(--transition-fast);
+}
+.icon-btn:hover { color: var(--color-accent); background: var(--color-surface-raised); }
+
+/* 就緒狀態自己一欄，不跟 profile 標記混在一起 */
+/* 兩行：狀態一行、「幾點跟 dockerd 求證的」一行。擠在同一行時兩個資訊會互相干擾，
+   而它們的權重本來就不同（狀態是主體，新鮮度是註腳）。 */
+.manifest__status {
+  display: flex;
+  flex-direction: column;
+  /* 這一欄固定是兩行，而兩行寬度差很多（「已結束」＋圖示 vs 「6 秒前確認」）。靠左排
+     時上面那行的圖示會孤零零掛在左上角、下面那行懸空，讀起來像兩個不相干的東西；
+     置中之後它們是同一塊。歷史表早就這樣排了，現在兩張表一致。 */
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+.manifest__state { display: flex; align-items: center; gap: 0.4em; }
+.manifest__status[data-state="ready"] { color: var(--color-signal-running); }
+.manifest__status[data-state="booting"] { color: var(--color-accent); }
+.manifest__status[data-state="ended"] { color: var(--color-signal-error); }
+/* ⚠ 表頭那格要跟著置中——只置中內容的話整欄看起來是歪的，不是「有設計」。
+   兩張表的第三欄都是狀態（執行中表是「狀態」、歷史表是「結束原因」），所以一條就夠。
+   ⚠ 內容那側**不可以**改用 text-align：`.manifest__status` 是 column flex，那顆 `<i>`
+     與裸文字節點（匿名 flex item）的橫向位置由 align-items 決定，text-align 對它們無效。 */
+.manifest__row--head > div:nth-child(3) { text-align: center; }
+/* 這一列的狀態是幾點跟 dockerd 求證來的（ADR 0013）。刻意壓得比狀態本身低一階：
+   平時是背景資訊，過舊時才用警示色跳出來——那時它講的是「對帳可能卡住了」。 */
+.manifest__checked {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.manifest__checked[data-stale="1"] { color: var(--color-signal-warn); }
+/* container 名稱常常超過欄寬（`claude-pty-<12位hex>-<自取名>`）。截斷比換行好——列高
+   才會一致——但完整名稱是要拿去 `docker exec/logs` 的，不能真的看不到，所以 hover 時
+   用自訂 tooltip 顯示全名。
+   ⚠ 截斷與 tooltip 必須分兩層：`overflow: hidden` 會把 .tip 的 ::after 一起裁掉，
+   兩者放同一個元素的話 tooltip 永遠不會出現。 */
+.manifest__meta {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  margin-top: 2px;
+  max-width: 100%;
+}
+.manifest__meta-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* nowrap：profile chips 固定就那幾個，換行只會讓列高忽高忽低。
+   ⚠ **不可加 overflow: hidden**：這些 chip 的說明是 .tip 的 ::after，overflow 會把
+   tooltip 一起裁掉，滑鼠移上去什麼都不會出現（實際踩到，而且是同一個坑犯第二次——
+   container 名稱那欄也是因此把截斷與 tooltip 拆成兩層）。
+   欄寬已由 grid 保證足夠（見 .manifest__row 的 Profile 軌道），不需要再裁。 */
+/* 允許換到第二列：加上模型與思考深度之後，一場 claude session 最多會有七個 chip
+   （owner / CLI / 模型 / 深度 / 網路 / 錄製 / telemetry），一列塞不下。
+   `align-content: center` 讓只有一列時仍垂直置中，不會黏在上緣。 */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: var(--space-2);
+}
+
+/* 列表裡的文字 chip：**貼合內容 + 一個下限**。
+   ⚠ 這裡原本是寫死的固定寬度，理由是「整欄對齊本身就是資訊」——那個目標擋不住
+   長短懸殊的內容：chip 裝的是模型名這種會變長的字串（完整名稱如
+   `claude-fable-5` 實測就超過 5.6rem），硬給一個夠大的固定值又會把 `opus`
+   撐成一條空蕩蕩的長條（2026-07-28 使用者回報兩者都看到了）。
+   現在的取捨：短值共用 5.6rem 的下限（不至於窄得像個點、掃視時仍有節奏），
+   長值各自貼合、超過上限才截斷並掛 tooltip。**對齊不再是保證**，
+   內容長短不同的列會差零點幾 rem。 */
+.manifest__chips-cell .chip:not(.chip--mark) {
+  /* ⚠ 這裡曾經是寫死的 `width: 5.6rem`。那個值**放不下** `claude`／`medium`
+     （headless 實測分別要 6.24 / 6.42rem），只是當時 ellipsis 沒有真的生效、
+     看起來剛好而已；截斷一修好，整欄就變成 `CLA…` `med…`（2026-07-28 回報）。
+     反過來給一個夠大的固定值也不行：claude 的 `opus` 會被撐成一條空蕩蕩的長條。
+     所以改成貼合內容 + 一個下限（短值不至於窄得像個小點）+ 一個上限（真的異常長的
+     slug 才截斷，並掛 tooltip）。⚠ 不要再用寫死的寬度「量一次就好」——字型不同機器
+     不同，量到的數字不能當常數用。 */
+  width: auto;
+  min-width: 5.6rem;
+  max-width: 11rem;
+  justify-content: center;
+  /* ⚠ **不可以**在這裡 overflow:hidden。被截斷的 chip 會掛上 `.tip`，而那個 tooltip 是
+     `::after` 的絕對定位子元素——祖先一裁，提示就跟著被裁掉，等於白掛。裁切改由裡面的
+     .chip__text 負責（它不需要溢出任何東西）。 */
+}
+/* 文字自己一層才吃得到 ellipsis：chip 是 inline-flex，裸文字節點會落進匿名 flex item，
+   `text-overflow` 對它無效——原本這裡寫了 ellipsis 卻只看到硬切就是這個原因。
+   min-width:0 是 flex item 的必要條件，否則它會撐到內容寬、根本不觸發溢出。 */
+.manifest__chips-cell .chip__text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* ⚠ `.chip` 是 line-height:1，文字盒的高度剛好等於字級——配上這裡的 overflow:hidden，
+     g／p 的下伸部會被**裁掉**（使用者回報 `gpt-` 的 g 少半截）。1.35 讓盒子容得下升部與
+     下伸部；chip 高度固定 1.75rem（28px），13.5px × 1.35 ≈ 18px 仍然放得進去。 */
+  line-height: 1.35;
+}
+
+.chip {
+  /* 中文在 12px 已經接近可讀下限（筆畫會糊在一起）。這些 chip 是要「掃一眼就認出」的
+     資訊，不是註腳——與同列的狀態、container 名稱同級才對。 */
+  font-size: 13.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+/* 高度統一：固定 height（box-sizing 是 border-box，1px 邊框已含在內），並把 line-height
+   壓成 1、圖示改 block——否則有圖示的 chip 會被 icon 的行高與 baseline 多撐出幾 px */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  height: 1.75rem;
+  line-height: 1;
+}
+/* fill=currentColor → 跟著 chip 變色；display:block 讓它不吃 baseline 的行距 */
+.chip__logo { display: block; width: 0.95em; height: 0.95em; flex: none; }
+
+.chip__icon { display: block; font-size: 0.95em; line-height: 1; flex: none; }
+
+/* ── 自訂 tooltip：原生 title 慢半拍、樣式不受控，改用 data-tip ─────────────── */
+.tip { position: relative; }
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  /* 往**下**彈，不往上：在密集的表格列裡往上會蓋住前一列已經讀過的內容，而且陰影是
+     朝下的（下面那行 box-shadow），往上顯示時陰影正好投在觸發它的圖示上，看起來像
+     浮錯了一邊。往下則是陰影落在空白處，方向一致。 */
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  padding: 5px var(--space-3);
+  background: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px -6px var(--color-shadow);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  z-index: 30;
+}
+.tip:hover::after, .tip:focus-visible::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* ⚠ `.tip` 一律往正下方置中彈出，貼著視窗右緣的元素會把 tooltip 頂出視窗（整頁多一條
+   橫向捲軸，實測超出 7px）。CSS 無法自動翻轉——要量寬度才知道會不會超出。
+   下面兩個修飾就是為此而加（2026-07-26，抽屜標題列那條提示貼著右緣，實測溢出）：
+     .tip--right  改成靠觸發元素的右緣對齊，往左邊長
+     .tip--left   改成靠觸發元素的左緣對齊，往右邊長
+     .tip--wide   長句子改成可換行；預設的 nowrap 會撐成一條數百 px 的長條
+   兩者可以疊用。貼著右緣**又**內容長的元素兩個都要加。
+   ⚠ 貼**左**緣的要用 .tip--left，`--right` 救不了：兩者都是往左長，只是起點不同，
+     元素本身就在 x≈24 的時候，往左長多少都會被視窗左緣切掉（計價徽章在 620px 下
+     實測：置中會伸到 x=-33）。左緣裁切不會多一條捲軸，所以不會被「有沒有橫向溢出」
+     那個檢查抓到——只會靜靜少半句話。 */
+/* ⚠ 有 `.tip` 就代表「停在這裡會多告訴你一件事」，游標要說出來——不然那些精確時刻
+   （重置時刻、券的到期日）沒有任何線索，只有碰巧滑過去的人會發現。
+   可點的元素維持 pointer：那裡的主要動作是「點」，不是「看說明」。 */
+.tip { cursor: help; }
+button.tip, a.tip, .tip button, .tip a { cursor: pointer; }
+.tip--right::after { left: auto; right: 0; transform: translateX(0) translateY(-4px); }
+.tip--right:hover::after,
+.tip--right:focus-visible::after { transform: translateX(0) translateY(0); }
+.tip--left::after { left: 0; right: auto; transform: translateX(0) translateY(-4px); }
+.tip--left:hover::after,
+.tip--left:focus-visible::after { transform: translateX(0) translateY(0); }
+.tip--wide::after { white-space: normal; width: max-content; max-width: 22rem; line-height: 1.5; }
+
+/* 純圖示的狀態標記：profile 三項（網路 / 錄製 / telemetry）用它，省下一整排文字寬度 */
+.chip--mark { padding: 2px var(--space-2); }
+.chip--mark[data-tone="off"] { color: var(--color-text-muted); opacity: 0.75; }
+/* 關閉狀態：同一個圖示槓一條斜線，不必換圖也看得出是「關」 */
+.chip--mark[data-tone="off"] i { position: relative; }
+.chip--mark[data-tone="off"] i::after {
+  content: "";
+  position: absolute;
+  inset: 45% -10% auto -10%;
+  border-top: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.chip[data-tone="accent"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+/* CLI 各有自己的顏色。先給一層 accent 當基底，未知的 CLI（日後新增）也才有樣子可看，
+   不會變成沒有邊框的裸字。 */
+.chip[data-tone^="cli-"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.chip[data-tone="cli-claude"] {
+  border-color: var(--color-brand-claude);
+  color: var(--color-brand-claude);
+  background: var(--color-brand-claude-soft);
+}
+.chip[data-tone="ok"] {
+  border-color: var(--color-signal-running);
+  color: var(--color-signal-running);
+}
+
+.chip[data-tone="error"] {
+  border-color: var(--color-signal-error);
+  color: var(--color-signal-error);
+}
+
+/* 「這個不是現在設定的那一顆」——不是錯誤（那個程序好好地在服務），但值得一眼看出來 */
+.chip[data-tone="warn"] {
+  border-color: var(--color-signal-warn);
+  color: var(--color-signal-warn);
+}
+
+/* ttyd 是哪一顆（C / Rust）。與 cli- 同一套做法：**類別**用品牌色而不是狀態色——
+   「這個程序跑的是 Rust 版」不是好事也不是壞事，它是一個分類。給基底樣式是為了日後
+   多一顆 binary 時也還有樣子可看，不會變成沒有邊框的裸字。
+   ⚠ 顏色刻意避開 accent（琥珀）與 cli-claude（鮭橘）：三個橘色排在一起就沒有層次了。 */
+.chip[data-tone^="bin-"] {
+  text-transform: none;
+  border-color: var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+.chip[data-tone="bin-c"] {
+  border-color: var(--color-bin-c);
+  color: var(--color-bin-c);
+  background: var(--color-bin-c-soft);
+}
+.chip[data-tone="bin-rust"] {
+  border-color: var(--color-bin-rust);
+  color: var(--color-bin-rust);
+  background: var(--color-bin-rust-soft);
+}
+
+/* 模型與思考深度：中性灰底，不與 CLI 的品牌色或 accent 搶。它們是「這場怎麼跑的」的
+   細節，需要讀得到但不需要被一眼看見——真正要一眼認出的是 CLI 是誰。 */
+.chip[data-tone="model"],
+.chip[data-tone="effort"] {
+  text-transform: none;
+  border-color: var(--color-border-strong);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-overlay);
+}
+
+/* 擁有者：admin 檢視時才有意義（一般使用者只看得到自己的） */
+.chip[data-tone="owner"] {
+  text-transform: none;
+  letter-spacing: 0.02em;
+  /* 刻意**不用**等寬字型：使用者名稱是人名，不是需要逐字對齊的識別碼。而等寬字的
+     x-height 比 UI 字型小，同樣 12px 放在旁邊會矮一截，看起來像是被降級的資訊。 */
+}
+
+/* 常駐在自己的欄位裡。原本是 hover 才從右側浮出——省了寬度，代價是使用者得先把滑鼠
+   移過去才知道有哪些操作，觸控裝置更是完全按不到（沒有 hover 這件事）。
+   功能不該藏在互動之後。 */
+.manifest__actions {
+  display: flex;
+  gap: var(--space-2);
+  /* ⚠ 不可用 flex-end：欄寬不足時內容會靠右堆，最左邊那顆（送入）直接被捲出視野，
+     使用者看到的是「按鈕不見了」。靠左起排，看不到的是最右邊那顆，而且捲軸就在
+     它旁邊，找得到。 */
+  justify-content: flex-start;
+  white-space: nowrap;       /* 按鈕文字折行既難看也難點 */
+  /* 操作鍵放不下時讓這一欄自己橫捲，不要再去壓縮別的欄位——那會變成每加一顆按鈕就
+     得把整張表的寬度重算一輪。
+     ⚠ **捲軸的空間必須明確保留，不能指望列高剛好有富餘**。macOS 有兩種捲軸：預設的
+     overlay（浮在內容上、佔 0px）與「一律顯示」設定下的佔位式（實測佔 15px）。只靠
+     `align-self: stretch` + 垂直置中的話，開發機（overlay）看起來完全正常，而開了
+     「一律顯示」的機器上捲軸就直接壓在按鈕下緣——同一份 CSS，兩種結果，改了兩次都
+     沒真的修好（2026-07-25 使用者截圖回報）。
+     現在的保證是幾何上的，不依賴「捲軸有多高」這個猜測：
+       min-height 4.25rem（68px）＋ padding-bottom 6px，按鈕實測 40.9px。
+       最壞情況（macOS classic 佔位式捲軸 15px，且自訂的 6px 沒被採用）內容區仍有
+       68−15−6＝47px，餘裕 6px；overlay（0px）則是 62px，按鈕置中後底部空 16.5px。
+     代價是每一列高約 10px。值得——按鈕被切一半是功能問題，列高只是密度問題。
+     ⚠ padding 不能再加大：佔位式下捲軸與 padding 是**相加**的，吃掉的是按鈕的空間。
+     ⚠ 改按鈕字級或 padding 時要重算這裡：餘裕是算出來的，不是抓一個看起來夠的數字。 */
+  align-self: stretch;
+  align-items: center;
+  overflow-x: auto;
+  min-height: 4.25rem;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  /* ⚠ 刻意**不**設 pointer-events: none。看似該設——按鈕還沒淡入時不該可點——但實際
+     後果是點擊落空：淡入有轉場時間，這段期間底下的列會把 click 接走，使用者按了卻
+     完全沒有反應也沒有錯誤。而「看不見卻可點」的誤觸窗口其實不存在：指標要能點到
+     這裡，就必須先移到這裡，而移到這裡就已經觸發 hover 讓它顯示了。 */
+}
+/* 自己畫捲軸，不用系統的：一旦指定了 ::-webkit-scrollbar 的高度，WebKit 就固定用這個
+   尺寸的佔位式捲軸，不再受「一律顯示捲軸」那個系統設定影響——上面留的 10px padding
+   因此在所有機器上都夠用。Firefox 走 scrollbar-width: thin（無法指定精確高度，但
+   thin 明顯小於 10px）。 */
+.manifest__actions::-webkit-scrollbar { height: 6px; }
+.manifest__actions::-webkit-scrollbar-track { background: transparent; }
+.manifest__actions::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+}
+.manifest__actions:hover::-webkit-scrollbar-thumb { background: var(--color-text-muted); }
+
+
+/* ── 控制元件 ───────────────────────────────────────────────────────────────── */
+.btn {
+  font: inherit;
+  font-size: 13.5px;
+  letter-spacing: 0.02em;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+              color var(--transition-fast);
+}
+.btn:hover { background: var(--color-surface-overlay); border-color: var(--color-text-muted); }
+.btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-weight: 600;
+}
+.btn--primary:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+
+.btn--danger:hover { border-color: var(--color-signal-error); color: var(--color-signal-error); }
+
+.field { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); }
+/* ⚠ 只要作者樣式設了 display，HTML 的 `hidden` 屬性就失效了——UA 樣式表的
+   `[hidden] { display: none }` 特異性最低，任何 author 規則都蓋得過它。
+   少了這一行，`el.hidden = true` 在畫面上完全沒有作用，而 JS 讀 `el.hidden` 仍回 true
+   ——「驗過了」與「真的看不到」因此可以完全脫節（2026-07-26 由 e2e 抓到：非 admin 的
+   使用者篩選格一直都看得見，而我檢查的是屬性不是可見性）。 */
+.field[hidden] { display: none; }
+
+/* 同一列的欄位群。單欄最小寬度可由 --form-col-min 逐處微調，窄螢幕自動換行 */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--form-col-min, 12rem), 1fr));
+  gap: var(--space-4);
+}
+
+
+/* 「目前不適用」的欄位：淡出並停止互動，但**不隱藏**——欄位消失會讓版面跳動，
+   而且條件回復時使用者得重新找它在哪。 */
+.field[data-disabled="1"] { opacity: 0.4; pointer-events: none; }
+
+.field__hint { font-size: 12.5px; color: var(--color-text-muted); }
+.field__hint[data-tone="error"] { color: var(--color-signal-error); }
+/* 「你把它調離預設了」——不是錯誤，是狀態，所以用強調色不用警示色 */
+.field__hint[data-tone="accent"] { color: var(--color-accent); }
+.field__hint[data-tone="warn"] { color: var(--color-signal-warn); }
+.field__hint[hidden] { display: none; }
+
+/* 需要橫向空間的欄位（設定面板的 GitLab PAT）：占滿整列。
+   ⚠ 為什麼需要：`.filters__grid--lean` 是 `auto-fill, minmax(13rem, 1fr)`，所以每一格都被
+     鎖在約 13rem——一段三行的說明文字在那個寬度下會擠成一條窄柱，讀起來很痛苦。
+   ⚠ 但**占滿整列不等於文字也拉滿**：面板寬 1200px 以上，滿版行長比窄柱更難讀。
+     所以下面另外用 max-width 把「輸入框」與「說明文字」各自收在好讀的長度。 */
+/* 輸入框與它的動作鍵並排。用 flex 不用 grid：這裡就是「一個主元素 + 一顆按鈕」，
+   按鈕照內容寬、輸入框吃掉剩下的。 */
+.field__row { display: flex; align-items: center; gap: var(--space-3); }
+.field__row .input { flex: 1 1 auto; }
+.field__row .btn { flex: 0 0 auto; }
+
+.input, .select {
+  font: inherit;
+  padding: var(--space-3);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-fast);
+}
+.input:focus, .select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+/* ── 密碼欄的「看一眼」按鈕 ─────────────────────────────────────────────────────
+   包裝層由 JS 建立（見 app.js 的 enhancePasswordFields），模板不必知道這件事。 */
+.pw {
+  position: relative;
+  display: block;      /* 撐滿原本 input 佔的位置——表單多半用 grid，欄寬由父層決定 */
+}
+.pw .input {
+  width: 100%;
+  padding-right: 2.75rem;      /* 讓出按鈕的位置，密碼不會被圖示蓋住 */
+}
+.pw__toggle {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.pw__toggle:hover { color: var(--color-text-primary); background: var(--color-surface-overlay); }
+/* tabIndex=-1 讓它不進 Tab 順序，但滑鼠 focus 仍要看得出來 */
+.pw__toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+
+/* 多行輸入（初始 prompt）。只准直向縮放：橫向拖寬會撐破表單的網格。 */
+.input--area {
+  resize: vertical;
+  min-height: 4.5rem;
+  line-height: 1.55;
+}
+
+/* ── 面板 / 卡片 ────────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-raised);
+}
+.panel + .panel { margin-top: var(--space-5); }
+/* 面板標題用 UI 字（黑體），不用 display 襯線。襯線在 agent-tty 那個招牌上是識別，
+   但套到「開一個新 Session」這種指令性的標題就只是裝飾——中文襯線在這個字級下筆畫
+   細節多、辨識反而慢，而這行字是要人一眼知道下面那塊在做什麼。 */
+.panel__title {
+  font-family: var(--font-ui);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0 0 var(--space-4);
+}
+/* 面板標題底下的說明段。限寬是刻意的：整行橫跨螢幕的說明文字沒人讀得下去。 */
+.panel__lede {
+  margin: calc(var(--space-4) * -1 + 2px) 0 var(--space-4);
+  /* 不另設 max-width：外層 .shell 已經把版面收在 1320px 內，這裡再限 62ch 只會在右邊
+     留下一大片空白，看起來像沒寫完。行長的控制交給容器，不是每段文字各自為政。 */
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+/* 說明本身帶語氣：授予管理權限與建立一般帳號不是同一件事，那個差別該看得出來，
+   而不是靠讀者自己讀完整段才意識到 */
+.panel__lede[data-tone="warn"] {
+  color: var(--color-text-secondary);
+  border-left: 2px solid var(--color-signal-warn);
+  padding-left: var(--space-3);
+}
+.panel__lede[data-tone="warn"] strong { color: var(--color-signal-warn); }
+.panel__lede code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-primary);
+}
+.panel__lede strong { color: var(--color-text-primary); font-weight: 600; }
+
+/* 產出的 token。字要可全選、可換行——一長串不換行會把面板撐爆。 */
+.token-out {
+  margin-top: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  padding: var(--space-3);
+}
+.token-out[hidden] { display: none; }
+.token-out__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.token-out__exp { font-size: 12.5px; color: var(--color-text-muted); }
+.token-out__value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;      /* JWT 沒有空白可斷行，不強制就會撐破容器 */
+  user-select: all;           /* 點一下就整段選起來，免得手動拖曳漏字 */
+  color: var(--color-text-primary);
+}
+.btn--sm { padding: 4px 10px; font-size: 12.5px; }
+
+/* ── 登入頁：非置中對稱，刻意偏移＋大留白 ──────────────────────────────────── */
+.gate {
+  /* dvh 而非 vh：行動瀏覽器的 100vh 不含會收合的網址列，永遠比實際可視高度多一截，
+     那多出來的部分就是憑空冒出來的垂直捲軸。dvh 取的是「當下」的視窗高度。 */
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  position: relative;
+  z-index: 1;
+}
+.gate__aside {
+  padding: var(--space-10) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  /* 兩軸都置中，右半邊的表單也置中——左右各自把內容擺在自己那一半的正中央，才是
+     真的對稱。原本兩邊的內容都靠左，看起來就是整片版面往左偏。 */
+  justify-content: center;
+  align-items: center;
+  border-right: 1px solid var(--color-border);
+  position: relative;         /* 插畫以此為定位基準 */
+  overflow: hidden;           /* 插畫超出時裁掉，不要撐出捲軸 */
+}
+/* 品牌文字本身維持左對齊（置中的中文標題會顯得鬆散），但整塊在欄位裡置中。
+   入場：從左側滑入並淡入。用 backwards 讓元素在延遲期間就先套上起始狀態，
+   否則會先閃現最終位置再跳回去開始動。 */
+.gate__brand {
+  position: relative;
+  z-index: 1;
+  animation: gate-in 620ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.gate__kicker { animation: gate-in 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 80ms backwards; }
+.gate__mark { animation: gate-in 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 160ms backwards; }
+/* 插畫最後才進來，而且慢一點——它是背景氣氛，不該搶在品牌之前 */
+.gate__art { animation: gate-art-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) 320ms backwards; }
+/* 右半邊的表單稍晚一點跟上，讀起來是「先認得這是什麼，再開始填」 */
+.gate__form { animation: gate-in 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 240ms backwards; }
+
+@keyframes gate-in {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes gate-art-in {
+  from { opacity: 0; transform: translateX(-40px) scale(0.96); }
+  to   { opacity: 0.85; transform: none; }
+}
+/* 尊重系統的「減少動態效果」：直接給最終狀態，不做位移 */
+@media (prefers-reduced-motion: reduce) {
+  .gate__brand, .gate__kicker, .gate__mark, .gate__art, .gate__form { animation: none; }
+}
+
+/* 左下角的插畫：純氣氛，壓在品牌下層，不與任何互動元素重疊。
+   用 vmin 而非固定值——視窗變小時它跟著縮，不會擠壓品牌區。 */
+.gate__art {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: min(46vmin, 28rem);
+  height: auto;
+  /* 先宣告比例：否則圖片載入前高度是 0、載入後才撐開，版面會跳一下（有時就是那一下
+     讓捲軸閃現）。這批插畫都是正方形。 */
+  aspect-ratio: 1;
+  opacity: 0.85;
+  pointer-events: none;
+  user-select: none;
+}
+/* 視窗矮的時候插畫會壓到品牌，直接收起來——氣氛沒有比讀得到字重要 */
+@media (max-height: 560px), (max-width: 900px) {
+  .gate__art { display: none; }
+}
+.gate__mark {
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 5.5vw, 4.2rem);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+}
+.gate__mark em { font-style: italic; color: var(--color-accent); }
+/* 品牌上方的小標。.label 的 12.5px 在這種大留白版面裡小到像雜訊，但它又不該搶走
+   品牌字的視線——放大到 15px 並保留字距，維持「引導語」的份量。 */
+.gate__kicker {
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+/* 表單標題：字級、字重與底下那道強調色短線一起讓它看起來是「標題」而不是另一個欄位
+   標籤。不用襯線——招牌（.gate__mark）就在正上方，這裡再用一次會變成兩個招牌打架。 */
+.gate__heading {
+  font-family: var(--font-ui);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  margin: 0 0 var(--space-6);
+  padding-bottom: var(--space-3);
+  position: relative;
+}
+.gate__heading::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.5rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.gate__main {
+  display: flex;
+  align-items: center;
+  justify-content: center;    /* 與左半邊對稱：各自在自己那一半置中 */
+  padding: var(--space-10) var(--space-8);
+}
+/* 表單本身有寬度上限（過寬的輸入框很難看），但要在右半邊**水平置中**，
+   不是靠著中間那條分隔線——後者會讓整片版面的重心整個往左偏。 */
+.gate__form { width: 100%; max-width: 22rem; margin-inline: auto; }
+
+/* ── 提示訊息 ───────────────────────────────────────────────────────────────── */
+.notice {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  border-left-width: 3px;
+  font-size: 14.5px;
+  margin-bottom: var(--space-4);
+}
+.notice[data-tone="error"] { border-left-color: var(--color-signal-error); color: var(--color-signal-error); }
+.notice[data-tone="ok"] { border-left-color: var(--color-signal-running); color: var(--color-signal-running); }
+.notice[hidden] { display: none; }
+
+/* ── 通知 toast（右上角堆疊 + 倒數進度條）──────────────────────────────────────
+   倒數由進度條的 animation 擔任，JS 不另開計時器（見 app.js 的 toast）。 */
+.toast-stack {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 100;              /* 高於 modal 遮罩：操作結果要蓋在對話框之上 */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(27rem, calc(100vw - var(--space-4) * 2));
+  pointer-events: none;      /* 容器不擋點擊，只有 toast 本身收事件 */
+}
+/* ⚠ 抽屜開著時往下讓開它的標題列。抽屜的關閉／新分頁／字級全在**右上角**，與 toast
+   同一個位置——而 toast 疊在抽屜之上（z-index 100 > 90，那是對的：操作結果要看得到），
+   於是它正好**擋住關閉鍵**。實測 Playwright 直接點不到（「toast intercepts pointer
+   events」），真人也一樣，只是他會以為抽屜卡住了。
+   做法是讓開而不是降低疊放順序：被蓋住才是真正的問題，往下挪之後 toast 仍然一眼看得到。
+   4.75rem ＝ 標題列高度再多一點餘裕（`.drawer__bar` 的 padding + 控制項高度）。 */
+body:has(.drawer[data-open]) .toast-stack { top: 4.75rem; }
+.toast {
+  pointer-events: auto;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;        /* 有內文時多行，圖示要對首行而不是垂直置中 */
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + 2px);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  border-left: 3px solid var(--toast-color);
+  background: var(--color-surface-overlay);
+  box-shadow: 0 8px 24px var(--color-shadow);
+  color: var(--color-text-primary);
+  /* 進場：從右側滑入。起始狀態寫在這裡，由 data-shown 切到最終狀態 */
+  opacity: 0;
+  transform: translateX(12px);
+  transition: opacity var(--transition-base), transform var(--transition-base);
+}
+.toast[data-shown] { opacity: 1; transform: translateX(0); }
+.toast[data-closing] { opacity: 0; transform: translateX(12px); }
+
+.toast[data-level="info"]    { --toast-color: var(--color-signal-info); }
+.toast[data-level="success"] { --toast-color: var(--color-signal-running); }
+.toast[data-level="warning"] { --toast-color: var(--color-signal-warn); }
+.toast[data-level="danger"]  { --toast-color: var(--color-signal-error); }
+
+/* 圖示與標題**首行**對齊：align-items 用 start，否則多行內文會把圖示推到垂直中央，
+   看起來像浮在字中間。1.35em 是標題的 line-height，正好對到首行的視覺中線。 */
+.toast__icon {
+  color: var(--toast-color);
+  font-size: 18px;
+  line-height: 1.35;
+}
+.toast__body { min-width: 0; }
+.toast__title {
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.toast__desc {
+  margin-top: 3px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+.toast__desc[hidden] { display: none; }
+.toast__close {
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.35;
+  transition: color var(--transition-fast);
+}
+.toast__close:hover { color: var(--color-text-primary); }
+
+.toast__bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--toast-color);
+  transform-origin: left;
+  animation: toast-countdown linear forwards;
+}
+/* hover 暫停：animation 停了＝倒數也停了（兩者本來就是同一件事）。
+   ⚠ 只有「純提示」的 toast 可以暫停。倒數代表某件事會在時間到時發生（例如延遲送出）
+   時不能暫停——那個動作由 JS 的計時器決定，hover 停不下來，進度條停了只會讓畫面說謊。
+   那種 toast 由 JS 標上 data-pausable="0"（見 app.js 的 toast）。*/
+.toast:hover .toast__bar,
+.toast:focus-within .toast__bar { animation-play-state: paused; }
+.toast[data-pausable="0"]:hover .toast__bar,
+.toast[data-pausable="0"]:focus-within .toast__bar { animation-play-state: running; }
+@keyframes toast-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  /* 進場位移拿掉，但**進度條的 animation 必須保留**——它同時是倒數計時器，
+     停掉的話 toast 會永遠不關。 */
+  .toast { transition: opacity var(--transition-fast); transform: none; }
+  .toast[data-closing] { transform: none; }
+}
+
+.empty {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+/* 「這裡沒東西」與「這裡沒東西**而且那是個問題**」是兩件事。後者要看得出來，
+   否則一片灰字看起來就像正常的空狀態。 */
+.empty[data-tone="error"] {
+  color: var(--color-signal-error);
+  border-bottom: none;
+  padding: var(--space-4);
+  text-align: left;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-signal-error) 10%, transparent);
+}
+
+/* ── 篩選列 ─────────────────────────────────────────────────────────────────────
+ * 展開在 section-head 底下、列表上方——它描述的是「下面這份清單是怎麼來的」，
+ * 放在被它影響的內容正上方，關係最直接。
+ * 收合時仍會在按鈕上顯示生效數（見 sessions.html），所以這一整塊藏起來不會讓人
+ * 忘記自己正在看被篩過的資料。 */
+/* 篩選列的展開/收合。
+ *
+ * ⚠ 不能用 `hidden`（＝display:none）來開關：display 不可過渡，動畫從第一格就不會發生。
+ *   高度改由外層 shell 的 `grid-template-rows: 0fr ⇄ 1fr` 帶——那是目前唯一能從「內容
+ *   自己的高度」過渡到 0 的做法（max-height 要猜一個夠大的值，猜大了收合會先空轉一段
+ *   時間才開始動，猜小了內容會被切掉）。
+ *
+ * ⚠ 這裡**刻意不用 transform**。裡面的 picker 與日期面板都是 position: fixed，而任何
+ *   非 none 的 transform 都會讓這一層變成它們的 containing block，`overflow: hidden`
+ *   就會把展開的選單整個裁掉。位移感用 opacity 表達就夠了。
+ */
+.filters-shell {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-bottom: 0;
+  transition: grid-template-rows 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              margin-bottom 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.filters-shell[data-open="1"] {
+  grid-template-rows: 1fr;
+  margin-bottom: var(--space-4);
+}
+/* `.filters` 是**純粹的裁切層**，不帶任何視覺（外框在 .filters__box）。
+   min-height: 0 是 grid 子項能被壓到 0 的前提（預設 auto 會撐住內容高度）；
+   padding 與 border 若留在這一層，收合時它們不會被壓縮，整塊仍佔 34px。 */
+.filters {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  /* 淡入比高度晚一點起跑：先讓出空間再顯字，比兩者同步更像「拉開」 */
+  transition: opacity 180ms ease 60ms;
+}
+.filters__box {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+.filters-shell[data-open="1"] > .filters { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .filters-shell, .filters { transition: none; }
+}
+.filters__grid {
+  display: grid;
+  /* auto-fit + minmax：窄視窗自己收成一欄，不必為這一塊再開斷點 */
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-4);
+}
+/* 欄位很少的面板（設定只有一格）用這個。
+   ⚠ 差別只有 auto-fit → auto-fill 一個字，結果差很多：**auto-fit 會把空軌道摺疊掉**，
+     於是「一個欄位」變成「一個 1fr 的軌道」＝整列寬——一顆只有 C / Rust 兩個選項的下拉
+     被拉成 1238px（2026-07-27 實測）。auto-fill 保留空軌道，那一格就跟篩選面板裡的欄位
+     一樣寬。窄視窗下兩者都收成一欄，響應式行為完全不變。 */
+.filters__grid--lean { grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); }
+/* 起迄就是 grid 裡的兩個一般欄位，緊接在「時間範圍」後面流下去——選了自訂之後
+   讀起來是連續的一句話，不必跳到另一塊區域。平時 hidden，完全不佔位。
+   只給一條左邊界標示「這兩格從屬於前面那一格」，不另外開區塊。 */
+.range-field { border-left: 2px solid var(--color-accent-soft); padding-left: var(--space-3); }
+/* grid 的欄寬是照最窄內容分的，而這一格的按鈕要放得下「起 → 迄」兩個完整時刻 */
+/* 這一格要放得下「起 → 迄」兩個完整時刻（約 21rem），而 grid 的每欄只有 13rem 起跳
+   ——跨兩欄才裝得下，不然文字一定會被截成省略號。 */
+.range-field { grid-column: span 2; min-width: 0; }
+@media (max-width: 60rem) {
+  .range-field { grid-column: span 1; }
+}
+
+/* ── 日期區間選擇器 ───────────────────────────────────────────────────────────
+   取代原本兩個 `<input type="datetime-local">`。原生控制項挑不出「上週三到這週五」這種
+   相對關係，兩欄之間也沒有任何關聯——使用者回報「很難用」，要求參考 element-plus 的
+   datetimerange。這裡是同一個形狀：兩個月並排、點兩下定區間、中間滑過預覽。 */
+/* 按鈕上的區間文字。⚠ flex 子項預設 `min-width: auto`＝不肯縮到內容以下，所以
+   `2026-10-15 00:00 → 2026-11-16 23:59` 會**直接畫出圓角邊框之外**（使用者截圖）。
+   要縮就得明寫 min-width: 0，並自己接住溢出。 */
+.rangepick__trigger { overflow: hidden; }
+.rangepick__trigger .rangepick__value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rangepick__trigger > .picker__caret { flex-shrink: 0; }
+/* 還沒選過時淡一級——那是提示不是值，跟填好的區間要看得出差別 */
+.rangepick__value[data-empty="1"] { color: var(--color-text-muted); font-family: inherit; }
+
+.rangepick__panel {
+  /* 與 .picker__menu 同一套疊放規則：fixed（避免被 overflow 容器裁掉）、
+     z-index 高於 modal(100) 與抽屜(90)。座標由 app.js 的 anchorPanel() 算。 */
+  position: fixed;
+  z-index: 110;
+  width: max-content;
+  max-width: min(40rem, 94vw);
+  /* 矮視窗放不下整個面板時自己捲，不要溢出畫面（定位那邊也會把它夾回可視範圍） */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: var(--space-3);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  animation: picker-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.rangepick__panel[hidden] { display: none; }
+
+.rangepick__heads {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+.rangepick__head { display: flex; align-items: center; gap: var(--space-2); }
+.rangepick__head .input { width: auto; }
+.rangepick__arrow { color: var(--color-text-muted); }
+
+/* 置中：面板寬度是由上面那排（起/迄各兩個輸入框）決定的，比兩個月曆寬。靠左的話
+   右邊會空出一大塊（使用者截圖）。 */
+.rangepick__cals {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-3) 0;
+}
+/* 兩個月之間拉一條線：沒有分隔的話 14 欄數字連成一片，看不出月份的邊界 */
+.rangepick__cal + .rangepick__cal {
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--color-border);
+}
+.rangepick__calhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+/* 左右兩側的翻頁鍵不等量（上一月只在左、下一月只在右），沒有固定寬度的話月份名稱
+   會左右跳動。 */
+.rangepick__navs { display: flex; gap: var(--space-1); min-width: 3.5rem; }
+.rangepick__cal:last-child .rangepick__navs:first-child { min-width: 3.5rem; }
+.rangepick__month { font-size: 13.5px; white-space: nowrap; }
+.rangepick__nav {
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.rangepick__nav:hover { color: var(--color-text-primary); background: var(--color-surface-raised); }
+
+.rangepick__dow, .rangepick__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 2rem);
+  gap: 2px;
+}
+.rangepick__dow > span {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  padding-bottom: var(--space-1);
+}
+.rangepick__day {
+  height: 2rem;
+  border: 0;
+  background: none;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.rangepick__day:hover { background: var(--color-surface-raised); }
+/* 前後月的補格留著（不是空白）才看得出那一週的完整形狀，但要淡到不會被誤點 */
+.rangepick__day.is-other { color: var(--color-text-muted); opacity: 0.45; }
+/* 今天：只加一個底線，不搶走「已選」的視覺重量 */
+.rangepick__day.is-today { box-shadow: inset 0 -2px 0 var(--color-accent-soft); }
+/* 未來的日子挑了也查不到東西（篩的是已經發生過的 session），直接擋掉而不是讓人
+   選完才發現是空的 */
+.rangepick__day.is-disabled {
+  color: var(--color-text-muted);
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.rangepick__day.is-disabled:hover { background: none; }
+.rangepick__nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.rangepick__nav:disabled:hover { background: none; color: var(--color-text-muted); }
+.rangepick__day.is-in { background: var(--color-accent-soft); border-radius: 0; }
+.rangepick__day.is-edge {
+  background: var(--color-accent);
+  /* 與 .btn--primary 同一個 token：主題換色時這兩處必須一起走，硬編的深色在亮色主題
+     底下會變成看不見（test_web 的「CSS 規則內無硬編顏色」就是在守這件事） */
+  color: var(--color-accent-contrast);
+  font-weight: 500;
+}
+
+.rangepick__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+/* 提示佔滿剩餘寬度，把兩顆按鈕推到右邊 */
+.rangepick__hint { flex: 1; font-size: 12.5px; color: var(--color-text-muted); }
+
+@media (max-width: 46rem) {
+  /* 窄畫面放不下兩個月並排，改成上下疊 */
+  .rangepick__cals { flex-direction: column; gap: var(--space-3); }
+  .rangepick__cal + .rangepick__cal {
+    padding-left: 0;
+    padding-top: var(--space-3);
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+}
+/* ⚠ 這兩格塞的是固定格式的 `2026/07/26, 02:00:00 PM` 外加一個日曆圖示。用一般 .input 的
+   內距與字級時，實測可用寬 197px、而文字剛好也要 197px——圖示沒有位置，字被壓掉一截。
+   值是固定寬度的，不需要跟自由輸入一樣的呼吸空間；縮內距與字級即可，不必為了這兩格把
+   整排欄位都拉寬。改字級時要重量（量文字實際需要多寬，不是看起來像夠）。 */
+.range-field .input {
+  padding-inline: var(--space-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.filters__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+/* 有條件生效時按鈕本身要看得出來——只靠一個小數字容易掃過去 */
+#filter-toggle[data-active="1"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── 鍵值列：一行「名稱｜值」。量測值那種「欄位固定、值長短不一」的資料用它 ────── */
+.kv {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr;
+  gap: var(--space-3);
+  padding: 2px 0;
+  font-size: 13px;
+}
+.kv__k { color: var(--color-text-muted); }
+/* 名稱那欄可以掛 .tip 解釋術語（RSS / VMS / fd 這些不是看兩眼就懂的東西）。
+   有說明時給一條虛線底線——沒有任何記號的話，沒人會知道那裡可以停下來看。 */
+.kv__k.tip {
+  justify-self: start;      /* 底線只跟著文字長度，不要拉滿整欄 */
+  text-decoration: underline dotted var(--color-text-muted);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+/* 這些說明有分行（\n），要讓它真的斷行。
+   ⚠ 選擇器寫兩個 class 是為了**特異性更高**（0,2,1 對 .tip--wide::after 的 0,1,1），
+     不是靠順序——同 .cred.tip--wide 那條的理由。 */
+.kv__k.tip--wide::after { white-space: pre-line; }
+.kv__v { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+
+/* ── 終端程序（ttyd）觀測卡 ──────────────────────────────────────────────────────
+ * 一張卡＝一個 ttyd。三種狀態各自要一眼分得出來：
+ *   正常     —— 中性邊框
+ *   幽靈記錄 —— 登錄有列、程序已死（佔著 port 的 UNIQUE）
+ *   孤兒程序 —— 程序在跑、登錄沒有（那個 port 就此消失，沒有任何機制找得到）
+ * 後兩者都用警示色：它們代表的是「對不上」，而這一頁存在的理由就是把對不上的揪出來。 */
+.ttyd {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+.ttyd + .ttyd { margin-top: var(--space-3); }
+.ttyd--dead, .ttyd--orphan {
+  border-color: color-mix(in srgb, var(--color-signal-error) 45%, transparent);
+}
+.ttyd__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;                 /* 窄視窗寧可換行，也不要把 chip 擠成一團 */
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+/* 量測值分兩欄；窄視窗自動收成一欄（auto-fit 不必寫斷點） */
+/* 面板頂端的「你目前用哪一顆 ttyd」。放在最上面而不是每一列旁邊：它是**看這一頁的人**
+   的偏好（per-user，`users.ttyd_bin`），不是某個程序的屬性——每一列旁邊那顆 chip 才是
+   「這個程序實際跑的是哪一顆」，兩者可能不一樣（切換之前起的終端不會被換掉）。
+   ⚠ 這裡原本寫「整台機器的設定」，那是 env 開關時代的說法，已經不成立。 */
+.ttyd-current { margin-bottom: var(--space-3); }
+.ttyd-current__bin {
+  text-transform: none;
+  font-family: var(--font-mono);
+  opacity: 0.72;
+}
+
+.ttyd__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 0 var(--space-5);
+}
+
+/* ── 分頁：延續看板語彙，中央是計數器而非一排頁碼按鈕 ────────────────────────── */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-2);
+}
+.pager[hidden] { display: none; }
+.pager__status {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.pager__status b { font-weight: 400; color: var(--color-text-primary); }
+
+/* ── 表格（帳號管理）─────────────────────────────────────────────────────────── */
+.roster { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.roster th {
+  text-align: left;
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.roster td { padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+/* 帳號名稱那一格截斷。
+   後端有長度上限，但**上限只管得住碼位數與東亞寬字元**：像 U+FDF5 這種阿拉伯連字，
+   east_asian_width 判 N（內部算一欄）卻畫得比兩個 a 還寬，32 個排起來實測是同數量
+   ASCII 的四倍寬（對抗性測試 2026-07-26）。字形寬度是字體的事、伺服器量不到，一個個
+   列舉沒有盡頭——所以在這裡處理**後果**：不管名字用什麼字元，都不准把表格推爆。
+   完整名稱放在 title，滑上去看得到。
+
+   ⚠ 這個 class 要掛在 td **裡面**的元素上，不能掛在 td 自己身上：表格是 auto layout
+   （沒設 table-layout: fixed），而 auto layout 會**直接忽略 td 的 max-width**，欄寬照
+   內容算——實測 32 個 z 的 scrollWidth 與 clientWidth 都是 261px，等於什麼都沒發生。 */
+.roster__name {
+  display: block;
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 建立時間：絕對值在上（等寬字，直向掃視時數字對齊），相對值在下（次要，淡一級） */
+.roster__when { color: var(--color-text-muted); white-space: nowrap; }
+.roster__when > span:first-child { font-family: var(--font-mono); font-size: 13px; }
+.roster__ago { display: block; font-size: 12.5px; opacity: 0.8; }
+
+/* ⚠ 掛在 td **裡面**的 div，不是 td 自己：`display:flex` 會讓 td 不再是 table-cell，
+   那一列的 border-bottom 就在這一格前面斷成兩截（2026-07-28 回報）。同 .roster__name。 */
+.row-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
+
+/* ── 主題切換器 ─────────────────────────────────────────────────────────────── */
+
+/* ── 響應式 ─────────────────────────────────────────────────────────────────── */
+/* ⚠ 斷點必須 ≥ 七欄的最小需求寬度，否則中間會出現一段「grid 縮不下去、compact 又還沒
+   生效」的死區，內容直接溢出。
+   實測（2026-07-26，把 .shell 設 width: min-content 讓 1fr 收到下限後量）：
+     固定欄 2.25+4.5+20+7+6.5+17.5 = 57.75rem，名稱欄下限 8.4rem，
+     6 道 gap × --space-4(1rem) = 6rem，列左右 padding 1.5rem  →  一列需要 66.15rem
+     再加 .shell 左右 padding 3rem                →  **需要視窗 76.65rem（16px 下 1227px）**
+   所以斷點設在 77.5rem。原本寫 1120px 是「約 60rem 再加一點」估出來的，少算了 106px：
+   實測 1121px 下每一列橫向溢出 69px，1121–1225 整段都是死區。
+   ⚠ 斷點用 **rem 不用 px**：上面每一項都是 rem，寫成 px 的話使用者一調瀏覽器預設字級
+   死區就回來（20px 下一列需要 1533px，1240px 的斷點接不住）。量出來的 rem 直接當斷點。
+   ⚠ 別用 `html { font-size }` 去試這條——媒體查詢裡的 rem 依規範是對 root 字級的**初始
+   值**求值，作者自己設的 html 字級改不動它，會量出「斷點沒跟著動」的假結果。這裡成立
+   的前提正是本專案**不設** html 字級：版面 rem 與媒體查詢 rem 同為瀏覽器預設值，兩邊
+   一起縮放。（因此也無法在頁面內模擬，需要真的去改瀏覽器設定。）
+   ⚠ 欄位寬度或 gap 改動時務必用上面的量法重算，不要用估的。 */
+@media (max-width: 77.5rem) {                    /* = 1240px @ 16px */
+  .manifest__row { grid-template-columns: 1.5rem 1fr auto; row-gap: var(--space-2); }
+  .manifest__row--past { grid-template-columns: 1.5rem 1fr auto; }
+  .manifest__status { grid-column: 3; justify-self: end; }
+  .manifest__chips-cell { grid-column: 2 / -1; }
+  .manifest__metrics { grid-column: 2 / -1; grid-template-columns: auto auto auto auto;
+                       justify-content: start; column-gap: var(--space-3); }
+  .manifest__actions { grid-column: 2 / -1; justify-content: flex-start; }
+  /* 窄版一列變多行，表頭的欄位對不上任何東西，留著只會誤導 */
+  .manifest__row--head { display: none; }
+}
+
+/* masthead 是**不換行**的單列 flex，而塞進去的東西一路長大：招牌、副標、分段控制、
+   計價徽章、主題 picker、身分膠囊、登出。實測（2026-07-26，本機字型）自然寬度
+   **1222px**（不含徽章是 1059px——它一個就吃掉 163px）
+   ——低於這個寬度，flex 會去壓縮子項而不是換行，後果有兩層：
+     1. 壓不下去的部分讓整份**文件**橫向溢出（360px 下 scrollWidth = 954、可左右拉），
+        而 masthead 是 sticky：橫向捲走之後右上角的主題與登出就再也按不到。
+     2. 壓得下去的更陰險——1024px 下 32px 的招牌被擠成 92px 寬、**折成三行**，
+        沒有任何溢出可看，只是變醜。
+   ⚠ 1222 這個數字要用**放開 flex 後的自然寬度**量（見 .navseg 的量法）。第一次量成
+   954 是因為直接讀了已經被壓縮的 scrollWidth——那時它等於容器寬，量到的是「現在多寬」
+   而不是「需要多寬」，斷點因此定低了將近 100px。
+   ⚠ 要量**最寬的那一態**：計價徽章三態不等寬（ok 150px / warn 111px / bad 163px），
+   照常態的 ok 量的話，真的出事那天（bad）版面才開始擠——而那正是最不該分心的時候。
+   斷點取 80rem（1222px + 58px 餘裕，吸收字型 fallback 與較長的使用者名稱）。列表的斷點
+   在**上面**、是 77.5rem，兩者各自量出來的，沒有關係，改動時分開重算。
+   同樣用 rem 不用 px，理由見列表那段。 */
+@media (max-width: 80rem) {                      /* = 1280px @ 16px */
+  .masthead { flex-wrap: wrap; }
+  .masthead__brand,
+  .masthead__nav { width: 100%; justify-content: space-between; }
+}
+
+@media (max-width: 53.75rem) {                   /* = 860px @ 16px */
+  .gate { grid-template-columns: 1fr; }
+  .gate__aside { border-right: none; border-bottom: 1px solid var(--color-border); }
+}
+
+/* ⚠ 媒體查詢由寬到窄排列，這一段必須留在最後。CSS 同特異性後者勝，兩個都命中時
+   窄的那個要能蓋過寬的；把它插在前面的話，一旦哪天兩段碰到同一個屬性，寬的會反過來
+   蓋掉窄的——那是很難查的那種 bug。 */
+/* 實測（2026-07-26，同上的量法）：套用下面的規則之後，招牌那區自然寬 394px、
+   工具那區 427px，取較寬者 + masthead 左右 padding 48px → **兩列的版面撐到 475px
+   （29.7rem）都不會溢出**。斷點取 38.75rem 是刻意比需求早觸發——到 30rem 才換行的話，
+   中間那段雖然不溢出但已經擠得很難讀（副標與分段控制黏在一起）。
+   ⚠ 這是「早於需求」而不是「晚於需求」，所以不會有死區；改動時只要確認新的需求值
+   仍然小於斷點即可。 */
+@media (max-width: 38.75rem) {                   /* = 620px @ 16px */
+  /* 兩區各自再換行：招牌與分段控制上下疊、picker 與身分上下疊。
+     不縮 --navseg-w——那個值是照文字實際寬度訂的，縮下去就是折行或截字。 */
+  .masthead__brand,
+  .masthead__nav { flex-wrap: wrap; gap: var(--space-3); }
+  .masthead__brand .navseg { margin-left: 0; }
+  /* 副標是「這裡是什麼」，在只剩一個螢幕寬的時候讓位給真正能操作的東西 */
+  .masthead__kicker { display: none; }
+  #theme-picker { min-width: 0; flex: 1 1 12rem; }
+  /* 換行之後左邊那道分隔線會落在行首，變成一條沒有分隔任何東西的豎線 */
+  .masthead__account { padding-left: 0; border-left: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* ⚠ 必須排除 .toast__bar：那條進度條的 animation **同時是 toast 的倒數計時器**
+     （關閉時機由它的 animationend 決定，見 app.js 的 toast）。被這條全域規則關掉的話，
+     開啟「減少動態」的使用者永遠等不到 animationend，toast 會一直堆積在畫面上直到
+     手動一則則關掉。改成瞬間完成也不行——那會讓 toast 一出現就消失。
+     這裡讓它照常跑：進度條是等速位移，本來就不屬於會引發不適的那種動態。 */
+  *:not(.toast__bar), *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* ── 開關：二選一用它，不用下拉（見 app.js 的 createSwitch）────────────────────
+   高度刻意與 .picker__button 對齊，混排時同一列的控制項不會參差不齊。 */
+.switch {
+  /* 高度與 .picker__button / .input 對齊（同樣的 line-height + padding + border 公式），
+     否則同一列的控制項會參差不齊 */
+  /* em 必須有明確基準：.switch 繼承來的字級比 .picker__button 的 `font: inherit`（＝body
+     的 1rem）小，直接用 em 算會矮 4px。 */
+  font-size: 1rem;
+  --switch-h: calc(1.7em + var(--space-3) * 2 + 2px);
+  --switch-w: 5.5rem;
+  --switch-pad: 5px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--switch-h);
+}
+.switch__control {
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+  /* ⚠ 必須明講：custom property 裡的 em 是在**使用它的元素**上解析，而 --switch-h 是在
+     .switch__track 上用的——它在 <button> 裡，而 button 預設不繼承字型（13.3px），
+     算出來會比 .picker__button 矮 4px。 */
+  font-size: inherit;
+}
+.switch__track {
+  display: block;
+  width: var(--switch-w);
+  height: var(--switch-h);
+  padding: var(--switch-pad);
+  border-radius: 999px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.switch__thumb {
+  --thumb: calc(var(--switch-h) - var(--switch-pad) * 2 - 2px);
+  display: grid;
+  place-items: center;
+  width: var(--thumb);
+  height: var(--thumb);
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  color: var(--color-surface-sunken);
+  font-size: 15px;
+  /* 位移用 transform 而非 margin：只跑合成器，不觸發版面重排。
+     專屬 easing 帶一點回彈（滑塊該有重量感，直線等速像是被拖過去的）。overshoot 約 6%，
+     位移下來只有 2px 出頭，落在 track 的 padding 內，不會凸出去。 */
+  transform: translateX(0);
+  transition: transform 260ms cubic-bezier(0.32, 1.25, 0.5, 1),
+              background var(--transition-base);
+}
+.switch__control[aria-checked="true"] .switch__track {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+.switch__control[aria-checked="true"] .switch__thumb {
+  background: var(--color-accent);
+  color: var(--color-surface);
+  transform: translateX(calc(var(--switch-w) - var(--thumb) - var(--switch-pad) * 2 - 2px));
+}
+.switch__control:focus-visible .switch__track {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+.switch__label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;      /* 連點切換時不要選到文字 */
+  min-width: 0;
+}
+.switch__text {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  transition: color var(--transition-base);
+  /* 「限制（白名單）」被折成兩行會把整列撐高、與旁邊的欄位對不齊。欄寬不夠時寧可
+     讓標籤截斷（開關本身已經表達了狀態），也不要破壞這一排控制項的高度一致。 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 補充說明用**顏色**區分即可，不必連字級也縮——把字改小會讓它看起來像被降級的次要資訊，
+   但它其實是在提醒「你打開了一個有代價的東西」。 */
+.switch__hint {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  /* ⚠ 只設 opacity: 0 是不夠的——那樣它照樣佔著寬度，把主標籤擠到被截斷（實際發生過：
+     「限制（白名單）」變成「限制（白名…」）。連寬度一起收合，才是真的讓出空間，
+     而 max-width 可以過渡，所以淡入淡出的效果仍然保留。 */
+  max-width: 0;
+  opacity: 0;
+  transition: opacity var(--transition-base), max-width var(--transition-base);
+}
+.switch[data-on="true"] .switch__hint { opacity: 1; max-width: 10rem; }
+.switch[data-on="true"] .switch__text { color: var(--color-accent); }
+
+/* ── 自訂下拉：原生 select 在各平台外觀不受控、也放不了圖示 ──────────────────── */
+.picker { position: relative; }
+
+.picker__button {
+  width: 100%;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font: inherit;
+  padding: var(--space-3);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.picker__button:hover { border-color: var(--color-text-muted); }
+.picker__button[aria-expanded="true"] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+.picker__button > .picker__caret { margin-left: auto; color: var(--color-text-muted); font-size: 11px; }
+.picker__icon { width: 1.15em; text-align: center; color: var(--color-accent); flex: none; }
+
+/* 清單還沒到位（見 sessions.html 的 setCatalogLoading）。⚠ 要看起來是「正在載入」
+   而不是「壞掉了」——所以除了變灰，還加一道掃過去的微光。單純灰掉的控制項在畫面上
+   等同故障，使用者會去找哪裡出錯而不是等它。 */
+.picker__button:disabled { cursor: progress; opacity: 0.55; }
+.picker__button:disabled:hover { border-color: var(--color-border-strong); }
+.picker[data-loading="1"] { position: relative; overflow: hidden; border-radius: var(--radius-md); }
+.picker[data-loading="1"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--color-surface-raised), transparent);
+  transform: translateX(-100%);
+  animation: picker-shimmer 1.4s ease-in-out infinite;
+  pointer-events: none;      /* 純裝飾：不可以擋住底下按鈕的 disabled 游標提示 */
+}
+@keyframes picker-shimmer { to { transform: translateX(100%); } }
+/* 願意的話就別動它：這道微光是「還在等」的提示，不是資訊本身，關掉不影響可用性。 */
+@media (prefers-reduced-motion: reduce) {
+  .picker[data-loading="1"]::after { animation: none; opacity: 0; }
+}
+
+/* 由 JS 依可用空間切換（見 createPicker 的 open）——位在對話框底部的 picker 若固定
+   往下開，展開後整片會跑到框外。 */
+/* data-drop 只剩「箭頭/動畫方向」的語意——實際位置由 JS 的 place() 以 fixed 座標決定
+   （見 app.js：absolute 會被 .modal__scroll 之類的捲動容器裁掉）。 */
+
+.picker__menu {
+  /* fixed 而非 absolute：picker 會出現在 .modal__scroll（overflow-y: auto）裡，
+     absolute 的選單會被那個容器裁掉。座標由 app.js 的 place() 每次展開時算。 */
+  position: fixed;
+  /* 高於 modal(100) 與抽屜(90)：選單是從它們裡面叫出來的，必須疊在上面 */
+  z-index: 110;
+  /* 選單可比按鈕寬：主題名稱 + 亮/暗提示在窄按鈕下會被擠壓 */
+  min-width: 100%;
+  width: max-content;
+  max-width: min(24rem, 90vw);
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  /* 22rem 約放得下 6 個選項。17rem 時搜尋框一佔位就只剩 4 個看得到——選單本來就
+     可捲，但一次只露 4 個會讓人以為清單就是那麼短。 */
+  max-height: 22rem;
+  overflow-y: auto;
+  animation: picker-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.picker__menu[hidden] { display: none; }
+
+/* 選項多到要用找的時候，選單最上面的那格輸入框（createPicker 的 search 選項）。
+   sticky：清單可以捲，但輸入框要一直看得到——捲下去之後找不到自己打的字很怪。 */
+.picker__search {
+  position: sticky;
+  top: calc(var(--space-1) * -1);
+  z-index: 1;
+  padding: var(--space-1) var(--space-1) var(--space-2);
+  margin: calc(var(--space-1) * -1) calc(var(--space-1) * -1) 0;
+  background: var(--color-surface-overlay);
+  border-bottom: 1px solid var(--color-border);
+}
+.picker__search .input { width: 100%; box-sizing: border-box; }
+.input--sm { padding: var(--space-2) var(--space-3); font-size: 13px; }
+/* 找不到東西時要明講。留一片空白會讓人以為是壞了。 */
+.picker__empty {
+  padding: var(--space-4) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+@keyframes picker-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.picker__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.picker__option:hover,
+.picker__option[data-active="true"] { background: var(--color-surface-raised); }
+.picker__option[aria-selected="true"] { color: var(--color-accent); }
+.picker__option[aria-selected="true"]::after {
+  content: "\f00c";                       /* fa-check */
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  margin-left: auto;
+  font-size: 11px;
+}
+.picker__hint { color: var(--color-text-muted); font-size: 12px; margin-left: auto;
+                padding-left: var(--space-4); }
+.picker__option[aria-selected="true"] .picker__hint { margin-left: var(--space-2); }
+
+/* ── 終端抽屜：從右側滑入的 ttyd ─────────────────────────────────────────────
+ * 終端原本是開新分頁。改成疊在原頁上的抽屜，是因為看終端的當下多半還要對照列表
+ * （哪個 session、跑多久了、要不要送入），分頁一開就把那些全部蓋掉了。
+ *
+ * z-index 90：在 masthead(20) 之上、modal/toast(100) 之下——從抽屜叫出來的確認框與
+ * 操作結果仍要蓋在它上面。
+ */
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer__scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-surface-sunken) 68%, transparent);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+.drawer[data-open] .drawer__scrim { opacity: 1; }
+
+.drawer__panel {
+  position: relative;
+  width: 90vw;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-raised);
+  border-left: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-raised);
+  /* 起始位置在畫面外，開啟時打上 data-open 才滑進來。用 transform 而不是 right/width：
+     只有 transform 與 opacity 走得了合成器，改位置屬性會讓 iframe 裡的終端每一幀重排。 */
+  transform: translateX(100%);
+  transition: transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  overscroll-behavior: contain;      /* 捲到底時不要把底下的頁面一起帶著捲 */
+}
+.drawer[data-open] .drawer__panel { transform: none; }
+
+.drawer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.drawer__id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;                      /* 讓下面的 ellipsis 生效 */
+}
+.drawer__id > i { color: var(--color-accent); }
+.drawer__title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drawer__sid {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  flex: none;
+}
+/* 哪一顆 ttyd（C / Rust）。做成安靜的標記而不是彩色徽章：它是「出事時要問的第一個
+   問題」，不是常態下要一直看的東西。與 sid 同一組，因為兩者都在回答「這是誰」。 */
+.drawer__bin {
+  flex: none;
+  padding: 1px 0.5em;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-sunken);
+}
+.drawer__tools { display: flex; align-items: center; gap: var(--space-2); flex: none; }
+
+/* ── 標題列的提示輪播 ─────────────────────────────────────────────────────────
+   三條參考資訊（持久化目錄、選字訣竅、GitLab 網址）輪流露臉。並排放不下——標題列的
+   寬度要分給 session 名稱與四顆控制項，而工具區是 `flex: none`，被擠掉的一定是名稱。
+
+   ⚠ 疊法用 **grid 同一格**（`grid-area: 1/1`）而不是 absolute：容器的寬高因此等於
+     「最寬/最高那一條」，輪播時版面不會每 6 秒抽動一次。absolute 會讓容器塌成 0，
+     得另外寫一個隱形的 sizer 來撐——那是同一件事的比較差的做法。 */
+.drawer__hints {
+  display: grid;
+  align-items: center;
+  flex: none;
+  padding-right: var(--space-2);
+}
+.drawer__hint {
+  grid-area: 1 / 1;                /* 全部疊在同一格 */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  /* 沒露臉的那幾條：透明且往上讓半步。位移很小——這是背景資訊的交替，
+     不是需要被注意的轉場。 */
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 320ms ease, transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.drawer__hint[data-on="true"] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.drawer__hint > i { color: var(--color-text-secondary); }
+/* 路徑用等寬字：它是要照著打進終端的字串，不是散文。 */
+.drawer__hint--persist > code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+/* 持久化那條是**按鈕**（點了複製路徑）。做成低調的形狀：它與旁邊兩條是同一種份量的
+   參考資訊，長成一顆按鈕會讓人以為那是主要動作。可點的線索交給 hover 與那顆複製圖示。 */
+button.drawer__hint {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+button.drawer__hint:hover { color: var(--color-text-secondary); }
+button.drawer__hint:hover > code,
+button.drawer__hint:hover .drawer__copy-icon { color: var(--color-accent); }
+button.drawer__hint:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+/* 路徑與它的複製圖示是**一組**：組內 3px 貼緊、組外再推開 4px（加上 .drawer__hint 自己的
+   gap 共 7px）。等距的話看不出那顆圖示是屬於路徑還是屬於後面的「會留著」，而被複製的
+   只有路徑。 */
+.drawer__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 4px;
+}
+.drawer__copy-icon { font-size: 11px; color: var(--color-text-muted); }
+
+/* 字級加減：兩顆貼在一起當一組，中間不留 gap（.drawer__tools 的 gap 會把它們拆開看） */
+.drawer__zoom { display: inline-flex; align-items: center; gap: 2px; }
+.drawer__zoom-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  min-width: 3.2em;                /* 8px–32px 都放得下，數字變動時按鈕不會左右跳 */
+  text-align: center;
+}
+/* 到界的那一側：看得出來是「不能再按」而不是壞了 */
+.drawer__zoom .icon-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ⚠ 這裡曾經是兩條 media query，把提示一條一條 `display: none` 掉——而**藏掉的那條就
+   等於不存在**（持久化路徑那條關係到使用者的檔案會不會消失）。改成輪播之後不需要了：
+   佔的寬度本來就只有一條，而且每一條都輪得到。窄視窗只把整組收掉。 */
+@media (max-width: 60rem) {                      /* = 960px @ 16px */
+  .drawer__hints { display: none; }
+}
+
+/* ⚠ 會動的東西要問過使用者的偏好。這裡**只關掉位移與淡入的過渡**，輪播本身照跑——
+   輪播是「內容輪流出現」，不是動畫效果；停掉的話後兩條就永遠看不到了，那是把
+   「不要動畫」誤解成「不要資訊」。 */
+@media (prefers-reduced-motion: reduce) {
+  .drawer__hint { transition: none; transform: none; }
+  .drawer__hint[data-on="true"] { transform: none; }
+}
+
+/* 這個底色只在 iframe 載入前的那一瞬間看得到（載入後由 ttyd 自己的背景蓋掉），
+   用語意色而不是寫死黑色——主題換成亮色時，中間閃一下純黑會很刺眼。 */
+.drawer__body { flex: 1; min-height: 0; position: relative; background: var(--color-surface-sunken); }
+.drawer__frame { width: 100%; height: 100%; border: 0; display: block; }
+
+/* iframe 還沒載入前是一片純黑，看不出是在等還是壞了——先鋪一層字說明現況 */
+.drawer__pending {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  text-align: center;
+  padding: var(--space-5);
+}
+.drawer__pending[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* 滑入是這個元件唯一的動態，關掉之後直接就位即可。
+     ⚠ JS 的收尾等的是 transitionend，這裡把 transition 拿掉之後它永遠不會來——
+     所以 closeDrawer 另外掛了 timeout 保底（見 app.js）。 */
+  .drawer__panel, .drawer__scrim { transition: none; }
+}
+
+/* ── 對話框：取代原生 confirm() / prompt() ──────────────────────────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: color-mix(in srgb, var(--color-surface-sunken) 72%, transparent);
+  backdrop-filter: blur(4px);
+  animation: fade-in 140ms ease-out;
+}
+.modal[hidden] { display: none; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.modal__box {
+  width: min(30rem, 100%);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  padding: var(--space-5);
+  animation: picker-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.modal__title {
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0 0 var(--space-3);
+}
+.modal__body { color: var(--color-text-secondary); margin-bottom: var(--space-4); }
+.modal__actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  /* 與上方的捲動區分開。捲動區的邊界不會自己產生視覺間隔——內容捲到底時會直接貼上
+     按鈕，看起來像是按鈕屬於那段內容。上緣的細線讓「這裡是固定的操作區」更明確。 */
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+/* 一般確認框沒有捲動區，內容與按鈕之間已有 margin，不需要那條線 */
+.modal__box:not(.modal__box--wide) .modal__actions {
+  padding-top: 0;
+  border-top: none;
+}
+/* API 請求預覽：預設收合。它是給想知道「這個按鈕實際打什麼」的人看的，
+   不該佔掉每個人的版面。 */
+/* margin-bottom 不可為 0：下面緊接著就是取消/送出，貼在一起看起來像是按鈕屬於程式碼區塊 */
+/* 終端畫面的對話框：終端本身是 140 欄 × 40 列，用一般對話框的寬高只能看到一小角。
+   放到接近整個視窗，讓它盡可能還原真實畫面。 */
+.modal__box--screen {
+  max-width: min(96vw, 78rem);
+  width: 96vw;
+}
+.modal__box--screen .modal__pre {
+  max-height: calc(100dvh - 14rem);   /* 扣掉標題、說明與按鈕，剩下全給畫面 */
+  font-size: 12px;
+  line-height: 1.35;                  /* 貼近終端本身的行距，版面才不會被拉長 */
+}
+
+/* 終端畫面用：不折行、自己橫捲。終端是固定欄寬的版面，一折行整個對齊就毀了。 */
+.modal__pre--nowrap {
+  white-space: pre;
+  overflow-x: auto;
+  word-break: normal;
+}
+
+.modal__pre {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: 12.5px;
+}
+
+/* 送入面板比一般確認框寬：裡面有 textarea、下拉與程式碼預覽，太窄的話這些元素
+   會顯得又高又窄，比例失衡。 */
+.modal__box--wide { max-width: 42rem; }
+/* 內容可能撐得比視窗高（展開 API 預覽時尤其明顯）。捲動範圍只給中段——標題、頁籤與
+   底部按鈕固定住，捲的時候才知道自己在哪個模式、送出鈕在哪裡。 */
+.modal__box {
+  max-height: calc(100dvh - var(--space-8));
+  display: flex;
+  flex-direction: column;
+}
+.modal__scroll {
+  overflow-y: auto;
+  min-height: 0;            /* flex 子項預設 min-height:auto，不設它就不會縮、不會捲 */
+  /* 捲動時內容不要貼著邊 */
+  padding-right: 2px;
+}
+
+
+/* 原文檢視：保留換行與縮排，長內容自己捲，不把對話框撐爆 */
+.modal__pre {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  max-height: min(50vh, 26rem);
+  overflow: auto;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;     /* 保留換行，但過長的行仍要折回來 */
+  word-break: break-word;
+  user-select: text;
+}
+
+
+/* 表單主要動作靠右對齊 */
+.form-actions { display: flex; justify-content: flex-end; margin-top: var(--space-4); }
+.form-actions--center { justify-content: center; }
+
+/* ── 主題切換的同心圓過渡（View Transition API）────────────────────────────────
+ * 關掉預設的交叉淡入，改由 JS 對 ::view-transition-new(root) 做 clip-path 圓形展開，
+ * 圓心＝使用者點擊的位置，看起來像從指尖擴散的漣漪。
+ * 不支援 View Transition 的瀏覽器會直接套用新主題（無動畫），功能不受影響。
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) { z-index: 2147483646; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
+
+
+/* ── 頁尾：線上跑的是哪一版 ────────────────────────────────────────────────────
+ * 兩行、置中：上排是各模組，下排是打包時間。置中而不是靠左——頁尾沒有「閱讀起點」，
+ * 靠左會讓它看起來像是內容沒排完的殘句。
+ * ⚠ 寬度與 padding 跟著 .shell（同一個 82.5rem 上限），否則會與內容錯開。用 rem 不用
+ *   px，理由見 .shell 那條註解。
+ * ⚠ 不用 position: fixed：主體是會長高的列表，固定頁尾會一直蓋住最後一列。
+ */
+.footer {
+  max-width: 82.5rem;
+  margin: var(--space-8) auto var(--space-6);
+  padding: var(--space-4) var(--space-5) 0;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.footer__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+}
+/* 一個模組是一顆膠囊：邊界靠底色而不是靠分隔符號——分隔點在換行時會落在行首/行尾，
+   而這一排本來就會隨視窗寬度換行。 */
+.footer__mod {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  border-radius: 999px;
+  background: var(--color-surface-raised);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.footer__mod:hover { background: var(--color-surface-overlay); color: var(--color-text-secondary); }
+.footer__name { color: var(--color-text-secondary); }
+.footer__ver { color: var(--color-text-primary); }
+/* commit 是要拿去跟 git log 逐字對照的識別碼，用等寬字 */
+.footer__sha { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted); }
+/* ⚠ 問不到就明說。空白會讓人去查，錯的值會讓人停止查——所以用 warn 色，
+   「不知道自己在跑哪一版」確實是個該修的狀態，不是中性事實。 */
+.footer__unknown { color: var(--color-signal-warn); opacity: 0.85; }
+.footer__built { margin-top: var(--space-3); color: var(--color-text-muted); }
+.footer__rel { opacity: 0.75; }
+.footer__at:empty, .footer__rel:empty { display: none; }
+
+/* ── 訂閱用量面板 ──────────────────────────────────────────────────────────────
+ * 從招牌那顆 info 鍵展開。定位交給 anchorPanel()（它會夾在視窗內），這裡只管長相。
+ */
+/* ⚠ **這一顆刻意不用 flex 置中，改成隨文字基線走的 inline-block。**
+   flex 的置中把它擺成一個獨立的盒子，而 Chrome 對「文字基線」與「有邊框的盒子」是分別
+   捨入到裝置像素的——兩邊各自 round，於是某些縮放倍率剛好對上、某些差一個像素。
+   使用者回報的形狀正是這個：80% 看起來正、100% 偏上、175% 又正（2026-07-28）。
+   實測（真實倍率截圖、亮度加權重心，六個縮放倍率取最差）：
+     flex 置中（原本）            0.79px，且每一格都是圓圈偏上
+     只留字形、拿掉 CSS 圓框       1.34px（更糟，方向還相反）
+     **inline-block + em 尺寸**   0.41px，正負跨零 ← 採用
+   殘留的 0.4px 是裝置像素捨入的本質，CSS 消不掉；能做的是讓圓框與文字**一起**被捨入。
+   ⚠ 這條與 `.cred__label` 的 `line-height: 1` 是**一組的**：把那行拿掉，這裡會退回
+     1.65px（同一組實測）。改動任一邊都要重量。
+   ⚠ 改成 SVG 之後由使用者在真實螢幕上以 0.25px 為級距校準（2026-07-28，Linux/125%），
+     結果是 **0**——所以這裡**不需要**任何 translateY 補償，也不要為了「看起來再正一點」
+     加一個：那會在 mac 上把已經正的東西弄歪。 */
+.cred__more {
+  display: inline-block;
+  vertical-align: middle;
+  text-align: center;
+  /* em 而非 px：跟著文字縮放，捨入的相位也跟著文字走 */
+  box-sizing: border-box;
+  width: 1.55em; height: 1.55em; line-height: 1.55em;
+  margin-left: var(--space-1);
+  /* 圖示縮小走內距，**不動 width/height**：那兩個同時是點擊範圍與面板開啟時的底色圓，
+     跟著縮會讓本來就只有 ~20px 的目標更難點。內距對稱，所以不影響上面量到的對齊。 */
+  padding: 0.14em;
+  /* 圓框現在由 SVG 自己畫（見 _masthead.html），按鈕不再有 border——那正是先前
+     「兩個各自捨入的東西」中的一個。圓角留著：hover 的底色要是正圓。 */
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+/* 圖示是內嵌 SVG（見 _masthead.html）：圓框與 i 在同一個座標系裡，內部對齊精確，
+   不再有「CSS 圓框 vs 字形」各自捨入的問題。block 讓它不吃 baseline 的行距。 */
+.cred__more-icon { display: block; width: 100%; height: 100%; }
+.cred__more:hover, .cred__more[aria-expanded="true"] { opacity: 1; }
+.cred__more[aria-expanded="true"] { background: color-mix(in srgb, currentColor 14%, transparent); }
+
+.usage {
+  position: fixed;
+  z-index: 40;
+  width: 26rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  /* ⚠ 橫向一律裁掉。`.tip::after` 是絕對定位、平時 opacity:0 但**仍算進 overflow**——
+     面板是可捲容器，於是它在底下長出一條水平捲軸（使用者回報 2026-07-27）。
+     裡面的 tooltip 已改成 tip--right（往左長）不會超出，這條是保險；
+     用 clip 不用 hidden：hidden 會讓這個軸也變成可捲，等於把問題換個樣子。 */
+  overflow-x: clip;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+  box-shadow: 0 18px 48px -12px var(--color-shadow);
+  font-size: 13px;
+}
+.usage[hidden] { display: none; }
+.usage__head {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+.usage__plan { margin-bottom: var(--space-3); color: var(--color-text-secondary); }
+/* 一列＝標籤在上、進度條在中、百分比在右。把「幾點重置」放在標籤底下而不是另開一欄：
+   它是那一條的註腳，不是獨立的一欄資料。 */
+.usage__row { margin-bottom: var(--space-4); }
+.usage__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.usage__label { color: var(--color-text-primary); }
+.usage__when { font-size: 12px; color: var(--color-text-muted); }
+.usage__track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+}
+/* 超過 100% 就**讓它真的超出去**，不要夾在滿格。夾住的話 103% 與 100% 長得一模一樣，
+   而「超出多少」正是這一條唯一要傳達的事（數字在右邊，形狀在這裡）。
+   軌道本身留一道虛線標出 100% 的位置，超出的那一段才有參照物。 */
+.usage__track[data-over="1"] { overflow: visible; }
+.usage__track[data-over="1"]::after {
+  content: "";
+  position: absolute;
+  top: -2px; bottom: -2px; left: 100%;
+  border-left: 1px dashed var(--color-text-muted);
+}
+.usage__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-signal-info);
+  transition: width var(--transition-base);
+}
+/* 三個等級用既有的語意色，不另外發明顏色 */
+.usage__fill[data-sev="warn"] { background: var(--color-signal-warn); }
+.usage__fill[data-sev="critical"] { background: var(--color-signal-error); }
+.usage__pct { display: none; }
+/* 百分比放在進度條右邊那一欄——放在標籤列會與「幾點重置」搶位置 */
+/* ⚠ 第二欄**固定寬**（三位數 + %），不可以用 auto。auto 會讓「8%」與「100%」佔不同寬度，
+   於是每一條進度條的長度都不一樣——一眼比不出誰用得多，而那正是把它們排在一起的理由。
+   配上 .usage__pct 的 tabular-nums，數字換了也不會抖。 */
+.usage__row { display: grid; grid-template-columns: minmax(0, 1fr) 2.75rem; gap: 0 var(--space-3); }
+/* ⚠ **grid / flex 子項預設 min-width:auto**——不肯縮到內容寬度以下。少了下面這幾個
+   `min-width: 0`，長標籤配上「3 天 11 小時後重置」就把整列推寬，面板底下長出一條水平
+   捲軸（使用者回報 2026-07-27）。第一欄用 minmax(0, 1fr) 是同一件事的 grid 寫法。 */
+.usage__meta { grid-column: 1 / -1; min-width: 0; }
+.usage__label { min-width: 0; overflow-wrap: anywhere; }
+.usage__when { min-width: 0; text-align: right; }
+/* ⚠ 進度條只有 6px 高，而同一列的百分比文字約 18px——列高由文字決定，軌道若不
+   `align-self: center` 就會貼在列的**頂端**，看起來像沒對齊（使用者回報 2026-07-27）。
+   兩邊都置中才會在同一條中線上。 */
+.usage__track { min-width: 0; align-self: center; }
+.usage__pct {
+  display: block;
+  align-self: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--color-text-secondary);
+}
+.usage__pct[data-sev="warn"] { color: var(--color-signal-warn); }
+.usage__pct[data-sev="critical"] { color: var(--color-signal-error); }
+.usage__sep {
+  height: 1px;
+  margin: var(--space-4) 0;
+  background: var(--color-border);
+}
+.usage__note { margin-bottom: var(--space-3); color: var(--color-text-secondary); }
+.usage__note b { color: var(--color-text-primary); }
+.usage__ticket {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  /* ⚠ 透明框是**佔位**，不是裝飾。快到期的券才會上色，若平常那張沒有框，兩者的內寬
+     會差 2px——同一份清單裡有的券縮一點、有的寬一點，看起來像排版壞了。 */
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+.usage__ticket-title { color: var(--color-text-primary); }
+.usage__ticket-when { font-size: 12px; color: var(--color-text-muted); }
+
+/* ── 重置券到期倒數：三段式（分桶邏輯在 app.js 的 ticketExpiry）───────────────
+   券過期就沒了，所以「快到期」必須自己跳出來。三段刻意用同一組語意色而不是自創色階：
+   橘＝該注意、紅＝快沒了、紅＋脈動＝今天就沒了。 */
+.usage__ticket[data-expiry="soon"] {
+  border-color: color-mix(in srgb, var(--color-signal-warn) 75%, transparent);
+}
+.usage__ticket[data-expiry="urgent"] {
+  border-color: color-mix(in srgb, var(--color-signal-error) 75%, transparent);
+}
+.usage__ticket[data-expiry="critical"] {
+  border-color: var(--color-signal-error);
+  /* 底色用 color-mix 疊在原本的 surface-raised 上，不是換一個顏色——換色的話兩個主題
+     各要調一次，疊色則自動跟著主題走。 */
+  background: color-mix(in srgb, var(--color-signal-error) 12%, var(--color-surface-raised));
+  animation: usage-ticket-alarm 2.4s ease-in-out infinite;
+}
+/* 脈動只加「紅光」不改幾何：改 transform/尺寸會讓下面幾張券跟著抖，而這是一份清單。
+   ⚠ 開了「減少動態」時全域規則會關掉這條 animation，那時剩下框線＋底色＋警示圖示
+   ——訊息不會消失，只是不再動。 */
+@keyframes usage-ticket-alarm {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-signal-error) 55%, transparent); }
+  50%      { box-shadow: 0 0 12px 2px color-mix(in srgb, var(--color-signal-error) 55%, transparent); }
+}
+.usage__ticket-exp[data-expiry="soon"] { color: var(--color-signal-warn); }
+.usage__ticket-exp[data-expiry="urgent"],
+.usage__ticket-exp[data-expiry="critical"] { color: var(--color-signal-error); }
+.usage__ticket-exp[data-expiry="critical"] { font-weight: 600; }
+.usage__empty { color: var(--color-text-muted); }
+/* 面板標題列：名稱在左、重新整理在右 */
+.usage__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.usage__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.usage__refresh:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-surface-raised);
+}
+.usage__refresh:disabled { opacity: 0.5; cursor: default; }
+.usage__title { color: var(--color-text-primary); }
+.usage__head-right { display: inline-flex; align-items: center; gap: var(--space-2); }
+/* 這份資料有多舊。放在標題列右邊、緊鄰重新整理鍵——「它多舊」與「我要更新」是同一件事
+   的兩半，分開放的話使用者得先在別處找到年齡才知道要不要按。 */
+.usage__age { font-size: 11px; color: var(--color-text-muted); }

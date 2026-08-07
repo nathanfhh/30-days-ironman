@@ -1,0 +1,180 @@
+# 控制平面 image（ADR 0009）：Flask + reconciler + ttyd，經 host docker socket 操作 daemon。
+#
+# 需要 docker CLI 是因為 ttyd 的子命令就是 `docker attach <container>`（ADR 0002）——
+# 它在這個容器內執行，透過掛進來的 socket 對 host daemon 講話，attach 到「兄弟」容器。
+#
+# ══ 全檔規則：**任何一個 apt 階段，第一件事都是把來源換成 https** ══════════════════
+#
+# Mac 的 Docker Desktop 會掛一層 proxy（`docker info` 看得到 `HTTP Proxy:
+# http.docker.internal:3128`），而容器內走純 HTTP/80 一律連不出去、https/443 正常。
+#
+# 症狀特別難認：`apt-get update` 連不到只是**警告、退出碼 0**，真正炸的是下一句
+# `apt-get install`——它因為索引是空的而回 exit 100（"Unable to locate package git"）。
+# 而且 apt 預設會重試三輪、逾時很長，所以要等**十幾分鐘**才看得到那個錯
+# （2026-07-27 實測：第一階段卡到 724 秒才報 exit 100）。
+#
+# Linux 沒有那層 proxy，http 本來就通——但 https 也通，所以這條規則對兩邊都成立，
+# 不需要分支判斷。deb.debian.org 支援 https。
+#
+# ⚠ 這個規則**寫在這裡一次**。之前只有第二階段有，第一階段（Rust builder）是後來加的、
+#   沒跟上，於是整個 build 在 Mac 上根本過不去。新增任何一個 FROM 都要一起套。
+
+# --- 第一階段：把 Rust 版 ttyd 編出來（image 內同時放兩顆，由 env 選）------------------
+#
+# 為什麼要多這一階段而不是直接抓 release binary：Rust 版目前只存在於分支上，沒有 release
+# 資產可下載，也就沒有「對得起 C 版那條紀律」的 sha256 可釘。**改釘 commit**——branch 名
+# 是會動的，用它等於每次 build 都可能拿到不同的東西，而這顆 binary 代理的是每一位使用者的
+# 互動 shell。要換版就換這個 SHA（`git rev-parse <branch>` 取得）。
+#
+# ⚠ builder 用 **bookworm**（glibc 2.36）而最終 image 是 trixie（2.41）：glibc 只保證
+#   「舊的編、新的跑」，反過來會在啟動時報 GLIBC_2.4x not found。不要為了版本一致把
+#   builder 換成更新的 suite——那個方向沒有保障。
+# ⚠ 這兩個宣告在**第一個 FROM 之前**＝全域 ARG，用到的 stage 各自以「裸 ARG」繼承。
+#   不這樣做的話預設值要在兩個 stage 各寫一份，而那兩份遲早會分岔（改了 builder 卻忘了
+#   改最後那個 ENV，頁尾就會顯示一個沒有在跑的 commit）。
+ARG TTYD_RUST_REPO=https://github.com/nathanfhh/ttyd.git
+ARG TTYD_RUST_REF=a6275568a2c4f4c47aaf3d3942fb8dde3132fc6e
+
+FROM rust:1.86-slim-bookworm AS ttyd-rust
+ARG TTYD_RUST_REPO
+ARG TTYD_RUST_REF
+# 見檔頭的「全檔規則」。這一階段**不需要**第二階段那段 Verify-Peer=false 的 bootstrap：
+# rust:slim 為了讓 cargo 抓 crates.io，image 裡本來就有 ca-certificates（實測
+# /etc/ssl/certs/ca-certificates.crt 存在），所以直接走正常驗證的 https 就好。
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+# 先 depth=1 拉分支再 checkout 指定 commit：這樣既省頻寬，又不接受「分支現在指到哪」。
+# 抓不到那個 commit（被 force-push 蓋掉）就讓 build 直接失敗——那正是釘 SHA 要的行為。
+RUN git init /src && cd /src \
+    && git remote add origin "${TTYD_RUST_REPO}" \
+    && git fetch --depth 1 origin "${TTYD_RUST_REF}" \
+    && git checkout FETCH_HEAD
+# --locked：用 repo 裡的 Cargo.lock，不讓 build 期自己解析出別的版本組合。
+# 前端不用另外 build——build.rs 直接讀 C 版就有的 src/html.h（單一來源）。
+RUN cd /src/rust && cargo build --release --locked && /src/rust/target/release/ttyd --version
+
+FROM python:3.13-slim
+
+# docker CLI（只要 client，不要 daemon——daemon 是 host 的）+ ttyd
+# ttyd 從 GitHub release 取靜態 binary；arch 動態選（Apple Silicon / x86 皆可）。
+ARG TTYD_VERSION=1.7.7
+# ⚠ **binary 一定要驗過才給執行。** 這一段原本是 `curl → chmod +x → ttyd --version`，
+#   而 `--version` 只證明「它跑得起來」，不證明「它是我們審過的那一顆」。同一份 Dockerfile
+#   對 docker-ce-cli 做得很嚴（釘 GPG keyring，連 Verify-Peer=false 那段都特地說明
+#   「套件完整性仍由 InRelease 的簽章保護」），ttyd 卻是一顆沒有任何佐證的下載檔——而它
+#   正是代理每一位使用者互動 shell 的那個程序，又跑在掛著 docker.sock 的控制平面裡。
+#   固定版本與 HTTPS 擋得住意外升版與中間人，擋不住上游資產被換掉。
+#
+#   雜湊**寫進版本控制**，不是 build 時從同一個位置抓 SHA256SUMS 再比對（那等於讓攻擊者
+#   同時提供題目與答案）。取得方式：2026-07-26 由 release 的 SHA256SUMS 取得，並與實際
+#   下載的檔案、以及當時線上 image 內已在執行的那顆 binary 三方對照一致。
+#   升版時要一起換這兩行——換了版本卻沒換雜湊，build 會直接失敗，這正是要的行為。
+ARG TTYD_SHA256_AMD64=8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55
+ARG TTYD_SHA256_ARM64=b38acadd89d1d396a0f5649aa52c539edbad07f4bc7348b27b4f4b7219dd4165
+# apt 走 HTTPS——理由見檔頭的「全檔規則」。
+# 這一階段（python:3.13-slim）與 builder 的差別：它**沒有** ca-certificates，所以要先以
+# Verify-Peer=false 把它 bootstrap 起來（套件完整性仍由 InRelease 的 GPG 簽章保護，TLS 只是
+# 傳輸層），隨即恢復正常驗證。此坑同見 dev-container/Dockerfile。
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::https::Verify-Peer=false update \
+    && apt-get -o Acquire::https::Verify-Peer=false install -y --no-install-recommends ca-certificates \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        curl gnupg \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg \
+        -o /etc/apt/keyrings/docker.asc \
+    && chmod a+r /etc/apt/keyrings/docker.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+        https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+        > /etc/apt/sources.list.d/docker.list \
+    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
+    && case "$(dpkg --print-architecture)" in \
+         amd64) TTYD_ARCH=x86_64;  TTYD_SHA="${TTYD_SHA256_AMD64}" ;; \
+         arm64) TTYD_ARCH=aarch64; TTYD_SHA="${TTYD_SHA256_ARM64}" ;; \
+         *) echo "unsupported arch" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.${TTYD_ARCH}" \
+        -o /usr/local/bin/ttyd \
+    && echo "${TTYD_SHA}  /usr/local/bin/ttyd" | sha256sum --check --strict - \
+    && chmod +x /usr/local/bin/ttyd \
+    && ttyd --version \
+    && apt-get purge -y gnupg && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Rust 版擺在旁邊，**檔名不同、預設不啟用**。選哪一顆是使用者的偏好、存在 DB
+# （`users.ttyd_bin`，管理畫面「設定」可切；白名單見 config.TTYD_BINS）。
+# 兩顆同時在 image 裡才切得動：切換即時生效，不必重新 build、也不必重啟。
+COPY --from=ttyd-rust /src/rust/target/release/ttyd /usr/local/bin/ttyd-rust
+RUN ttyd-rust --version
+
+WORKDIR /app
+# ⚠ 相依**只有一份清單**，就是 pyproject.toml。這裡曾經另外寫死一串 pip install，
+#   結果兩份分岔：psutil 與 gunicorn 只活在 image，pyproject 沒有。兩個後果——
+#     1. 本機 `uv run` 永遠沒有 psutil，於是 _is_our_ttyd 一律走「無從佐證」的降級路徑，
+#        真正的把關邏輯在本機測不到。
+#     2. CVE 掃描掃的是由 pyproject 產生的 uv.lock，而實際跑的是另一串；gunicorn 是
+#        對外聽 port 的東西，卻從來沒被任何一次掃描涵蓋過。
+#   程式碼要在 pip install 之前 COPY 進來——`pip install .` 要建的就是這個套件本身。
+COPY pyproject.toml ./
+COPY server/ ./server/
+COPY client/ ./client/
+RUN pip install --no-cache-dir ".[server]"
+
+# registry / secret key 的落腳處；compose 以 volume 掛入使其跨重啟持久。
+ENV CLAUDE_PTY_CONTROL_HOST=0.0.0.0
+
+# 以非 root 執行。掛著 docker socket 的容器**本來就等於 host root**（ADR 0009 已明確
+# 接受），所以這不是安全邊界的質變，而是縱深防禦：程序不是 uid 0，就動不了 root 擁有
+# 的檔案、綁不了 <1024 的 port、拿不到預設 capability。
+#
+# 兩件事必須配合，否則會壞（都實測過）：
+#   1. **docker socket 的群組**：socket 是 `srw-rw---- root:root`，非 root 要讀它就得屬於
+#      該 gid。compose 用 group_add 補上（macOS Docker Desktop 是 0；Linux 多半是 docker
+#      群組的 gid，見 compose 的 DOCKER_GID）。
+#   2. **/data volume 的擁有者**：named volume 首次建立時會沿用 image 內該路徑的
+#      ownership，所以這裡先 chown；但**既有的 volume 不會被追溯修改**，升級既有部署
+#      要手動 chown 一次（指令見 README）。
+# ⚠ uid 要與 host 上那些掛進來的檔案的擁有者一致，否則讀不到：`~/.claude/.credentials.json`
+#   是 0600（讀不到＝控制平面判定「憑證讀不到」，建立 session 全被擋），bind mount 的
+#   deploy/data 同理。compose 從 .env 的 APP_UID 帶進來（Linux 填 `id -u`），見 ADR 0009。
+ARG APP_UID=1000
+RUN useradd -m -u ${APP_UID} app \
+    && mkdir -p /data \
+    && chown -R app:app /data /app
+USER app
+
+# --- 這一版是哪個 commit（頁尾要顯示）------------------------------------------------
+#
+# ⚠ **必須放在整份 Dockerfile 的最後面。** ARG 的值一變，它以下的每一層都會失效——放在
+#   前面的話「換一個 commit」等於整包重編（Rust ttyd 那一階段五分鐘起跳）。放在這裡的話
+#   失效的只有這一層 ENV，幾乎不花時間。
+#
+# ⚠ 為什麼要用 build arg 而不是執行期去問：程式是 `COPY` 進來的，`.git` 根本不在 build
+#   context 裡（context 是 claude-pty/，而 .git 在上一層），容器內也沒有 git 執行檔。
+#   執行期問不到自己是哪一版，只能在 build 時烘。
+#
+# ⚠ 預設留空**不要填一個假值**。空的會讓頁尾顯示「commit 未知」並在 tooltip 講明原因；
+#   填一個看起來合理的預設只會讓人以為自己知道線上在跑什麼。值由 deploy/redeploy.sh 算
+#   （含工作區髒掉時的 `-dirty` 標記），經 compose 的 build args 傳進來。
+ARG GIT_SHA=
+# ⚠ 這裡要的是**建置時間**不是 commit 時間。要回答的是「線上這包是什麼時候做出來的」——
+#   同一個 commit 可以在任何時候被重新建置，commit 時間答不了那個問題。
+ARG BUILT_AT=
+# ⚠ 裸 ARG＝繼承全域那份。ARG **不跨 stage**：少了這一行，下面的 ENV 會是空字串，
+#   而頁尾就少掉 Rust 版那顆的 commit——空得無聲無息。
+ARG TTYD_RUST_REF
+ENV CLAUDE_PTY_GIT_SHA=${GIT_SHA} \
+    CLAUDE_PTY_BUILT_AT=${BUILT_AT} \
+    CLAUDE_PTY_TTYD_RUST_REF=${TTYD_RUST_REF}
+
+EXPOSE 8000
+# 正式服務用 gunicorn，不用 Flask 內建開發伺服器（它自己每次啟動都會警告）。
+#   --workers 1  目前量級一個就夠；要加時直接調——registry/配額/port 全由 DB 仲裁
+#                （ADR 0008），多 worker 本來就成立，不需改任何程式。
+#   --threads 8  單 worker 內以執行緒處理併發請求（docker API 等待多為 I/O bound）。
+#   --timeout    建立 session 會等 container 起來（restricted 約 40 秒），預設 30 秒會被砍。
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", \
+     "--workers", "1", "--threads", "8", "--timeout", "180", \
+     "--access-logfile", "-", "--error-logfile", "-", \
+     "server.app:app"]

@@ -1,0 +1,501 @@
+{% extends "base.html" %}
+{% block title %}帳號 · agent-tty{% endblock %}
+
+{% block body %}
+<div class="shell">
+  {% include "_masthead.html" %}
+
+
+  <section class="panel">
+    <h2 class="panel__title">變更我的密碼</h2>
+    <form id="pw-form">
+      <div class="form-row">
+        <div class="field">
+          <label class="label" for="old-pw">目前密碼</label>
+          <input class="input" id="old-pw" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="field">
+          <label class="label" for="new-pw">新密碼（至少 {{ min_password_length }} 字元）</label>
+          <input class="input" id="new-pw" type="password" autocomplete="new-password" required>
+        </div>
+        <div class="field">
+          <label class="label" for="confirm-pw">再輸入一次新密碼</label>
+          <input class="input" id="confirm-pw" type="password" autocomplete="new-password" required>
+          <span class="field__hint" id="pw-hint" hidden></span>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn--primary" type="submit" id="pw-btn" disabled>
+          <i class="fa-solid fa-key"></i> 更新密碼</button>
+      </div>
+    </form>
+  </section>
+
+
+  {% if user.is_admin %}
+  <section class="panel">
+    <h2 class="panel__title">新增使用者</h2>
+    {# 說明依所選角色而變。「這個帳號建出來能做什麼」正是按下建立之前唯一要判斷的事，
+       寫成一段涵蓋兩種角色的固定文字，讀的人得自己從中挑出與當下選擇相關的半句。 #}
+    <p class="panel__lede" id="role-lede"></p>
+    <form id="user-form">
+      <div class="form-row" style="--form-col-min:11rem">
+        <div class="field">
+          <label class="label" for="new-user">使用者名稱</label>
+          {# maxlength 只是先擋一手（貼上超長字串時當場截斷），真正的把關在後端 _clean_username
+   ——瀏覽器的限制繞得過去，而帳號建錯了不能刪。 #}
+<input class="input" id="new-user" autocomplete="off" required
+       maxlength="{{ username_max }}"
+       title="最長 {{ username_max }} 字元，不可含空白或換行">
+        </div>
+        <div class="field">
+          <label class="label" for="new-user-pw">密碼</label>
+          <input class="input" id="new-user-pw" type="password" autocomplete="new-password" required>
+        </div>
+        <div class="field">
+          <span class="label">權限</span>
+          <div id="pick-role"></div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn--primary" type="submit">
+          <i class="fa-solid fa-user-plus"></i> 建立帳號</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">帳號清單</h2>
+    <table class="roster">
+      <thead>
+        <tr><th>ID</th><th>使用者名稱</th><th>權限</th><th>狀態</th><th>建立時間</th><th></th></tr>
+      </thead>
+      <tbody id="roster-body" data-testid="roster"><tr><td colspan="6">載入中…</td></tr></tbody>
+    </table>
+    {# 分頁的樣式與 session 列表共用同一個 .pager，不另立一套——同一個系統裡「翻頁」
+       應該長得一樣、按鍵在同一個位置。只有一頁時整條收起來。 #}
+    <div class="pager" id="roster-pager" data-testid="roster-pager" hidden>
+      <button class="btn" id="roster-prev" data-testid="roster-prev">
+        <i class="fa-solid fa-chevron-left"></i> 上一頁</button>
+      <span class="pager__status" id="roster-status" data-testid="roster-status"></span>
+      <button class="btn" id="roster-next" data-testid="roster-next">
+        下一頁 <i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+  </section>
+
+  {# 終端程序：ttyd 是 on-demand 的（開網頁才起、關掉就自退），所以這一區平時多半是空的
+     ——那是正常狀態，不是壞了。放在帳號管理頁而不是導覽列新增一格：分段控制目前是兩格
+     等寬，--navseg-w 是照「四個中文字」量出來的，加第三格要重量並重調 thumb 的平移。 #}
+  <section class="panel">
+    <div class="section-head" style="margin-bottom:var(--space-4)">
+      <h2 class="panel__title" style="margin:0">終端程序（ttyd）</h2>
+      <div class="section-head__actions">
+        <span class="section-head__note" id="ttyd-updated"></span>
+        <button class="btn" id="ttyd-refresh"><i class="fa-solid fa-rotate"></i> 重新整理</button>
+      </div>
+    </div>
+    <p class="panel__lede">
+      每開一個終端就在控制平面內起一個 <code>ttyd</code>，關掉網頁它會自行退出，
+      所以這裡空著是常態。有價值的是下面兩種對不上的情況。
+    </p>
+    <div id="ttyd-body"><div class="empty">載入中…</div></div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const isAdmin = {{ 'true' if user.is_admin else 'false' }};
+  const rolePicker = isAdmin ? createPicker(document.getElementById("pick-role"), [
+    { value: "0", label: "一般使用者", icon: "fa-solid fa-user" },
+    { value: "1", label: "管理員", icon: "fa-solid fa-user-shield" },
+  ], "0") : null;
+
+  // 每個角色實際拿到什麼——照程式的行為寫，不是照「應該差不多是這樣」寫
+  const ROLE_NOTE = {
+    "0": ["只看得見、也只能操作自己開的 session。讀別人的一律回「未知 session」，"
+          + "連那筆存不存在都不洩漏。可以自己改密碼。", "info"],
+    "1": ["看得見並可終止**所有人**的 session，還能新增帳號、停用／復用、提權／降權、"
+          + "代改他人密碼。權限一旦給出去只能靠對方自律——唯一的硬保護是"
+          + "「最後一位能登入的管理員不可被降權或停用」，避免系統變成沒人管得動。", "warn"],
+  };
+  // 宣告在外層：建立帳號成功後也要重畫一次（見表單的 submit handler）。
+  // 非 admin 沒有這個 picker，維持 no-op 就好。
+  let paintRole = () => {};
+  if (rolePicker) {
+    const lede = document.getElementById("role-lede");
+    paintRole = () => {
+      const [text, tone] = ROLE_NOTE[rolePicker.value] || ROLE_NOTE["0"];
+      // 只有 **粗體** 這一種標記，自己處理即可——為了一個強調引進 markdown 解析器
+      // 是把一行字的問題換成一個相依套件的問題
+      lede.innerHTML = esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      lede.dataset.tone = tone;
+    };
+    // createPicker 選完會 dispatch 冒泡的 change（見 app.js）
+    document.getElementById("pick-role").addEventListener("change", paintRole);
+    paintRole();
+  }
+  const myId = {{ user.id }};
+
+  // 改密碼：兩次輸入一致且達長度下限才讓按鈕可按（後端仍會自己驗一次）
+  const MIN_PW = {{ min_password_length }};
+  const oldPw = document.getElementById("old-pw");
+  const newPw = document.getElementById("new-pw");
+  const confirmPw = document.getElementById("confirm-pw");
+  const pwBtn = document.getElementById("pw-btn");
+  const pwHint = document.getElementById("pw-hint");
+
+  function validatePw() {
+    const a = newPw.value, b = confirmPw.value;
+    // 只在使用者已經開始輸入時才報錯，不然一進頁面就滿江紅
+    const message = a && a.length < MIN_PW ? `至少 ${MIN_PW} 字元`
+                  : b && a !== b ? "兩次輸入不一致" : "";
+    pwHint.textContent = message;
+    pwHint.hidden = !message;
+    pwHint.dataset.tone = "error";
+    pwBtn.disabled = !(oldPw.value && a.length >= MIN_PW && a === b);
+  }
+
+  [oldPw, newPw, confirmPw].forEach((el) => el.addEventListener("input", validatePw));
+  validatePw();
+
+  document.getElementById("pw-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/users/me/password", {
+        method: "POST",
+        body: { old_password: oldPw.value, new_password: newPw.value },
+      });
+      toast("密碼已更新", "success",
+            { body: "你在其他裝置的登入都已失效；這一台不受影響" });
+      // form.reset() 只清值——按過「顯示密碼」的欄位會維持明文，下一次輸入直接攤在
+      // 畫面上。收回遮蔽狀態必須自己來。
+      e.target.reset();
+      resetPasswordFields(oldPw, newPw, confirmPw);
+      validatePw();          // reset 後按鈕必須回到 disabled
+    } catch (ex) { toastError("更新密碼", ex); }
+  });
+
+  if (isAdmin) {
+    const body = document.getElementById("roster-body");
+    const rosterPager = document.getElementById("roster-pager");
+    const rosterStatus = document.getElementById("roster-status");
+    const rosterPrev = document.getElementById("roster-prev");
+    const rosterNext = document.getElementById("roster-next");
+    let rosterOffset = 0;
+    let rosterPageSize = null;   // 由後端回應決定，前端不自作主張
+
+    async function loadUsers() {
+      try {
+        const data = await api(`/api/users?offset=${rosterOffset}`);
+        // ⚠ 以後端回報的 offset 為準，不是送出去的那個。超出範圍時後端會回一頁空的，
+        //   拿本地變數去算頁碼會顯示成「11–10 / 共 3 筆」。
+        rosterOffset = data.offset;
+        rosterPageSize = data.limit;
+        renderRosterPager(data);
+        body.innerHTML = data.users.map((u) => {
+          // 帳號的退場只有「停用」，沒有刪除（ADR 0010）：可逆、留痕、不會把他的
+          // session 登錄一起 cascade 掉，稽核鏈也不會斷在半路。
+          const role = u.is_admin
+            ? '<span class="chip" data-tone="accent">admin</span>'
+            : '<span class="chip">user</span>';
+          const state = u.is_active
+            ? '<span class="chip" data-tone="ok">啟用中</span>'
+            : '<span class="chip" data-tone="error">已停用</span>';
+          const self = u.id === myId;
+          const toggle = self ? "" : (u.is_active
+            ? `<button class="btn" data-act="disable" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-user-slash"></i> 停用</button>`
+            : `<button class="btn" data-act="enable" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-user-check"></i> 復用</button>`);
+          // 權限升降。**自己的不給自己改**：提權等於自我授權，降權則會在按下的那一刻
+          // 讓自己失去操作資格（連反悔都做不到）——兩者都該由另一位管理員執行，後端也擋。
+          const rank = self ? "" : (u.is_admin
+            ? `<button class="btn" data-act="demote" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-arrow-down-short-wide"></i> 降為一般</button>`
+            : `<button class="btn" data-act="promote" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-user-shield"></i> 提為管理員</button>`);
+          return `
+          <tr>
+            <td class="mono-id">${u.id}</td>
+            <td><span class="roster__name" title="${esc(u.username)}">${esc(u.username)}</span></td>
+            <td>${role}</td>
+            <td>${state}</td>
+            {# 絕對時間回答「是哪一天」，相對時間回答「多久以前」——找特定帳號時用前者，
+               判斷「這是不是剛剛新增的」用後者，兩個問題都常問，所以兩個都給。
+               relTime() 來自 app.js，與 session 列表共用同一份說法。 #}
+            <td class="roster__when">
+              <span>${esc(u.created_at.slice(0, 16).replace("T", " "))}</span>
+              <span class="roster__ago">${esc(relTime(u.created_at))}</span>
+            </td>
+            {# ⚠ `display:flex` 要掛在 td **裡面**的 div，不能掛在 td 自己身上：td 一旦
+               變成 flex container 就不再是 table-cell，那一列的底線會在這一格前面斷掉
+               （2026-07-28 使用者截圖回報）。與 `.roster__name` 是同一條規矩。 #}
+            <td>
+              <div class="row-actions">
+                <button class="btn" data-act="reset" data-id="${u.id}" data-name="${esc(u.username)}"><i class="fa-solid fa-key"></i> 重設密碼</button>
+                ${rank}${toggle}
+              </div>
+            </td>
+          </tr>`;
+        }).join("");
+      } catch (ex) {
+        body.innerHTML = `<tr><td colspan="6">讀取失敗：${esc(ex.message)}</td></tr>`;
+        rosterPager.hidden = true;
+        toastError("帳號清單讀取", ex);
+      }
+    }
+
+    function renderRosterPager({ total, limit, offset: off, users }) {
+      rosterPager.hidden = total <= limit && off === 0;   // 只有一頁就不佔版面
+      const from = total ? off + 1 : 0;
+      const to = off + users.length;
+      rosterStatus.innerHTML = `<b>${from}</b>–<b>${to}</b> / 共 <b>${total}</b> 筆`;
+      rosterPrev.disabled = off <= 0;
+      rosterNext.disabled = to >= total;
+    }
+
+    /** 把 rosterOffset 移到 username 所在的那一頁。查不到就不動（清單照樣會重畫）。 */
+    async function gotoUserPage(username) {
+      if (!rosterPageSize) return;
+      try {
+        // /options 回的是同一組排序的完整名單，所以名字的索引就是它在清單裡的位置
+        const { users } = await api("/api/users/options");
+        const i = users.findIndex((u) => u.username === username);
+        if (i >= 0) rosterOffset = Math.floor(i / rosterPageSize) * rosterPageSize;
+      } catch { /* 翻不過去就留在原頁，不值得為此讓建立帳號看起來失敗 */ }
+    }
+
+    rosterPrev.addEventListener("click", () => {
+      rosterOffset = Math.max(0, rosterOffset - (rosterPageSize || 0));
+      loadUsers();
+    });
+    rosterNext.addEventListener("click", () => {
+      rosterOffset += rosterPageSize || 0;
+      loadUsers();
+    });
+
+    body.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn) return;
+      const { act, id, name } = btn.dataset;
+      try {
+        if (act === "reset") {
+          const pw = await dialog({
+            title: "重設密碼", body: `為 ${name} 設定新密碼（至少 {{ min_password_length }} 字元）`,
+            confirmText: "重設", confirmIcon: "fa-key",
+            input: { type: "password", placeholder: "新密碼" },
+          });
+          if (!pw) { toast("已取消", "info", { body: `${name} 的密碼未變動` }); return; }
+          await api(`/api/users/${id}/password`, { method: "POST", body: { new_password: pw } });
+          toast(`已重設 ${name} 的密碼`, "success",
+                { body: "他既有的登入 cookie 已立刻失效" });
+        } else if (act === "promote" || act === "demote") {
+          const up = act === "promote";
+          const ok = await dialog({
+            title: up ? "提為管理員" : "降為一般使用者",
+            body: up
+              ? `${name} 將能管理所有帳號、看見並終止所有人的 session。`
+              : `${name} 將失去管理權限。他自己的 session 不受影響。`,
+            confirmText: up ? "提權" : "降權", danger: !up,
+            confirmIcon: up ? "fa-user-shield" : "fa-arrow-down-short-wide",
+          });
+          if (!ok) { toast("已取消", "info", { body: `${name} 的權限未變動` }); return; }
+          await api(`/api/users/${id}`, { method: "PATCH", body: { is_admin: up } });
+          toast(`${name} 已${up ? "提為管理員" : "降為一般使用者"}`, up ? "warning" : "success",
+                { body: "他既有的登入已失效，需重新登入才會套用新權限" });
+          await loadUsers();
+        } else if (act === "disable" || act === "enable") {
+          const on = act === "enable";
+          await api(`/api/users/${id}`, { method: "PATCH", body: { is_active: on } });
+          toast(`已${on ? "復用" : "停用"} ${name}`, on ? "success" : "warning",
+                { body: on ? "他可以重新登入了"
+                           : "他無法再登入，已開啟的終端也已被切斷；session 本身繼續執行" });
+          await loadUsers();
+        }
+      } catch (ex) { toastError("操作", ex); }
+    });
+
+    document.getElementById("user-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      // 先取出來：表單 reset 之後就讀不到了，而通知訊息要用它
+      const username = document.getElementById("new-user").value;
+      const isAdminRole = rolePicker.value === "1";
+      try {
+        await api("/api/users", {
+          method: "POST",
+          body: {
+            username,
+            password: document.getElementById("new-user-pw").value,
+            is_admin: isAdminRole,
+          },
+        });
+        toast(`已建立帳號 ${username}`, "success",
+              { body: isAdminRole ? "權限：管理員（可管理帳號與所有 session）" : "權限：一般使用者" });
+        // 明確清空，不依賴 form.reset()：權限 picker 是 JS 元件，reset 管不到它，
+        // 於是「帳號密碼清了、權限還停在上一次的選擇」——下一筆很容易誤建成管理員。
+        document.getElementById("new-user").value = "";
+        // ⚠ 用 resetPasswordFields 而不是自己清 value：它會一併把欄位收回遮蔽狀態。
+        //   只清值的話，上一次按過「顯示密碼」的狀態會留著，下一個帳號的密碼就明文了。
+        resetPasswordFields(document.getElementById("new-user-pw"));
+        rolePicker.value = "0";
+        // ⚠ picker 的 setter 不會 dispatch change（見 app.js），所以說明文字要自己重畫。
+        //   少了這一行：picker 回到「一般使用者」，底下卻還留著管理員那段橘色警示——
+        //   選的是 A、說明在講 B，而這是權限邊界上的畫面（review 2026-07-25）。
+        paintRole();
+        // 清單依名字排序又分頁，新帳號很可能不在目前這一頁——建完卻看不到他，
+        // 看起來就跟沒建成一樣。翻到他所在的那一頁再重畫。
+        await gotoUserPage(username);
+        await loadUsers();
+      } catch (ex) { toastError("建立帳號", ex); }
+    });
+
+    loadUsers();
+
+    // ── 終端程序（ttyd）─────────────────────────────────────────────────────
+    const ttydBody = document.getElementById("ttyd-body");
+    const ttydUpdated = document.getElementById("ttyd-updated");
+
+    const bytes = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB`
+                       : n >= 1024 ? `${(n / 1024).toFixed(0)} KB` : `${n} B`;
+
+    /** 一個程序的量測值排成兩欄。讀不到的項目直接不出現，不要顯示「-」冒充有量到。 */
+    function procRows(p) {
+      if (!p) return "";
+      // ⚠ 每一行都要驗**它自己會插值的每一個鍵**。只驗第一個的話，量測半途失敗
+      //   （伺服端那邊是整組寫入，但版本差異或未來改動仍可能只給一半）會印出
+      //   `5 / undefined`、`VMS undefined B`——那比不顯示還糟，它看起來像量到的值。
+      const has = (...keys) => keys.every((k) => p[k] !== undefined && p[k] !== null);
+      // 每一列都掛說明。這些是作業系統的術語，不是「多看兩眼就懂」的東西——
+      // 尤其 VMS，它幾乎一定比 RSS 大好幾倍，不解釋的話會被讀成「這東西吃了 18MB RAM」。
+      const pairs = [
+        ["狀態", has("status") ? p.status : null,
+         "作業系統眼中的程序狀態。sleeping 就是正常的——它在等網路 I/O，不是卡住。"
+         + "running 代表此刻正在用 CPU；zombie 代表已結束但還沒被回收。"],
+        ["CPU", has("cpu_percent", "cpu_user", "cpu_system")
+          ? `${p.cpu_percent}%（累計 user ${p.cpu_user}s / sys ${p.cpu_system}s）` : null,
+         "百分比是這一次讀取時取樣 0.2 秒量到的「瞬時」使用率；括號內是從啟動到現在"
+         + "累計燒掉的 CPU 秒數（user＝跑自己的程式碼，sys＝在核心裡做系統呼叫）。"
+         + "ttyd 只負責轉發 bytes，兩個數字都該接近 0；持續偏高多半是畫面在狂刷。"],
+        ["記憶體", has("rss", "vms", "mem_percent")
+          ? `RSS ${bytes(p.rss)} · VMS ${bytes(p.vms)} · ${p.mem_percent}%` : null,
+         "RSS（常駐集合）＝此刻真的佔住的實體記憶體，要看「它吃掉多少 RAM」就看這個。\n"
+         + "VMS（虛擬記憶體）＝程序宣告的整個位址空間，包含還沒真正用到的保留區、"
+         + "以及與其他程序共用的函式庫。它幾乎一定比 RSS 大很多，但那"
+         + "不代表真的吃了那麼多 RAM——不要拿它判斷記憶體壓力。\n"
+         + "百分比是 RSS 佔本機實體記憶體的比例。"],
+        ["執行緒 / fd", has("threads", "fds") ? `${p.threads} / ${p.fds}` : null,
+         "執行緒：ttyd 是單執行緒的事件迴圈，正常就是 1。\n"
+         + "fd（file descriptor，檔案描述子）＝這個程序此刻開著的「東西」有幾個——"
+         + "檔案、網路連線、pipe 都算一個。ttyd 每接一個瀏覽器就會多開幾個 socket，"
+         + "所以它會跟著看終端的人數上下。只升不降才是洩漏的徵兆。"],
+        ["監聽", (p.listening || []).join("、") || null,
+         "它實際綁在哪個位址與 port（0.0.0.0 代表容器內所有介面，但這個 port 不對外，"
+         + "只在 docker network 內）。拿它跟登錄裡記的 port 對照就知道有沒有對上，"
+         + "不必自己連連看。"],
+        ["連線中的 client", has("clients") ? String(p.clients) : null,
+         "此刻有幾條 TCP 連線連著它＝有幾個人正開著這個終端。\n"
+         + "ttyd 帶 `-q`，最後一個 client 斷線就會自行退出——所以這裡是 0 卻還活著，"
+         + "要嘛是剛起來還沒人連上，要嘛它就是該被收掉卻沒人找得到的那種孤兒。"],
+        ["啟動", has("started_at") ? absTime(p.started_at) : null,
+         "這個 ttyd 程序被起來的時刻（不是 session 建立的時刻——終端可以關掉再開，"
+         + "session 本體不受影響）。"],
+      ].filter(([, v]) => v !== null && v !== undefined);
+      return pairs.map(([k, v, tip]) =>
+        // tip--left：這些標籤很短、又貼在面板左緣，置中的 tooltip 會往左長出視窗外
+        //（實測「狀態」「執行緒 / fd」「啟動」三個都被切掉）。靠左對齊往右長才進得去。
+        `<div class="kv"><span class="kv__k tip tip--wide tip--left" data-tip="${esc(tip)}">` +
+        `${esc(k)}</span>` +
+        `<span class="kv__v">${esc(String(v))}</span></div>`).join("");
+    }
+
+    // 哪一顆 binary。C 版與 Rust 版同時在 image 裡，由每個人在 session 列表的「設定」選——畫面上
+    // 要看得出「現在設定的是哪一顆」，以及「這個程序實際是哪一顆」：切換之後舊版起的
+    // 程序還會活一陣子，只顯示設定值會讓那些殘留看起來像是新設定起的。
+    const TTYD_FLAVOR = { "ttyd": "C", "ttyd-rust": "Rust" };
+    const flavor = (bin) => TTYD_FLAVOR[bin] || bin || "?";
+    /* 哪一顆 ttyd 是**分類**不是狀態，所以給類別色（同 cli- 的做法），不是灰底。
+       日後多一顆 binary 也不會變成裸字：`[data-tone^="bin-"]` 有基底樣式接住。 */
+    const binTone = (bin) => `bin-${flavor(bin).toLowerCase()}`;
+
+    function renderTtyd(d) {
+      const parts = [];
+      if (d.bin) {
+        // ⚠ 這顆 chip 要**自己講完整**。原本印的是 `ttyd：Rust ttyd-rust`——看的人無從判斷
+        //   那是「目前的設定」還是「有哪些版本」，而且 flavor 與 binary 名之間沒有任何
+        //   區隔，讀起來像兩個並列的東西（使用者回報 2026-07-27）。
+        // ⚠ tooltip 用 `tip--left`（靠左緣、往右長）。這顆 chip 貼在面板最左邊，用
+        //   `tip--right` 會往左長而被視窗左緣切掉——那種裁切不會多一條橫向捲軸，所以不會
+        //   被溢出檢查抓到，只會靜靜少半句話（app.css 的 `.tip--` 那段已記過這個坑）。
+        parts.push(`<div class="ttyd-current">
+          <span class="chip tip tip--wide tip--left" data-tone="${esc(binTone(d.bin))}"
+            data-tip="你的偏好（per-user），在 session 列表的「設定」裡切。只影響之後開的終端。">
+            目前使用：${esc(flavor(d.bin))}<span class="ttyd-current__bin">（${esc(d.bin)}）</span>
+          </span></div>`);
+      }
+      if (!d.psutil) {
+        // 明講而不是靜靜顯示空的孤兒清單——那看起來會像「掃過了，很乾淨」
+        parts.push(`<div class="empty" data-tone="error">沒有安裝 psutil，只能顯示登錄裡的資料；`
+                 + `程序實況與孤兒偵測都無法進行。</div>`);
+      }
+      if (!d.views.length && !d.orphans.length) {
+        parts.push(`<div class="empty">目前沒有任何 ttyd 在跑（沒有人開著終端）。</div>`);
+      }
+      for (const v of d.views) {
+        const dead = v.alive === false;
+        // ⚠ alive 有三種值：true / false / null（查不到，例如沒有 psutil，或這一列的
+        //   pid 還沒寫回來）。null 塌成「活著」等於在正確的免責聲明旁邊掛一盞捏造的綠燈。
+        const unknown = v.alive === null || v.alive === undefined;
+        // ⚠ 對不上目前設定時，warn 要**蓋過**類別色：那一刻要傳達的是「跟你選的不一樣」，
+        //   不是「它是 Rust 版」。對得上時才用類別色，一眼認得出這個程序跑的是哪一顆。
+        parts.push(`
+          <article class="ttyd ${dead ? "ttyd--dead" : ""}">
+            <div class="ttyd__head">
+              <span class="lamp" data-state="${dead ? "exited" : unknown ? "gone" : "running"}"
+                ${unknown ? 'title="查不到這個程序的狀態"' : ""}></span>
+              <strong>${esc(v.session_name || v.session_id)}</strong>
+              <span class="mono-id">${esc(v.session_id)}</span>
+              <span class="chip">port ${esc(String(v.port))}</span>
+              <span class="chip">pid ${esc(String(v.pid ?? "—"))}</span>
+              <span class="chip">${esc(v.owner || "—")}</span>
+              ${v.proc && v.proc.bin ? `<span class="chip tip tip--wide tip--right"
+                data-tone="${v.proc.bin !== d.bin ? "warn" : esc(binTone(v.proc.bin))}"
+                data-tip="${esc(v.proc.bin === d.bin
+                  ? "與你目前的設定一致"
+                  : "⚠ 不是你目前設定的那一顆（切換之前起的）。關掉終端重開就會換過來。")}"
+                >${esc(flavor(v.proc.bin))}</span>` : ""}
+              ${dead ? `<span class="chip tip tip--wide tip--right" data-tone="error"
+                data-tip="登錄有、程序沒了。關掉終端後還沒輪到被清而已，不影響下次開終端。
+一直都在才是問題——那代表對帳器沒在跑。">幽靈記錄</span>` : ""}
+            </div>
+            <div class="ttyd__facts">${procRows(v.proc)}</div>
+          </article>`);
+      }
+      for (const o of d.orphans) {
+        parts.push(`
+          <article class="ttyd ttyd--orphan">
+            <div class="ttyd__head">
+              <span class="lamp" data-state="exited"></span>
+              <strong>孤兒程序</strong>
+              <span class="chip">pid ${esc(String(o.pid))}</span>
+              <span class="chip tip tip--wide tip--right" data-tone="error"
+                data-tip="程序在跑、登錄裡卻沒有它。沒有任何機制找得到這種 ttyd，那個 port 會就此卡住。">
+                沒有對應的登錄</span>
+            </div>
+            <div class="ttyd__facts">${procRows(o.proc)}</div>
+          </article>`);
+      }
+      ttydBody.innerHTML = parts.join("");
+      ttydUpdated.textContent =
+        `擷取於 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}`;
+    }
+
+    async function loadTtyd() {
+      try {
+        renderTtyd(await api("/api/admin/ttyd"));
+      } catch (ex) {
+        ttydBody.innerHTML = `<div class="empty">讀取失敗：${esc(ex.message)}</div>`;
+      }
+    }
+    document.getElementById("ttyd-refresh").addEventListener("click", loadTtyd);
+    loadTtyd();
+  }
+</script>
+{% endblock %}

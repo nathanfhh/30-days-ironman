@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- data-persist-dir：抽屜標題列要顯示「哪個目錄寫了會留著」。放在 <html> 上與
+     data-behind-proxy 同一個做法——抽屜是 app.js 在 runtime 建的，拿不到 Jinja context。 -->
+<html lang="zh-Hant" data-behind-proxy="{{ 1 if behind_proxy else 0 }}"
+      data-persist-dir="{{ persist_dir() }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}agent-tty{% endblock %}</title>
+  <!-- 顯示字體：Instrument Serif（自帶，載不到時退回系統 serif，版面不受影響）。
+       字體與圖示都不走 CDN：這套東西的部署網路未必出得去公網，外部資源在那種環境
+       是「有時有、有時沒有」的樣式抖動來源，自帶才可重現。 -->
+  <link rel="stylesheet" href="{{ asset_url('vendor/fonts/instrument-serif.css') }}">
+  <!-- 按鈕圖示（Font Awesome Free 6.7.2，自帶）。載不到時圖示不顯示，但按鈕文字仍在、
+       功能不受影響（漸進增強） -->
+  <link rel="stylesheet" href="{{ asset_url('vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ asset_url('css/app.css') }}">
+  <script>
+    /* 首屏套色：必須在 CSS 之後、body 之前**同步**執行。
+       主題色本來只在 app.js 載入後才 fetch 套用，於是每次換頁都先用內建的深色畫一次
+       才變成使用者選的亮色——看起來就是閃爍。這裡直接吃 app.js 快取下來的色票，
+       沒有網路往返，瀏覽器第一次繪製就是對的顏色。
+       ⚠ SYNC：key 與 static/js/app.js 的 THEME_STORAGE_KEY / THEME_VARS_KEY 一致。 */
+    (function () {
+      try {
+        var id = localStorage.getItem("claude-pty:theme");
+        if (!id || id === "instrument") return;      // 預設主題＝CSS 內建值，不必覆寫
+        document.documentElement.dataset.theme = id;
+        var vars = JSON.parse(localStorage.getItem("claude-pty:theme-vars:" + id) || "null");
+        if (!vars) return;                            // 沒快取就維持預設，app.js 會補上
+        for (var k in vars) document.documentElement.style.setProperty("--color-" + k, vars[k]);
+      } catch (e) { /* localStorage 不可用（無痕/停用）→ 就用預設主題，不影響功能 */ }
+    })();
+  </script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230a0d12'/><circle cx='16' cy='16' r='5' fill='%23e0a340'/></svg>">
+</head>
+<body>
+  {% block body %}{% endblock %}
+  {# 頁尾：線上跑的到底是哪一版。放在 base.html 讓三個頁面（登入 / session / 帳號）都有
+     ——「我看到的是不是最新的」在哪一頁都會問。
+     ⚠ 值一律由 server 端算好（`build_info()`，見 server/version.py）。問不到就留白並在
+       tooltip 講原因：猜一個看起來合理的值比空白糟得多，空白會讓人去查、錯的值會讓人
+       停止查。 #}
+  <footer class="footer" data-testid="footer">
+    <div class="footer__row">
+      {% for m in build_info().modules %}
+      <span class="footer__mod tip{{ ' tip--left' if loop.first else '' }}"
+            data-testid="footer-mod" data-tip="{{ m.detail }}">
+        <span class="footer__name">{{ m.name }}</span>
+        {%- if m.version %} <span class="footer__ver">{{ m.version }}</span>
+        {%- else %} <span class="footer__unknown">版本未知</span>{% endif %}
+        {%- if m.commit %} <code class="footer__sha">{{ m.commit }}</code>
+        {%- elif loop.first %} <span class="footer__unknown">commit 未知</span>{% endif %}
+      </span>
+      {% endfor %}
+    </div>
+    {#- 建置時間單獨一行：它是整包的屬性，不屬於任何一個模組。相對時間由 JS 補
+        （伺服端跑在 UTC，排出來的時間不屬於任何人）。 -#}
+    {% set built = build_info().modules[0].built_at %}
+    {% if built %}
+    <div class="footer__built">
+      建置於 <time class="footer__at" datetime="{{ built }}"></time>
+      <span class="footer__rel" data-for="{{ built }}"></span>
+    </div>
+    {% endif %}
+  </footer>
+  <script src="{{ asset_url('js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

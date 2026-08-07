@@ -1,0 +1,12 @@
+# SQLite registry（deploy/docker-compose.yml 以 bind mount 掛給 control 與 reconciler）。
+# 裡面是密碼雜湊、session 歷史與初始 prompt 原文——即使是 hash 也不進版控。
+# 連 -wal / -shm 一起擋：它們是同一份資料還沒 checkpoint 的部分。
+deploy/data/
+
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.playwright-mcp/
+.DS_Store

@@ -1,0 +1,36 @@
+# build context 是 claude-pty/（見 deploy/docker-compose.yml 的 `context: ..`）。
+# Dockerfile 只 COPY pyproject.toml / server/ / client/，但那些目錄裡的雜物會照單全收
+# ——沒有這份清單，__pycache__ 與 .DS_Store 都會進到 image（2026-07-25 實測確認）。
+#
+# ⚠ 這裡的語法**不是 .gitignore**，兩個差異都會讓規則靜默失效（實測踩過）：
+#   1. pattern 不遞迴：`__pycache__/` 只匹配 context 根層級那一個，`server/__pycache__`
+#      照樣被複製。要遞迴一定要寫 `**/__pycache__`。
+#   2. 不支援行尾註解：`**/__pycache__  # 說明` 整條會被當成一個奇怪的檔名，等於沒寫。
+#      所有註解都必須自成一行。
+
+# --- 絕不可進入 image ---------------------------------------------------------------
+# SQLite registry：密碼雜湊、session 歷史、初始 prompt 原文
+deploy/data
+# SECRET_KEY（cookie 與 API token 的簽章金鑰）
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- 雜訊：進 image 沒有用途，還會讓 build cache 無謂失效 -----------------------------
+# ⚠ .pyc 不只是佔空間：COPY 會保留 mtime，一份比原始碼新的陳舊 .pyc 有機會被 CPython
+#   直接採用，變成「改了程式卻沒生效」這種最難查的問題。
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.DS_Store
+.venv
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.playwright-mcp
+
+# --- 不屬於執行期的東西 -------------------------------------------------------------
+# 測試在 host 對著跑起來的 stack 執行，不在 image 內
+tests
+docs
+**/*.md

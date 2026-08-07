@@ -1,0 +1,41 @@
+[project]
+name = "claude-pty"
+version = "0.2.0"
+description = "把互動式 Claude Code 的 session 放進瀏覽器：開場、觀看、續談、回收"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.0",
+    "docker>=7.0",
+    "sqlalchemy>=2.0",      # 持久化 registry（ADR 0008）。方言只有 SQLite 一種，
+                            # 互斥全靠 BEGIN IMMEDIATE，見 db.py 的模組 docstring
+    "argon2-cffi>=23.0",    # 密碼雜湊（ADR 0008：一律 argon2id，絕不明文/sha256）
+    # ttyd 程序的觀測與存活判定（views.inspect_ttyd / _is_our_ttyd）。
+    # ⚠ 下限 6.0：`Process.net_connections()` 是 6.0 才用的名字（5.x 叫 connections()），
+    #   而呼叫它的那段包在 suppress 裡——裝到 5.9.x 會靜靜少掉「監聽位址」與「連線數」。
+    "psutil>=6.0",
+    # 使用者自備 GitLab PAT 的靜態加密（ADR 0017）。金鑰由 SECRET_KEY 以 HKDF 導出，
+    # 不引入第二個秘密——見 server/crypto.py。用 Fernet 而不自刻 AES-GCM：
+    # nonce 重用與版本標記的坑不值得自己踩。
+    "cryptography>=42",
+]
+
+[project.optional-dependencies]
+# 正式部署額外要的。⚠ deploy/Dockerfile **必須**照這裡裝（`pip install .[server]`），
+# 不要在 Dockerfile 裡另外寫死一串——兩份清單一旦分岔，CVE 掃描掃的是 uv.lock（由本檔
+# 產生）而實際跑的是另一串，等於掃了一個沒在跑的東西。gunicorn 是對外聽 port 的，
+# 尤其不該落在掃描範圍外。
+server = ["gunicorn>=21.0"]
+
+[tool.setuptools.packages.find]
+include = ["server*"]
+
+[tool.ruff]
+# 這個子專案自帶 ruff 設定：repo 根的設定管 skills/ 那套，這裡的行寬與規則
+# 沿用本專案一路以來的口徑（E/F/W、120 欄），兩邊互不干擾。
+# target-version 寫死而不讓 ruff 從 requires-python 推：推斷會讓「加或改這個檔案」
+# 本身改變 lint 結果（repo 根的 pyproject 記著同一個教訓）。
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]

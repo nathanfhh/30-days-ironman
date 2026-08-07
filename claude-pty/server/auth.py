@@ -1,0 +1,375 @@
+"""帳號與認證（ADR 0005 authn/authz、ADR 0008 users 表）。
+
+密碼一律 **argon2id**（argon2-cffi 的預設演算法），絕不明文、不用 sha256/md5、不自刻。
+登入狀態走 Flask 的簽章 cookie——多 worker 共用同一把 SECRET_KEY 即可互相驗證，
+不需要伺服端 session 儲存（KISS）。
+"""
+
+from __future__ import annotations
+
+import unicodedata
+
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from . import config
+from .db import session_scope
+from .models import User
+
+_ph = PasswordHasher()  # 預設即 argon2id，參數為 argon2-cffi 建議值
+
+# 使用者不存在時拿來做假驗證的雜湊，讓「查無此人」與「密碼錯」耗時相近，
+# 避免以回應時間列舉帳號（user enumeration）。
+_DUMMY_HASH = _ph.hash("dummy-password-for-constant-time-compare")
+
+
+class AuthError(RuntimeError):
+    pass
+
+
+# --- 密碼 -------------------------------------------------------------------------
+
+def hash_password(password: str) -> str:
+    _validate_password(password)
+    return _ph.hash(password)
+
+
+def _validate_password(password: str) -> None:
+    if not isinstance(password, str) or len(password) < config.MIN_PASSWORD_LENGTH:
+        raise AuthError(f"密碼長度至少 {config.MIN_PASSWORD_LENGTH} 字元")
+
+
+# --- 使用者操作 --------------------------------------------------------------------
+
+# 「印得出來卻看不見」的字元：`isprintable()` 是 True、`isspace()` 也是 False，所以穿得過
+# 一般的檢查——但在清單、下拉、稽核紀錄上，`admin` 與 `adminㅤ` 肉眼**完全相同**，而帳號
+# 不能刪（ADR 0010），混進來就永遠分不出誰是誰。
+#
+# ⚠ 這裡用的是 Unicode 的 **Default_Ignorable_Code_Point** 屬性——「這些碼位存在但不該
+#   被畫出來」，正是這個問題的官方定義。上一版自己列了五個字元，對抗性測試當場又找出
+#   七個穿得過去的（2026-07-26）：**黑名單一定漏**，因為它列的是實例不是規則。
+#   stdlib 的 unicodedata 沒有暴露這個屬性，只能把區間寫出來（Unicode 15.1）。
+_DEFAULT_IGNORABLE = (
+    (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C),
+    (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180F),
+    (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F),
+    (0x3164, 0x3164), (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF),
+    (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8),
+    (0x1BCA0, 0x1BCA3), (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF),
+)
+# 不屬於 Default_Ignorable、卻整格畫成空白的漏網之魚
+_BLANK_GLYPHS = {"⠀"}   # U+2800 BRAILLE PATTERN BLANK（So）
+
+
+def _is_invisible(ch: str) -> bool:
+    cp = ord(ch)
+    return ch in _BLANK_GLYPHS or any(lo <= cp <= hi for lo, hi in _DEFAULT_IGNORABLE)
+
+
+def _fold(name: str) -> str:
+    """唯一性比對用的鍵：NFKC 正規化 + casefold。
+
+    ⚠ **一定要在 Python 這一端算。** 原本寫成 `func.lower(User.username) == name.lower()`，
+      左邊交給資料庫執行，而 **SQLite 內建的 lower() 只處理 ASCII**（3.47.1 實測：
+      `lower('Ärger')` 回 `'Ärger'`）。右邊 Python 給的是 `'ärger'`，比不中就放行。
+      更糟的是它**有方向性**：先建 `über` 再建 `Über` 擋得下來，先建 `Über` 再建 `über`
+      就穿過去——只測一個方向會以為修好了（探索性測試 2026-07-26 打出來的）。
+
+    NFKC 順帶收斂兩件事：`café`（U+00E9）與 `café`（e + U+0301）視覺相同卻是不同字串；
+    全形 `ａｄｍｉｎ` 與 `admin` 也是。casefold() 比 lower() 更適合比對（德文 ß → ss）。
+    """
+    return unicodedata.normalize("NFKC", name).casefold()
+
+
+def _display_width(name: str) -> int:
+    """概略的顯示欄寬——東亞寬字元佔兩欄。
+
+    上限要管的是**版面**，而版面吃的是欄寬不是碼位數：32 個中文字是 32 個碼位、卻會把
+    帳號清單撐成 64 欄。
+    """
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in name)
+
+
+def _clean_username(raw) -> str:
+    """把外部給的使用者名稱驗過並正規化，失敗一律拋 AuthError（→ 400，不是 500）。
+
+    ⚠ 型別要先驗。`raw.strip()` 遇到 int/bool/list/dict 會拋 AttributeError，那是
+      未捕捉的例外——回應變成 500 的 HTML 錯誤頁，日誌裡還留一整段 traceback。
+      而這條路 **未登入就打得到**（login 也走同一個正規化），等於誰都能刷日誌。
+
+    禁空白與不可列印字元：帳號名稱會出現在清單、下拉、稽核紀錄裡，含換行或 Tab 的
+    名字在那些地方與含空白的名字**看起來一模一樣**，而這個系統沒有刪除帳號的功能
+    （ADR 0010），認錯人就只能一直錯下去。
+
+    ⚠ **同形異字擋不住，這是刻意接受的。** 西里爾的 `аdmin`（U+0430）與拉丁的 `admin`
+      在畫面上無法分辨，而 _fold() 也不會把它們收斂到一起。要擋就得限定單一文字系統，
+      那會連中文帳號一起擋掉——代價比威脅大：帳號**只有管理員建得出來**，所以這條路
+      需要一個管理員去騙另一個管理員，而不是外人打得進來的。
+
+    ⚠ 組合記號（Mn）也不全擋。U+05C7（希伯來母音點）之類的字元接在拉丁字母後面幾乎
+      看不見，但它們是希伯來文／泰文／天城體帳號的正常構件——全擋等於擋掉那些語言。
+      Default_Ignorable 涵蓋的是「本來就不該畫出來」的那一群，那條線才畫得乾淨。
+    """
+    if not isinstance(raw, str):
+        raise AuthError("使用者名稱必須是字串")
+    name = raw.strip()
+    if not name:
+        raise AuthError("使用者名稱不可為空")
+    width = _display_width(name)
+    if width > config.USERNAME_MAX:
+        raise AuthError(
+            f"使用者名稱最長 {config.USERNAME_MAX} 欄寬（給了 {width}；"
+            f"中文與全形字元各算兩欄）")
+    if any(ch.isspace() or not ch.isprintable() for ch in name):
+        raise AuthError("使用者名稱不可含空白、換行或其他不可列印字元")
+    # ⚠ 正規化**前後都要看**。U+FFA0 的 NFKC 就是 U+1160，而 U+1160 本來就在名單裡
+    #   ——上一版只檢查原字串，於是名單漏掉了自己映射過去的那個字元。
+    folded = unicodedata.normalize("NFKC", name)
+    # 訊息只列**使用者真的打進來**的那些碼位。兩邊聯集的話，打一個 U+3164 會被回報成
+    # 「U+1160、U+3164」（因為前者是後者的 NFKC）——正確但看了會愣住，而錯誤訊息的
+    # 職責是讓人知道要改掉哪一個字。原字串裡找不到才退回用正規化後的（那表示問題是
+    # 正規化之後才浮現的，那時列出對照反而是需要的資訊）。
+    bad = {ch for ch in name if _is_invisible(ch)} or {ch for ch in folded if _is_invisible(ch)}
+    if bad:
+        raise AuthError(
+            "使用者名稱含有看不見的字元（"
+            + "、".join(f"U+{ord(ch):04X}" for ch in sorted(bad, key=ord))
+            + "），在清單上會與沒有它的名字完全一樣")
+    return name
+
+
+def create_user(username: str, password: str, is_admin: bool = False) -> dict:
+    username = _clean_username(username)
+    pw_hash = hash_password(password)
+    # ⚠ 這是一筆「讀全表 → 寫一列」的交易，必須整段互斥。
+    #
+    #   SQLite 的預設交易是 deferred：先讀只拿 read lock，要寫才升級——而在 WAL 底下，
+    #   若中間有別人寫過，升級會**當場**回 SQLITE_BUSY，busy_timeout 對這種情況無效
+    #   （它等的是鎖，不是快照衝突）。實測 4 併發 × 20 輪有 12.5% 回 500
+    #   `database is locked`（對抗性測試 2026-07-26）。immediate=True 讓交易一開始就取
+    #   寫鎖，既不再撞這個，也順帶讓「檢查重名 → 插入」真正原子。
+    #
+    with session_scope(immediate=True) as s:
+        # ⚠ 唯一性用 _fold() 的鍵比，**不分大小寫、也不分正規化形式**。UNIQUE 索引比的
+        #   是原字串，於是 `casey`/`Casey`、`café`(NFC)/`café`(NFD)、`ａdmin`/`admin`
+        #   都可以並存且各自登得進去——清單上兩列一模一樣，稽核時分不出是誰做的，而帳號
+        #   不能刪（ADR 0010），建錯了就永遠留著。
+        #
+        #   比對鍵在 **Python 端**算，不能下推給資料庫：SQLite 的 lower() 只處理 ASCII，
+        #   詳見 _fold 的說明。代價是這裡要把使用者全撈出來比一遍——建帳號是管理員偶爾
+        #   才做一次的事，這個規模的全表掃描便宜得多，換來的是不必為了一個索引去改
+        #   schema（而 ALTER TABLE ADD COLUMN 帶不出 UNIQUE，那是另一個坑）。
+        #
+        #   登入端刻意**維持精確比對**：既有資料庫裡可能已經有這種成對的帳號（本機就有
+        #   一組），把登入改成正規化比對會讓那一對變成不知道該驗哪一個的密碼。擋住新的、
+        #   不動既有的，是唯一不會弄壞現況的做法。
+        key = _fold(username)
+        clash = next((u for u in s.query(User).all() if _fold(u.username) == key), None)
+        if clash is not None:
+            raise AuthError(f"使用者 {clash.username} 已存在（名稱比對不分大小寫與正規化形式）")
+        user = User(username=username, password_hash=pw_hash, is_admin=is_admin)
+        s.add(user)
+        s.flush()
+        return _to_dict(user)
+
+
+def authenticate(username: str, password: str) -> dict:
+    """驗證帳密，成功回傳 user dict；任何失敗一律拋同一則訊息（不透露是帳號還是密碼錯）。"""
+    # ⚠ 不能直接 `(username or "").strip()`：非字串（int / list / dict）會在這裡拋
+    #   AttributeError，而 login 是**未登入就打得到**的端點——任何人都能讓它回 500 並在
+    #   日誌裡留下一整段 traceback。型別不對就是帳密錯誤，走同一則訊息、同一個時間路徑。
+    if not isinstance(username, str):
+        username = ""
+    # ⚠ **密碼也要**，而且理由一模一樣。`password or ""` 只擋得掉 falsy 的非字串
+    #   （0、[]、{}）；truthy 的非字串（`1`、`True`、`[1]`、`{"a":1}`、`3.14`）會原樣進到
+    #   argon2，它在 `password.encode()` 那一步拋 AttributeError——未捕捉，回 500。
+    #   2026-07-26 對線上實測 `{"username":"nobody","password":1}` → 500（交叉審查指出）。
+    #   上一輪修 username 時只改了一行，隔壁那一行是同一個洞。
+    if not isinstance(password, str):
+        password = ""
+    with session_scope() as s:
+        user = s.query(User).filter_by(username=username.strip()).one_or_none()
+        stored = user.password_hash if user else _DUMMY_HASH
+        try:
+            _ph.verify(stored, password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError):
+            # 帳號不存在、密碼錯、或 hash 不可用（如 system 帳號的 "!"）都走這裡
+            raise AuthError("帳號或密碼錯誤") from None
+        if user is None:                       # 假驗證竟通過也不可能放行
+            raise AuthError("帳號或密碼錯誤")
+        if not user.is_active:
+            # 停用的帳號連「密碼對不對」都不該回饋，訊息與帳密錯誤一致
+            raise AuthError("帳號或密碼錯誤")
+        if _ph.check_needs_rehash(user.password_hash):
+            user.password_hash = _ph.hash(password)  # 參數升級時自動換新雜湊
+        return _to_dict(user)
+
+
+def change_password(user_id: int, new_password: str, old_password: str | None = None,
+                    require_old: bool = True) -> dict:
+    """改密碼。require_old=True（使用者自行修改）時必須驗舊密碼；admin 代改可略過。
+
+    回傳改完之後的 user（含遞增過的 password_version）——呼叫端要靠它把「操作中的
+    這一台」的 cookie 續上，見 app.change_own_password。
+    """
+    new_hash = hash_password(new_password)
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None:
+            raise AuthError("使用者不存在")
+        # ⚠ 與 set_active / set_admin 同一道防線。system 的 password_hash 是不可用值 `!`
+        #   （argon2 永遠驗不過），那是它「無法被登入」的**唯一**保障——給它設一個真密碼
+        #   就等於把一個 is_admin=True 的帳號變成可登入的管理員，而它不會被
+        #   `_count_usable_admins` 算進來，「至少留一位管理員」的保護也就跟著失準。
+        #   它出現在 /api/users 清單上，admin 點得到那顆「重設密碼」。
+        if user.username == config.SYSTEM_USERNAME:
+            raise AuthError("不可設定 system 帳號的密碼（它必須維持無法登入）")
+        if require_old:
+            # 非字串的舊密碼同樣會在 argon2 的 .encode() 拋 AttributeError（見 authenticate）
+            if not isinstance(old_password, str):
+                old_password = ""
+            try:
+                _ph.verify(user.password_hash, old_password)
+            except (VerifyMismatchError, VerificationError, InvalidHashError):
+                raise AuthError("原密碼錯誤") from None
+        user.password_hash = new_hash
+        user.password_version += 1   # 使既有簽章 cookie 全部失效（review H4）
+        return _to_dict(user)
+
+
+def get_user(user_id: int) -> dict | None:
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        return _to_dict(user) if user else None
+
+
+def set_ttyd_bin(user_id: int, value: str) -> dict:
+    """設定「這個人開終端要用哪一顆 ttyd」。回傳更新後的使用者。
+
+    ⚠ 值一律先過白名單（`config.TTYD_BINS`）再落地：它最終會變成 argv[0]，把任意字串
+      存進去等於把 exec 的第一個參數交給呼叫端。端點那邊也擋一次——這裡是最後一道。
+    """
+    # 型別先驗，理由同 app.set_prefs：`x in dict` 對不可 hash 的值會拋 TypeError。
+    if not isinstance(value, str) or value not in config.TTYD_BINS:
+        raise ValueError(f"不認得的 ttyd 種類：{value!r}")
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None:
+            raise ValueError("使用者不存在")
+        user.ttyd_bin = value
+        return _to_dict(user)
+
+
+def list_users() -> list[dict]:
+    """**全部**帳號，含已停用的。
+
+    ⚠ 停用的不可以濾掉。停用是這個系統唯一的退場方式（沒有刪除，見 ADR 0010），名單
+      上看不到他就沒有人能把他復用回來；他過去開的 session 歷史也是永久保存的，篩選
+      用的下拉少了他，那些紀錄就永遠查不到。
+    """
+    with session_scope() as s:
+        return [_to_dict(u) for u in s.query(User).order_by(User.username).all()]
+
+
+def page_users(limit: int, offset: int = 0) -> tuple[list[dict], int]:
+    """一頁帳號 + 總筆數（排序、含已停用的規則同 list_users）。
+
+    總數在同一個交易裡算，不是拿 len() 去數這一頁——那會回報成「共 10 筆」。
+    """
+    with session_scope() as s:
+        total = s.query(User).count()
+        rows = (s.query(User).order_by(User.username)
+                .limit(limit).offset(offset).all())
+        return [_to_dict(u) for u in rows], total
+
+
+def set_active(user_id: int, active: bool) -> dict:
+    """停用 / 復用帳號。停用即無法登入，既有 cookie 也會在下次請求被 gate 擋下。
+
+    這是刪除帳號的正解：可逆、留下歸屬痕跡、不動任何既有資料。
+
+    停用最後一位管理員與降權後果相同（沒有人能再登入管理介面），所以走同一道檢查，
+    也同樣需要序列化——見 set_admin 的說明。
+    """
+    with session_scope(immediate=True) as s:
+        user = s.get(User, user_id)
+        if user is None:
+            raise AuthError("使用者不存在")
+        if user.username == config.SYSTEM_USERNAME:
+            raise AuthError("不可停用 system 帳號")
+        if not active:
+            _assert_not_last_admin(s, user)
+        user.is_active = active
+        if not active:
+            user.password_version += 1   # 立刻讓其既有登入 cookie 失效
+        return _to_dict(user)
+
+
+def _count_usable_admins(s, exclude_id: int | None = None) -> int:
+    """數還剩幾位**真的能登入**的管理員。
+
+    ⚠ 必須排除 `system`：它是 `is_admin=True`，但 password_hash 固定為 `"!"`，argon2
+    永遠驗不過（見 sessions.ensure_system_user）。把它算進來的話，「至少留一位管理員」
+    這個保護會在只剩一位真人管理員時放行——降完之後沒有任何人能登入管理介面，
+    只能直接改資料庫才救得回來。
+    """
+    q = (s.query(User)
+          .filter(User.is_admin.is_(True), User.is_active.is_(True))
+          .filter(User.username != config.SYSTEM_USERNAME))
+    if exclude_id is not None:
+        q = q.filter(User.id != exclude_id)
+    return q.count()
+
+
+def _assert_not_last_admin(s, user: User) -> None:
+    """把使用者變成「不再是可用的管理員」之前，確認還有別人守著。
+
+    降權與停用共用這一個判斷——兩者的後果相同（少一位能登入的管理員），卻曾經只有降權
+    有檢查。呼叫端的交易必須以 `session_scope(immediate=True)` 開啟（BEGIN IMMEDIATE），
+    否則檢查與寫入之間可以插進另一筆同樣「檢查通過」的交易。（曾經還有第三條路徑「刪除帳號」，已於 ADR 0010 移除。）
+    """
+    if not (user.is_admin and user.is_active):
+        return                      # 他本來就不算數，拿掉不影響
+    if _count_usable_admins(s, exclude_id=user.id) == 0:
+        raise AuthError("這是最後一位能登入的管理員，這麼做之後就沒有人能管理系統了")
+
+
+def set_admin(user_id: int, is_admin: bool) -> dict:
+    """提權 / 降權。
+
+    「數一數還有幾位管理員 → 改掉這一位」必須是一筆不可分割的交易。沒有它的話，
+    兩位管理員同時互相降權時，兩邊都會先看到「對方還在」而放行，結果一個管理員都不剩。
+    互斥靠 `immediate=True` 的 BEGIN IMMEDIATE：交易一開始就取整個 DB 的寫鎖。
+    """
+    with session_scope(immediate=True) as s:
+        user = s.get(User, user_id)
+        if user is None:
+            raise AuthError("使用者不存在")
+        if user.username == config.SYSTEM_USERNAME:
+            raise AuthError("不可變更 system 帳號的權限")
+        if not is_admin:
+            _assert_not_last_admin(s, user)
+        user.is_admin = is_admin
+        # 權限變更要立即生效於既有連線：cookie 帶著簽發當下的版號，
+        # 遞增它等於強制重新認證，拿到的才會是新權限。
+        user.password_version += 1
+        return _to_dict(user)
+
+
+# 這裡**刻意沒有 delete_user()**：帳號的退場是 set_active(False)，不是刪除（ADR 0010）。
+# 刪除會沿 FK cascade 掉 `sessions` 登錄（容器變孤兒），也讓稽核鏈斷在半路。
+# `session_history` 仍保留 user_id ON DELETE SET NULL 與 username 快照——那是給
+# 「有人直接動資料庫」的兜底，不是應用層還會走的路徑。
+
+
+def _to_dict(user: User) -> dict:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "is_active": user.is_active,
+        "password_version": user.password_version,
+        # 這個人開終端時要用哪一顆 ttyd（見 config.TTYD_BINS）。一律經收斂函式，
+        # 讓沒設過（NULL）與白名單改掉之後留下的舊值都退回預設。
+        "ttyd_bin": config.ttyd_bin_or_default(user.ttyd_bin),
+        "created_at": user.created_at.isoformat(),
+    }
