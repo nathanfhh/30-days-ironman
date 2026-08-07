@@ -46,6 +46,17 @@ CAPTURE_DIR="$HOME/ncr/mitm"
 CAPTURE_PROXY_HOST="127.0.0.1"
 CAPTURE_PROXY_PORT="8880"
 CAPTURE_WEB_PORT="8081"          # 容器內固定；host 那側由 run script 動態挑，避免多開時撞號
+# mitmweb UI 綁在容器內的哪個介面。
+#
+# 預設 `0.0.0.0`：人自己開容器時，run script 用 `-p 127.0.0.1:<port>:8081` 把它發布到
+# host 的 loopback，而 docker 的 port forwarding 連的是**容器內的介面**——綁容器
+# loopback 的話那條路就通不了，UI 直接打不開。
+#
+# ⚠ 但**加入了自訂 network 的容器不一樣**：同一個網段上的兄弟容器連得到 8081，而那個
+#   UI 顯示的是**未脫敏的即時流量**（token 又印在 `docker logs` 裡）。那種部署要把它
+#   收回容器 loopback：`NCR_MITM_WEB_BIND=127.0.0.1`。UI 仍然開得起來（在容器內），
+#   token 也照印——只是拿到 token 的人得先進得了這個容器。
+CAPTURE_WEB_BIND="${NCR_MITM_WEB_BIND:-0.0.0.0}"
 CAPTURE_HOSTS=""            # 空字串＝全錄；選單第二題可收斂成只錄模型 API
 CAPTURE_MODEL_HOSTS="api.anthropic.com"
 CAPTURE_CA="$HOME/.mitmproxy/mitmproxy-ca-cert.pem"
@@ -95,7 +106,7 @@ start_capture() {
     nohup mitmweb -q \
         --listen-host "$CAPTURE_PROXY_HOST" --listen-port "$CAPTURE_PROXY_PORT" \
         --no-web-open-browser \
-        --web-host 0.0.0.0 --web-port "$CAPTURE_WEB_PORT" \
+        --web-host "$CAPTURE_WEB_BIND" --web-port "$CAPTURE_WEB_PORT" \
         --set web_password="$token" \
         --set store_streamed_bodies=true \
         -s "$CAPTURE_ADDON" \
