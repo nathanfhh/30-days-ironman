@@ -366,7 +366,18 @@ try:
     class _LiveC:
         status = "running"
 
-    _NET_UID = _sysuid
+    # ⚠ **這一段用自己的 user，不要共用 system。**
+    #
+    #   前面幾段在 system 底下留了 4 筆 row（3 running、1 creating），而這一段的每一條
+    #   斷言都以「這個人有／沒有活著的 session」為前提。共用的後果是兩個方向都壞，
+    #   而且壞法相反：
+    #     · 「沒有 session 了 → 網路被收掉」→ 前提根本不成立（`active` 仍含那個 uid），
+    #       `_reap_user_networks` 在 `uid in active` 就跳過 → **紅，而且紅的理由是假的**。
+    #     · 「有活著的 session → 網路留著」→ 那 4 筆自己就足以讓它綠，**把自己 add 的那筆
+    #       拿掉也一樣綠** → 從來沒有驗到自己的設定。
+    #   自己開一個乾淨的 user 比「用完把 row 刪掉」好：刪 row 會讓前面那些 row 對應的
+    #   真容器變成沒人追蹤的孤兒，最後那道「測試結束無殘留 container」會紅（實測踩到）。
+    _NET_UID = _auth_seed.create_user("netreap-owner", "netreap-password-1")["id"]
 
     def _converge_with(gitlab_on, live, attached=()):
         """跑一輪收斂，回傳那張網路有沒有被收掉。"""
@@ -380,9 +391,23 @@ try:
             config.GITLAB_HOST = saved
         return net.removed
 
-    with db.session_scope() as s:
-        s.add(SessionRow(id="netkeep0001", container_name="claude-pty-netkeep",
-                         user_id=_NET_UID, status="running", workdir="/tmp"))
+    def _reset_rows(*rows):
+        """把這個 user 的 row 換成指定的那幾筆——每個 case 自己擺自己的前提。
+
+        ⚠ 這個 user 是這一段專用的、沒有任何真容器，所以清空它的 row 不會像清空 system
+          那樣把別的段落建的容器變成孤兒。
+        """
+        with db.session_scope() as s:
+            for r in s.query(SessionRow).filter(SessionRow.user_id == _NET_UID).all():
+                s.delete(r)
+            for r in rows:
+                s.add(r)
+
+    def _netkeep_row():
+        return SessionRow(id="netkeep0001", container_name="claude-pty-netkeep",
+                          user_id=_NET_UID, status="running", workdir="/tmp")
+
+    _reset_rows(_netkeep_row())
     _live = {"claude-pty-netkeep": _LiveC()}
     check("🔴 GitLab 關閉 + 有活著的 session → 網路留著",
           not _converge_with(gitlab_on=False, live=_live))
@@ -390,8 +415,7 @@ try:
           not _converge_with(gitlab_on=True, live=_live))
     # 反向：沒有任何活著的 session，網路就該收（不然位址池會慢慢被吃光）。這條同時證明
     # 上面兩條不是因為「_reap 根本沒在動」才綠的。
-    with db.session_scope() as s:
-        s.delete(s.get(SessionRow, "netkeep0001"))
+    _reset_rows()
     check("🔴 沒有 session 了 → 網路被收掉（證明上面不是因為 reap 沒作用才綠）",
           _converge_with(gitlab_on=False, live={}))
     # jaeger 掛在每一張使用者網路上，它**不算**「還有人在用」——不然每一張網都永遠收不掉，
