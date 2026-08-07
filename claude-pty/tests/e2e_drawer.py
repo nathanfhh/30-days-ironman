@@ -411,6 +411,18 @@ try:
         page.wait_for_selector(".toast", state="visible", timeout=4000)
         check(f"🔴 點路徑本身就複製到了（{page.evaluate('navigator.clipboard.readText()')}）",
               page.evaluate("navigator.clipboard.readText()") == config.DATA_BIND)
+        # 🔴 **一次點擊只准產生一則 toast。**
+        #
+        # ⚠ 這條守的是「同一顆元素被兩個 handler 各接一次」——那不是假想：`ed96517` 加了
+        #   一支全域 `[data-copy]` 委派，而這顆按鈕當時正拿 `data-copy` 當自己的資料欄
+        #   （它有自己的 `copy-persist` 分支）。於是一次點擊吐兩則標題不同的 toast、剪貼簿
+        #   寫兩次，而 **markup 與那兩支程式碼分開看都是對的**，靜態上完全看不出來。
+        # ⚠ 現在只有一個 handler 接得到它（資料欄已改名 `data-persist-path`），但**「現在
+        #   只有一個」不等於「不會再有第二個」**——下次有人再發明一個掃得到它的全域機制，
+        #   這條就會紅。等 800ms 而不是立刻數：第二則若是非同步來的，立刻數會漏掉。
+        page.wait_for_timeout(800)
+        _n = page.locator(".toast").count()
+        check(f"🔴 一次點擊只有一則 toast（實際 {_n} 則）", _n == 1)
         # 收掉這一則，下面要驗的是「再點一次」自己那一則
         page.locator(".toast__close").first.click()
         page.wait_for_selector(".toast", state="detached", timeout=4000)

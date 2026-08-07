@@ -985,7 +985,7 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
                    可聚焦、可用 Enter 觸發的元素，否則鍵盤使用者按不到。 -->
             ${persistDir() ? `
             <button class="drawer__hint drawer__hint--persist tip tip--right tip--wide"
-                    type="button" data-act="copy-persist" data-copy="${esc(persistDir())}"
+                    type="button" data-act="copy-persist" data-persist-path="${esc(persistDir())}"
                     data-testid="drawer-persist"
                     data-tip="只有這個目錄的內容留得到下一場（換一顆 container 也還在），而且是你個人的，別人看不到。工作目錄與家目錄其他地方都是容器的可寫層，session 一結束就消失。點一下複製路徑。">
               <i class="fa-solid fa-box-archive"></i>
@@ -1417,7 +1417,9 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
     if (act === "upload") fileInput.click();
     if (act === "copy-persist") {
       const btn = e.target.closest("[data-act='copy-persist']");
-      await copyPath(btn?.dataset.copy || "");
+      // ⚠ 讀 `data-persist-path` 而**不是** `data-copy`：後者是全域「點一下複製」的公開
+      //   標記（見本檔末段），掛上去會讓這顆按鈕同時被兩個 handler 接走。
+      await copyPath(btn?.dataset.persistPath || "");
       return;
     }
     if (act === "pop") {
@@ -2031,6 +2033,18 @@ function initAccountMenu() {
 /* ── 點一下複製 ────────────────────────────────────────────────────────────────
  * 用委派而不是逐個綁：這些 `<code data-copy>` 散在各頁的說明文字裡，而說明文字是
  * 最常被改的東西——逐個綁的話，下一個人加一段說明就會忘記綁，而且不綁**看起來一樣**。
+ *
+ * ⚠ **`data-copy` 是「把我註冊成可複製元素」的公開標記，不是任何人的私有資料欄。**
+ *   帶著它的元素都會被這支接走，**不管它自己有沒有別的 handler**。踩過一次：抽屜那顆
+ *   持久化路徑按鈕本來拿 `data-copy` 當自己的資料欄（它有自己的 `copy-persist` 分支），
+ *   這支上線之後，那一次點擊變成兩個 handler 各跑一次——兩則標題不同的 toast、剪貼簿
+ *   寫兩次。**markup 與兩支程式碼分開看都是對的**，只有跑起來才看得到。
+ *
+ * ⚠ 所以規則有兩條，都是可操作的：
+ *     1. **私有資料欄要取一個全域選擇器掃不到的名字**（那顆按鈕現在叫 `data-persist-path`）。
+ *     2. **新增任何全域委派之前，先 grep 那個屬性名還有誰在用**，確認它們沒有自己的
+ *        handler——命中不代表沒事，要一個一個看。
+ *   釘住它的是 e2e_drawer 的「點一次只產生一則 toast」。
  *
  * ⚠ 非 HTTPS 或權限被拒時 `navigator.clipboard` 不可用。那時不要只說「複製失敗」——
  *   把內容留在畫面上讓人自己選取，總比一句失敗然後什麼都不能做好（同 sessions.html
