@@ -106,6 +106,35 @@ try:
         page.goto(f"{BASE}/account", wait_until="domcontentloaded")
         page.wait_for_timeout(800)
 
+        print("== CLI 憑證面板：貼 token → 已設定；清除 → 未設定（D 階段的入口）==")
+        check("初始是未設定（chip 紅）", "未設定" in page.inner_text("#token-state"))
+        check("招牌徽章也說未設定",
+              "未設定" in page.inner_text("#cred-badge"))
+        check("沒 token 時沒有清除鍵（沒東西可清）",
+              page.locator("#token-clear").is_hidden())
+        check("輸入框是 password 型別（貼進來的是憑證，畫面上不該讀得出來）",
+              page.get_attribute("#cli-token", "type") == "password")
+        check("空欄位時儲存鍵按不下去", page.locator("#token-save").is_disabled())
+        page.fill("#cli-token", "sk-ant-oat01-e2e-test-token")
+        check("貼了字儲存鍵才亮", page.locator("#token-save").is_enabled())
+        page.click("#token-save")
+        # 成功後前端先 toast、900ms 才 location.reload()——不能只等時間，要等 chip
+        # 真的翻過來（等時間就是在賭 reload 已完成，賭輸的樣子像功能壞掉）。
+        page.wait_for_function(
+            "() => document.querySelector('#token-state')?.textContent.includes('已設定')",
+            timeout=8000)
+        check("重載後 chip 變已設定", "已設定" in page.inner_text("#token-state"))
+        check("招牌徽章跟著轉綠（同一個真相來源）",
+              "已設定" in page.inner_text("#cred-badge"))
+        check("輸入框不吐回存過的值（永遠是空的）",
+              page.input_value("#cli-token") == "")
+        check("清除鍵出現了", page.locator("#token-clear").is_visible())
+        page.click("#token-clear")
+        page.wait_for_function(
+            "() => document.querySelector('#token-state')?.textContent.includes('未設定')",
+            timeout=8000)
+        check("清除後回到未設定", "未設定" in page.inner_text("#token-state"))
+
         print("== 第一頁 ==")
         check("分頁列真的看得見（不是只有 hidden 屬性被拿掉）",
               page.locator('[data-testid="roster-pager"]').is_visible())
