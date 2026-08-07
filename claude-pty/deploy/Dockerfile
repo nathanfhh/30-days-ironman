@@ -53,6 +53,10 @@ RUN git init /src && cd /src \
 # --locked：用 repo 裡的 Cargo.lock，不讓 build 期自己解析出別的版本組合。
 # 前端不用另外 build——build.rs 直接讀 C 版就有的 src/html.h（單一來源）。
 RUN cd /src/rust && cargo build --release --locked && /src/rust/target/release/ttyd --version
+# ⚠ 真 binary 的能力斷言（發表阻擋項 #17 的兌現）：控制平面靠 --title 把命令列擋在瀏覽器
+#   之外、靠 --auth-url 掛第二層授權。這三支旗標若哪天 fork 改掉，**build 當場失敗**，
+#   而不是等到執行時靜默少一層。這是「用真 binary 驗旗標真的被接受」，不是讀 --version。
+RUN for flag in --title --auth-url --auth-cache-ttl; do         /src/rust/target/release/ttyd --help 2>&1 | grep -q -- "$flag"         || { echo "FATAL: Rust ttyd 缺旗標 $flag（fork 版本不對？）" >&2; exit 1; };     done
 
 FROM python:3.13-slim
 
@@ -107,6 +111,13 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
 # 兩顆同時在 image 裡才切得動：切換即時生效，不必重新 build、也不必重啟。
 COPY --from=ttyd-rust /src/rust/target/release/ttyd /usr/local/bin/ttyd-rust
 RUN ttyd-rust --version
+# ⚠ 兩 binary 契約在 build 時就釘死（真 binary 實測 2026-08-07）：
+#   · Rust 版有 --title / --auth-url（上一階段已斷言，這裡再確認搬進來的是對的那顆）
+#   · C 版**沒有**這些旗標，而且它對沒有的旗標是**靜默忽略照跑**（不是拒起）——所以
+#     絕不能靠「塞了會壞」來防呆，必須靠 server 端 strategy 不把旗標交給它
+#     （views._TTYD_EXTRAS）。這裡斷言 C 版 help 確實沒有，作為那個 strategy 的地基。
+RUN ttyd-rust --help 2>&1 | grep -q -- --title     || { echo "FATAL: 搬進來的 ttyd-rust 沒有 --title" >&2; exit 1; }
+RUN if ttyd --help 2>&1 | grep -q -- --title; then         echo "FATAL: C 版 ttyd 竟然有 --title，兩 binary 差異的前提不成立" >&2; exit 1;     fi
 
 WORKDIR /app
 # ⚠ 相依**只有一份清單**，就是 pyproject.toml。這裡曾經另外寫死一串 pip install，
@@ -118,7 +129,6 @@ WORKDIR /app
 #   程式碼要在 pip install 之前 COPY 進來——`pip install .` 要建的就是這個套件本身。
 COPY pyproject.toml ./
 COPY server/ ./server/
-COPY client/ ./client/
 RUN pip install --no-cache-dir ".[server]"
 
 # registry / secret key 的落腳處；compose 以 volume 掛入使其跨重啟持久。

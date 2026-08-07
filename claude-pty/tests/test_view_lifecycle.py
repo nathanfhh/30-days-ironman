@@ -44,6 +44,13 @@ config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
 db.reset_engine()
 db.init_db()
 
+# 憑證守門在 create() 入口（D 階段起）。這支的 session 掛在 system 使用者名下，
+# 給它種一個測試 token 就過得了守門——本測試驗的是 view 生命週期，不是憑證。
+from server import auth as _auth_seed  # noqa: E402
+from server import sessions as _sessions_seed  # noqa: E402
+
+_auth_seed.set_cli_token(_sessions_seed.ensure_system_user(), "sk-test-setup-token")
+
 from server import views  # noqa: E402
 from server.models import Session as SessionRow  # noqa: E402
 from server.models import View  # noqa: E402

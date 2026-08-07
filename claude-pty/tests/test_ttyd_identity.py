@@ -88,8 +88,10 @@ try:
           views._ttyd_argv(41000, "c", "sid", "rm -rf /")[0] == config.TTYD_BIN_DEFAULT)
 
     print("== 參數建構策略：每顆 binary 一組，特有旗標不進共用模板 ==")
-    # Rust 特有旗標（--title / --auth-url / --auth-cache-ttl）C 版**不認得**，塞進
-    # 共用模板 C 版直接拒起——strategy 拆開就是在守這件事。
+    # Rust 特有旗標（--title / --auth-url / --auth-cache-ttl）C 版沒有。真 binary 實測
+    # （test_ttyd_real_binary）：C 版對它沒有的旗標是**靜默忽略照跑**，不是拒起——
+    # 所以塞給 C 不會炸，只會靜靜少掉標題遮蔽與第二層授權。strategy 拆開守的就是
+    # 「這些旗標永遠不會落到不認得它們的 binary 上」。
     rust = views._ttyd_argv(41000, "claude-pty-xyz789", "xyz789", "ttyd-rust")
     c = views._ttyd_argv(41000, "claude-pty-xyz789", "xyz789", "ttyd")
     check("🔴 策略表恆等於白名單（多一顆 binary 就要寫下它的策略，含「沒有」）",
@@ -109,7 +111,7 @@ try:
           and "claude-pty-xyz789" not in _title)
     check("--title 與 titleFixed 是同一個字串（兩條路顯示一致）",
           f"titleFixed={_title}" in rust)
-    check("🔴 C 版沒有任何 Rust 特有旗標（帶了會拒起）",
+    check("🔴 C 版 argv 沒有任何 Rust 特有旗標（strategy 不讓它們落到 C 上）",
           not {"--title", "--auth-url", "--auth-cache-ttl"} & set(c))
     check("C 版仍靠 titleFixed 蓋畫面",
           any(a.startswith("titleFixed=") for a in c))

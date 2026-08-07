@@ -71,7 +71,10 @@ def free_port():
 
 PORT = free_port()
 BASE = f"http://127.0.0.1:{PORT}"
-auth.create_user("e2e-user", "e2e-password-1", is_admin=True)
+_e2e_user = auth.create_user("e2e-user", "e2e-password-1", is_admin=True)
+# 憑證守門在 create() 入口（D 階段起）：這個人要能開 session 就得先有 token。
+# 本測試驗端到端流程，不是憑證，種一個測試值即可。
+auth.set_cli_token(_e2e_user["id"], "sk-test-setup-token")
 
 # 在背景緒跑 Flask（werkzeug 開發伺服器足夠；E2E 驗的是流程不是效能）
 # ⚠ 把 werkzeug 的**請求** log 關掉（保留 WARNING 以上）。兩個理由，第二個才是重點：
@@ -219,10 +222,14 @@ try:
         check("並提示不一致", "不一致" in page.text_content("#pw-hint"))
         page.fill("#confirm-pw", "e2e-password-2")
         check("兩次一致 → 送出鈕啟用", page.is_enabled("#pw-btn"))
+        # 帳號清單要趁改密碼**之前**查——改完會跳轉登入頁，跳轉後這頁就不在了
+        check("管理員看得到帳號清單", page.query_selector("#roster-body") is not None)
         page.click("#pw-btn")
-        # 操作結果改以右上角 toast 呈現（不再是頁內的 #flash 區塊）
+        # 操作結果以右上角 toast 呈現。改密碼的成功文案是「請重新登入」——因為 D 階段起
+        # 改密碼＝這個帳號連著的東西全部斷掉，前端跟著在 1200ms 後送回登入頁。
         page.wait_for_selector(".toast[data-level='success']", timeout=8000)
-        check("顯示成功 toast", "密碼已更新" in page.inner_text(".toast__title"))
+        check("顯示成功 toast（文案叫人重新登入）",
+              "請重新登入" in page.inner_text(".toast__title"))
         check("toast 有倒數進度條（不需使用者手動關）",
               page.query_selector(".toast__bar") is not None)
         pw_ok = False
@@ -232,25 +239,23 @@ try:
         except auth.AuthError:
             pass
         check("新密碼實際生效", pw_ok)
-        check("管理員看得到帳號清單", page.query_selector("#roster-body") is not None)
 
-        print("== 改密碼：舊 cookie 作廢，但操作中的這一台不被踢（review H4）==")
-        # ⚠ 這段原本斷言「改密碼後被導回登入頁」——那是**舊行為**。現在 change_own_password
-        #   會把按下送出的那一台的 cookie 版本續上（他剛用舊密碼證明過自己是本人，踢掉他
-        #   換不到任何安全性，而畫面上的提示寫的是「你在**其他裝置**的登入已失效」）。
-        #   斷言沒跟著改，於是這一整支 e2e 從那裡就 timeout，後半段的終止流程根本沒被跑到
-        #   （交叉審查 2026-07-26 指出）。要守的性質是**「別台失效、這台不失效」**，
-        #   所以兩邊都要驗，而且驗別台要用**改密碼前存下來的那串 cookie**，不能用當下這一張
-        #   （它已經被伺服器續期過了）。
-        page.goto(f"{BASE}/", wait_until="domcontentloaded")
-        check("操作中的這一台仍然登入著", not page.url.endswith("/login"))
+        print("== 🔴 改密碼＝這個帳號連著的東西全部斷掉，包含操作中的這一台 ==")
+        # D 階段起**沒有「這一台除外」的特例**。改密碼後本機也被登出、送回登入頁；
+        # 改密碼前複製走的舊 cookie 當然也失效。兩邊都驗——別台用改密碼**前**存下的
+        # cookie（當下這張已被清掉，拿它驗會驗到一個必然失效的東西，那是代理指標）。
+        page.wait_for_url(f"{BASE}/login", timeout=8000)
+        check("🔴 操作中的這一台也被送回登入頁（不留特例）", page.url.endswith("/login"))
         stale = ctx_stale.new_page()
         stale.goto(f"{BASE}/", wait_until="domcontentloaded")
-        check("改密碼前複製走的舊 cookie 已失效（被導回登入頁）", stale.url.endswith("/login"))
+        check("改密碼前複製走的舊 cookie 也失效（被導回登入頁）", stale.url.endswith("/login"))
         stale.close()
         ctx_stale.close()
 
-        print("== 終止 session ==")
+        print("== 終止 session（先用新密碼重新登入——上一步把這台也登出了）==")
+        page.fill("#username", "e2e-user")
+        page.fill("#password", "e2e-password-2")
+        page.click("#login-btn")
         page.wait_for_selector(".manifest__row", timeout=8000)
         page.click('button[data-act="kill"]')
         page.wait_for_selector(".modal", timeout=5000)
