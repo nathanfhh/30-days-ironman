@@ -79,18 +79,32 @@ iptables -A INPUT  -i lo -j ACCEPT
 iptables -A OUTPUT -o lo -j ACCEPT
 
 # ------------------------------------------------------------------------------
-# 4b. SSH 只通 GitLab 那一台
+# 4b. SSH 只通 GitLab 那一台，**而且只在 agent 真的在場時才開**
 #
-# run wrapper 會把 host 的 ssh-agent socket 轉發進來。交出去的是「簽章的能力」而不是
-# 私鑰本體，這點沒錯——但那個能力**沒有範圍限制**：它能對任何一台連得到、且認得那把
-# 公鑰的主機簽章。而多數人的 SSH 金鑰是複用的（同一把進 GitLab、也進其他伺服器）。
+# 交出去的是「簽章的能力」而不是私鑰本體，這點沒錯——但那個能力**沒有範圍限制**：
+# 它能對任何一台連得到、且認得那把公鑰的主機簽章。而多數人的 SSH 金鑰是複用的
+# （同一把進 GitLab、也進其他伺服器）。所以範圍不能在 SSH 那一層畫，只能在網路
+# 這一層畫：只放行我們真的會 push/pull 的那台。
 #
-# 所以範圍不能在 SSH 那一層畫，只能在網路這一層畫：只放行我們真的會 push/pull 的那台。
+# ⚠ **放行的條件是 agent 在不在，不是「誰啟動了這個容器」。** 22 當初進白名單就是
+#   為了服務轉發進來的 agent；agent 後來變成 opt-in，白名單卻沒跟著動——規則活得比
+#   它的理由久，留下一個沒有用途的出口。沒有 agent 的容器開著 22 不會讓任何事情
+#   變得可能，只是多一個攻擊面。
+#
+# ⚠ **判準是那個 socket 本身，不是任何人傳進來的訊號。** 一個事實有兩個來源就會漂：
+#   哪天網頁那條路徑也允許 opt-in agent，「這是哪一條路徑」那種旗標就會擋錯人。
+#   socket 在不在是就地觀察得到的事實，不必有人宣告，也沒有第二份可以分岔。
+#   路徑與 Dockerfile 的 `ENV SSH_AUTH_SOCK` 同一個值——⚠ SYNC：改一邊要改另一邊，
+#   否則這裡永遠看不到 agent、22 永遠不開，而且沒有任何錯誤訊息。
+#   （不讀 `$SSH_AUTH_SOCK` 是因為這支跑在 sudo 下，`env_reset` 會把它清掉。）
 #
 # 已知限制（與下面的 ipset 相同）：boot 時解析一次。IP 換了就得重開容器。
 # 解析失敗只警告不中斷——git over SSH 這回合不能用，但審查本身照跑（優雅降級）。
 # ------------------------------------------------------------------------------
-if [ -n "$GITLAB_SSH_HOST" ]; then
+SSH_AGENT_SOCK="/ssh/ssh_sock"      # ⚠ SYNC: dev-container/Dockerfile 的 ENV SSH_AUTH_SOCK
+if [ ! -S "$SSH_AGENT_SOCK" ]; then
+    echo "沒有轉發 ssh-agent（$SSH_AGENT_SOCK 不在）— 不開放任何 SSH outbound"
+elif [ -n "$GITLAB_SSH_HOST" ]; then
     gitlab_ips=$(dig +short +tries=2 +time=3 A "$GITLAB_SSH_HOST" \
                  | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || true)
     if [ -z "$gitlab_ips" ]; then
