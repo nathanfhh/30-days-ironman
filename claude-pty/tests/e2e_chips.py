@@ -61,8 +61,18 @@ admin = auth.create_user("e2e-admin", "e2e-password-1", is_admin=True)
 # 兩邊都要驗——只驗「長的會切」的話，把 chip 調到 5.6rem 那種連真實字串都塞不下的
 # 寬度也會全綠，而那正是使用者回報的畫面（只看得到開頭幾個字）。
 # （chip 畫的就是 profile.model 的字串，不查任何目錄。）
-REAL = "claude-sonnet-5-preview"          # 實測自然寬度 133.8px；chip 是 auto + max-width 11rem（176px）
-TOO_LONG = "claude-sonnet-5-preview-2026-07-31"
+#
+# ⚠ REAL **從白名單取最長的那個，不寫死**。寫死過一次，後來白名單換了內容、字串留在原地，
+#   於是這條斷言測的是一個系統永遠不會顯示的值；它紅了，而紅的原因與版面無關。派生就不會
+#   漂：白名單哪天放寬成完整名稱（`claude-fable-5` 那種形式，見 config.CLAUDE_MODELS 上方
+#   註解），這個 fixture 自己會跟著變長。
+# ⚠ 附帶後果講明：目前白名單是四個短別名（最長 6 字元），遠在 chip 上限之內，所以「不該被
+#   切」這條**現在是寬鬆的**。它守的是未來——白名單放寬時 chip 寬度必須跟上。下一個看到的
+#   人不要因為「它一定會過」就把它刪掉。
+REAL = max(config.CLAUDE_MODELS, key=len)
+# 刻意合成、必定超過 chip 的 max-width（11rem／176px）。不是任何真實型號，只為驗「切了要
+# 掛 tooltip、tooltip 要有完整字串」這條路徑。
+TOO_LONG = REAL + "-preview-2026-07-31-extended-name"
 
 now = utcnow()
 # 名稱欄同理：第一列取一個放不進欄寬的名字（一定被切），第二列不取名（沿用 12 碼 sid，
