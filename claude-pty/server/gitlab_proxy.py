@@ -111,6 +111,25 @@ _API_LOCATIONS: tuple[tuple[str, str, int], ...] = (
 _GIT_LOCATION = r"location ~ ^/.+\.git/(info/refs|git-upload-pack|git-receive-pack)$"
 
 
+def ca_digest() -> str:
+    """目前那份自訂 CA 的內容摘要；沒設或讀不到回空字串。
+
+    ⚠ **為什麼指紋要含 CA 的內容，而不是只含路徑。** 續簽一次內部 CA 是路徑不變、內容變
+      ——只比路徑的話 `/_state` 不會變、reconciler 不會重載，於是 nginx 抱著記憶體裡那份
+      舊的 CA 繼續驗，而**症狀是每個請求 502、容器完全健康**（同 GITLAB_CA_FILE 那段講的
+      那個惡劣形狀）。把內容摘進指紋，換一次 CA 下一輪就自己重載。
+    ⚠ 讀不到回空字串而不是拋：這支在收斂的熱路徑上，CA 檔暫時不可讀不該讓整輪陣亡。
+      「填了卻找不到」由 preflight 在啟動時喊（見 sessions.preflight）。
+    """
+    if not config.GITLAB_CA_FILE_SELF:
+        return ""
+    try:
+        with open(config.GITLAB_CA_FILE_SELF, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()[:16]
+    except OSError:
+        return ""
+
+
 def fingerprint(pat: str) -> str:
     """這份設定的指紋——`/_state` 回的就是它，reconciler 拿它判斷「跑著的是不是最新的」。
 
@@ -118,6 +137,8 @@ def fingerprint(pat: str) -> str:
       · 使用者換了 PAT
       · **我們改了這個產生器**（例如白名單加一條端點）→ 部署後所有代理自動 reload，
         不必手動重建，也不會有人記得要重建
+      · **自訂 CA 換了**（路徑或內容都算，見 `ca_digest`）——續簽是內容變而路徑不變，
+        只看路徑會漏掉那一種
 
     ⚠ **用 HMAC 而不是裸 sha256。** `/_state` 就在 per-user network 上，**session 裡的 AI
       打得到**。裸 hash 等於把「一個 secret 的 hash」交出去；以 `SECRET_KEY` 導出的金鑰
@@ -148,6 +169,12 @@ def render_conf(pat: str) -> bytes:
 def _render(pat: str, state: str) -> bytes:
     pat = validate_pat(pat)
     host = config.GITLAB_HOST
+    # 信任錨：有掛自訂 CA 就指過去，否則沿用容器內的系統 CA（維持現狀）。
+    ca_path = config.GITLAB_CA_BIND if config.GITLAB_CA_FILE else \
+        "/etc/ssl/certs/ca-certificates.crt"
+    # CA 的內容摘要寫成註解，只為了讓它進到指紋裡（見 ca_digest）。它是 CA 的**公開**
+    # 憑證的雜湊，不是秘密；而 `/_state` 回的是整份 conf 的 HMAC，不是這一行。
+    ca_note = f"# gitlab-ca: {ca_digest() or 'system'}\n"
     if not host:
         # 到不了這裡才對——呼叫端一律先問 `config.gitlab_enabled()`。真的走到了就明講，
         # 不要渲染出一份 upstream 是空字串的設定（那會變成 nginx 啟動失敗，而錯誤訊息
@@ -168,7 +195,7 @@ def _render(pat: str, state: str) -> bytes:
         for loc, methods, burst in _API_LOCATIONS)
 
     return f"""# 由 claude-pty 自動產生（server/gitlab_proxy.py，ADR 0016）。不要手改。
-worker_processes 1;
+{ca_note}worker_processes 1;
 error_log /var/log/nginx/error.log warn;
 pid /var/run/nginx.pid;
 
@@ -198,8 +225,10 @@ http {{
 
     # 上游 TLS 驗證。⚠ 這四行漏掉，代理對 GitLab 就是不驗憑證——你把憑證從 agent 手上
     # 收走，卻在代理這一段自己開了一個中間人的門。
+    # ⚠ **永遠不會有 `proxy_ssl_verify off`**，內部 CA 的解法是把那個 CA 給它（見
+    #   config.GITLAB_CA_FILE），不是不驗。
     proxy_ssl_verify on;
-    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+    proxy_ssl_trusted_certificate {ca_path};
     proxy_ssl_server_name on;
     proxy_ssl_name {host};
 

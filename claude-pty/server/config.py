@@ -441,6 +441,34 @@ PROXY_EXTRA_HOSTS = {
 # GitLab 自己發的 PAT 是 26 字元左右；留大幅餘裕給其他形式的 token。
 GITLAB_PAT_MAX = int(os.environ.get("CLAUDE_PTY_GITLAB_PAT_MAX", "512"))
 
+# --- 自訂 CA：內部憑證簽的 GitLab -----------------------------------------------
+#
+# 代理對上游是 `proxy_ssl_verify on`，信任錨預設是容器內的系統 CA
+# （`/etc/ssl/certs/ca-certificates.crt`）。**內部 CA 簽的 GitLab 不在那份裡面**，
+# 於是每一個請求都在 TLS 這一關失敗。
+#
+# ⚠ **失敗的形狀很惡劣，所以要知道自己在找什麼**：容器**是健康的**（nginx 跑得好好的），
+#   只是每個請求回 502。而 `users.gitlab_proxy_error` 那條訊號是靠「代理沒活著」觸發的
+#   （見 reconciler._note_proxy_down），所以它**不會亮**——畫面全綠、git 全掛，真正的
+#   原因只在容器的 error_log 裡。preflight 會在啟動時先喊一次，見 sessions.preflight。
+#
+# 填 **host 上** CA 檔（PEM）的絕對路徑，由 daemon 解讀（ADR 0009）。不填＝維持現狀，
+# 用系統 CA。SELF 版供控制平面自己做存在性檢查。
+GITLAB_CA_FILE = os.environ.get("CLAUDE_PTY_GITLAB_CA_FILE", "").strip()
+GITLAB_CA_FILE_SELF = os.environ.get(
+    "CLAUDE_PTY_GITLAB_CA_FILE_SELF", "").strip() or GITLAB_CA_FILE
+# 容器內的落點。⚠ 放 `/etc/nginx/` **之外**：那個目錄是 `put_archive` 在寫的
+#   （nginx.conf 與熱重載的暫存檔），把一個 bind mount 的檔案混進去只會讓兩種寫入機制
+#   在同一個目錄上打架。
+GITLAB_CA_BIND = "/etc/ssl/gitlab-ca.crt"
+
+# ⚠ **這裡永遠不會有「關掉 TLS 驗證」的開關，那是刻意的。**
+#   這顆容器存在的唯一理由是保管別人的 PAT——對上游不驗憑證，等於把「憑證不進 session」
+#   買到的東西，在代理到 GitLab 這一段原樣送給任何一個中間人。內部 CA 的正確解法是
+#   **把那個 CA 給它**（上面那個變數），不是不驗。
+#   覺得「先 `proxy_ssl_verify off` 讓它動起來、之後再說」的人請停在這裡：那個「之後」
+#   不會來，而它壞掉的時候沒有任何訊號。
+
 # 代理**連續**起不來幾輪之後，才把錯誤訊息端到畫面上（`users.gitlab_proxy_error`）。
 # ⚠ 不是 1：代理偶爾重啟一輪是正常的（重新部署、daemon 抖動），每一次都對使用者喊
 #   「你的 GitLab 壞了」就是狼來了——喊久了真的壞掉時沒有人會看。

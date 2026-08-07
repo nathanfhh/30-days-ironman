@@ -442,6 +442,43 @@ SSH 的兩種也要改，因為 session 裡 SSH agent 預設不掛、防火牆�
 - **加 docker healthcheck**：沒有任何東西會消費 health（沒有 orchestrator、restart policy
   刻意不設），而 reconciler 每輪探 `/_state` 本身就兼存活探測。
 
+## 上游 TLS：驗，而且只能靠給它正確的 CA
+
+代理對 GitLab 是 `proxy_ssl_verify on`，信任錨預設是容器內的系統 CA。
+
+**內部 CA 簽的 GitLab 因此預設不能用**，而失敗的形狀是這整個 ADR 裡最惡劣的一種：
+
+- 容器**是健康的**（nginx 起得來、`/ping` 與 `/_state` 都答得出來），
+- 所以 reconciler 的存活判斷認為它好好的，`users.gitlab_proxy_error` **不會亮**
+  ——那條訊號偵測的是「代理沒活著」（見〈為什麼是「連續 N 輪」〉），
+- 而每一個 git 與 API 呼叫都在 TLS 那關失敗回 502。
+
+也就是說：**畫面全綠、功能全掛，而專門為「設定錯了而且永遠不會自己好」設計的那條訊號
+守不到它。** 這是「一條訊號存在，但它守的不是這個失敗」的實例。
+
+### 決定
+
+`CLAUDE_PTY_GITLAB_CA_FILE` 收 host 上那份 CA（PEM）的絕對路徑，唯讀掛進每一顆代理，
+`proxy_ssl_trusted_certificate` 指過去。不設＝維持現狀（系統 CA）。
+
+**沒有關掉驗證的開關，而且不會有。** 這顆容器存在的唯一理由是保管別人的 PAT；對上游
+不驗憑證，等於把「PAT 不進 session」買到的東西在代理到 GitLab 這一段原樣送給任何一個
+中間人。`proxy_ssl_verify off` 會讓事情「動起來」，然後在沒有任何訊號的情況下一直錯下去。
+
+### 三件配套，少一件這個功能就是半殘的
+
+1. **啟動自檢要喊。** 填了路徑卻找不到檔案時，`sessions.preflight` 直接報，並講出症狀
+   （502、而狀態是綠的）。**不可以靜靜退回系統 CA**——那會變成「設定了、重啟了、什麼
+   都沒變」，與這個功能要解決的問題同一種。
+2. **換路徑要重建容器。** CA 是 bind mount，而掛載是 `create` 時決定的——熱重載換不掉。
+   所以收斂時要比對「這顆代理實際掛的 CA」與「現在的設定」（`user_proxy.ca_mount_matches`），
+   不一致就重建。少了它，改設定永遠不會生效。
+   ⚠ 兩條路徑的時序刻意不同，同〈併發與半成品〉的取捨：`sessions` 那邊**當場重建**
+   （有人正在等他的 session），reconciler 是**下一輪**才補。
+3. **續簽要能收斂。** 續簽是路徑不變、內容變——只比路徑會完全漏掉，而 nginx 會抱著記憶體
+   裡那份舊的 CA 繼續驗。所以 CA 的**內容摘要**進了設定指紋（`gitlab_proxy.ca_digest`），
+   換一次 CA 下一輪就自己熱重載。那一行摘要寫在 conf 的註解裡，是公開憑證的雜湊、不是秘密。
+
 ## 兩份白名單
 
 API 白名單同時存在於 `server/gitlab_proxy.py` 與 `gitlab-proxy/nginx.conf.template`

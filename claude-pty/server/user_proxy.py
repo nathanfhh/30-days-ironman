@@ -307,6 +307,37 @@ def list_all(client: docker.DockerClient) -> list:
     return client.containers.list(all=True, filters=config.PROXY_FILTERS)
 
 
+def ca_binds() -> dict:
+    """代理容器該有的 bind mount。沒設自訂 CA 就是空的（維持現狀，一個 volume 都不掛）。
+
+    ⚠ **建立與比對共用這一支。** 下面 `ca_mount_matches` 拿它跟容器實際掛的東西比對，
+      兩邊各寫一份的話，改了掛法會變成「每一輪都判定不一致、每一輪都重建」——而那是
+      無限重建迴圈，比不修還糟。
+    """
+    if not config.GITLAB_CA_FILE:
+        return {}
+    return {config.GITLAB_CA_FILE: {"bind": config.GITLAB_CA_BIND, "mode": "ro"}}
+
+
+def ca_mount_matches(container) -> bool:
+    """這顆已經在跑的代理，掛的 CA 與**現在的設定**是不是同一個。
+
+    ⚠ **為什麼需要它：CA 是 volume，而 volume 換不掉。** 換 PAT 走熱重載（`put_archive`
+      ＋ SIGHUP，容器不動）就夠了，但掛載是建立容器時決定的——改了 `CLAUDE_PTY_GITLAB_CA_FILE`
+      之後，既有的代理**永遠不會拿到新的**，除非把它重建。少了這道比對，那就是又一個
+      「設定改了、重啟了、什麼都沒變」。
+    ⚠ 比的是**來源與落點**，不是檔案內容。內容變（續簽）由指紋那條路處理，走熱重載就夠
+      ——那條不必重建容器（見 gitlab_proxy.ca_digest）。
+    """
+    want = ca_binds()
+    got = {}
+    for m in container.attrs.get("Mounts") or []:
+        if m.get("Type") == "bind" and m.get("Destination") == config.GITLAB_CA_BIND:
+            got[m.get("Source")] = {"bind": m.get("Destination"),
+                                    "mode": "ro" if not m.get("RW", True) else "rw"}
+    return got == want
+
+
 def create(client: docker.DockerClient, user_id: int, pat: str) -> str:
     """建一顆代理並啟動，回傳 container id。撞名時回傳既有那顆（見 `create_or_adopt`）。"""
     cid, _ = create_or_adopt(client, user_id, pat)
@@ -356,6 +387,10 @@ def create_or_adopt(client: docker.DockerClient, user_id: int,
                 network_mode=net,
                 mem_limit=config.PROXY_MEM_LIMIT,
                 pids_limit=config.PROXY_PIDS_LIMIT,
+                # 自訂 CA（內部憑證簽的 GitLab）。⚠ 一律 :ro——這顆容器裡沒有任何人需要
+                #   改信任錨，而可寫的信任錨等於把「驗上游」這件事交出去。
+                #   沒設就是空的，一個 volume 都不掛（維持現狀）。
+                binds=ca_binds() or None,
                 # 逃生口，預設空的——見 config.PROXY_EXTRA_HOSTS 的說明。
                 extra_hosts=config.PROXY_EXTRA_HOSTS or None),
             # session 就是靠這個名字找到它的。

@@ -48,6 +48,14 @@ x-gitlab-env: &gitlab-env
   CLAUDE_PTY_GITLAB_PAT_MAX: ${CLAUDE_PTY_GITLAB_PAT_MAX:-512}
   # 代理連續幾輪起不來才把錯誤端到畫面上（不是 1：偶爾重啟一輪是正常的）。
   CLAUDE_PTY_GITLAB_PROXY_FAIL_THRESHOLD: ${CLAUDE_PTY_GITLAB_PROXY_FAIL_THRESHOLD:-3}
+  # 內部 CA 簽的 GitLab：那份 CA（PEM）在 host 上的絕對路徑，唯讀掛進每一顆代理。
+  # 空的＝用容器內的系統 CA（維持現狀）。
+  # ⚠ **reconciler 也必須看得到這兩個。** 判斷「這顆代理掛的 CA 與現在的設定不一樣、
+  #   要重建」是它做的——CA 是 bind mount，掛載換不掉，熱重載救不了。漏給 reconciler
+  #   就是「改了 CA 卻永遠沒有作用」，而症狀是每個請求 502、代理狀態卻是綠的。
+  CLAUDE_PTY_GITLAB_CA_FILE: ${CLAUDE_PTY_GITLAB_CA_FILE:-}
+  # 控制平面自己看得到的同一個檔（存在性檢查與內容比對用）。不設就等於上面那個。
+  CLAUDE_PTY_GITLAB_CA_FILE_SELF: ${CLAUDE_PTY_GITLAB_CA_FILE_SELF:-}
 
 services:
   control:

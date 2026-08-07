@@ -352,6 +352,81 @@ with app.test_client() as cli:
           "GitLab 憑證" not in cli.get("/account").get_data(as_text=True))
     config.GITLAB_HOST = _saved_host
 
+# ── 自訂 CA：內部憑證簽的 GitLab ───────────────────────────────────────────────
+#
+# ⚠ 這一段守的失敗**完全沒有訊號**：CA 不對時代理照樣建得起來、容器健康、畫面上的 chip
+#   是綠的，但每個 git / API 呼叫都在 TLS 那關 502。`users.gitlab_proxy_error` 是靠
+#   「代理沒活著」觸發的，所以它不會亮（見 reconciler._note_proxy_down）。
+print("\n== 自訂 CA ==")
+_saved_ca = (config.GITLAB_CA_FILE, config.GITLAB_CA_FILE_SELF)
+_ca_dir = tempfile.mkdtemp(prefix="claude-pty-ca-")
+_ca = os.path.join(_ca_dir, "internal-ca.pem")
+with open(_ca, "w") as f:
+    f.write("-----BEGIN CERTIFICATE-----\nQUFB\n-----END CERTIFICATE-----\n")
+try:
+    # 1) 沒設＝維持現狀。這條要先驗，否則後面全部都證明不了「預設沒被動到」。
+    config.GITLAB_CA_FILE = config.GITLAB_CA_FILE_SELF = ""
+    _plain = gitlab_proxy.render_conf(PAT).decode()
+    check("🔴 沒設 CA → 信任錨仍是系統 CA（預設行為一個字都沒變）",
+          "proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;" in _plain)
+    check("🔴 沒設 CA → 一個 volume 都不掛", user_proxy.ca_binds() == {})
+
+    # 2) 有設＝conf 指向落點、容器掛唯讀。
+    config.GITLAB_CA_FILE = "/host/somewhere/internal-ca.pem"
+    config.GITLAB_CA_FILE_SELF = _ca
+    _conf = gitlab_proxy.render_conf(PAT).decode()
+    check("🔴 有設 CA → 信任錨指向容器內的落點",
+          f"proxy_ssl_trusted_certificate {config.GITLAB_CA_BIND};" in _conf)
+    check("🔴 有設 CA → 掛載是 host 路徑 → 落點，而且是唯讀",
+          user_proxy.ca_binds() == {"/host/somewhere/internal-ca.pem":
+                                    {"bind": config.GITLAB_CA_BIND, "mode": "ro"}})
+    # 🔴 **永遠不准出現關掉驗證的開關。** 這條不是風格檢查：這顆容器存在的唯一理由是
+    #    保管別人的 PAT，對上游不驗憑證等於把「憑證不進 session」買到的東西原樣送給
+    #    任何一個中間人。內部 CA 的解法是把 CA 給它，不是不驗。
+    # ⚠ 比對前先把註解行剝掉：conf 裡**刻意**留了一句註解寫著「永遠不會有
+    #    `proxy_ssl_verify off`」，而那句話本身就含有那個字串。這條要驗的是「有沒有這條
+    #    **指令**」，不是「檔案裡有沒有出現這幾個字」——第一版就是被自己的註解絆倒的。
+    _directives = "\n".join(ln for ln in _conf.splitlines()
+                            if not ln.strip().startswith("#"))
+    check("🔴 產生出來的 conf 永遠是 proxy_ssl_verify on，沒有 off 那條指令",
+          "proxy_ssl_verify on;" in _directives
+          and "proxy_ssl_verify off" not in _directives)
+
+    # 3) 續簽（路徑不變、內容變）也要收斂——只比路徑會漏掉這一種。
+    _fp_before = gitlab_proxy.fingerprint(PAT)
+    with open(_ca, "w") as f:
+        f.write("-----BEGIN CERTIFICATE-----\nQkJC\n-----END CERTIFICATE-----\n")
+    check("🔴 CA 續簽（路徑不變、內容變）指紋要變，否則 nginx 抱著舊的 CA 不放",
+          gitlab_proxy.fingerprint(PAT) != _fp_before)
+
+    # 4) 掛載比對：這是「改了 CA 卻沒作用」的守門人。CA 是 volume，換不掉，只能重建。
+    class _FakeC:
+        def __init__(self, mounts):
+            self.attrs = {"Mounts": mounts}
+    _match = [{"Type": "bind", "Source": "/host/somewhere/internal-ca.pem",
+               "Destination": config.GITLAB_CA_BIND, "RW": False}]
+    check("🔴 掛的就是現在設定的那一個 → 不必重建",
+          user_proxy.ca_mount_matches(_FakeC(_match)))
+    check("🔴 掛的是**別的** CA → 判定不符（要重建，熱重載換不掉掛載）",
+          not user_proxy.ca_mount_matches(_FakeC(
+              [{**_match[0], "Source": "/host/somewhere/old-ca.pem"}])))
+    check("🔴 完全沒掛（設定是後來才加的）→ 判定不符",
+          not user_proxy.ca_mount_matches(_FakeC([])))
+    config.GITLAB_CA_FILE = config.GITLAB_CA_FILE_SELF = ""
+    check("🔴 反過來：設定拿掉了但容器還掛著 → 也要判定不符（否則舊 CA 永遠留著）",
+          not user_proxy.ca_mount_matches(_FakeC(_match)))
+
+    # 5) preflight：填了卻找不到要在啟動時就喊，不可以靜靜退回系統 CA。
+    config.GITLAB_CA_FILE = config.GITLAB_CA_FILE_SELF = os.path.join(_ca_dir, "nope.pem")
+    _probs = " ".join(sessions.preflight())
+    check("🔴 CA 檔不存在 → preflight 出聲，而且講得出症狀（502／狀態是綠的）",
+          "nope.pem" in _probs and "502" in _probs)
+    config.GITLAB_CA_FILE = config.GITLAB_CA_FILE_SELF = _ca
+    check("🔴 檔案在就不要吵", not any("GITLAB_CA_FILE" in p for p in sessions.preflight()))
+finally:
+    config.GITLAB_CA_FILE, config.GITLAB_CA_FILE_SELF = _saved_ca
+    shutil.rmtree(_ca_dir, ignore_errors=True)
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)

@@ -351,6 +351,23 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
             pat = auth.gitlab_pat(uid)
             if not pat:
                 continue                  # 與 state 之間的競態，下輪再看
+
+            # --- 自訂 CA 的掛載變了 → **重建**，熱重載救不了 -------------------------
+            #
+            # ⚠ 換 PAT 走熱重載就夠（`put_archive` + SIGHUP，容器不動），但 CA 是
+            #   **bind mount**——掛載是建立容器時決定的，換不掉。所以改了
+            #   `CLAUDE_PTY_GITLAB_CA_FILE` 之後，既有的代理必須整顆重建才拿得到新的。
+            # ⚠ 收掉之後**這一輪不補**：`seen` 已經加了這個 uid，補建迴圈跑的是
+            #   `active - seen`，所以要等下一輪（同「半成品」那條的取捨，理由見那裡）。
+            # ⚠ 只比來源與落點，不比檔案內容。內容變（CA 續簽）由指紋那條走熱重載處理
+            #   ——那條不必重建，見 gitlab_proxy.ca_digest。
+            if not user_proxy.ca_mount_matches(c):
+                print(f"[reconciler] 代理 {c.name} 掛的 CA 與設定不符，重建它"
+                      f"（掛載換不掉，只能重來一顆）", flush=True)
+                if isolated(f"重建代理 {c.name}（CA 掛載變了）",
+                            user_proxy.remove, client, uid) is not STUCK:
+                    removed += 1
+                continue
             want = gitlab_proxy.fingerprint(pat)
             got = isolated(f"問代理 {c.name} 在跑什麼",
                            user_proxy.running_state, client, uid)

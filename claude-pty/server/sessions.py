@@ -844,6 +844,27 @@ def preflight() -> list[str]:
             "BEHIND_PROXY=1 但 COOKIE_SECURE=0：登入 cookie 不帶 Secure，若該入口是 HTTP "
             "或經未加密網路，cookie 可被側錄重放（review H6）。上 TLS 後請設 "
             "CLAUDE_PTY_COOKIE_SECURE=1；僅本機 loopback 測試可忽略此提醒。")
+    # 自訂 CA（內部憑證簽的 GitLab）。**填了卻找不到要在這裡喊。**
+    #
+    # ⚠ 不喊的話它會退化成一個沒有任何訊號的失敗：代理照樣建起來、容器健康、chip 綠燈，
+    #   但每一個 git / API 呼叫都在 TLS 那關 502——而 `users.gitlab_proxy_error` 那條訊號
+    #   是靠「代理沒活著」觸發的（見 reconciler._note_proxy_down），**它不會亮**。
+    #   真正的原因只在容器的 error_log 裡，而使用者只看得到「GitLab 連不到」。
+    # ⚠ 而且**絕不可以靜靜退回系統 CA**：那會變成「設定了、重啟了、什麼都沒變」，
+    #   與這個功能要解決的問題是同一種。
+    # ⚠ 查 *_SELF：這是「控制平面現在讀不讀得到」，不是「daemon 待會兒掛不掛得到」
+    #   ——容器化部署下兩者是不同路徑（ADR 0009）。SELF 沒另外設時它就等於 HOST。
+    if config.GITLAB_CA_FILE:
+        if not config.gitlab_enabled():
+            problems.append(
+                f"設了 CLAUDE_PTY_GITLAB_CA_FILE={config.GITLAB_CA_FILE}，但沒設 "
+                f"CLAUDE_PTY_GITLAB_HOST——GitLab 代理整個功能是關的，這個 CA 不會有人用。")
+        elif not os.path.isfile(config.GITLAB_CA_FILE_SELF):
+            problems.append(
+                f"CLAUDE_PTY_GITLAB_CA_FILE 指向的檔案不存在：{config.GITLAB_CA_FILE_SELF}。"
+                f"代理會照樣建起來、容器也健康，但每個 git / API 呼叫都會在 TLS 驗證失敗"
+                f"（502），而畫面上的代理狀態是綠的、不會有任何錯誤訊息。"
+                f"容器化部署請另外以 CLAUDE_PTY_GITLAB_CA_FILE_SELF 指明控制平面看得到的路徑。")
     return problems
 
 
@@ -1149,6 +1170,16 @@ class SessionManager:
             elif existing.status != "running":
                 # exited：設定已經在它裡面，直接 start——不必再碰 PAT。
                 self._docker.api.start(existing.id)
+            elif not user_proxy.ca_mount_matches(existing):
+                # ⚠ **自訂 CA 換了就只能重建**：CA 是 bind mount，而掛載是建立容器時決定
+                #   的，熱重載換不掉。這裡若退回走下面那條 reload，送進去的新 conf 會指向
+                #   一個**沒有掛進來**的路徑，`nginx -t` 當場不過、每一輪重試一次，而代理
+                #   看起來完全健康——正是這個功能要避免的那種安靜失敗。
+                # ⚠ 這裡**當場重建**，reconciler 那條是**下一輪**才補。差異是刻意的，
+                #   同 `is_stale_half_built` 那組的取捨：這條路上有人正在等他的 session。
+                user_proxy.remove(self._docker, user_id)
+                cid, won = user_proxy.create_or_adopt(self._docker, user_id, pat)
+                mine = cid if won else None
             elif user_proxy.running_state(self._docker, user_id) != gitlab_proxy.fingerprint(pat):
                 user_proxy.reload(self._docker, user_id, pat)
             return True
