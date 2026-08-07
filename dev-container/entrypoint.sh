@@ -447,6 +447,39 @@ if [ -n "$NCR_SESSION_ID" ]; then
         echo "● session id（呼叫端指定）：${NCR_SESSION_ID}"
     fi
 fi
+
+# 模型與思考深度：非互動呼叫端（CI、腳本、控制平面）用 NCR_MODEL / NCR_EFFORT 指定，
+# 翻成 CLI 的 `--model` / `--effort`。沒設就一個字都不加——人自己開容器時 argv 與
+# 以前逐字元相同。
+#
+# ⚠ **一定要在 `resolve_session_id "$@"` 之後才 append**（上面那一行）。那支會**掃描
+#   argv 的內容**認 `--session-id` / `--resume`，而模型名是使用者給的字串：一個值剛好
+#   是 `--resume` 的 `NCR_MODEL` 會被它讀成「呼叫端自帶 session」，於是這一場的
+#   capture 資料夾用了一個不存在的 id 命名，事後拿它去對 transcript 會對到空的。
+#   先定案 session id、再加旗標，那條掃描就永遠看不到我們加的東西。
+# ⚠ 值不做白名單：合法別名隨 CLI 版本變，寫死一份在這裡只會過期。給錯的話 CLI 自己
+#   會拒絕並印出它認得的值——那比我們猜一份清單準。
+if [ -n "${NCR_MODEL:-}" ]; then
+    set -- "$@" --model "$NCR_MODEL"
+    echo "● 非互動：模型 = ${NCR_MODEL}"
+fi
+if [ -n "${NCR_EFFORT:-}" ]; then
+    set -- "$@" --effort "$NCR_EFFORT"
+    echo "● 非互動：思考深度 = ${NCR_EFFORT}"
+fi
+
 start_capture
+
+# 就緒標記：**只有非互動呼叫端要它**（NCR_MARK=1）。人自己開容器時不設，畫面上
+# 就不會多出一行機器用的字。
+#
+# ⚠ **位置就是這裡：`start_capture` 之後、`run_cli` 之前。** 呼叫端拿這個標記當
+#   「可以開始互動了」的訊號——放早了（例如挪到選單結束處）它會在防火牆還沒套完、
+#   mitmproxy 還在起的時候就放行，那時送進去的按鍵會被吞掉，而畫面上完全看不出來。
+#   放晚了（挪進 run_cli）就永遠不會印，因為那支要嘛 exec 掉、要嘛在前景等 CLI。
+if [ "${NCR_MARK:-}" = "1" ]; then
+    echo "__NCR_DRIVER_STARTING__"
+fi
+
 echo ""
 run_cli "$@"
