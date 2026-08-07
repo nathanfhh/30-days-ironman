@@ -562,7 +562,8 @@ def provision_user_space(user_id: int, username: str) -> None:
     idempotent、不需要 backfill，而且「沒開過 session 的人不佔目錄」也比較乾淨。
 
       1. 建出要掛進去的目錄，**0700**。必須由我們建，不能讓 docker daemon 隱式
-         建立——那樣在 Linux 上會是 root:root，容器內的 nathan(uid 1000) 寫不進去，
+         建立——那樣在 Linux 上會是 root:root，容器內那個使用者（`config.SESSION_UID`，
+         實測是 1001 不是直覺的 1000，見那個常數的說明）寫不進去，
          症狀是 claude 起得來但什麼都存不下（同 trivy 快取目錄那個坑）。
          0700 是因為 `ncr/mitm/` 裡是**完整的 API 請求本文**（prompt 全文）；預設的 0755
          在多帳號的 host 上等於發給每一個本機使用者。

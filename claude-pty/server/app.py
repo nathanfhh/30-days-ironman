@@ -89,15 +89,19 @@ def _auth_error(e: auth.AuthError):
 def _security_headers(resp):
     """基本瀏覽器安全標頭（review L2）。
 
-    CSP 白名單只開實際用到的來源：字體與圖示 CSS 來自 cdnjs / Google Fonts，其餘一律自家。
+    **一律自家**：字體與圖示都在 `static/vendor/` 底下，沒有任何外部來源。
+    ⚠ 這裡曾經放行 cdnjs 與 Google Fonts，因為早期的圖示字體從那兩處載。改成 vendored
+      之後沒有人再用它們，但白名單留著——**一條沒有用途的放行仍然是放行**：只要有任何
+      一處注入得了 `<link>` 或 `<style>`，它就是現成的外連通道。CSP 裡的死設定與活權限
+      是同一件事，所以拿掉。日後真要引外部來源，連同這行註解一起改。
     inline script/style 目前仍需 'unsafe-inline'（模板內有 <script> 與 style 屬性）——
     要收緊得先把它們外部化，屬後續工作，這裡先擋住最容易被利用的其餘方向。
     """
     resp.headers.setdefault("Content-Security-Policy", "; ".join([
         "default-src 'self'",
         "script-src 'self' 'unsafe-inline'",
-        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
-        "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self'",
         "img-src 'self' data:",
         "connect-src 'self'",
         "frame-ancestors 'none'",          # 不給任何人嵌成 iframe（防點擊劫持）
