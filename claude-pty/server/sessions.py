@@ -1597,19 +1597,6 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     if os.path.isfile(config.INIT_FIREWALL_SH_SELF):
         volumes[config.INIT_FIREWALL_SH] = {"bind": config.INIT_FIREWALL_BIND, "mode": "ro"}
 
-    # firewall profile：告訴 init-firewall.sh「這是網頁開的 session」。
-    # 人的路徑不掛這個檔 → 腳本讀不到 → 走 host 分支 → 行為與以前逐字相同。
-    #
-    # ⚠ **為什麼是靜態檔案 + :ro，而不是 env、也不是 put_archive**：
-    #   · env 是容器內的 nathan 可控的，等於讓 AI 挑自己的牢房。
-    #   · put_archive 只能在容器起來之後做，於是變成跟 entrypoint 賽跑；輸掉的話腳本
-    #     落回 host profile——沒有 443 的規則，**連 sidecar 都出不去**，而且是間歇性的。
-    #   靜態檔沒有這兩個問題。實測（2026-07-29）容器內即使是 root 也寫不動、刪不掉、
-    #   也沒辦法用 `mount --bind` 蓋掉整個目錄（那要 CAP_SYS_ADMIN，這裡只給 NET_ADMIN）。
-    if os.path.isfile(config.FIREWALL_PROFILE_WEB_SELF):
-        volumes[config.FIREWALL_PROFILE_WEB] = {"bind": config.FIREWALL_PROFILE_BIND,
-                                                "mode": "ro"}
-
     # semgrep-rules（A4 SAST 軌道）：比照 run script 以 :ro 共用掛入（規則庫沒有 per-user
     # 的意義）。判準也與 run script 相同——要有 `.git` 才算真的 clone：compose/daemon 在
     # 來源缺席時會以 root 建出**空目錄**頂替，只驗 isdir 會把那個空殼掛進去、看起來像掛了

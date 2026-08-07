@@ -309,17 +309,6 @@ TEST_MARK = os.environ.get("CLAUDE_PTY_TEST_MARK")   # 測試設為 "1"，正式
 
 
 
-# firewall profile 檔：控制平面以 :ro bind mount 掛進 session 容器，腳本讀它決定政策。
-# ⚠ **不用環境變數傳**（env 是容器內的 nathan 可控的，等於讓 AI 挑自己的牢房），也**不用
-#   put_archive**（那要在 container 起來之後才做得到，就變成跟 entrypoint 賽跑；輸掉的話
-#   落回 host profile → 沒有 443 規則 → 連 sidecar 都出不去，而症狀是間歇性的）。
-#   靜態檔案 + :ro 掛載沒有這兩個問題，實測容器內即使是 root 也寫不動、刪不掉、蓋不掉。
-FIREWALL_PROFILE_BIND = "/etc/claude-pty/firewall-profile"
-FIREWALL_PROFILE_WEB_SELF = os.path.join(_SELF_REPO_ROOT, "claude-pty", "deploy",
-                                         "firewall-profile-web")
-FIREWALL_PROFILE_WEB = os.path.join(HOST_REPO_ROOT, "claude-pty", "deploy",
-                                    "firewall-profile-web")
-
 # init-firewall.sh 也跟著 bind-mount（比照 entrypoint.sh）：改政策不必重新 build image。
 # ⚠ 一律 :ro——sudoers 白名單的是**路徑**，所以那個路徑的內容就是 root 執行的程式碼。
 INIT_FIREWALL_SH_SELF = os.path.join(_SELF_REPO_ROOT, "dev-container", "init-firewall.sh")

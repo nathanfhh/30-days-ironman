@@ -393,21 +393,25 @@ if os.path.isfile(_ep) and os.path.isfile(_run):
     check("run script 仍掛 host 正式的 ~/.claude.json", "-v ~/.claude.json:" in _run_src)
     check("run script 沒有沾到 per-user 空間", "claude-pty-space" not in _run_src)
 
-    # --- firewall profile 的零偏差 ---------------------------------------
-    # ⚠ 這一段**還沒接上**。控制平面已經會把 `firewall-profile-web` 以 :ro 掛進 session
-    #   （見 config.FIREWALL_PROFILE_BIND 與 build_run_kwargs），但 dev-container 的
-    #   `init-firewall.sh` 目前還不讀那個檔——所以網頁 session 現在跑的是與人的路徑
-    #   完全相同的那套規則。要釘的性質有兩個，接上之後這裡就補起來：
-    #     · 預設是 host（沒有那個檔＝人的路徑，行為逐字不變）
-    #     · profile 讀**檔案**不是環境變數（env 是容器內那個使用者可控的）
+    # --- 🔴 SSH:22 的放行條件是「agent 在不在」，不是「誰啟動了這個容器」-----------
+    #
+    # 22 當初進白名單是為了服務轉發進來的 ssh-agent。agent 後來變成 opt-in，白名單
+    # 卻沒跟著動——規則活得比它的理由久，留下一個沒有用途的出口。
+    #
+    # ⚠ **判準必須是那個 socket 本身。** 一個事實有兩個來源就會漂：若改用「這是網頁
+    #   場」之類的旗標，哪天網頁那條路徑也允許 opt-in agent，22 就會被錯誤地擋掉；
+    #   反過來也一樣。socket 在不在是就地觀察得到的事實，沒有第二份可以分岔。
     _fw = os.path.join(_repo, "dev-container", "init-firewall.sh")
     _fw_src = open(_fw, encoding="utf-8").read()
-    if "FW_PROFILE" in _fw_src:
-        check("profile 讀的是檔案不是環境變數",
-              config.FIREWALL_PROFILE_BIND in _fw_src and "FW_PROFILE=${" not in _fw_src)
-    else:
-        print("  SKIP  init-firewall.sh 尚未讀 profile 檔（接上之前這幾條無從驗起）")
-    check("run script 完全不提 firewall profile（它靠預設值，不需要知道這件事）",
+    _fw_code = "\n".join(ln.split("#")[0] for ln in _fw_src.splitlines())
+    check("🔴 22 的放行以 agent socket 在場為前提（不是路徑旗標）",
+          "-S \"$SSH_AGENT_SOCK\"" in _fw_code and "--dport 22" in _fw_code)
+    check("🔴 socket 路徑與 image 的 ENV 一致（對不上就永遠看不到 agent）",
+          config.SSH_AUTH_SOCK_BIND in _fw_src)
+    # 反向：沒有那條判斷的話，這條測試就沒有守住任何東西
+    check("🔴 沒有 socket 時不開任何 SSH outbound（訊號缺席＝不放行）",
+          "不開放任何 SSH outbound" in _fw_src)
+    check("run script 不需要知道 firewall profile 這種東西（它靠 agent 在不在）",
           "firewall-profile" not in _run_src)
 else:
     print("  SKIP  找不到 dev-container/（只有 claude-pty 被單獨 checkout 時會這樣）")
