@@ -613,12 +613,6 @@ VIEW_CLAIM_GRACE = int(os.environ.get("CLAUDE_PTY_VIEW_CLAIM_GRACE", "30"))
 #   這支是漏網的那一個）。
 VIEW_PEER_WAIT = float(os.environ.get("CLAUDE_PTY_VIEW_PEER_WAIT", "6"))
 
-# `GET /api/sessions/<sid>?wait_ready=<秒>` 的上限。
-# ⚠ 這個參數會讓請求**整段阻塞**在 gunicorn 的一條執行緒上（--threads 8），而且每 0.5 秒
-#   輪詢一次 docker inspect + logs。上限給到 600 秒的話，八個這種請求就能把整個控制平面
-#   佔滿——連 nginx 的 auth_request → /api/auth/view 都排不進去，等於所有人開著的終端
-#   一起失效。上限要跟 READY_TIMEOUT（TUI 就緒的實際等待上限）同量級，不是一個隨手取的大數。
-WAIT_READY_MAX = float(os.environ.get("CLAUDE_PTY_WAIT_READY_MAX", "180"))
 # ADR 0002 的 Ctrl+P 陷阱：docker attach CLI 預設 detach 序列會扣住 Ctrl+P，必改。
 DETACH_KEYS = "ctrl-x,ctrl-x"
 

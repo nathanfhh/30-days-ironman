@@ -53,7 +53,7 @@ iCloud Drive 常同步 Documents——執行期狀態會被送上雲，而且檔
 
 per-user 空間切的是 transcript / 設定 / skills / 錄製。**憑證不走這條**——每個使用者在
 自己的機器上執行 `claude setup-token`，把輸出貼到帳號管理頁，控制平面加密存 DB
-（金鑰由 `SECRET_KEY` 導出），開場時以環境變數交給那一場的 CLI。所以憑證天生 per-user，
+（金鑰由 `SECRET_KEY` 導出），開場時交給那一場的 CLI。所以憑證天生 per-user，
 host 上不需要準備任何憑證檔（也不去讀——那種「檔案在就順便用」的後路是一條平常不走、
 出事才走、沒人測過的路徑，見 README 與 `server/models.py` 的欄位註解）。
 

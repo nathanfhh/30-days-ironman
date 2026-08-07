@@ -63,8 +63,18 @@ docker compose exec control python -m server.cli create-admin alice   # 第一�
 ## 憑證：每個人自己的 setup-token
 
 每個人在自己的機器上執行 `claude setup-token`，把輸出貼到帳號管理頁。控制平面加密
-存放，開場時以環境變數交給那一場的 CLI——誰的 session 用誰的憑證，host 上不需要
-準備任何憑證檔。
+存放，開場時交給那一場的 CLI——誰的 session 用誰的憑證，host 上不需要準備任何憑證檔。
+
+**憑證預設不進容器的環境變數。** 值在 `create` 與 `start` 之間以 `put_archive` 寫進容器
+自己的檔案系統，entrypoint 讀完立刻 `rm`、只留一個已開的 fd——所以 `docker inspect`、
+`/proc/1/environ`、以及每一個子行程的環境都看不到它。理由很具體：CLI 會開 shell，shell
+會跑 AI 要求的任何指令，而**環境變數每一層都繼承**。CLI 自己在 spawn 子行程前就把這幾個
+憑證變數從環境刪掉了，我們不該在外面一層又加回去。
+
+⚠ 但這條路依賴一個**官方沒有寫進文件**的機制（`CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`），
+一次版本升級就可能改名或消失，而症狀會是「所有新 session 都要求登入」。所以建立表單留了
+一個「憑證交付」開關，可以當場切回環境變數那條**有文件**的退路。**那不是偏好題，是逃生
+口**：預設一律用檔案描述符，只有在它壞掉時才切。
 
 **token 過期不會有預告。** 它不揭露自己的壽命，所以畫面上只有「已設定／未設定」，
 沒有「剩幾天」。症狀是**新開的 session 停在登入提示、開不了場**；遇到就重跑一次

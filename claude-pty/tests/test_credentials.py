@@ -176,8 +176,9 @@ print("== credentials_state()：形狀是 {cli: state} ==")
 both = credentials_state(uid)
 check("只有 claude 一把鑰匙", set(both) == {"claude"})
 check("brand 正確（畫面的品牌標誌靠它）", both["claude"]["brand"] == "anthropic")
-check("stamps 是空清單（沒有時刻可標，但形狀與畫面契約不變）",
-      both["claude"]["stamps"] == [])
+# ⚠ 這裡曾經斷言 `stamps == []`——那是在驗一個寫死的字面值，恆真。那個空欄位是留給
+#   「到期時刻」的形狀，而 setup-token 不揭露壽命，能力已經沒了（見下方對照表），
+#   前端還為它跑一個永遠不執行的迴圈。欄位與斷言一起刪了。
 
 # ── 舊斷言對照表（閘 4：說得出每一條是「對象消失」還是「換人守」）─────────────────
 # 換人守：

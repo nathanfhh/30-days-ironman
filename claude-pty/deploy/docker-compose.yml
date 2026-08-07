@@ -9,7 +9,8 @@
 # APP_UID）。完整步驟見 README 的「部署」一節。
 #
 # 憑證不在部署層：每個人登入網頁後，把自己 `claude setup-token` 的輸出貼到帳號管理頁
-# （加密存 DB、開場時以環境變數交給 session）。host 上不需要準備任何憑證檔。
+# （加密存 DB、開場時交給 session——**預設走檔案描述符，不進容器的環境變數**，見 README
+# 的「憑證」一節）。host 上不需要準備任何憑證檔。
 #
 # 建立第一個管理員（容器起來後）：
 #   docker compose exec control python -m server.cli create-admin alice
@@ -93,7 +94,7 @@ services:
       # 重抓約 1GB 的 DB，實測多花 36 秒。
       - ${HOME}/.cache/ncr-trivy:${HOME}/.cache/ncr-trivy
       # semgrep-rules（A4 SAST 軌道的規則 repo）：唯讀，供存在性檢查 + 當 session 的掛載
-      # 來源（同一路徑，ADR 0009）。host 上要**自己先 git clone**（見 docs/host-paths.md）
+      # 來源（同一路徑，ADR 0009）。host 上要**自己先 git clone 一份到 $HOME/semgrep-rules**
       # ——不存在時 compose 會以 root 建出空目錄頂替，所以 session 那側驗的是 `.git`
       # 不是 isdir：空殼＝不掛，A4 軌道 gate 不過、自動跳過。
       - ${HOME}/semgrep-rules:${HOME}/semgrep-rules:ro
@@ -214,6 +215,9 @@ networks:
   #   另外起的 session 容器。宣告在這裡只會看起來有人負責，實際上不會被建出來
   #   （2026-07-29 實測）。改由**控制平面啟動時確保它存在**（見 sessions.preflight），
   #   那樣不管用什麼方式部署都成立。
-  # ⚠ telemetry：jaeger 定義在 `dev-container/jaeger-compose.yaml`，以 external 引用該
-  #   network，所以要**先起這個 stack**（控制平面會把 network 建好）再起 jaeger。
-  #   反過來的話 jaeger 起不來，而 OTLP 是 fail-open——trace 靜默消失，沒有任何錯誤。
+  # ⚠ telemetry：jaeger 定義在 `opentelemetry/jaeger-compose.yaml`，它**只建自己那一張網**
+  #   （`ncr-telemetry`），不借用任何人的。**沒有開機順序要求**——先起誰都可以。
+  #   規約是「需要 jaeger 的那一方負責把它接到自己的網上」，接線點見 `user_proxy.attach_jaeger`
+  #   （網路剛建好時、控制平面啟動時、reconciler 每一輪各接一次）。
+  #   ⚠ 這裡以前寫「jaeger 以 external 引用，所以要先起這個 stack 再起 jaeger」——那個
+  #     開機順序陷阱正是後來要修掉的東西，別再照它做。

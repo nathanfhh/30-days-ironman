@@ -142,9 +142,11 @@ ENV CLAUDE_PTY_CONTROL_HOST=0.0.0.0
 #   1. **docker socket 的群組**：socket 是 `srw-rw---- root:root`，非 root 要讀它就得屬於
 #      該 gid。compose 用 group_add 補上（macOS Docker Desktop 是 0；Linux 多半是 docker
 #      群組的 gid，見 compose 的 DOCKER_GID）。
-#   2. **/data volume 的擁有者**：named volume 首次建立時會沿用 image 內該路徑的
-#      ownership，所以這裡先 chown；但**既有的 volume 不會被追溯修改**，升級既有部署
-#      要手動 chown 一次（指令見 README）。
+#   2. **/data 的擁有者**：compose 掛的是 **bind mount**（`./data:/data`）不是 named
+#      volume，所以下面那道 chown 只管 image 內的空目錄——**掛上來之後看到的是 host 上
+#      `deploy/data/` 的擁有者**，image 這邊改不動它。那個目錄要屬於 APP_UID，否則 SQLite
+#      一個字都寫不進去。`deploy/redeploy.sh` 每次會先 mkdir 並檢查可寫，不可寫就停下來
+#      講原因（最常見的是先前被 dockerd 建成 root），所以正常不需要手動處理。
 # ⚠ uid 要與 host 上那些掛進來的目錄的擁有者一致，否則寫不進去：bind mount 的
 #   deploy/data（SQLite）與 per-user 空間（0700）都吃這個。compose 從 .env 的 APP_UID
 #   帶進來（Linux 填 `id -u`），見 ADR 0009。

@@ -170,16 +170,6 @@ class Filters:
     capture: bool | None = None
     telemetry: bool | None = None
 
-    def active(self) -> int:
-        """目前生效幾個條件（畫面上的「篩選 · N」與清除鈕都靠它）。
-
-        時間區間的兩端算**一個**條件：畫面上它就是一格「時間範圍」，自訂起迄時填了
-        兩個欄位卻跳成 2，會讓人以為多套了一個看不見的條件。
-        """
-        n = sum(v is not None for v in (self.cli, self.network,
-                                        self.capture, self.telemetry))
-        return n + (self.since_at is not None or self.until_at is not None)
-
     def apply(self, q, model, date_col):
         """把條件套上查詢。`date_col` 是 since_days 要比對的欄位。"""
         if self.since_at is not None:
@@ -284,11 +274,12 @@ def _slugify(name: str | None) -> str:
 def parse_docker_time(raw: str | None) -> _dt.datetime | None:
     """docker 的 RFC3339 時間戳 → aware datetime；解不出來回 None。
 
-    ⚠ **這是唯一一份。** 曾經有兩份：這裡與 `reconciler._age_seconds`，而兩份已經漂移
-      ——那一份只認 `"+"` 來判斷有沒有時區偏移，於是 `-05:00` 會落到 else 分支被當成 UTC，
-      整整差掉時差。目前不可達（daemon 一律回 `Z`），但 `_remove_orphans` 的寬限期就是靠
-      它算的，而它解析失敗的 fallback 是「很舊」——真的錯起來會**安靜地提早把還在建立中的
-      容器當孤兒刪掉**。
+    ⚠ **這是唯一一份。** 曾經有兩份：這裡，以及 reconciler 自己那一份時間戳解析（後來收斂
+      成共用這支，那個名字已經不在了）。而兩份**已經漂移過**——reconciler 那一份只認 `"+"`
+      來判斷有沒有時區偏移，於是 `-05:00` 會落到 else 分支被當成 UTC，整整差掉時差。
+      目前不可達（daemon 一律回 `Z`），但 `_remove_orphans` 的寬限期就是靠它算的，而解析
+      失敗的 fallback 是「很舊」——真的錯起來會**安靜地提早把還在建立中的容器當孤兒刪掉**。
+      要再寫第二份解析之前先想清楚這一段。
 
     兩個必須處理的細節：
       - docker 給的是**奈秒**精度（`2026-07-26T02:57:51.828567844Z`），而 `fromisoformat`
@@ -477,19 +468,23 @@ def _put_cli_token(container, user_id: int, delivery: str) -> bool:
         return False
 
 
-_CLAUDE_BASE = {"cli": "claude", "cli_label": "Claude", "brand": "anthropic"}
+_CLAUDE_BASE = {"cli": "claude", "brand": "anthropic"}
 
 
 def claude_credentials_state(user_id: int | None) -> dict:
     """這個人開 session 時，Claude Code 拿不拿得到登入憑證。
 
     憑證＝他自己貼進來的 setup-token（`claude setup-token` 的輸出，加密存 DB、開場時
-    以環境變數交給容器）。**唯一來源**，控制平面不讀 host 上的任何憑證檔——「檔案在
-    就順便用」是一條平常不走、出事才走、而且沒人測過的路徑。
+    交給那一場；**預設走檔案描述符、不進環境變數**，env 只是逃生口，見
+    `config.TOKEN_DELIVERIES`）。**唯一來源**，控制平面不讀 host 上的任何憑證檔——
+    「檔案在就順便用」是一條平常不走、出事才走、而且沒人測過的路徑。
 
     只有兩種狀態：已設定／未設定。token 的到期時刻**不可知**（它不揭露自己的壽命），
     所以沒有「剩 N 天」的預警——過期不會有任何預告，**症狀是開場失敗**（終端裡只會
     看到登入提示）。detail 把這件事講在前面，事到臨頭那句話就是操作指南。
+    ⚠ 這裡曾經回一個永遠是空陣列的 `stamps`，形狀是留給「到期時刻」用的。setup-token
+      不揭露壽命之後那個能力就沒了，而空欄位讓前端跑一個永遠不會執行的迴圈——那個
+      「未來也許會用到」的形狀留了很久，一直是死的。要再加預警請先確認拿得到時刻。
 
     解不開（換過 SECRET_KEY）與沒設過**刻意同一種畫面**：對使用者的正確指示都是
     同一句「重新貼一次」。
@@ -499,12 +494,12 @@ def claude_credentials_state(user_id: int | None) -> dict:
     token = auth_mod.cli_token(user_id) if user_id is not None else None
     if token is None:
         return {**_CLAUDE_BASE, "ok": False, "state": "bad",
-                "label": "Claude 未設定憑證", "stamps": [],
+                "label": "Claude 未設定憑證",
                 "detail": "在 host 上執行 `claude setup-token`，把輸出貼到"
                           "帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態"
                           "啟動，開場只會看到登入提示。"}
     return {**_CLAUDE_BASE, "ok": True, "state": "ok",
-            "label": "Claude 憑證已設定", "stamps": [],
+            "label": "Claude 憑證已設定",
             "detail": "token 過期不會有預告，症狀是新開的 session 開場失敗"
                       "（終端停在登入提示）。遇到就在 host 重跑 `claude setup-token`，"
                       "把新的貼回帳號管理頁。已在跑的 session 不受影響。"}
@@ -1209,21 +1204,6 @@ class SessionManager:
 
         return self._wait_pty_quiet(sid, deadline)   # 階段 2
 
-    def wait_until_ready(self, sid: str, timeout: float) -> dict:
-        """輪詢到 session 就緒（容器 log 出現 DRIVER_MARKER）為止。
-
-        與 wait_ready() 的差別：後者直接盯 log 與 PTY（就緒偵測執行緒用），這裡走
-        status() 輪詢，回傳完整的狀態 dict 給 HTTP 層（`?wait_ready` 靠這條）。
-
-        逾時不拋錯，回傳當下狀態即可：ready 欄位自己會說話，呼叫端可自行決定要不要再等。
-        """
-        deadline = time.time() + timeout
-        while True:
-            info = self.status(sid, with_ready=True)
-            if info["ready"] or time.time() >= deadline:
-                return info
-            time.sleep(0.5)
-
     def _wait_pty_quiet(self, sid: str, deadline: float) -> bool:
         """attach 到 PTY，等畫面停止更新＝TUI 初次繪製完成。
 
@@ -1790,8 +1770,10 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     # semgrep-rules（A4 SAST 軌道）：比照 run script 以 :ro 共用掛入（規則庫沒有 per-user
     # 的意義）。判準也與 run script 相同——要有 `.git` 才算真的 clone：compose/daemon 在
     # 來源缺席時會以 root 建出**空目錄**頂替，只驗 isdir 會把那個空殼掛進去、看起來像掛了
-    # 其實沒有規則。不在（或只是空殼）→ 不掛，skill 的 A4 gate 不過、自動跳過（優雅降級，
-    # 準備方式見 docs/host-paths.md）。存在性查 *_SELF、掛載用 host 路徑（ADR 0009）。
+    # 其實沒有規則。不在（或只是空殼）→ 不掛，skill 的 A4 gate 不過、自動跳過（優雅降級）。
+    # 準備方式：在 host 上 `git clone` 一份規則庫到 `$HOME/semgrep-rules`（或以
+    # `CLAUDE_PTY_SEMGREP_RULES` / `NCR_OPENGREP_RULES` 指到別處）。
+    # 存在性查 *_SELF、掛載用 host 路徑（ADR 0009）。
     if os.path.isdir(os.path.join(config.SEMGREP_RULES_SELF, ".git")):
         volumes[config.SEMGREP_RULES_HOST] = {"bind": config.SEMGREP_RULES_BIND, "mode": "ro"}
 

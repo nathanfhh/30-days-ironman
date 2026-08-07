@@ -828,22 +828,15 @@ def list_history():
 def get_session(sid: str):
     """單一 session 的完整狀態，含 `ready`。
 
-    `?wait_ready=<秒>` 會阻塞到就緒（或逾時）才回應——**等待是這支端點的參數，不是
-    另一支端點**：「就緒」是 session 的一個狀態欄位，不是一個獨立的動詞；拆成
-    /ready 只會讓同一份事實有兩個來源。逾時不算錯誤，照樣回傳當下狀態，ready 欄位
-    自己會說話。
-
-    ⚠ 上限是 `config.WAIT_READY_MAX`（180 秒），不是隨手取的 600。這個參數會把請求整段
-      釘在 gunicorn 的一條執行緒上（`--threads 8`），八個就能把控制平面佔滿——連 nginx 的
+    ⚠ 這裡曾經有一個 `?wait_ready=<秒>` 參數，會**阻塞**到就緒才回應。它從來沒有任何
+      呼叫端（前端對單一 session 只打 PATCH 與 DELETE），也沒有測試，卻把請求整段釘在
+      gunicorn 的一條執行緒上（`--threads 8`）——八個就能把控制平面佔滿，連 nginx 的
       `auth_request` → `/api/auth/view` 都排不進去，等於所有人開著的終端一起失效。
-      所以預算收成「整個請求」而不是「每次輪詢」。
+      一條沒有人走、又能把服務佔滿的路，留著只有壞處。要再做「等就緒」請在**呼叫端**
+      輪詢這支（它本來就回 `ready`），不要把等待搬進伺服器的執行緒裡。
     """
     _owned(sid)
-    wait = request.args.get("wait_ready")
-    if wait is None:
-        return jsonify(manager.status(sid, with_ready=True))
-    seconds = _int_in(request.args, "wait_ready", 0, 0, int(config.WAIT_READY_MAX))
-    return jsonify(manager.wait_until_ready(sid, seconds))
+    return jsonify(manager.status(sid, with_ready=True))
 
 
 @app.patch("/api/sessions/<sid>")

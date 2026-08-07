@@ -583,7 +583,7 @@ def _remove_orphans(client: docker.DockerClient, live: dict, isolated) -> int:
             # 擋的是反方向，兩邊都要有才對稱）。
             continue
         created = c.attrs.get("Created", "")
-        if _age_seconds(created) < config.ORPHAN_GRACE:
+        if age_seconds(created) < config.ORPHAN_GRACE:
             continue                                     # 可能正在建立中，下輪再看
         with suppress(docker.errors.NotFound):
             # isolated：一顆刪不掉（逾時、卡在 removing）不可以讓剩下的孤兒都不處理
@@ -625,10 +625,6 @@ def _reclaim_idle(client: docker.DockerClient, isolated) -> int:
         reclaimed += 1
     return reclaimed
 
-
-# container 建立至今幾秒。**實作在 sessions**（`sessions.age_seconds`）；
-# 這裡保留舊名字當別名，呼叫端不必全部改。
-_age_seconds = age_seconds
 
 
 _stopping = threading.Event()

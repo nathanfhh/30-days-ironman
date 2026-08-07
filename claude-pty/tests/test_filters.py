@@ -121,12 +121,10 @@ check("已結束 since=7 → 2 筆（含 40 天前開、12 小時前才結束的
 check("已結束 since=1 → 只剩 12 小時前結束的那筆（兩天前的被排除）",
       past(Filters(since_at=now - _dt.timedelta(days=1))) == 1)
 
-print("== active()：畫面上的「篩選 · N」與清除鈕靠它 ==")
-check("沒有條件 → 0", Filters().active() == 0)
-check("capture=False 也算一個條件（不是「沒設定」）",
-      Filters(capture=False).active() == 1)
-check("三個條件 → 3",
-      Filters(cli="claude", capture=False, since_at=now).active() == 3)
+# ⚠ 這裡曾經有三條 `Filters.active()` 的斷言，標題寫「畫面上的『篩選 · N』與清除鈕靠它」
+#   ——那是假的。那個數字**在前端算**（見 sessions.html 的 paintFilters），後端那支從來
+#   沒有任何呼叫端，只有這三條測試在餵它。連同它一起刪掉了；「起迄兩端算一格」那條規則
+#   的正本在前端那段註解裡。
 
 print("== count 與 list 必須同條件（否則頁碼會錯）==")
 f = Filters(capture=False)

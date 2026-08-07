@@ -210,7 +210,8 @@ check("無 cap_add（不套 profile 的能力）", "cap_add" not in kw)
 config.ENTRYPOINT = None  # 還原
 
 print("\n== docker 時間戳只有一份解析（review 2026-07-26）==")
-# ⚠ 曾經有兩份實作（sessions._image_created_at 與 reconciler._age_seconds），而且已經漂移：
+# ⚠ 曾經有兩份實作（sessions 這邊，與 reconciler 自己那一份——現已收斂，名字不在了），
+#   而且兩份已經漂移過：
 #   後者只認 "+" 判斷有沒有時區偏移，於是 "-05:00" 會落到 else 分支被當成 UTC。目前不可達
 #   （daemon 一律回 Z），但 _remove_orphans 的寬限期就是靠它算的，而解析失敗的 fallback 是
 #   「很舊」——錯的方向是安靜地提早把還在建立中的容器當孤兒刪掉。

@@ -293,8 +293,10 @@ def set_cli_token(user_id: int, token) -> None:
     if len(token) > 4096:
         raise AuthError("token 長得不像話（超過 4096 字元），請確認貼的是 token 本身")
     if not all(33 <= ord(ch) <= 126 for ch in token):
-        # 換行／空白／控制字元都擋：這個值會進容器的環境變數，而多行的「token」幾乎
-        # 一定是整段終端輸出連說明文字一起貼進來了。
+        # 換行／空白／控制字元都擋。⚠ 理由**不是**「它會進環境變數」——預設那條早就改成
+        # 檔案描述符了（見 config.TOKEN_DELIVERIES）。是這兩件事：值會被寫進送進容器的
+        # tar，而 env 那條逃生口也還在；何況多行的「token」幾乎一定是整段終端輸出連說明
+        # 文字一起貼進來了。兩條路都不該收，所以這道檢查與交付方式無關，一律擋。
         raise AuthError("token 只能是單行可見字元——看起來貼進來的不只 token 本身")
     with session_scope() as s:
         user = s.get(User, user_id)
