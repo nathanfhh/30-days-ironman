@@ -104,7 +104,7 @@
           <div id="pick-fcap"></div>
         </div>
         <div class="field">
-          <span class="label tip tip--wide" data-tip="這場有沒有把 OpenTelemetry 送到 Jaeger。">Telemetry</span>
+          <span class="label tip tip--wide" data-tip="這場有沒有**要求**把 OpenTelemetry 送到 Jaeger。容器起來後會先探 Jaeger 通不通，探不通就不送——這個條件篩的是要求，不是結果。">Telemetry</span>
           <div id="pick-ftel"></div>
         </div>
         <div class="field">
@@ -178,6 +178,7 @@
       off: "0", on: "1", initial: "0",
       offLabel: "不送", onLabel: "送 Jaeger",
       name: "Telemetry",
+      hint: "探不通就不送",
       offIcon: "fa-chart-line", onIcon: "fa-chart-line",
     }),
   };
@@ -374,8 +375,13 @@
     marks.push(p.capture
       ? ["流量錄製：開", "fa-solid fa-circle-dot", "accent"]
       : ["流量錄製：關", "fa-solid fa-circle-dot", "off"]);
+    // ⚠ 這一欄講的是**這一場要求了什麼**，不是「trace 真的收到了」。容器內的
+    //   entrypoint 會先探 Jaeger 通不通，探不通就不送（並在容器 log 印警告），
+    //   而那個結果目前沒有回報給控制平面——所以措辭只能講到「已要求」為止。
+    //   斷言它成功了會比不顯示更糟：使用者以為有 trace 在收，要查的時候才發現沒有。
     marks.push(p.telemetry
-      ? ["Telemetry：送 Jaeger", "fa-solid fa-chart-line", "accent"]
+      ? ["Telemetry：已要求送 Jaeger（實際是否送出以容器 log 為準）",
+         "fa-solid fa-chart-line", "accent"]
       : ["Telemetry：不送", "fa-solid fa-chart-line", "off"]);
 
     // ⚠ tone 也要逸出：它曾經只有 "owner"/"accent" 兩個字面常數，現在其中一個是

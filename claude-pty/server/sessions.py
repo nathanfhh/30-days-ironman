@@ -1650,6 +1650,14 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         # 請 entrypoint 印出就緒標記（DRIVER_MARKER）。人自己開容器時不設它，畫面上
         # 就不會多出一行機器用的字——那條路徑的零偏差由 test_entrypoint_human_path 守。
         "NCR_MARK": "1",
+        # mitmweb 的 UI 收回容器 loopback。
+        # ⚠ **這條只對網頁開的 session 成立**：它們掛在共用的 session network 上，
+        #   而那個 UI 顯示的是**未脫敏的即時流量**、token 又印在 `docker logs` 裡
+        #   （控制平面讀得到 log，同網段的兄弟容器連得到 8081）。綁回 loopback 之後，
+        #   token 拿到也沒用——要先進得了這顆容器。
+        # ⚠ 人自己開容器時不設它（預設 0.0.0.0），run script 的 `-p` 才轉得進去；
+        #   docker 的 port forwarding 連的是容器內的介面，綁 loopback 會讓 UI 打不開。
+        "NCR_MITM_WEB_BIND": "127.0.0.1",
         # per-user 狀態空間（ADR 0016）。**這兩個 env 是整個機制的關鍵**：
         #   CLAUDE_CONFIG_DIR         → transcript / settings / skills / .claude.json 全部
         #                               改看這個目錄（實測：設了之後 host 的 ~/.claude 一次

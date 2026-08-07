@@ -53,6 +53,9 @@ check("env 帶 NET/CAPTURE/SCOPE/MARK + 模型設定", env == {
     "NCR_NET": "restricted", "NCR_CAPTURE": "0", "NCR_CAPTURE_SCOPE": "all",
     # 只有 MARK 有值時 entrypoint 才印就緒標記——人自己開容器不會設它
     "NCR_MARK": "1",
+    # mitmweb UI 收回容器 loopback：網頁 session 在共用網段上，兄弟容器不該連得到
+    # 那個顯示未脫敏流量的畫面（人自己開容器時不設，run script 的 -p 才轉得進去）
+    "NCR_MITM_WEB_BIND": "127.0.0.1",
     # per-user 狀態空間（ADR 0016）。這兩個**不是**給 entrypoint.sh 的，是給 CLI 本身的，
     # 所以不隨 profile 變、每一場都在。
     # 少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器 writable layer，換一顆容器就沒了。
