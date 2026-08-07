@@ -108,8 +108,13 @@ _guard_credentials(uid)     # 不該 raise；raise 的話這支測試直接掛�
 check("_guard_credentials 放行", True)
 
 env = build_run_kwargs("c", "sid1", Profile(), uid).get("environment", {})
-check("🔴 env 注入 CLAUDE_CODE_OAUTH_TOKEN（憑證交給 CLI 的唯一管道）",
-      env.get("CLAUDE_CODE_OAUTH_TOKEN") == TOKEN)
+check("🔴 env 只放路徑，不放值（憑證由 put_archive 送進容器）",
+      env.get("NCR_TOKEN_FILE") == config.SESSION_TOKEN_FILE)
+# 🔴 這一條是整組的重點：**token 的值不准出現在 environment 的任何地方**。
+#    掃全部的 key 與 value，不是只看那個已知的鍵——改壞的方式通常是「換個名字塞進去」，
+#    只斷言舊鍵不在的話那種改法會全綠。env 會進 `docker inspect` 與每個子行程。
+check("🔴 token 的值不在 env 的任何一個欄位裡",
+      all(TOKEN not in str(k) and TOKEN not in str(v) for k, v in env.items()))
 
 print("== 🔴 沒有讀 host 憑證檔的後路 ==")
 # 在 HOST_HOME 放一份「看起來完全有效」的舊式憑證檔：狀態、守門、掛載**全部**不理它。
@@ -133,7 +138,8 @@ try:
           all(".credentials" not in v.get("bind", "")
               for v in kw["volumes"].values()) and live not in kw["volumes"])
     check("🔴 env 也沒有半個憑證（沒設就是沒設，不是空字串）",
-          "CLAUDE_CODE_OAUTH_TOKEN" not in kw.get("environment", {}))
+          "NCR_TOKEN_FILE" not in kw.get("environment", {})
+          and "CLAUDE_CODE_OAUTH_TOKEN" not in kw.get("environment", {}))
 finally:
     config.MOUNTS = _saved_mounts
 

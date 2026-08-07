@@ -236,18 +236,21 @@ try:
     check("env 指定 CLAUDE_CONFIG_DIR 指向那個目錄",
           env.get("CLAUDE_CONFIG_DIR") == "/home/nathan/.claude")
 
-    print("== 憑證＝這個人的 setup-token，只走環境變數、不掛任何檔案 ==")
-    # 有設 → 注入 CLAUDE_CODE_OAUTH_TOKEN；沒設 → 這個鍵**不存在**（不是空字串——
-    # 空值會蓋掉 image/env 鏈上任何同名變數，並讓 CLI 看到一個「設了但壞的」憑證）。
+    print("== 憑證＝這個人的 setup-token，env 只帶路徑、值走 put_archive ==")
+    # 有設 → env 帶 NCR_TOKEN_FILE（路徑）；沒設 → 這個鍵**不存在**（不是空字串——
+    # 空值會讓 entrypoint 看到一個「設了但指不到東西」的路徑）。
     # _UID=7 是假 id（DB 裡沒這個人）——token 要掛在真實使用者上才存得進去
     _tok_uid = auth.create_user("pm-token-user", "pm-token-password-1")["id"]
     auth.set_cli_token(_tok_uid, "sk-test-oauth-token")
     env_tok = build_run_kwargs("c", "sid-tok", Profile(), _tok_uid).get("environment", {})
-    check("🔴 有 token → 以 CLAUDE_CODE_OAUTH_TOKEN 交給 CLI",
-          env_tok.get("CLAUDE_CODE_OAUTH_TOKEN") == "sk-test-oauth-token")
+    check("🔴 有 token → env 帶的是路徑",
+          env_tok.get("NCR_TOKEN_FILE") == config.SESSION_TOKEN_FILE)
+    check("🔴 token 的值不在 env 的任何一個欄位裡",
+          all("sk-test-oauth-token" not in str(x)
+              for kv in env_tok.items() for x in kv))
     auth.clear_cli_token(_tok_uid)
     env_none = build_run_kwargs("c", "sid-tok2", Profile(), _tok_uid).get("environment", {})
-    check("🔴 沒 token → 這個鍵不存在", "CLAUDE_CODE_OAUTH_TOKEN" not in env_none)
+    check("🔴 沒 token → 這個鍵不存在", "NCR_TOKEN_FILE" not in env_none)
     check("🔴 憑證不再以檔案掛載（volumes 裡沒有 .credentials）",
           all(".credentials" not in str(v) for kwv in (env_tok, env_none) for v in kwv)
           and all(".credentials" not in b.get("bind", "")

@@ -223,6 +223,24 @@ SPACE_SELF = os.environ.get("CLAUDE_PTY_SPACE_SELF", SPACE_HOST)
 # macOS Docker Desktop 走 virtiofs 的 uid 對映，不受影響；Linux 上 APP_UID 要設成這個值。
 SESSION_UID = int(os.environ.get("CLAUDE_PTY_SESSION_UID", "1001"))
 
+# 登入憑證交進容器的落點。**這條路徑刻意不在任何 bind mount 底下**——它是容器自己的
+# writable layer，靠 `put_archive` 在 create 與 start 之間寫進去（同 gitlab 代理送
+# nginx.conf 的手法），所以 host 磁碟上從來沒有這個檔。
+#
+# ⚠ 為什麼不用環境變數（原本的做法）：env 會出現在 `docker inspect` 的 `Env` 陣列、
+#   `/proc/1/environ`，而且**每一個子行程都繼承它**——CLI 會開 shell，shell 會跑 AI 要求
+#   的任何指令，每一層都帶著這個值。CLI 自己在 spawn 子行程前就把這幾個憑證變數從環境
+#   刪掉，我們卻在外面一層又加回去。
+# ⚠ entrypoint.sh 讀完會立刻 `rm`，只留一個已開的 fd（實測：檔案不在了照樣讀得到）。
+#   所以容器內能看到這個檔的窗口是毫秒級，之後連容器裡也找不到它。
+# ⚠ **它必須待在一個 session 使用者自己擁有的目錄裡，不能直接放 `/run` 底下。**
+#   unlink 要的是**父目錄**的寫權限，不是檔案本身的——檔案給 0600 且屬於他也沒用，
+#   `/run` 是 root 的 0755，他刪不掉。實測症狀是 `rm: Permission denied`，而 entrypoint
+#   有 `set -e`，於是整個容器 exit 1，看起來像 session 建不起來（2026-08-07 踩到）。
+#   所以 `_put_cli_token` 的 tar 會連同 `cpty/` 這個目錄一起送，並且把它設成他的。
+SESSION_TOKEN_DIR = "/run/cpty"
+SESSION_TOKEN_FILE = SESSION_TOKEN_DIR + "/token"
+
 CLAUDE_CONFIG_BIND = "/home/nathan/.claude"
 # 容器內那個「寫了要留著」的根目錄。**dev-container 的兩條路徑都落在它底下**：
 #   · capture 的 .mitm  → `<根>/mitm`（entrypoint.sh 的 CAPTURE_DIR）

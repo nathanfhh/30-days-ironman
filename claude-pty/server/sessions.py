@@ -11,10 +11,12 @@ ttyd 與就緒偵測共用 docker-py 的 `attach_socket`（見下方 attach 段�
 from __future__ import annotations
 
 import datetime as _dt
+import io
 import json
 import os
 import re
 import sys
+import tarfile
 import tempfile
 import threading
 import time
@@ -417,10 +419,52 @@ class SessionNotFound(SessionError):
     """找不到 session，或請求者無權存取（兩者刻意回同一種錯，不洩漏存在性）。"""
 
 
-# ⚠ 這裡曾經有 `_require_credentials_mountpoint()`：憑證以前是以檔案掛進容器的，
+# ⚠ 這裡曾經有 `_require_credentials_mountpoint()`：憑證以前是以檔案**掛**進容器的，
 #   巢狀 bind mount 在新版 runc（openat2 + securejoin）上落點不存在就 exit 125。
-#   現在憑證走環境變數（CLAUDE_CODE_OAUTH_TOKEN，見 build_run_kwargs），整個檔案
-#   掛載的問題類別連同那個函式一起消失。
+#   現在憑證由 `_put_cli_token` 用 put_archive 送進容器自己的 writable layer——是檔案
+#   沒錯，但不是 mount，所以那整個問題類別連同那個函式一起消失。
+#   （中間曾經改走環境變數；那條路解掉了掛載問題，卻讓值出現在 `docker inspect` 與每一個
+#     子行程的環境裡。現在的做法兩個都避開，見 config.SESSION_TOKEN_FILE。）
+
+def _put_cli_token(container, user_id: int) -> bool:
+    """把這個人的 CLI 憑證寫進容器自己的 writable layer，回傳有沒有真的寫。
+
+    **不經環境變數**，理由見 `config.SESSION_TOKEN_FILE`。tar 裡直接帶 uid 與 0600：
+    entrypoint 以 `config.SESSION_UID` 執行，root 寫的檔它讀不到。
+
+    ⚠ **失敗一律降級，不中斷建立。** 拿不到憑證的終端會停在登入提示，那是使用者看得懂
+      的失敗；為此讓整場開不起來不成比例。
+    ⚠ 例外只印型別不印訊息——put_archive 的錯誤訊息可能回夾 payload。
+    """
+    token = auth_mod.cli_token(user_id)
+    if not token:
+        return False
+    data = token.encode()
+    stem = os.path.basename(config.SESSION_TOKEN_DIR)          # cpty
+    parent = os.path.dirname(config.SESSION_TOKEN_DIR)         # /run
+
+    # ⚠ **目錄要一起送，而且要設成他的。** entrypoint 讀完就 `rm`，而 unlink 要的是父目錄
+    #   的寫權限——檔案 0600 給對了人也沒用，`/run` 是 root 的。見 config 那段的實測。
+    d = tarfile.TarInfo(stem)
+    d.type, d.mode = tarfile.DIRTYPE, 0o700
+    d.uid = d.gid = config.SESSION_UID
+
+    f = tarfile.TarInfo(f"{stem}/{os.path.basename(config.SESSION_TOKEN_FILE)}")
+    f.size, f.mode = len(data), 0o600
+    f.uid = f.gid = config.SESSION_UID
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        tar.addfile(d)
+        tar.addfile(f, io.BytesIO(data))
+    try:
+        container.put_archive(parent, buf.getvalue())
+        return True
+    except Exception as e:  # noqa: BLE001 — 見 docstring
+        print(f"[claude-pty] ⚠ 憑證送不進容器（{type(e).__name__}）：終端會停在登入提示",
+              flush=True)
+        return False
+
 
 _CLAUDE_BASE = {"cli": "claude", "cli_label": "Claude", "brand": "anthropic"}
 
@@ -934,6 +978,10 @@ class SessionManager:
             run_kwargs = build_run_kwargs(name, sid, run_profile, user_id)
             run_kwargs.pop("detach", None)
             container = self._docker.containers.create(config.IMAGE, **run_kwargs)
+            # ⚠ **憑證要在 start 之前送進去，而且只能在 create 之後。** put_archive 需要
+            #   一顆已經存在的容器，而 entrypoint 一跑起來就會去讀它。中間這個縫隙是唯一
+            #   的窗口。失敗不中斷：拿不到憑證的終端會停在登入提示，那是誠實的失敗畫面。
+            _put_cli_token(container, user_id)
             # ⚠ **就是這裡，不能更晚。** 見上面那段：防火牆放行的是 entrypoint 起跑那一刻
             #   的路由快照，`start` 之後才接的網路永遠通不了。
             has_proxy = False
@@ -1728,13 +1776,14 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
 
     env.update(_gitlab_env())
 
-    # 登入憑證：這個人貼進來的 setup-token，以環境變數交給 CLI。**唯一來源**——不掛
-    # 任何 host 憑證檔（模型欄位 cli_token_enc 那段講了為什麼不留後路）。
+    # 登入憑證：這個人貼進來的 setup-token。**這裡只放路徑，不放值**——值由 create()
+    # 在 create 與 start 之間用 `put_archive` 送進容器（見 config.SESSION_TOKEN_FILE
+    # 的說明，以及 _put_cli_token）。不掛任何 host 憑證檔（模型欄位 cli_token_enc
+    # 那段講了為什麼不留後路）。
     # create() 的 _guard_credentials 已經擋過「沒設」，這裡拿不到只剩競態（guard 之後
-    # 才被清掉）——照樣不注入，讓終端停在登入提示，那是誠實的失敗畫面。
-    token = auth_mod.cli_token(user_id)
-    if token:
-        env["CLAUDE_CODE_OAUTH_TOKEN"] = token
+    # 才被清掉）——照樣不注入路徑，讓終端停在登入提示，那是誠實的失敗畫面。
+    if auth_mod.cli_token(user_id):
+        env["NCR_TOKEN_FILE"] = config.SESSION_TOKEN_FILE
 
     # 模型與思考深度：entrypoint.sh 把它翻成 `--model` / `--effort`，這裡只放進 env。
     env["NCR_MODEL"] = profile.model

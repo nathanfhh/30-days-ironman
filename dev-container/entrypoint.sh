@@ -6,8 +6,33 @@ set -euo pipefail
 
 echo "📦 ncr-dev-container｜image built: $(cat /etc/image-build-time 2>/dev/null || echo unknown)"
 
-if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ ! -s "$HOME/.claude/.credentials.json" ]; then
-    echo "⚠️  容器內沒有憑證（CLAUDE_CODE_OAUTH_TOKEN 或 ~/.claude/.credentials.json），claude 會要求登入。"
+# 憑證：網頁版把 token 放在一個檔案裡（NCR_TOKEN_FILE，由控制平面 put_archive 進來），
+# 這裡把它變成一個**已開的 file descriptor** 再交給 CLI。
+#
+# ⚠ 為什麼不把檔案內容直接指派給那個「裸的」token 環境變數：那個值會進到環境，於是
+#   （這裡刻意不把那行反例寫成可執行的樣子——test_profile_mapping 用子字串守「entrypoint
+#     不准賦值它」，而一行貼著就能取消註解的危險寫法，本來就不該留在檔案裡）
+#   `/proc/1/environ` 讀得到，而且 CLI 底下每一個子行程都繼承它——CLI 會開 shell，shell
+#   會執行 AI 要求的任何指令。CLI 自己在 spawn 子行程前就把這幾個憑證變數從環境刪掉，
+#   我們不該在外面一層又加回去。走 fd 只有一個數字進環境。
+# ⚠ `rm` 排在 `exec 4<` **之後**：fd 已經開著，檔案就可以立刻從檔案系統消失，而讀取照樣
+#   成立（實測驗過）。少一個躺在那裡等人 `cat` 的檔案。
+# ⚠ 這一段必須跑在任何 `exec` 或子行程**之前**，fd 才傳得下去。
+# ⚠ `rm` 失敗**不可以**弄死這一場。unlink 要的是父目錄的寫權限，而那是控制平面那側決定
+#   的事；哪天它換了落點、權限不對，症狀會是整個容器 exit 1（`set -e`），看起來像
+#   session 建不起來，而真正的原因是一行清理指令（2026-08-07 實測踩到）。所以吞掉錯誤，
+#   但**要吵**：檔案還在是一個少掉的保障，不是沒事。
+if [ -n "${NCR_TOKEN_FILE:-}" ] && [ -s "${NCR_TOKEN_FILE}" ]; then
+    exec 4< "${NCR_TOKEN_FILE}"
+    export CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=4
+    rm -f "${NCR_TOKEN_FILE}" 2>/dev/null \
+        || echo "⚠️  憑證檔刪不掉（${NCR_TOKEN_FILE} 仍在容器內），fd 已經讀到、這一場照常。"
+fi
+
+if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] \
+   && [ -z "${CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR:-}" ] \
+   && [ ! -s "$HOME/.claude/.credentials.json" ]; then
+    echo "⚠️  容器內沒有憑證（環境變數、fd 或 ~/.claude/.credentials.json），claude 會要求登入。"
 fi
 
 # ------------------------------------------------------------------------------
