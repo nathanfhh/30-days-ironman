@@ -179,6 +179,33 @@
     </div>
   </section>
 
+  {# ttyd 實況。回答三個「DB 與 `docker ps` 都答不了」的問題：那顆行程在聽哪個 port、
+     現在有幾個人連著、有沒有誰在跑卻不在 DB 裡。
+     ⚠ 這一節是**唯讀**的，沒有任何動作鈕。它的用途是對帳，不是操作——要收掉哪一場走
+       既有的終止那條路，那條有完整的擁有者檢查。 #}
+  <section class="panel">
+    <div class="section-head" style="margin-bottom:var(--space-2)">
+      <h2 class="panel__title" style="margin:0">ttyd 實況</h2>
+      <button class="btn" id="ttyd-refresh" data-testid="ttyd-refresh">
+        <i class="fa-solid fa-rotate"></i> 重新整理</button>
+    </div>
+    <p class="panel__lede">
+      「在聽」與「連線」是去問那顆行程自己的 socket 得到的，不是 DB 記的。兩者對不上就是這一節要抓的東西。
+    </p>
+    {# ⚠ 沒有 psutil 時一定要喊。不喊的話下面那個空的孤兒區看起來就像「掃過了，很乾淨」，
+       而這一節整個存在的理由就是不讓「沒查到」被讀成「沒問題」。 #}
+    <p class="panel__lede" data-tone="warn" id="ttyd-nopsutil" hidden>
+      這個容器裡沒有 psutil，只讀得到 DB 那一半。<strong>下面沒有列出孤兒，不代表沒有孤兒。</strong>
+    </p>
+    <table class="roster">
+      <thead>
+        <tr><th>擁有者 / session</th><th>port</th><th>pid</th><th>在聽</th><th>連線</th><th>ttyd</th><th>開啟於</th></tr>
+      </thead>
+      <tbody id="ttyd-body" data-testid="ttyd-views"><tr><td colspan="7">載入中…</td></tr></tbody>
+    </table>
+    <div id="ttyd-orphans" data-testid="ttyd-orphans"></div>
+  </section>
+
   {% endif %}
 </div>
 {% endblock %}
@@ -466,6 +493,98 @@
     });
 
     loadUsers();
+
+    // --- ttyd 實況（唯讀對帳）-------------------------------------------------
+    const ttydBody = document.getElementById("ttyd-body");
+    const ttydOrphans = document.getElementById("ttyd-orphans");
+    const ttydNoPsutil = document.getElementById("ttyd-nopsutil");
+
+    // 「不知道」與「壞了」要長得不一樣。alive===null 是 pid 還沒寫回 DB 的那個窗口
+    // （開終端當下的例行狀態），把它畫成紅色就是每開一次終端就假警報一次。
+    function aliveCell(row) {
+      if (row.alive === null) {
+        return '<span class="chip" title="pid 還沒寫回 DB（開啟中），不是死了">建立中</span>';
+      }
+      if (row.alive === false) {
+        return '<span class="chip" data-tone="danger" '
+             + 'title="DB 有列、程序已死。它佔著 uq_views_port，這場下次開終端會拿不到 port">已死</span>';
+      }
+      return `<span class="mono-id">${esc(String(row.pid))}</span>`;
+    }
+
+    // ⚠ 這一格是這一節的重點：DB 說 port 是 X，那顆行程實際在聽的是不是 X。
+    //   相同就只印 port，不同（或問不到）才出聲——每一列都掛一個綠勾等於沒有訊號。
+    function listenCell(row) {
+      const proc = row.proc;
+      if (!proc || !("listening" in proc)) {
+        return row.alive === false
+          ? '<span class="roster__ago">—</span>'
+          : '<span class="chip" title="問不到那個行程的 socket">不知道</span>';
+      }
+      const ports = proc.listening.map((a) => Number(a.split(":").pop()));
+      if (ports.includes(row.port)) return `<span class="roster__ago">同左</span>`;
+      return '<span class="chip" data-tone="danger" title="'
+           + esc(`DB 記的是 ${row.port}，它實際在聽 ${proc.listening.join("、") || "（沒有在聽）"}`)
+           + '">對不上</span>';
+    }
+
+    function renderTtyd(data) {
+      ttydNoPsutil.hidden = data.psutil !== false;
+      ttydBody.innerHTML = data.views.length === 0
+        ? '<tr><td colspan="7">目前沒有開著的終端</td></tr>'
+        : data.views.map((r) => {
+            const clients = r.proc && "clients" in r.proc
+              ? String(r.proc.clients)
+              : '<span class="roster__ago">—</span>';
+            return `
+          <tr>
+            <td><span class="roster__name" title="${esc(r.owner || "")}">${esc(r.owner || "?")}</span>
+                <span class="roster__ago">${esc(r.session_name || r.session_id)}</span></td>
+            <td class="mono-id">${r.port}</td>
+            <td>${aliveCell(r)}</td>
+            <td>${listenCell(r)}</td>
+            <td>${clients}</td>
+            <td>${esc(r.proc && r.proc.bin ? r.proc.bin : (r.ttyd_bin || "?"))}</td>
+            <td class="roster__when">
+              <span>${esc(r.created_at.slice(0, 16).replace("T", " "))}</span>
+              <span class="roster__ago">${esc(relTime(r.created_at))}</span>
+            </td>
+          </tr>`;
+          }).join("");
+
+      // 孤兒：程序在跑、DB 沒有對應的列。沒有任何自動機制找得到它們，所以這裡是唯一的出口。
+      ttydOrphans.innerHTML = data.orphans.length === 0
+        ? ""
+        : `<p class="panel__lede" data-tone="warn" style="margin-top:var(--space-4)">
+             <strong>${data.orphans.length} 個孤兒程序</strong>：在跑，但 DB 沒有對應的列。
+             沒有任何自動清理找得到它們，而它們佔著 port。
+           </p>
+           <table class="roster"><thead><tr><th>pid</th><th>在聽</th><th>ttyd</th><th>起於</th></tr></thead>
+           <tbody>${data.orphans.map((o) => {
+             const p = o.proc || {};
+             return `<tr>
+               <td class="mono-id">${o.pid}</td>
+               <td>${esc((p.listening || []).join("、") || "不知道")}</td>
+               <td>${esc(p.bin || "?")}</td>
+               <td>${p.started_at ? esc(relTime(p.started_at)) : "—"}</td>
+             </tr>`;
+           }).join("")}</tbody></table>`;
+    }
+
+    async function loadTtyd() {
+      try {
+        renderTtyd(await api("/api/ttyd/inspect"));
+      } catch (ex) {
+        // ⚠ 失敗要把表格換成講得出原因的一列，不能留著上一次的資料。留著的話畫面看起來
+        //   仍然正常，而它顯示的是過期的世界——那正是這一節要抓的那種假象。
+        ttydBody.innerHTML = '<tr><td colspan="7">讀不到（見下方訊息）</td></tr>';
+        ttydOrphans.innerHTML = "";
+        toastError("讀取 ttyd 實況", ex);
+      }
+    }
+
+    document.getElementById("ttyd-refresh").addEventListener("click", loadTtyd);
+    loadTtyd();
   }
 </script>
 {% endblock %}
