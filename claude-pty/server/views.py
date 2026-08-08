@@ -107,6 +107,39 @@ def close_views(session_id: str) -> int:
     return closed
 
 
+def close_user_views(user_id: int) -> int:
+    """收掉某位使用者**所有** session 上開著的終端。回傳收掉幾個。
+
+    ⚠ **撤銷存取權時，收掉 cookie / token 是不夠的。** 那兩者要到下一次 HTTP 請求才會被
+      gate 擋下，而已經升級完成的 ttyd WebSocket 不會再走 nginx 的 auth_request——連線
+      活著的期間，對方手上就是一個可互動的 shell，撤銷對它完全沒有效果。
+
+    ⚠ **住在這裡而不是 app.py，是為了讓不變式跟著操作走。** 它原本是 `app._cut_live_terminals`，
+      於是「改密碼要接著切終端」變成每一個呼叫端要自己記得的事——而 `server/cli.py` 的
+      `set-password` 就沒有記得（審查 F-003）：管理員從 CLI 讓一個被盜帳號退場，對方的分頁
+      仍然是一個能打字的 shell。放進 `auth.change_password` 之後，第四個呼叫端也不會漏。
+    ⚠ 因此**不可以** import sessions 或用 SessionManager：`sessions` 在模組層 import `auth`，
+      而 `auth` 要呼叫這一支。直接查 `Session.id` 就夠了——列表本來就只讀 DB（ADR 0012）。
+
+    ⚠ session 本身不動：這是「切斷存取」不是「終止工作」。容器繼續跑，重開網頁就會起一個
+      新的 ttyd（ADR 0003：不重播，畫面由 TUI 自行重繪），代價幾乎是零。
+
+    ⚠ **涵蓋範圍是「他擁有的 session」，不是「他開著的終端」**——這兩者在 admin 身上會分岔：
+      admin 開得了別人的 session，而 view 掛在 session 上、不記得是誰在看。所以「改掉一位
+      admin 的密碼」收不掉他正開著的、屬於別人的終端。要補得先讓 view 記錄開啟者，那是
+      schema 變更；在那之前這是已知的缺口，不要以為改密碼等於全斷。
+    """
+    from .models import Session as SessionRow      # 區域 import：避免與 auth 的載入順序打架
+    with session_scope() as s:
+        sids = [r.id for r in s.query(SessionRow.id).filter(
+            SessionRow.user_id == user_id).all()]
+    closed = 0
+    for sid in sids:
+        with suppress(Exception):      # noqa: BLE001 — 一場收不掉不可以讓其餘的不收
+            closed += close_views(sid)
+    return closed
+
+
 def list_views(session_id: str) -> list[dict]:
     """列出仍存活的 view；順手清掉已自行退出的殘留記錄（釋放 port）。
 

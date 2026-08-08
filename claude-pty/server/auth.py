@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import unicodedata
+from contextlib import suppress
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
@@ -211,9 +212,19 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
       每一張 cookie 都當場失效，包含按下送出的那一張——`app.change_own_password` 自己
       `session.clear()` 收尾，`admin_change_password` 則本來就不是他在操作。留一個例外只
       換到少按幾個鍵，卻讓「全部失效」變成說一套做一套。
-    ⚠ 而且 cookie 不是全部：版號管不到一條**已經升級完成的 WebSocket**（授權只發生在連線
-      交出去之前）。兩個呼叫端都要接著呼叫 `app._cut_live_terminals()`。
+
+    ⚠ **而且 cookie 不是全部：版號管不到一條已經升級完成的 WebSocket**（授權只發生在連線
+      交出去之前，之後不會再有人回頭問它還算不算數）。所以這裡直接收掉他所有開著的終端。
+      **這一步刻意寫在這支函式裡，不留給呼叫端**：它原本是每個呼叫端要自己記得的事
+      （`app._cut_live_terminals`），而 `cli.py` 的 `set-password` 就沒有記得——管理員從
+      CLI 讓一個被盜帳號退場，對方的分頁仍然是一個能打字的 shell，而畫面回報成功
+      （審查 F-003）。不變式跟著操作走，第四個呼叫端才不會再漏一次。
+    ⚠ 收終端要在**交易關掉之後**：`close_user_views` 會自己開交易，在 `session_scope`
+      裡面呼叫就是 SQLite 上的巢狀交易——這個 codebase 已經為那件事付過一次
+      `database is locked` 的代價。
     """
+    from . import views       # 區域 import：views 不 import auth，但擺模組層會綁死載入順序
+
     new_hash = hash_password(new_password)
     with session_scope() as s:
         user = s.get(User, user_id)
@@ -235,7 +246,12 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
                 raise AuthError("原密碼錯誤") from None
         user.password_hash = new_hash
         user.password_version += 1   # 使既有簽章 cookie 全部失效（review H4）
-        return _to_dict(user)
+        result = _to_dict(user)
+    # ⚠ 交易關掉之後才做——見 docstring：close_user_views 自己會開交易。
+    #   而且**一定要做**：cookie 全滅擋不到一條已經升級完成的 WebSocket。
+    with suppress(Exception):        # noqa: BLE001 — 收不掉終端不可以讓改密碼本身失敗
+        views.close_user_views(user_id)
+    return result
 
 
 def get_user(user_id: int) -> dict | None:

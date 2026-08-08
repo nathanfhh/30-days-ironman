@@ -207,6 +207,15 @@ kw = build_run_kwargs("c", "sidB", Profile(network="restricted", capture=True), 
 check("覆蓋 entrypoint=bash", kw.get("entrypoint") == "bash")
 check("無 profile env（選單無意義）", "environment" not in kw)
 check("無 cap_add（不套 profile 的能力）", "cap_add" not in kw)
+# 🔴 **network 是隔離層的性質，不隨 entrypoint 變**——它必須跨過 escape hatch。
+#    這條原本沒有，於是 network 的指定被寫在 escape hatch 的 return **之後**，走這條路的
+#    容器完全沒有 network 參數、落在 docker 預設 bridge（審查 F-004）——那張網住著這台
+#    機器上每一顆沒指定網路的容器，正是 ADR 0016 稱為「比它要取代的共用網路還糟」的形狀。
+#    而這一段本來就在測 escape hatch，只是斷言的清單裡少了它。
+#    ⚠ 上面那三條驗的是「profile 的東西**不該**出現」，這一條相反：驗一個**必須**出現的。
+#      兩種斷言混在同一段時特別容易漏掉後者。
+check("🔴 escape hatch 也要有 network（隔離層不隨 entrypoint 變，ADR 0016）",
+      kw.get("network") == user_proxy.network_name(_UID))
 config.ENTRYPOINT = None  # 還原
 
 print("\n== docker 時間戳只有一份解析（review 2026-07-26）==")

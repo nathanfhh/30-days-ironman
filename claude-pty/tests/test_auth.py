@@ -81,7 +81,7 @@ r = c.get("/api/auth/me")
 check("登入後 /me 回自己", r.status_code == 200 and r.get_json()["user"]["username"] == "alice")
 r = c.get("/api/sessions")
 check("登入後可讀 /api/sessions", r.status_code == 200)
-c.post("/api/auth/logout")
+c.post("/api/auth/logout", headers={"X-Requested-With": "fetch"})
 check("登出後 /me → 401", c.get("/api/auth/me").status_code == 401)
 
 print("== authz：一般使用者不得碰管理端點 ==")
@@ -110,7 +110,7 @@ with db.session_scope() as s:   # 直接塞一筆屬於 admin 的 session
 r = c.get("/api/sessions/otherses1")
 check("讀別人的 session → 404（不洩漏存在性，review L1）", r.status_code == 404)
 check("回應不洩漏擁有者資訊", "admin" not in r.get_data(as_text=True))
-r = c.delete("/api/sessions/otherses1")
+r = c.delete("/api/sessions/otherses1", headers={"X-Requested-With": "fetch"})
 check("刪別人的 session 被擋", r.status_code == 404)
 # 讀與刪之外的每一條寫入路徑也要各自擋——授權是 per-endpoint 的，漏掉一個就是漏掉
 # 一整條可以對別人的 TTY 下指令的路
@@ -121,7 +121,7 @@ for label, call in [
     ("列終端 /view", lambda: c.get("/api/sessions/otherses1/view")),
     # 關掉別人的 view 不會殺掉 session，但會把對方瀏覽器裡的終端從中斷掉。開與列都測了
     # 卻獨漏關，正是重構時最容易把 `_owned()` 拿掉而沒人發現的那一條。
-    ("關終端 /view", lambda: c.delete("/api/sessions/otherses1/view")),
+    ("關終端 /view", lambda: c.delete("/api/sessions/otherses1/view", headers={"X-Requested-With": "fetch"})),
     ("改名 PATCH", lambda: c.patch("/api/sessions/otherses1", json={"name": "hijack"})),
 ]:
     check(f"對別人的 session {label} → 404", call().status_code == 404)
@@ -340,9 +340,23 @@ for label, ctype, data in FORM_SHAPES:
                          data=data).status_code == 415)
     check(f"{label} 被擋下之後，那個 client 仍然是登入狀態",
           throwaway.get("/api/auth/me").status_code == 200)
-# 前端 api() 在沒有 body 時不送 Content-Type——那條合法路徑不可以被誤傷
-check("無 body 無 Content-Type 的 DELETE 沒被 415 誤傷（走到 authz 回 404）",
-      cme2.delete("/api/sessions/does-not-exist").status_code == 404)
+print("== 沒有 body 的 fetch 也打得進來，所以那條放行要加一道 form 設不了的標頭 ==")
+# ⚠ 這裡原本只有一條斷言：「無 body 無 Content-Type 的 DELETE 沒被 415 誤傷」——它把
+#   **正是這個洞**的形狀寫成了合法路徑（審查 F-002）。`<form>` 送不出「無 body 無
+#   Content-Type」沒錯，但這個送得出來，而且會帶 cookie：
+#       fetch(url, {method: "POST", mode: "no-cors", credentials: "include"})
+#   於是同一台機器上任何其他 port 的頁面（Lax 之下同一個 site）就能以受害者的身分建出
+#   一個帶 NET_ADMIN、掛著他憑證的容器。
+# ⚠ 關掉它的是 `X-Requested-With`：不在 CORS 安全列表裡 → no-cors 送不出去，
+#   `<form>` 也設不了。三條一起測，缺一條這個洞就補不完整。
+check("🔴 無 body 無標頭的 POST /api/sessions → 415（不是 201 建出容器）",
+      cme2.post("/api/sessions").status_code == 415)
+check("🔴 無 body 無標頭的 DELETE 也擋（同一條放行，不是只擋 POST）",
+      cme2.delete("/api/sessions/does-not-exist").status_code == 415)
+# 前端 api() 無條件送這個標頭，那條合法路徑不可以被誤傷
+check("帶了 X-Requested-With 的無 body DELETE 照樣通行（走到 authz 回 404）",
+      cme2.delete("/api/sessions/does-not-exist",
+                  headers={"X-Requested-With": "fetch"}).status_code == 404)
 
 print("== 壞掉的 JSON body 不可以被當成 {} 去跑預設動作 ==")
 check("語法壞掉的 JSON → 400（不是靜靜建出一個預設 session）",
@@ -378,29 +392,36 @@ print("== 撤銷存取權時，已經連上的終端也要斷（review 2026-07-2
 #   不會再走 nginx 的 auth_request——連線活著的期間，對方手上就是一個可互動的 shell。
 #   曾有一條「停用帳號」路徑早就想到這件事並收掉 view；「重設密碼」與「改自己的密碼」漏了，
 #   而後者的典型情境正是「我懷疑被盜了」。
-from server import app as _app_mod  # noqa: E402
+# ⚠ 這一段原本 stub 掉 `app.manager.list`，因為收終端的實作走的是它。收終端後來搬進
+#   `auth.change_password`（不變式跟著操作走，否則 cli.py 那條路徑漏掉——審查 F-003），
+#   而新實作直接查 `Session` 表。**stub 綁在協作者上，換一個實作就測不到東西了**，
+#   所以改成建真的登錄列：這樣測的是「這個人的 session 有沒有被收」這個行為本身，
+#   不管它是誰去查出來的。
 from server import views as _views_mod  # noqa: E402
 _closed: list[str] = []
-_orig_close, _orig_list = _views_mod.close_views, _app_mod.manager.list
+_orig_close = _views_mod.close_views
 _views_mod.close_views = lambda sid: _closed.append(sid) or 1
-_app_mod.manager.list = lambda user_id=None, **kw: [{"id": f"sess-of-{user_id}"}]
 try:
     victim_id = [u for u in auth.list_users() if u["username"] == "victim"][0]["id"]
+    alice_id = [u for u in auth.list_users() if u["username"] == "alice"][0]["id"]
+    with db.session_scope() as s:
+        s.add(_SessionRow(id="cutvictim01", container_name="claude-pty-cutvictim01",
+                          user_id=victim_id, workdir="/tmp"))
     _closed.clear()
     r = ca2.post(f"/api/users/{victim_id}/password", json={"new_password": "reset-by-admin-1"})
     check("admin 代改密碼成功", r.status_code == 204)
     check("→ 有收掉那個人開著的終端（不然重設完對方還握著 shell）",
-          _closed == [f"sess-of-{victim_id}"])
+          _closed == ["cutvictim01"])
 
     _closed.clear()
     cme3 = app.test_client()
     cme3.post("/api/auth/login", json={"username": "alice", "password": "alice-new-password"})
-    alice_id = [u for u in auth.list_users() if u["username"] == "alice"][0]["id"]
     r = cme3.post("/api/users/me/password",
                   json={"old_password": "alice-new-password", "new_password": "alice-newer-pw-1"})
     check("改自己的密碼成功", r.status_code == 204)
+    # alice 名下有 renametest01（上一段建的），所以這裡預期收到它。
     check("→ 也要收掉終端（換密碼的理由通常就是懷疑被盜）",
-          _closed == [f"sess-of-{alice_id}"])
+          _closed == ["renametest01"])
     # 🔴 **沒有「這一台除外」的特例。** 改密碼＝這個帳號現在連著的東西全部斷掉。
     #    先前這裡是「操作中的這一台不被登出（cookie 版本有續上）」——那個例外換到的
     #    只是少按幾個鍵，卻讓「全部失效」這句話變成說一套做一套。
@@ -408,7 +429,7 @@ try:
           cme3.get("/api/auth/me").status_code == 401)
 
 finally:
-    _views_mod.close_views, _app_mod.manager.list = _orig_close, _orig_list
+    _views_mod.close_views = _orig_close
 
 print("== 偏好設定：要用哪一顆 ttyd（per-user，會變成 argv[0]）==")
 # ⚠ 這個值最終是 exec 的第一個參數。端點若收下白名單以外的字串，等於把 argv[0] 交給

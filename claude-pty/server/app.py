@@ -167,8 +167,24 @@ def _require_json_for_writes():
 
     放行的條件因此收成兩種：
       - `is_json`——正常的呼叫端。
-      - **完全沒有 body、也沒有 Content-Type**——前端 `api()` 在沒有 body 時就是這樣送的
-        （DELETE /api/sessions/<sid> 等）。`<form>` 一定會帶 Content-Type，所以擋得到。
+      - **完全沒有 body、沒有 Content-Type，而且帶著 `X-Requested-With: fetch`**
+        （DELETE /api/sessions/<sid> 這類）。
+
+    ⚠ **那個標頭是後來補的，因為「沒有 body」單獨當放行條件是一個真的洞**（審查 F-002）。
+      原本的推理是 form 形狀的——「`<form>` 一定會帶 Content-Type，所以擋得到」——但
+      `<form>` 不是唯一的同 site 送出者：
+
+          fetch(url, {method: "POST", mode: "no-cors", credentials: "include"})
+
+      不帶 body 時**不會設 Content-Type**、不需要 preflight、而且會帶 cookie。
+      `navigator.sendBeacon(url)` 同理。於是同一台機器上任何其他 port 的頁面（Lax 之下
+      那是同一個 site，見上）就能以受害者的身分打 `POST /api/sessions` 建出容器，或打
+      `/api/auth/logout` 強制登出。
+
+    ⚠ **為什麼自訂標頭關得掉它**：`X-Requested-With` 不在 CORS 的安全列表裡，所以
+      `mode: "no-cors"` 送不出去（會被丟掉），而 `<form>` 根本設不了標頭。要送得出它就得
+      走正常的 CORS，那時 preflight 會擋在前面。這不是新發明——`upload_file` 早就用同一招
+      守住 multipart 那個例外，這裡只是把已經證明有效的做法用到剩下那個口。
     """
     # 檔案上傳是**唯一**的 multipart 例外（它就是為了送 JSON 塞不下的東西而存在）。
     # 例外收到最窄：只有這一個端點、只有真的 multipart 才放行——而且它自己還要求一個
@@ -176,12 +192,19 @@ def _require_json_for_writes():
     if request.endpoint == "upload_file" \
             and (request.content_type or "").startswith("multipart/form-data"):
         return None
-    if request.method in ("POST", "PUT", "PATCH", "DELETE") \
-            and request.path.startswith("/api/") \
-            and not request.is_json \
-            and (request.content_type or request.get_data()):
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE") \
+            or not request.path.startswith("/api/"):
+        return None
+    if request.is_json:
+        return None                      # 正常呼叫端
+    if request.content_type or request.get_data():
         return jsonify(error="請以 application/json 送出"), 415
-    return None
+    # 完全沒有 body、也沒有 Content-Type：`<form>` 送不出這種形狀，但 no-cors 的 fetch
+    # 送得出來（見 docstring）。用一個 form 設不了、no-cors 也送不出去的標頭關掉它。
+    if request.headers.get("X-Requested-With") == "fetch":
+        return None
+    return jsonify(
+        error="缺少 X-Requested-With 標頭（沒有 body 的請求需要它，見前端 api()）"), 415
 
 
 # --- 輸入驗證（review M5：malformed 輸入原本會變成 500）--------------------------
@@ -658,24 +681,11 @@ def create_user():
     return jsonify(user=user), 201
 
 
-def _cut_live_terminals(uid: int) -> None:
-    """把某位使用者所有開著的終端 view 收掉。
-
-    ⚠ **撤銷存取權時，收掉 cookie / token 是不夠的。** 那兩者要到**下一次 HTTP 請求**
-      才會被 gate 擋下，而已經升級完成的 ttyd WebSocket 不會再走 nginx 的 auth_request
-      ——連線活著的期間，對方手上就是一個可互動的 shell，撤銷對它完全沒有效果。
-
-    ⚠ session 本身不動：這是「切斷存取」，不是「終止工作」。容器繼續跑，重開網頁就會起
-      一個新的 ttyd（ADR 0003：不重播，畫面由 TUI 自行重繪），代價幾乎是零。
-
-    ⚠ **涵蓋範圍是「他擁有的 session」，不是「他開著的終端」**——這兩者在 admin 身上會
-      分岔：admin 開得了別人的 session，而 view 是掛在 session 上、不記得是誰在看。所以
-      「改掉一位 admin 的密碼」目前收不掉他正開著的、屬於別人的終端。要補得先讓 view
-      記錄開啟者，那是 schema 變更；在那之前這是已知的缺口，不要以為改密碼等於全斷。
-    """
-    for s in manager.list(user_id=uid):
-        with suppress(Exception):
-            views.close_views(s["id"])
+# ⚠ 這裡曾經有 `_cut_live_terminals(uid)`，而「改密碼要接著呼叫它」是每個呼叫端要自己
+#   記得的事。`server/cli.py` 的 `set-password` 就沒有記得——管理員從 CLI 讓一個被盜帳號
+#   退場，對方的分頁仍然是一個能打字的 shell，而畫面回報成功（審查 F-003）。
+#   現在收終端寫在 `auth.change_password` 裡面，不變式跟著操作走，三個呼叫端（這裡兩個、
+#   cli.py 一個）都自動涵蓋，第四個也不會漏。實作見 `views.close_user_views`。
 
 
 # ⚠ **沒有刪除帳號的端點，也沒有「停用」，這是刻意的**（ADR 0010）。
@@ -698,7 +708,8 @@ def change_own_password():
       效果**——授權只發生在 nginx 把連線交給 ttyd 之前，之後那條線就是一條線，不會再有
       人回頭問它還算不算數。所以就算把 cookie 全部作廢，一個已經打開的終端分頁**還是一個
       能打字的 shell**。換密碼的理由如果是「我懷疑被盜了」，不收那條線等於沒做。
-      收的動作在 `_cut_live_terminals`。
+      收的動作在 `auth.change_password` 裡面（實作見 `views.close_user_views`）——刻意不
+      留給呼叫端記得，理由見那支的說明。
 
     ⚠ 不必分辨「哪一條連線屬於哪一台裝置」——伺服端本來也分不出來，而既然登入狀態
       全部作廢了，終端就全部收。全部登出與全部切斷是同一個決定的兩半。
@@ -708,7 +719,6 @@ def change_own_password():
     _reject_unknown(body, {"old_password", "new_password"})
     auth.change_password(g.user["id"], body.get("new_password", ""),
                          old_password=body.get("old_password"), require_old=True)
-    _cut_live_terminals(g.user["id"])
     # ⚠ 這一張 cookie 也作廢：session 清掉，下一個請求就會被 gate 送回登入頁。
     #   不清的話它會帶著舊版號活到下一次請求才被擋，中間那段是說一套做一套。
     session.clear()
@@ -773,12 +783,12 @@ def admin_change_password(uid: int):
     尾段）。要讓他回來，把新密碼告訴他即可。
 
     ⚠ 只換掉密碼而不切斷已連上的終端，等於重設完之後對方還握著 shell——cookie 的
-      版號管不到一條已經升級完成的 WebSocket（見 _cut_live_terminals）。
+      版號管不到一條已經升級完成的 WebSocket。收的動作在 auth.change_password 裡面
+      （見 views.close_user_views）——CLI 那條路徑就是靠它才涵蓋得到的。
     """
     body = _body()
     _reject_unknown(body, {"new_password"})
     auth.change_password(uid, body.get("new_password", ""), require_old=False)
-    _cut_live_terminals(uid)
     return "", 204
 
 

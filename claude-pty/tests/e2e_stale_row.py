@@ -172,8 +172,12 @@ try:
 
         print("== 後端 404 的說法：不能只說「沒有」 ==")
         # 直接問一次 API（不經前端），驗的是訊息本體。
+        # ⚠ 要帶 `X-Requested-With`：沒有 body 的變更請求少了它會被 CSRF 閘門擋成 415
+        #   （審查 F-002），那時拿到的是閘門的訊息而不是這裡要驗的 404 文案。前端的
+        #   `api()` 無條件送這個標頭，所以這一發是在模仿真實呼叫端，不是在繞過檢查。
         msg = page.evaluate("""async () => {
-          const r = await fetch('/api/sessions/does-not-exist-at-all', {method: 'DELETE'});
+          const r = await fetch('/api/sessions/does-not-exist-at-all', {
+            method: 'DELETE', headers: {'X-Requested-With': 'fetch'}});
           return (await r.json()).error || '';
         }""")
         check("🔴 說得出「可能已經結束」", "結束" in msg)

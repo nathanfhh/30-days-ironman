@@ -1061,6 +1061,15 @@ class SessionManager:
                 self._docker.api.resize(container.id, height=rows, width=cols)  # 開機為 0x0
             with session_scope() as s:  # 步驟 3：登錄轉正
                 row = s.get(SessionRow, sid)
+                # ⚠ **這一列可能已經不在了。** 使用者（或 admin）在建立中的那數十秒內按
+                #   終止 → terminate() → archive() 把列刪掉，這裡就會 AttributeError，
+                #   走完下面的補償之後原樣往上拋——而 app.py 沒有它的 errorhandler，
+                #   對外就是一頁 HTML traceback 的 500（審查 F-035）。同一個檔案的
+                #   rename / touch / probe_container / resize 都有這道防護，只有這裡漏了，
+                #   而 resize 的 docstring 正是為了這件事寫的（review M5）。
+                #   轉成 SessionNotFound：補償照走，錯誤走既有的 404 出口。
+                if row is None:
+                    raise SessionNotFound(f"未知 session：{sid}")
                 row.container_id = container.id
                 row.status = STATUS_RUNNING
                 # 環境快照。取不到就留 NULL——這兩個是「回頭查」用的，絕不能因為它們
@@ -1796,6 +1805,19 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
             target=config.SSH_AUTH_SOCK_BIND, source=config.SSH_AUTH_SOCK_HOST,
             type="bind", read_only=False)]     # 連 unix socket 需要寫權限，ro 會 EACCES
 
+    # **網路：無條件指定成這個使用者自己那張**（ADR 0016）。
+    #
+    # ⚠ **這一行必須在 escape hatch 的 return 之前**，理由與上面的 SSH mount 完全相同：
+    #   它是**部署層／隔離層**的性質，不隨 profile 或 entrypoint 變。它原本寫在下面正常
+    #   路徑那一段，於是走 `CLAUDE_PTY_ENTRYPOINT` 的容器**完全沒有 network 參數、落在
+    #   docker 預設 `bridge`**（審查 F-004）——而那張網住著這台機器上每一顆沒指定網路的
+    #   容器，正是 ADR 0016 稱為「比它要取代的共用網路還糟」的那個形狀。
+    # ⚠ 下面那一段的註解寫著「不可以再退回條件式」，而**提早 return 就是條件式的另一種
+    #   寫法**——第一次修那個洞時只看了 `if`，沒看 return。
+    # ⚠ 仍然是**純函式**：`network_name()` 只是字串組裝，不碰 docker。網路要真的存在是
+    #   `create()` 的責任（它在建容器之前 `ensure_network`）。
+    kwargs["network"] = user_proxy.network_name(user_id)
+
     if config.ENTRYPOINT is not None:  # escape hatch
         kwargs["entrypoint"] = config.ENTRYPOINT
         if config.COMMAND:
@@ -1906,9 +1928,8 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     #   網路的容器，不只是別人的 session——比它要取代的共用網路還糟。而且它是**沉默的**：
     #   容器起得來、網路也通，看不出自己在一張公共的網上（2026-08-07 盤點時發現，當時
     #   一條測試都沒蓋到這個組合）。所以這一行**不可以再退回條件式**。
-    # ⚠ 仍然是**純函式**：`network_name()` 只是字串組裝，不碰 docker。網路要存在是
-    #   `create()` 的責任（它在建容器之前 `ensure_network`）。
-    kwargs["network"] = user_proxy.network_name(user_id)
+    # ⚠ network 的指定**已經移到 escape hatch 之前**（見那裡的說明）——留在這裡的話走
+    #   `CLAUDE_PTY_ENTRYPOINT` 的容器會落在預設 bridge（審查 F-004）。
     if profile.network == "restricted":
         kwargs["cap_add"] = ["NET_ADMIN"]              # init-firewall.sh 需要
     # ⚠ 這裡只看 profile.telemetry——是**純函式**，不探 jaeger。可達性的判斷與降級在

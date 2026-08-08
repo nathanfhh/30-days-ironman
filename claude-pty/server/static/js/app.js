@@ -46,7 +46,14 @@ function relTimeCell(iso, cls = "metric") {
 async function api(path, { method = "GET", body } = {}) {
   const res = await fetch(path, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : {},
+    // ⚠ `X-Requested-With` **無條件送**，不是只在有 body 時送。沒有 body 的變更請求
+    //   （DELETE /api/sessions/<sid> 等）就是靠它通過後端的 CSRF 閘門——那個閘門原本
+    //   對「沒有 body 也沒有 Content-Type」直接放行，而 no-cors 的 fetch 正好是那個
+    //   形狀（審查 F-002，理由見 app._require_json_for_writes 的 docstring）。
+    //   這個標頭不在 CORS 安全列表裡，所以 no-cors 送不出去、`<form>` 也設不了。
+    headers: body
+      ? { "Content-Type": "application/json", "X-Requested-With": "fetch" }
+      : { "X-Requested-With": "fetch" },
     body: body ? JSON.stringify(body) : undefined,
     credentials: "same-origin",
   });
