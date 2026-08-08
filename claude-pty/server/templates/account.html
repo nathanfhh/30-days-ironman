@@ -190,7 +190,8 @@
         <i class="fa-solid fa-rotate"></i> 重新整理</button>
     </div>
     <p class="panel__lede">
-      「在聽」與「連線」是去問那顆行程自己的 socket 得到的，不是 DB 記的。兩者對不上就是這一節要抓的東西。
+      「在聽」與「連線」是去問那顆行程自己的 socket 得到的，不是 DB 記的。<br>
+      「在聽」比的是<strong>它實際綁的 port</strong> 與<strong>左邊 DB 記的 port</strong>，對不上就是這一節要抓的東西。
     </p>
     {# ⚠ 沒有 psutil 時一定要喊。不喊的話下面那個空的孤兒區看起來就像「掃過了，很乾淨」，
        而這一節整個存在的理由就是不讓「沒查到」被讀成「沒問題」。 #}
@@ -522,7 +523,9 @@
           : '<span class="chip" title="問不到那個行程的 socket">不知道</span>';
       }
       const ports = proc.listening.map((a) => Number(a.split(":").pop()));
-      if (ports.includes(row.port)) return `<span class="roster__ago">同左</span>`;
+      if (ports.includes(row.port)) {
+        return `<span class="roster__ago" title="${esc(`它在聽 ${proc.listening.join("、")}，與 DB 記的 ${row.port} 相同`)}">相符</span>`;
+      }
       return '<span class="chip" data-tone="danger" title="'
            + esc(`DB 記的是 ${row.port}，它實際在聽 ${proc.listening.join("、") || "（沒有在聽）"}`)
            + '">對不上</span>';
