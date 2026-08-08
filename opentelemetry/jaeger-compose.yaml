@@ -17,8 +17,18 @@
 #   · ✗ Jaeger 去借別人的網（`external: true`）——那張網必須**先存在**，於是就有了
 #     開機順序：先起對方、再起 Jaeger，反過來就 `network not found`。而且它只借得到
 #     **一張**，送 trace 的人一多就不夠用。
-#   · ✓ Jaeger 建自己的網，**誰要送 trace，誰負責 `docker network connect jaeger <自己的網>`**。
-#     一顆容器可以同時掛多張網，接上去不影響它原本那張。沒有開機順序，張數也沒有上限。
+#   · ✓ Jaeger **不擁有也不借任何一張**（`network_mode: bridge`＝待在 docker 內建的預設橋接
+#     上，那張本來就存在、不佔配額），**誰要送 trace，誰負責
+#     `docker network connect <自己的網> jaeger`**。一顆容器可以同時掛多張網，接上去不影響
+#     它原本那張。沒有開機順序，張數也沒有上限。
+#
+# ⚠ **為什麼連「自己建一張」都不做**：整台機器的 bridge network 只有 **31 張**
+#   （172.17–172.31 共 15，加 192.168.x/20 共 16），而 claude-pty 是**每個使用者一張**
+#   （ADR 0016），所以每一張都直接換算成「少一個人能同時在線」。Jaeger 從來不主動連
+#   任何人，它只被連——它自己那張網平常沒有任何流量，純粹是「沒人接它時它待的地方」。
+#   為那件事花掉一格不划算。
+# ⚠ 預設橋接**沒有內建 DNS**，但這不影響：容器內用 `jaeger:4317` 找得到它，靠的是
+#   **接它過去的那張 user-defined 網**的 DNS，不是預設橋接。
 #
 # 兩條路徑都照這條規約做：
 #   · claude-pty  — 控制平面把 Jaeger 接到**每一張使用者網路**上（server/user_proxy.py
@@ -60,10 +70,10 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 3
-    networks:
-      # 只掛自己這一張。**送 trace 的那一方會把 jaeger 接到他自己的網上**（見檔頭的
-      # 網路規約），所以這裡不需要、也不應該去引用任何別人的網路。
-      - trace
+    # ⚠ **不宣告任何 network**（見檔頭）。compose 若沒有這一行會自動建一張
+    #   `<專案>_default`，那就等於默默佔掉 31 格裡的一格。送 trace 的那一方會把 jaeger
+    #   接到他自己的網上，所以這裡不需要、也不應該引用或建立任何網路。
+    network_mode: bridge
 
 volumes:
   jaeger-badger:
@@ -71,9 +81,3 @@ volumes:
     # 悄悄換一顆新 volume，歷史 trace 全部留在舊顆裡沒人知道。
     name: jaeger-badger
 
-networks:
-  trace:
-    # **擁有，不借用**（見檔頭）。compose 會自己建，不需要任何東西先存在。
-    # ⚠ 釘死名字，理由同上面的 volume：不釘的話會被冠上 compose 專案目錄前綴，
-    #   搬一次目錄就換一張網，而要接上來的那兩方都是照名字找的。
-    name: ncr-telemetry
