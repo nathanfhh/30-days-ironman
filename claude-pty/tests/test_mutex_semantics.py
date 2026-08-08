@@ -156,7 +156,13 @@ def try_create():
     except SessionError:
         results.append("quota")
     except Exception as e:               # noqa: BLE001 — 其他例外要現形，不可以吞成綠燈
-        results.append(f"boom:{type(e).__name__}")
+        # ⚠ **訊息要一起帶出來，只有型別名不夠。**
+        #   這條斷言 2026-08-07 紅過至少三次，每次都被當成「配額競態偶發」而略過——而它
+        #   從來不是競態，是樹在半成品狀態下 `create()` 直接壞掉（見下方 boom 的判讀）。
+        #   當時失敗行只印得出 `boom:AttributeError`，看起來像雜訊；真正的那句
+        #   「module 'server.config' has no attribute 'SESSION_NETWORK'」被丟掉了。
+        #   多印這一段，下一個人不必再查一次就知道該去看哪裡。
+        results.append(f"boom:{type(e).__name__}: {e}"[:160])
 
 
 ts = [threading.Thread(target=try_create) for _ in range(2)]
@@ -164,6 +170,19 @@ for t in ts:
     t.start()
 for t in ts:
     t.join(30)
+# ⚠ **看到 `boom:` 不要當成偶發，它幾乎一定是「樹壞了」而不是「競態」。** 而且 pair 的
+#   形狀直接告訴你壞在哪一段——`_guard_credentials` 跑在配額交易**之前**，
+#   `build_run_kwargs` 跑在**之後**：
+#
+#     ['boom:X', 'boom:X']   兩條都死 → 炸點在**配額檢查之前**（憑證守門那一段）。
+#                            2026-08-07 實例：crypto 的 purpose 重構做到一半，
+#                            `auth.cli_token` 這個呼叫端還沒補上 purpose → TypeError。
+#     ['boom:X', 'quota']    只有搶到名額的那條死 → 炸點在**配額檢查之後**。
+#                            2026-08-07 實例：`config.SESSION_NETWORK` 被刪掉了，而
+#                            `sessions.py` 還留著 9 處引用 → AttributeError（ed96517）。
+#
+#   兩次都不是競態，兩次都是半成品的樹。真的競態長什麼樣：`['ok', 'ok']`（配額沒擋住）
+#   或 `['quota', 'quota']`（互相擋掉）——**那兩種才是這條斷言真正要抓的東西**。
 check(f"🔴 恰好一個成功、一個被配額擋下（{sorted(results)}）",
       sorted(results) == ["ok", "quota"])
 config.MAX_SESSIONS = _orig_max
