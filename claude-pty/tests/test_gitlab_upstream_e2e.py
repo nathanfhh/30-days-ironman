@@ -278,6 +278,9 @@ try:
           f"共 {len(log)} 筆：{[r['path'] for r in log][:5]}")
 
     want_basic = "Basic " + base64.b64encode(f"oauth2:{PAT}".encode()).decode()
+    # ⚠ 先斷言它非空，不要拿它當分支條件：代理若完全打不到上游，下面那些標頭
+    #   斷言會**靜靜消失**而不是變紅（審查 F-031）。
+    check("🔴 上游真的收到請求了（否則下面的標頭斷言等於沒跑）", bool(git_reqs))
     if git_reqs:
         check("🔴 git 路徑帶 `Authorization: Basic base64(oauth2:<PAT>)`",
               all(r["headers"].get("authorization") == want_basic for r in git_reqs),
@@ -305,6 +308,9 @@ try:
         cli.api.remove_container(cid, force=True)
     check("🔴 `/api/v4/user` 通到上游（200）", "200" in out, out[-200:])
     api_reqs = [r for r in upstream_log() if r["path"].startswith("/api/v4/")]
+    # ⚠ 先斷言它非空，不要拿它當分支條件：代理若完全打不到上游，下面那些標頭
+    #   斷言會**靜靜消失**而不是變紅（審查 F-031）。
+    check("🔴 上游真的收到請求了（否則下面的標頭斷言等於沒跑）", bool(api_reqs))
     if api_reqs:
         check("🔴 API 路徑帶 `PRIVATE-TOKEN: <PAT>`",
               all(r["headers"].get("private-token") == PAT for r in api_reqs))

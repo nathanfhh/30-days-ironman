@@ -73,6 +73,10 @@ D = docker.from_env(timeout=config.DOCKER_TIMEOUT)
 UID_A, UID_B = 91, 913
 PAT_A = "glpat-AaaaTestOnly00001"
 PAT_B = "glpat-BbbbTestOnly00002"
+# ⚠ B 的代理**必須用第三把**。原本 B 也用 PAT_B，而 A 在上面剛被熱重載成 PAT_B——
+#   兩顆的指紋於是完全相同，下面那條「alias 解到的是 A 不是 B」就變成拿一個兩邊共有的
+#   值去斷言，測不到它要測的事（審查 F-020）。
+PAT_C = "glpat-CcccTestOnly00003"
 
 _probe = None            # 用來從網路內部打代理的一次性容器
 
@@ -234,18 +238,28 @@ try:
     # ------------------------------------------------------------------ 隔離
     print("\n== 兩個使用者：同一個 alias，互相看不到 ==")
     user_proxy.ensure_network(D, UID_B)
-    cid_b, _ = user_proxy.create_or_adopt(D, UID_B, PAT_B)
+    cid_b, _ = user_proxy.create_or_adopt(D, UID_B, PAT_C)
     check("B 也起得來，alias 同名不衝突（不同網路可以用同一個 alias）",
           user_proxy.find(D, UID_B).status == "running")
     # 從 A 的網路上打 alias，只能打到 A 的代理——指紋就是證據。
+    # 🔴 期望值只有**正確的那一顆**答得出來：A 現在跑 PAT_B、B 跑 PAT_C，指紋不同。
+    #    兩顆共用同一把 PAT 的話，把每顆代理都接上每一張網路（正是 _exact() 與 per-network
+    #    設計要防的錯誤）也照樣綠——那時 alias 可能解到 B，指紋卻一樣（審查 F-020）。
     check("🔴 A 網路上的鄰居解到的是 A 的代理，不是 B 的",
           _get("/_state")[1] == gitlab_proxy.fingerprint(PAT_B))   # A 剛換成 PAT_B
-    a_ips = {D.api.inspect_container(cid)["NetworkSettings"]["Networks"]
-             [user_proxy.network_name(UID_A)]["IPAddress"]}
+    check("🔴 而且明確不是 B 的（B 用的是第三把 PAT，指紋不同）",
+          _get("/_state")[1] != gitlab_proxy.fingerprint(PAT_C))
+    a_net = D.api.inspect_container(cid)["NetworkSettings"]["Networks"]
     b_net = D.api.inspect_container(cid_b)["NetworkSettings"]["Networks"]
     check("🔴 B 的代理不在 A 的網路上（兩張網路是分開的）",
           user_proxy.network_name(UID_A) not in b_net)
-    check("   （A 的代理有自己的 IP，B 那張網路上沒有它）", all(a_ips))
+    # ⚠ 這一條原本的標籤說「B 那張網路上沒有它」，評估的卻是 `all(a_ips)`——a_ips 是一個
+    #   只有一個元素的 set，all() 只等於「那個字串非空」，完全沒有檢查 B 的網路（審查
+    #   F-031）。標籤描述一個沒有被測的性質，比沒有這一行更糟。改成真的測反方向。
+    check("🔴 反方向也成立：A 的代理不在 B 的網路上",
+          user_proxy.network_name(UID_B) not in a_net)
+    check("   （而且 A 真的在自己那張網上、有 IP）",
+          bool(a_net.get(user_proxy.network_name(UID_A), {}).get("IPAddress")))
 
     # ------------------------------------------------------------------ 移除
     print("\n== 移除：等冪 ==")

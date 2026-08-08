@@ -386,11 +386,18 @@ try:
     # ⚠ 比對前先把註解行剝掉：conf 裡**刻意**留了一句註解寫著「永遠不會有
     #    `proxy_ssl_verify off`」，而那句話本身就含有那個字串。這條要驗的是「有沒有這條
     #    **指令**」，不是「檔案裡有沒有出現這幾個字」——第一版就是被自己的註解絆倒的。
-    _directives = "\n".join(ln for ln in _conf.splitlines()
-                            if not ln.strip().startswith("#"))
+    # ⚠ 變數名不可以叫 `_directives`——那是本檔 :134 的 helper 函式，而 `with` 不是 scope，
+    #   在這裡指派會把它**永久**蓋成一個字串。目前 :393 之後沒有人再呼叫它所以不會壞，
+    #   但下一個在後面追加、呼叫 _directives(...) 的測試會拿到
+    #   `TypeError: 'str' object is not callable`，而錯誤訊息完全指不到這裡（審查 F-019）。
+    _ssl_lines = "\n".join(ln for ln in _conf.splitlines()
+                           if not ln.strip().startswith("#"))
     check("🔴 產生出來的 conf 永遠是 proxy_ssl_verify on，沒有 off 那條指令",
-          "proxy_ssl_verify on;" in _directives
-          and "proxy_ssl_verify off" not in _directives)
+          "proxy_ssl_verify on;" in _ssl_lines
+          and "proxy_ssl_verify off" not in _ssl_lines)
+    # 🔴 helper 還活著——這一條就是上面那個坑的守衛：它被蓋掉的話這裡當場 TypeError。
+    check("🔴 _directives 仍然是函式（區域變數不可以蓋掉同名 helper）",
+          callable(_directives) and "proxy_ssl_verify on;" in _directives(_conf))
 
     # 3) 續簽（路徑不變、內容變）也要收斂——只比路徑會漏掉這一種。
     _fp_before = gitlab_proxy.fingerprint(PAT)

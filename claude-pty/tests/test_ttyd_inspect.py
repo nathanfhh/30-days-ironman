@@ -95,6 +95,12 @@ class _Proc:
     def _maybe(self, name):
         if name in self._fail:
             raise _Err(name)
+        # ⚠ `_Err` 是 psutil 的錯誤類別（見 _Fake.Error）——也就是 _proc_facts **設計要吞掉**
+        #   的那一種。只有它的話，檔頭那句「不吞程式錯誤」沒有任何東西在守：psutil 版本不對
+        #   而 `net_connections` 不存在時會是 AttributeError，那要傳播出來而不是被吸收
+        #   （審查 F-031）。`bug:<項目>` 這個模式就是拿來丟那一種的。
+        if f"bug:{name}" in self._fail:
+            raise TypeError(f"模擬的程式錯誤（{name}）——這一種不可以被吞掉")
 
     def cmdline(self):
         self._maybe("cmdline")
@@ -238,6 +244,25 @@ check("proc 一律 None", all(r["proc"] is None for r in res["views"]))
 check("orphans 是空的，但上面那個 psutil=False 已經說明了原因", res["orphans"] == [])
 views.psutil = _Fake
 
+
+print("== 🔴 程式錯誤要傳播，不可以跟 psutil 的「問不到」一起被吞掉 ==")
+# _proc_facts 只 suppress psutil.Error 與 OSError。吞 Exception 的話，psutil 版本不對
+# （例如 net_connections 改名）只會讓畫面少兩列、log 一片安靜——那正是那種版本 bug 可以
+# 靜靜活好幾個月的機制。檔頭承諾了「不吞程式錯誤」，在此之前沒有任何斷言在守它：`fail=`
+# 唯一丟得出來的 _Err 就是 psutil 的錯誤類別，也就是設計上**該**被吞的那一種（審查 F-031）。
+views.psutil = _Fake
+_bug_proc = _Proc(9999, "ttyd", listen_port=41000, fail=("bug:net_connections",))
+_propagated = False
+try:
+    views._proc_facts(_bug_proc)
+except TypeError:
+    _propagated = True
+check("🔴 TypeError 傳播出來（不是被當成「這一項問不到」吸收掉）", _propagated)
+# 對照組：同一個項目丟 psutil 的錯誤時要照原樣被吞掉，其餘欄位仍然算得出來。
+# 少了它，把 suppress 收得太緊（連 psutil.Error 都不吞）也會讓上面那條變綠。
+_facts = views._proc_facts(_Proc(9998, "ttyd", listen_port=41000, fail=("net_connections",)))
+check("對照組：psutil 的「問不到」照樣被吞（少那一項，不影響其餘）",
+      _facts is not None and "listening" not in _facts and _facts.get("pid") == 9998)
 
 views.psutil = _real_psutil
 db.reset_engine()

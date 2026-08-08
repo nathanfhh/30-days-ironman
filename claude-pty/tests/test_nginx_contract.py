@@ -53,8 +53,17 @@ check("frame-ancestors 'self'（不可以是 DENY/'none'，抽屜會變空白）
 
 print("== 登入限流（argon2 很貴，公開端點不限流會被錯密碼打爆）==")
 check("login 有獨立限流 zone", "limit_req_zone" in code and "rate=10r/m" in code)
+# 🔴 **宣告一個 zone 不等於用它。** 這裡原本只驗宣告，於是刪掉 nginx.conf 的
+#    `limit_req zone=claude_pty_login ...` 那一行，argon2 登入就完全不限流——正是這段標題
+#    講的那件事——而兩條斷言照樣全綠（審查 F-011）。`limit_req_status` 單獨存在也是沒有
+#    作用的。用同一份「擷取 location 區塊」的手法（下面 upload 那條已經在用）驗它真的在
+#    login 的 location 裡面，而不是檔案裡某處。
+_login = re.search(r"location = /api/auth/login \{([^}]*)\}", code)
+check("login 有自己的 location", _login is not None)
+check("🔴 限流真的套在那個 location 裡（宣告 zone 不等於用它）",
+      _login is not None and "limit_req zone=claude_pty_login" in _login.group(1))
 check("429 不是 503（讓打的人知道是被限流，不是伺服器掛了）",
-      "limit_req_status 429;" in code)
+      _login is not None and "limit_req_status 429;" in _login.group(1))
 
 print("== 上傳：body 上限只放寬在那一條，不是全站 ==")
 check("全站上限仍是小的（4m）", "client_max_body_size 4m;" in code)

@@ -86,7 +86,12 @@ def rules_with_agent(agent: bool) -> str:
 print("== 沒有 agent：不該有任何 22 的放行 ==")
 no_agent = rules_with_agent(agent=False)
 _rules_no = no_agent.split("--- RULES ---")[-1]
-check("🔴 iptables 裡沒有 --dport 22 的 ACCEPT", "--dport 22" not in _rules_no)
+# ⚠ 比對的 token 必須是 `dpt:22`。規則是用 `iptables -L OUTPUT -v -n -x` 印出來的
+#   （dev-container/firewall-counters.sh），那個格式渲染成 `tcp dpt:22`；`--dport 22`
+#   是 `iptables -S` 的寫法，在這份輸出裡**永遠不會出現**——原本比它，等於這條斷言
+#   恆為真。把 guard 拿掉、對每個容器無條件放行 22，它照樣是綠的（審查 F-005），
+#   而這支測試的檔頭自述正是「兩個方向缺一不可」。下面正向那條用的就是 dpt:22。
+check("🔴 iptables 裡沒有 dpt:22 的 ACCEPT", "dpt:22" not in _rules_no)
 check("而且說得出原因（沒有轉發 agent）", "沒有轉發 ssh-agent" in no_agent)
 
 print("== 有 agent：22 該通（否則人的路徑會壞）==")

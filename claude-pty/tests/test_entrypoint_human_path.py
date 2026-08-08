@@ -129,7 +129,11 @@ check("⑤ 畫面上沒有機器用的就緒標記（沒設 NCR_MARK）", MARKER
 # env-skip 的提示只在非互動時印；人類路徑不該看到
 check("⑥ 沒有出現非互動模式的提示（● 非互動 …）", "非互動" not in text)
 plain = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", text)
-check("⑦ 有印出 firewall/網路能力的結論行", "網路能力" in plain)
+# ⚠ 比對要帶項目符號。`網路能力` 這四個字在選單標題 `echo "網路能力："` 就出現過
+#   （entrypoint.sh，而且第 99 行的 expect 已經吃過它），所以只比字串的話，把兩個
+#   真正的結論行（`● 網路能力：完全開放 …` / `● 網路能力：限制白名單 …`）整個刪掉
+#   也不會紅——操作者就此失去畫面上唯一一句「這一場實際套到哪種模式」（審查 F-021）。
+check("⑦ 有印出 firewall/網路能力的結論行", "● 網路能力：" in plain)
 
 print(f"\n{'done' if _fails == 0 else f'{_fails} FAILED'}（完整輸出：/tmp/claude-pty-humanpath.log）")
 sys.exit(1 if _fails else 0)
