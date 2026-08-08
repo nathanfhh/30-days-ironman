@@ -218,13 +218,17 @@ networks:
   claude-pty-net:
     name: claude-pty-net
 
-  # ⚠ **`claude-pty-sessions`（session 容器所在的 network）刻意不宣告在這裡。**
-  #   compose 只會建立「有服務引用到」的 network，而沒有任何服務用它——用它的是控制平面
-  #   另外起的 session 容器。宣告在這裡只會看起來有人負責，實際上不會被建出來
-  #   （2026-07-29 實測）。改由**控制平面啟動時確保它存在**（見 sessions.preflight），
-  #   那樣不管用什麼方式部署都成立。
-  # ⚠ telemetry：jaeger 定義在 `opentelemetry/jaeger-compose.yaml`，它**只建自己那一張網**
-  #   （`ncr-telemetry`），不借用任何人的。**沒有開機順序要求**——先起誰都可以。
+  # ⚠ **session 容器的網路刻意不宣告在這裡。** 它是 **per-user 的**（`claude-pty-user-{id}`，
+  #   ADR 0016），開場時由控制平面 `user_proxy.ensure_network()` 建出來——開機時根本不知道
+  #   等一下會有誰來開場，先建不了。而且 compose 只會建立「有服務引用到」的 network，
+  #   沒有任何服務用它（用它的是控制平面另外起的 session 容器），宣告在這裡只會看起來
+  #   有人負責，實際上不會被建出來（2026-07-29 實測）。
+  #   ⚠ 這裡以前寫的是一張所有人共用的 `claude-pty-sessions`，由 `sessions.preflight`
+  #     開機時確保它存在。那張網退役了（跨使用者在上面互通得到），preflight 現在**只在
+  #     它還殘留時報一行叫人清掉**，不再建立任何共用網路。
+  # ⚠ telemetry：jaeger 定義在 `opentelemetry/jaeger-compose.yaml`，它**不擁有也不借任何
+  #   一張網**（`network_mode: bridge`——待在 docker 內建的預設橋接上，那張本來就存在、
+  #   不佔位址池的配額）。**沒有開機順序要求**——先起誰都可以。
   #   規約是「需要 jaeger 的那一方負責把它接到自己的網上」，接線點見 `user_proxy.attach_jaeger`
   #   （網路剛建好時、控制平面啟動時、reconciler 每一輪各接一次）。
   #   ⚠ 這裡以前寫「jaeger 以 external 引用，所以要先起這個 stack 再起 jaeger」——那個

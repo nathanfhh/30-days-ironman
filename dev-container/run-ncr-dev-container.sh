@@ -268,8 +268,8 @@ done
 # fail-open，設了沒人收也不會弄壞 claude，但 gating 免掉重試噪音，而且啟動時就把
 # 「這場有沒有在錄」講清楚。
 #
-# ⚠ **Jaeger 只掛它自己那張網（`ncr-telemetry`），要送 trace 的人負責把它接過來**
-#   ——見 opentelemetry/jaeger-compose.yaml 檔頭的網路規約。這條路徑送 trace 的容器待在
+# ⚠ **Jaeger 不擁有也不借任何一張網（`network_mode: bridge`），要送 trace 的人負責把它
+#   接過來**——見 opentelemetry/jaeger-compose.yaml 檔頭的網路規約。這條路徑送 trace 的容器待在
 #   gitlab-proxy 那張網上（上面 --network 那段），所以這裡把 jaeger 也接上去，接完
 #   容器內就能用 http://jaeger:4317 直達，防火牆不用動。
 # ⚠ **一定要在 docker run 之前接。** 限制模式放行的是 entrypoint 起跑那一刻的直連網段
