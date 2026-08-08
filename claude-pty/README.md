@@ -300,3 +300,8 @@ tests/run-all.sh --all    # 全部（需要 docker；ttyd 在 PATH 上則含真�
 GitLab 代理有兩支：`test_gitlab_proxy_conf.py`（離線，驗設定產生與「token 不進 session
 容器」）與 `test_user_proxy.py`（需要 docker，真的建容器、真的熱重載、真的用
 `docker inspect` 確認 token 沒外露）。後者不需要連得到任何 GitLab。
+
+Telemetry 也有兩支，因為 **OTLP 是 fail-open：接錯或漏接完全沒有錯誤訊息**。
+`test_telemetry.py` 驗降級與「座標不准說謊」；`test_jaeger_wiring.py` 驗接線本身——
+三個接線點、回收時的拔插互鎖、以及 jaeger 那份 compose 不准自己建網路（每一張 bridge
+network 都是 31 格位址池裡的一格）。兩支都不需要 docker。
