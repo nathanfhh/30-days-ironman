@@ -29,7 +29,7 @@ DEPS=(--with flask --with docker --with sqlalchemy --with argon2-cffi
 NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
               test_reconciler test_entrypoint_human_path test_entrypoint_profile
               test_firewall_ssh_gate test_user_proxy test_network_isolation
-              test_gitlab_upstream_e2e e2e_flow)
+              test_gitlab_upstream_e2e test_restricted_proxy_reach e2e_flow)
 
 # `fake_gitlab.py` 不是測試，是被 test_gitlab_upstream_e2e 掛進容器裡跑的假上游。
 # ⚠ 它的檔名沒有 `test_` 前綴正是為了不被下面那個 glob 撿走——改名前先想清楚。
