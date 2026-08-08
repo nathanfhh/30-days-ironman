@@ -1,0 +1,300 @@
+<mxfile host="app.diagrams.net" modified="2026-08-07T00:00:00.000Z" agent="drawio" version="24.0.0">
+  <diagram id="overview" name="整體">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1250" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- actors -->
+        <mxCell id="p1-actor-term" value="人（終端機）" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
+          <mxGeometry x="110" y="50" width="50" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-actor-web" value="人（瀏覽器）" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1055" y="50" width="50" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- two entry paths -->
+        <mxCell id="p1-runscript" value="run-ncr-dev-container.sh&lt;br&gt;（dev-container/）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="30" y="200" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-pty" value="claude-pty/（見分頁 2）&lt;br&gt;nginx → control plane → dockerd" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="950" y="200" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1-note-left" value="此路徑另有：Keychain／ssh-agent、&lt;br&gt;mitm UI port、trivy DB／semgrep 掛載" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="30" y="300" width="230" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-note-right" value="此路徑另有：per-user 狀態空間、&lt;br&gt;fd 憑證交付、對帳迴圈、per-user 代理" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="950" y="300" width="260" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- shared session container -->
+        <mxCell id="p1-sess" value="session 容器 ＝ 同一顆 image（dev-container/Dockerfile）" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="360" y="180" width="480" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-ep" value="entrypoint.sh（同一份，SSOT）&lt;br&gt;選單：網路能力｜流量錄製｜telemetry" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="390" y="230" width="420" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-cli" value="Claude Code ＋ skills/nathan-code-review（:ro）" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="390" y="330" width="420" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- bottom services -->
+        <mxCell id="p1-glp" value="gitlab-proxy/&lt;br&gt;單機共用一顆" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="120" y="560" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-jaeger" value="opentelemetry/&lt;br&gt;Jaeger" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="530" y="560" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-pup" value="per-user GitLab 代理&lt;br&gt;（claude-pty，每人一顆）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="880" y="560" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-gitlab" value="GitLab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="500" y="700" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="p1-e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1-actor-term" target="p1-runscript">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-e2" value="docker run・選單互動作答" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.25;" edge="1" parent="1" source="p1-runscript" target="p1-sess">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1-actor-web" target="p1-pty">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-e4" value="docker create/start・NCR_* env 作答" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.25;verticalAlign=bottom;" edge="1" parent="1" source="p1-pty" target="p1-sess">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.15;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p1-sess" target="p1-glp">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="432" y="500" />
+              <mxPoint x="230" y="500" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p1-e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.85;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p1-sess" target="p1-pup">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="768" y="500" />
+              <mxPoint x="1000" y="500" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p1-e7" value="OTLP（選配）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p1-sess" target="p1-jaeger">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-e8" value="token 由代理注入" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="p1-glp" target="p1-gitlab">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="230" y="730" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p1-e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="p1-pup" target="p1-gitlab">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1000" y="730" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="claude-pty-zoom" name="claude-pty 放大">
+    <mxGraphModel dx="1500" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="1050" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- browser -->
+        <mxCell id="p2-browser" value="瀏覽器" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="60" width="50" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- nginx edge -->
+        <mxCell id="p2-nginx" value="nginx（edge，唯一對外口）" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="230" y="40" width="340" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-nginx-ra" value="路由 A：/ → control plane（控制流）" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="80" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-nginx-rb" value="路由 B：/session/&lt;sid&gt;/ → auth_request 子請求&lt;br&gt;通過才 proxy 到 ttyd（終端資料流，不經 Flask）" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="115" width="310" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- control container -->
+        <mxCell id="p2-controlbox" value="control 容器" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;dashed=1;fillColor=none;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="650" y="30" width="500" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-flask" value="control plane（Flask）&lt;br&gt;帳號／授權／生命週期" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="680" y="70" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-ttyd" value="ttyd（on-demand）&lt;br&gt;只綁 127.0.0.1:動態 port" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="940" y="70" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-db" value="SQLite（唯一仲裁者）&lt;br&gt;session 列・view port UNIQUE・加密憑證" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="680" y="175" width="190" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- reconciler -->
+        <mxCell id="p2-rec" value="reconciler（獨立容器）&lt;br&gt;對帳迴圈：每輪收斂&lt;br&gt;代理／孤兒／idle／ready" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="70" width="230" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- dockerd -->
+        <mxCell id="p2-dockerd" value="dockerd（docker socket）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="680" y="360" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- token delivery note -->
+        <mxCell id="p2-toknote" value="憑證進容器：per-session 二選一（config.TOKEN_DELIVERIES）&lt;br&gt;・fd（預設）：env 只給路徑 NCR_TOKEN_FILE，值由 create 後 put_archive 送入；&lt;br&gt;　entrypoint exec 4&amp;lt; 開檔 → rm 檔案 → 環境裡只剩 fd 號碼&lt;br&gt;・env：CLAUDE_CODE_OAUTH_TOKEN 直接進環境（退路）" style="shape=note;whiteSpace=wrap;html=1;align=left;fontSize=10;size=14;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="920" y="330" width="380" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- user A network -->
+        <mxCell id="p2-netA" value="docker network claude-pty-user-1（使用者 A 專屬）" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;dashed=1;fillColor=none;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="560" width="630" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-sA1" value="session 容器 A-1&lt;br&gt;entrypoint.sh → claude" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="90" y="620" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-sA2" value="session 容器 A-2" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="90" y="730" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-pA" value="nginx 代理（A 的）&lt;br&gt;alias：gitlab-proxy&lt;br&gt;注入 A 的 PAT・端點白名單・限流" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="420" y="650" width="240" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- user B network -->
+        <mxCell id="p2-netB" value="docker network claude-pty-user-2（使用者 B 專屬）" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;dashed=1;fillColor=none;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="760" y="560" width="630" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-sB1" value="session 容器 B-1&lt;br&gt;entrypoint.sh → claude" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="790" y="620" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-pB" value="nginx 代理（B 的）&lt;br&gt;alias：gitlab-proxy&lt;br&gt;注入 B 的 PAT・端點白名單・限流" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="650" width="240" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- isolation note -->
+        <mxCell id="p2-isonote" value="alias 相同・network 不同 → A 的 session 解析到的永遠是 A 的代理，看不到 B 的；&lt;br&gt;限流桶因此對得上「人」（server/user_proxy.py・server/gitlab_proxy.py・ADR 0016）" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="60" y="890" width="440" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- gitlab + jaeger -->
+        <mxCell id="p2-gitlab" value="GitLab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="620" y="930" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-jaeger" value="Jaeger（OTLP :4317）&lt;br&gt;自有 ncr-telemetry 網&lt;br&gt;控制平面接上每張使用者網路" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="930" width="210" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="p2-e-b-n" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.4;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-browser" target="p2-nginx">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-n-f" value="路由 A ＋ auth_request（回 X-Ttyd-Port）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-nginx" target="p2-flask">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-n-t" value="路由 B：proxy_pass 127.0.0.1:$port" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0.5;exitY=0;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2-nginx" target="p2-ttyd">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="400" y="10" />
+              <mxPoint x="1030" y="10" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-f-t" value="開網頁才 spawn（view）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;fontSize=10;exitX=1;exitY=0.3;entryX=0;entryY=0.3;" edge="1" parent="1" source="p2-flask" target="p2-ttyd">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-t-f" value="--auth-url 再驗一次（rust 版）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;fontSize=10;exitX=0;exitY=0.8;entryX=1;entryY=0.8;" edge="1" parent="1" source="p2-ttyd" target="p2-flask">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-f-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;startArrow=classic;startFill=1;" edge="1" parent="1" source="p2-flask" target="p2-db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-f-dockerd" value="① create（network=使用者網）②&#160;put_archive(token) ③ start&lt;br&gt;網路必須早於 start：防火牆放行的是 entrypoint&lt;br&gt;起跑那一刻的路由快照" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0;exitY=0.75;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-flask" target="p2-dockerd">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="620" y="130" />
+              <mxPoint x="620" y="390" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-rec-db" value="leader lease・狀態收斂" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5;startArrow=classic;startFill=1;" edge="1" parent="1" source="p2-rec" target="p2-db">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1195" y="120" />
+              <mxPoint x="1195" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-rec-dockerd" value="對帳迴圈（DB ↔ dockerd）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0.5;exitY=1;entryX=0.6;entryY=1;" edge="1" parent="1" source="p2-rec" target="p2-dockerd">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1335" y="480" />
+              <mxPoint x="794" y="480" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-d-netA" value="建容器・持有 PTY" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2-dockerd" target="p2-netA">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="728" y="500" />
+              <mxPoint x="375" y="500" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-d-netB" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2-dockerd" target="p2-netB">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="822" y="500" />
+              <mxPoint x="1075" y="500" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-t-sA1" value="docker attach（PTY 在 dockerd 手上）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-ttyd" target="p2-sA1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1030" y="300" />
+              <mxPoint x="40" y="300" />
+              <mxPoint x="40" y="665" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-sA1-pA" value="git／API（不帶憑證）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.25;" edge="1" parent="1" source="p2-sA1" target="p2-pA">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-sA2-pA" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.75;" edge="1" parent="1" source="p2-sA2" target="p2-pA">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-sB1-pB" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-sB1" target="p2-pB">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-pA-gitlab" value="PRIVATE-TOKEN 由代理蓋" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-pA" target="p2-gitlab">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="540" y="960" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-pB-gitlab" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.1;exitY=1;entryX=1;entryY=0.75;" edge="1" parent="1" source="p2-pB" target="p2-gitlab">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1144" y="975" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-e-sB1-jaeger" value="OTLP（jaeger 被接進這張網）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;fontSize=10;exitX=0.5;exitY=1;entryX=0;entryY=0.25;" edge="1" parent="1" source="p2-sB1" target="p2-jaeger">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="885" y="945" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
