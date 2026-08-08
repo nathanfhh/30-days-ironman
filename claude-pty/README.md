@@ -297,9 +297,16 @@ tests/run-all.sh          # 快速組（不需要 docker）
 tests/run-all.sh --all    # 全部（需要 docker；ttyd 在 PATH 上則含真終端測試）
 ```
 
-GitLab 代理有兩支：`test_gitlab_proxy_conf.py`（離線，驗設定產生與「token 不進 session
-容器」）與 `test_user_proxy.py`（需要 docker，真的建容器、真的熱重載、真的用
-`docker inspect` 確認 token 沒外露）。後者不需要連得到任何 GitLab。
+GitLab 代理有三支：`test_gitlab_proxy_conf.py`（離線，驗設定產生與「token 不進 session
+容器」）、`test_user_proxy.py`（需要 docker，真的建容器、真的熱重載、真的用
+`docker inspect` 確認 token 沒外露）、以及 `test_gitlab_upstream_e2e.py`
+（需要 docker，**整條路走一次**）。三支都不需要連得到任何真的 GitLab。
+
+第三支起一個 TLS 假上游（內部 CA 簽的憑證，alias 就是設定裡的 GitLab 主機名），
+然後從另一個容器**真的 `git clone`**，斷言上游收到的授權標頭分流正確（git 拿 Basic、
+API 拿 PRIVATE-TOKEN，兩者不互相污染）、`Host` 是上游主機名、PAT 不在 client 容器裡。
+最後換一把沒簽過它的 CA 再 clone 一次，**必須失敗**，否則 `proxy_ssl_verify on` 就只是
+擺著好看。前兩支各自驗零件，只有這一支回答「憑證補上去之後上游收不收」。
 
 Telemetry 也有兩支，因為 **OTLP 是 fail-open：接錯或漏接完全沒有錯誤訊息**。
 `test_telemetry.py` 驗降級與「座標不准說謊」；`test_jaeger_wiring.py` 驗接線本身——

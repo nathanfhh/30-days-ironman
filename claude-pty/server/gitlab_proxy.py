@@ -183,12 +183,24 @@ def _render(pat: str, state: str) -> bytes:
             "沒有設定 GitLab 主機（CLAUDE_PTY_GITLAB_HOST），無法產生代理設定")
     api_auth = f'proxy_set_header PRIVATE-TOKEN "{pat}";'
     git_auth = f'proxy_set_header Authorization "Basic {_basic(pat)}";'
+    # ⚠ **每一個會 proxy_pass 的 location 都要自己再設一次這三行。**
+    #   nginx 的 `proxy_set_header` 繼承規則是「本層只要定義了任何一個，就完全不繼承
+    #   上層的」——而 git 那條設了 Authorization、API 那幾條設了 PRIVATE-TOKEN，於是
+    #   server 層的 Host / X-Real-IP / X-Forwarded-For **整組被丟掉**，`Host` 退回預設的
+    #   `$proxy_host`，也就是 upstream 區塊的名字 `gitlab`。
+    #   GitLab 是依 Host 路由的，收到 `gitlab` 會 404 或導去別的 vhost，而症狀完全指不到
+    #   這裡（2026-08-08 端到端測試第一次跑就抓到，見 test_gitlab_upstream_e2e）。
+    #   server 層那份留著當地板，給日後任何「一個 proxy_set_header 都沒設」的 location。
+    common_headers = f"""proxy_set_header Host {host};
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"""
 
     api_blocks = "\n".join(
         f"""
         {loc} {{
             limit_except {methods} {{ deny all; }}
             limit_req zone=gitlab_api burst={burst} nodelay;
+            {common_headers}
             {api_auth}
             proxy_pass https://gitlab;
         }}"""
@@ -239,6 +251,9 @@ http {{
         # ⚠ server 層**只放沒有授權語意的東西**。授權標頭一旦放在這裡就會被所有 location
         #   繼承，git 那條會收到它看不懂的標頭而全部 401（獨立版那份 template 的註解
         #   預告過這件事）。
+        # ⚠ **但這三行不會被下面那些 location 繼承**（它們各自設了授權標頭，而 nginx 的
+        #   繼承是整組取代不是逐項合併），所以每個 location 都自己再設一次。這裡留著只是
+        #   給未來「完全沒設 proxy_set_header」的 location 當地板。見上方 common_headers。
         proxy_set_header Host {host};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -275,6 +290,7 @@ http {{
         #   「用 service=git-receive-pack 去問 refs」，而真正的 push 是
         #   POST /git-receive-pack——所以推不推得動交給 PAT 的 scope 管，不在這裡擋。
         {_GIT_LOCATION} {{
+            {common_headers}
             {git_auth}
             client_max_body_size 0;          # 預設 10m 會讓稍大的 push 收到 413
             proxy_request_buffering off;     # 否則整包 packfile 先落到代理磁碟再轉發
