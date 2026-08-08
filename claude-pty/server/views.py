@@ -447,3 +447,131 @@ def _view_dict(view_id: int, session_id: str, port: int, pid: int | None,
         # 無 nginx 時的直連位址（開發用）
         "direct_url": f"http://{config.TTYD_HOST}:{port}/session/{session_id}/",
     }
+
+
+# --- ttyd 觀測（唯讀）-------------------------------------------------------------
+
+def inspect_ttyd(current_bin: str | None = None) -> dict:
+    """此刻所有 ttyd 的實況（管理用，唯讀）。
+
+    `current_bin`＝**看這一頁的人現在選的那一顆**（per-user，見 config.TTYD_BINS）。
+    它與每個 view 實際起的那一顆是兩件事：切換偏好之後，先前起的程序還活著，所以每一列
+    另外帶 `ttyd_bin`（那一列**當初**用的）與 `proc.bin`（那個程序**現在**的執行檔名）。
+
+    回 `{"views": [...], "orphans": [...], "psutil": bool, "bin": str}`。
+
+    **兩個方向的對帳才是重點**，數量本身意義不大：
+      - `orphans`：程序在跑、DB 卻沒有對應的 view。這種 ttyd 沒有任何機制找得到
+        （`_clean_views` 只走 DB 列、reconciler 的孤兒清理只管 container），而它若從頭到尾
+        沒有 client 連上過，`-q` 也永遠不會觸發。**那個 port 就此消失。**
+      - view 的 `alive=False`：DB 有列、程序已死。它佔著 `uq_views_port`，該 session
+        下次開終端會拿不到 port。
+
+    ⚠ 只看得到**本容器內**的 ttyd。它們是控制平面的子孫程序（double-fork 後 reparent 給
+      PID 1），所以這支必須跑在 control 裡；reconciler 共用同一個 PID namespace 也看得到。
+    """
+    rows = []
+    with session_scope() as s:
+        # v.session 是既有的 relationship（models.View.session），不必自己再查一次。
+        for v in s.query(View).order_by(View.created_at.desc()).all():
+            sess = v.session
+            rows.append({
+                "view_id": v.id, "session_id": v.session_id, "port": v.port,
+                "pid": v.pid, "created_at": v.created_at.isoformat(),
+                "ttyd_bin": v.ttyd_bin,
+                "owner": sess.user.username if sess and sess.user else None,
+                "session_name": sess.display_name if sess else None,
+            })
+
+    if psutil is None:
+        # ⚠ 沒有 psutil 就只能回 DB 那一半，而且要**明講**。不講的話畫面上那個空的
+        #   `orphans` 看起來就像「掃過了，很乾淨」——那正是這一頁要抓的那種假綠燈。
+        return {"views": [{**r, "alive": None, "proc": None} for r in rows],
+                "orphans": [], "psutil": False,
+                "bin": config.ttyd_bin_or_default(current_bin)}
+
+    procs = {}
+    for p in psutil.process_iter(["pid", "cmdline"]):
+        argv = p.info.get("cmdline") or []
+        if argv and os.path.basename(argv[0]) in _OUR_TTYD_NAMES:
+            procs[p.info["pid"]] = p
+
+    # cpu_percent 第一次呼叫一律回 0.0（要兩個取樣點才算得出來）。與其每個程序各等一次
+    # interval，不如先替所有程序建立基準，共用一次短暫的等待：N 個程序也只等一次。
+    for p in procs.values():
+        with suppress(Exception):    # noqa: BLE001 — 建基準失敗只是少一個數字
+            p.cpu_percent(None)
+
+    known = {r["pid"] for r in rows if r["pid"]}
+    for r in rows:
+        p = procs.get(r["pid"])
+        # pid 還沒寫回來的列（open_view 進行中）不是「死的」，是**還不知道**。
+        r["alive"] = None if r["pid"] is None else p is not None
+        r["proc"] = _proc_facts(p)
+
+    # ⚠ **port 交叉比對，不是只比 pid。** 開終端的那一瞬間有一段「ttyd 已經在跑、但 pid
+    #   還沒寫回 DB」的窗口：`_claim_port` 先插一列 pid=NULL，`_spawn_detached` 起 ttyd，
+    #   pid 要等 `_wait_ready` 回來才寫。只比對 pid 的話，那個健康的 ttyd 會被標成孤兒，
+    #   而這一頁存在的理由就是揪出對不上的東西——例行的假警報會讓整頁失去可信度。
+    #   改用「它聽的 port 有沒有被某一列宣告」來認領：port 是 UNIQUE 的，而 in-flight 的
+    #   列**已經**帶著 port 了，比 pid 更早可用。
+    claimed_ports = {r["port"] for r in rows}
+    orphans = []
+    for pid, p in procs.items():
+        if pid in known:
+            continue
+        facts = _proc_facts(p)
+        listening = set()
+        for addr in (facts or {}).get("listening", []):
+            with suppress(ValueError):
+                listening.add(int(addr.rsplit(":", 1)[-1]))
+        if listening & claimed_ports:
+            continue          # 有列宣告了它的 port＝正在被領養，不是孤兒
+        orphans.append({"pid": pid, "proc": facts})
+
+    return {"views": rows, "orphans": orphans, "psutil": True,
+            "bin": config.ttyd_bin_or_default(current_bin)}
+
+
+def _proc_facts(p) -> dict | None:
+    """一個 ttyd 程序的量測值。任何一項讀不到就略過該項，不讓整頁掛掉。"""
+    if p is None:
+        return None
+    out: dict = {"pid": p.pid}
+    with suppress(psutil.Error, OSError):
+        argv = p.cmdline()
+        if argv:
+            out["bin"] = os.path.basename(argv[0])
+    # ⚠ 只吞 `psutil.Error` 與 `OSError`，**不要吞 Exception**。`psutil.Error` 已涵蓋
+    #   NoSuchProcess / AccessDenied / ZombieProcess，也就是「這個程序問不到」的全部情況。
+    #   吞 Exception 會連 AttributeError / TypeError 這種**程式錯誤**一起吃掉——psutil 版本
+    #   不對而 `net_connections` 不存在時，畫面上只是少了兩列、log 裡一片安靜，而那正是
+    #   那種版本 bug 能靜靜存在好幾個月的機制。
+    with suppress(psutil.Error, OSError):
+        with p.oneshot():       # 一次系統呼叫餵飽下面所有查詢
+            cpu, mem = p.cpu_times(), p.memory_info()
+            out.update({
+                "status": p.status(),
+                "started_at": _dt.datetime.fromtimestamp(
+                    p.create_time(), _dt.UTC).isoformat(),
+                "cpu_user": round(cpu.user, 3),
+                "cpu_system": round(cpu.system, 3),
+                "rss": mem.rss,
+                "vms": mem.vms,
+                "mem_percent": round(p.memory_percent(), 2),
+                "threads": p.num_threads(),
+                "fds": p.num_fds(),
+            })
+    with suppress(psutil.Error, OSError):
+        out["cpu_percent"] = round(p.cpu_percent(None), 1)   # 基準已在上面建立
+    with suppress(psutil.Error, OSError):
+        conns = p.net_connections(kind="tcp")
+        listen = [c for c in conns if c.status == psutil.CONN_LISTEN]
+        out.update({
+            # 實際在聽的位址：拿它跟 DB 記的 port 對照，不必自己 TCP 連過去試
+            "listening": [f"{c.laddr.ip}:{c.laddr.port}" for c in listen],
+            # 已建立的連線數＝現在有幾個人正開著這個終端。ttyd 帶 `-q`（最後一個 client
+            # 斷線就自退），所以這個數字同時解釋了它為什麼還活著。
+            "clients": sum(1 for c in conns if c.status == psutil.CONN_ESTABLISHED),
+        })
+    return out or None

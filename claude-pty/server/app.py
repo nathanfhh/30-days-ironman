@@ -589,6 +589,22 @@ def set_prefs():
 
 # --- 帳號管理 ----------------------------------------------------------------------
 
+@app.get("/api/ttyd/inspect")
+@admin_only
+def inspect_ttyd():
+    """此刻所有 ttyd 程序的實況（見 `views.inspect_ttyd`）。唯讀，管理員限定。
+
+    回答的是三個「`docker ps` 答不了」的問題：那顆行程**在聽哪個 port**、**現在有幾個
+    人連著**、以及**有沒有誰在跑卻不在 DB 裡**。前兩個來自 psutil 問那個行程自己的
+    socket，第三個是拿它聽的 port 跟 DB 宣告的 port 做交叉比對。
+
+    ⚠ **必須由 control 回答。** ttyd 是控制平面的子孫程序，只有共用那個 PID namespace
+      的人看得到它們（reconciler 也共用，但它沒有對外的 HTTP 面）。
+    ⚠ 管理員限定：回傳含每個人的 session 名稱與擁有者。
+    """
+    return jsonify(views.inspect_ttyd(g.user.get("ttyd_bin")))
+
+
 @app.get("/api/users")
 @admin_only
 def list_users():
