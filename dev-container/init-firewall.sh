@@ -203,12 +203,12 @@ iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
 # 那種情況下 agent 從第一次呼叫模型就開始失敗，而錯誤訊息不會說是防火牆。
 # curl 的 exit 0 涵蓋任何 HTTP 回應：Cloudflare 回 403 也證明連線建立了。
 # ------------------------------------------------------------------------------
-if curl --connect-timeout 5 -sS -o /dev/null https://example.com 2>/dev/null; then
+if curl --connect-timeout 5 --max-time 10 -sS -o /dev/null https://example.com 2>/dev/null; then
     echo "錯誤：example.com 連得到 — 防火牆沒有生效"
     exit 1
 fi
 for domain in "${ALLOWED_DOMAINS[@]}"; do
-    if ! curl --connect-timeout 5 -sS -o /dev/null "https://${domain}/" 2>/dev/null; then
+    if ! curl --connect-timeout 5 --max-time 10 -sS -o /dev/null "https://${domain}/" 2>/dev/null; then
         echo "錯誤：${domain} 連不到 — 白名單沒生效，agent 會從第一次呼叫就失敗"
         exit 1
     fi

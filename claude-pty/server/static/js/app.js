@@ -42,6 +42,22 @@ function relTimeCell(iso, cls = "metric") {
        + `data-tip="${esc(absTime(iso))}">${esc(relTime(iso))}</span>`;
 }
 
+/* localStorage 的安全存取。Safari 全面封鎖 cookie、企業政策、無痕模式下，`localStorage`
+ * 的**存取本身**就會 throw——不是回 null。這個 codebase 其他地方對它有防護（見下方的
+ * 「無痕模式等情境下 storage 不可用」），但主要初始化路徑沒有：initTheme 是
+ * DOMContentLoaded 的第一個呼叫，它一 throw，同一個 handler 裡後面全部不執行
+ * （導覽、密碼欄位切換、憑證徽章、頁尾時間、身分下拉＝登出鍵失效），而且沒有任何錯誤
+ * 訊息（審查 F-016）。 */
+function lsGet(key, fallback = null) {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+function lsSet(key, value) {
+  try { localStorage.setItem(key, value); return true; } catch { return false; }
+}
+function lsDel(key) {
+  try { localStorage.removeItem(key); return true; } catch { return false; }
+}
+
 /** 呼叫控制平面 API。失敗時把後端的中文錯誤訊息原樣拋出，供畫面顯示。 */
 async function api(path, { method = "GET", body } = {}) {
   const res = await fetch(path, {
@@ -1106,7 +1122,7 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
    * 就是靠比對「送出 36×150」與「畫面上 112×42」才定位到的。 */
   const sizeDebug = (() => {
     let on = false;
-    try { on = localStorage.getItem("claude-pty:debug-size") === "1"; } catch { /* 隱私模式 */ }
+    try { on = lsGet("claude-pty:debug-size") === "1"; } catch { /* 隱私模式 */ }
     const t0 = performance.now();
     return on ? (...a) => console.log(`[size +${Math.round(performance.now() - t0)}ms]`, ...a)
               : () => {};
@@ -1210,7 +1226,7 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
     const term = frame.contentWindow?.term;
     if (!term) return;
     term.options.fontSize = size;
-    localStorage.setItem(FONT_KEY, String(size));
+    lsSet(FONT_KEY, String(size));
     showFont(size);
     frame.contentWindow.dispatchEvent(new Event("resize"));
   };
@@ -1243,7 +1259,7 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
     });
     // localStorage 的值是使用者可以手改的，而且舊版本可能存過別的範圍——一律夾回界內，
     // 不是「合法才用」：存了 999 的話直接忽略會讓他永遠回不到自己調過的大小。
-    const raw = parseInt(localStorage.getItem(FONT_KEY) || "", 10);
+    const raw = parseInt(lsGet(FONT_KEY) || "", 10);
     const saved = Number.isFinite(raw)
       ? Math.min(FONT_MAX, Math.max(FONT_MIN, raw)) : null;
     if (saved !== null && saved !== term.options.fontSize) {
@@ -1517,7 +1533,7 @@ const THEME_VARS_KEY = "claude-pty:theme-vars:";
  */
 async function loadThemeColors(id) {
   if (id === "instrument") return null;      // 預設主題＝CSS 內建值，沒有色票要套
-  const cached = localStorage.getItem(THEME_VARS_KEY + id);
+  const cached = lsGet(THEME_VARS_KEY + id);
   if (cached) {
     try { return JSON.parse(cached); } catch { /* 壞掉就當沒有，往下重抓 */ }
   }
@@ -1545,8 +1561,8 @@ function paintTheme(id, colors) {
 /** 記住選擇與色票。localStorage 是**同步磁碟 I/O**，實測佔掉整段 callback 的一大半
  *  ——所以它必須在過渡之外做。 */
 function persistTheme(id, colors) {
-  if (colors) localStorage.setItem(THEME_VARS_KEY + id, JSON.stringify(colors));
-  localStorage.setItem(THEME_STORAGE_KEY, id);
+  if (colors) lsSet(THEME_VARS_KEY + id, JSON.stringify(colors));
+  lsSet(THEME_STORAGE_KEY, id);
 }
 
 /** 保留原本的介面給不做過渡的呼叫端（初始化、prefers-reduced-motion）。 */
@@ -1607,7 +1623,7 @@ async function applyTheme(id, origin) {
 
 
 function initTheme() {
-  const saved = localStorage.getItem(THEME_STORAGE_KEY) || "instrument";
+  const saved = lsGet(THEME_STORAGE_KEY) || "instrument";
   const mount = document.getElementById("theme-picker");
   if (mount) {
     // 每個主題標示亮/暗，選單裡一眼看得出來

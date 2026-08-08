@@ -110,7 +110,13 @@ fi
 # 控制平面以 APP_UID 執行，於是一個字都寫不進去：per-user 空間建不出來，每一次建立 session
 # 都失敗（2026-07-29 實測踩到，錯誤出現在很後面，看起來像應用層的 bug）。
 # README 的第 1 步有寫要手動建，但「記得照文件做」不是防線——這裡無條件補一次。
-SPACE="$(sed -n 's/^[[:space:]]*CLAUDE_PTY_SPACE=//p' .env 2>/dev/null | tail -1 | tr -d '"'\''')"
+# ⚠ **優先序要與 compose 一致：shell 環境變數優先於 .env。** 這裡原本只讀 .env，
+#   而 compose 對 `${CLAUDE_PTY_SPACE:-…}` 是 env 優先——使用者 export 過的話，
+#   腳本會去建 .env 指的那個目錄並對它做可寫檢查（通過），compose 卻掛 env 指的
+#   那個（不存在）→ dockerd 以 root 建出來，正是下面整段註解在防的症狀，而防線
+#   從這裡被繞過（審查 F-022）。同一支腳本上面才剛為 HOST_PLATFORM 寫下這個優先序。
+SPACE_FROM_FILE="$(sed -n 's/^[[:space:]]*CLAUDE_PTY_SPACE=//p' .env 2>/dev/null | tail -1 | tr -d '"'\''')"
+SPACE="${CLAUDE_PTY_SPACE:-${SPACE_FROM_FILE}}"
 SPACE="${SPACE:-${HOME}/claude-pty-space}"
 # ⚠ `~` 在 .env 裡不會被展開（compose 不展、Python 也不展），照著建會真的長出一個名字叫
 #   `~` 的目錄，而且完全無聲。與其建錯，不如在這裡停下來。

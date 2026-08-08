@@ -61,7 +61,7 @@ def acquire_lease(name: str, owner: str, ttl: int) -> bool:
 
     ⚠ 互斥靠的就是這個 immediate：漏了它，兩個 reconciler 同時看到一張過期的租約
       時會雙雙判定可接手，接著同時跑破壞性清理——正是這張租約要防的事
-      （`sessions._pty_writer()` 是同一個形狀的坑）。
+      （`sessions.create()` 的配額交易與 `views._claim_port` 是同一個形狀的坑）。
     """
     now = utcnow()
     with session_scope(immediate=True) as s:
@@ -91,15 +91,34 @@ def still_leader(name: str, owner: str) -> bool:
 
 
 def reconcile_once(client: docker.DockerClient | None = None,
-                   owner: str | None = None) -> dict:
+                   owner: str | None = None,
+                   lease_ttl: int = config.RECONCILE_INTERVAL * 2 + 10) -> dict:
     """跑一輪對帳，回傳各項處理計數。
 
-    `owner` 有值時，每個破壞性操作前確認租約仍屬於自己（見 still_leader）。
+    `owner` 有值時，每個破壞性操作前確認租約仍屬於自己——**並順便續約**（見 `_leading`）。
+    `lease_ttl` 要與呼叫端取得租約時用的一致，否則續約會把 TTL 改成別的值。
     """
     client = client or docker.from_env(timeout=config.DOCKER_TIMEOUT)
 
     def _leading() -> bool:
-        return owner is None or still_leader("reconciler", owner)
+        """租約還在自己手上嗎——**順便續約**。
+
+        ⚠ 租約原本只在每輪開頭取得一次，而 TTL（`interval*2+10`，預設 70 秒）同時被當成
+          「一輪的預算」：卡住的容器每顆吃滿 DOCKER_TIMEOUT（15 秒），五顆就超過。超過之後
+          這支開始回 False，於是 step 1 的 break、step 4 的孤兒清理、step 5 的 idle 回收、
+          以及代理收斂的逐顆檢查**全部停手**——也就是說**容器卡得越多、越需要對帳，
+          reconciler 反而越做不完後半段**，而且完全沒有訊號（審查 F-033）。
+        ⚠ `still_leader` 的 docstring 已經論證過「過期就讓這輪停手」是刻意的，那沒有錯——
+          錯的是讓它因為「這一輪做得久」而過期。`acquire_lease` 本來就支援續約（同一個
+          owner 直接續），所以這裡改成邊確認邊續：**只有真的失去領導權才停手**。
+        """
+        if owner is None:
+            return True
+        if acquire_lease("reconciler", owner, lease_ttl):
+            return True
+        print("[reconciler] ⚠ 租約已被別的實例接手，本輪提前結束（後半段的孤兒清理／"
+              "idle 回收／代理收斂這一輪不會執行）", flush=True)
+        return False
 
     stats = {"gone": 0, "exited_removed": 0, "views_cleaned": 0,
              "orphan_containers": 0, "idle_reclaimed": 0,
@@ -210,6 +229,21 @@ def reconcile_once(client: docker.DockerClient | None = None,
     return stats
 
 
+def _has_live_session(user_id: int) -> bool:
+    """這個人**此刻**還有沒有活著的 session（含還在建立寬限期內的列）。
+
+    ⚠ 與輪初算 `active_sessions` 的判準必須一致——差別只在時機：那個是快照，這個是現問。
+      收掉帶著 PAT 的代理之前用這一支再確認一次（見 _converge_proxies 裡的說明）。
+    ⚠ 這裡不看輪初的 `live` 快照，改問 DB 的 `docker_state`：那一欄是 reconciler 自己每輪
+      更新的（ADR 0012），而「還在建立寬限期內」本來就只有 DB 知道。
+    """
+    with session_scope() as s:
+        for row in s.query(SessionRow).filter(SessionRow.user_id == user_id).all():
+            if _is_creating_within_grace(row) or row.docker_state in ALIVE_STATES:
+                return True
+    return False
+
+
 def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
                       leading=None) -> tuple[int, int]:
     """把 per-user 網路與 GitLab 代理收斂到期望狀態（ADR 0016）。回傳 (收掉幾顆, 修好幾顆)。
@@ -289,9 +323,19 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
                 #   還在路上的那一刻不可以收（同 _remove_orphans 的理由）。
                 if age_seconds(c.attrs.get("Created", "")) < config.ORPHAN_GRACE:
                     continue
+                # ⚠ **收之前再問一次。** `active` 是輪初算的，而這個迴圈可能跑很久——卡住的
+                #   容器每顆吃滿 DOCKER_TIMEOUT，這正是上面那段為租約逐顆重查的同一個理由，
+                #   只是那個論證沒有套用到這個集合上（審查 F-034）。窗口內若有人開了新
+                #   session（`_ensure_user_proxy` 看到既有 running 代理、指紋相符就直接用），
+                #   這裡會把正在服務他的代理收掉；而 `seen` 已經含這個 uid，補建迴圈跑的是
+                #   `active - seen`，要等下一輪。症狀是畫面說「本場可用」而 git 全掛一個
+                #   對帳週期——那一欄刻意不可變，不會回頭改。成本只是一筆小查詢。
+                if _has_live_session(uid):
+                    continue
                 if isolated(f"收掉沒人用的代理 {c.name}",
                             user_proxy.remove, client, uid) is not STUCK:
                     removed += 1
+                _note_proxy_ok(uid)      # 見下方 _note_proxy_ok：離開清單也要清
                 continue
 
             state = auth.gitlab_pat_state(uid)
@@ -300,9 +344,13 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
                 if isolated(f"使用者 {uid} 已清除 PAT，收掉代理",
                             user_proxy.remove, client, uid) is not STUCK:
                     removed += 1
+                _note_proxy_ok(uid)      # 他不再需要代理了，畫面上那句錯誤也該消失
                 continue
             if state != "ok":
-                continue                  # unreadable：什麼都不做
+                # unreadable（換過 SECRET_KEY）：什麼都不做。⚠ 但也要清掉那句錯誤——
+                # 它會停在「代理起不來」，而真正的原因是 PAT 解不開，兩者的處置完全不同。
+                _note_proxy_ok(uid)
+                continue
 
             if c.status == "created":
                 # **半成品**：`create_container` 成功但 `put_archive`／`start` 沒走完就被
@@ -469,6 +517,12 @@ def _note_proxy_ok(uid: int) -> None:
     ⚠ **清除要無條件做**，不可以只在「這一輪剛好報過錯」時做。要判斷「先前有沒有報過」
       就得再存一份狀態，而那份狀態一旦與 DB 不同步（reconciler 一重啟就會），畫面上那句
       早就修好的錯誤會永遠留著——使用者會照著它去改一個本來就正確的設定。
+
+    ⚠ **不是只有「這一輪看到一顆 running 的代理」才呼叫它。** 這支原本只掛在 running 那條
+      分支上，於是代理只要**離開清單**——使用者清掉 PAT、沒有活著的 session 被回收、或
+      SECRET_KEY 換過變成 unreadable——那句錯誤就永遠留在帳號頁上（審查 F-008）。
+      而它造成的正是這個 docstring 自己在防的事：使用者照著一句早就不成立的訊息去查。
+      所以那三條路徑現在也各自呼叫它。
     """
     _proxy_fails.pop(uid, None)
     with suppress(Exception), session_scope() as s:
@@ -511,6 +565,7 @@ def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated,
         uid = user_proxy.owner_of(net)
         if uid is not None and uid in active:
             continue
+
         if age_seconds(net.attrs.get("Created", "")) < config.ORPHAN_GRACE:
             continue
         # ⚠ **jaeger 掛在每一張使用者網路上**（`attach_jaeger`），而掛著的容器會讓
@@ -519,11 +574,15 @@ def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated,
         # ⚠ 判準是「**除了 jaeger 之外**沒有別人」，不是「一顆都沒有」。真的還有 session
         #   容器掛著時就別動它：不拔 jaeger、也不 remove，交給下一輪（那條規矩沒變）。
         #   先拔再發現收不掉的話，那個使用者的 trace 會靜靜停掉。
-        if not user_proxy.only_jaeger_left(net):
-            continue
-        user_proxy.detach_jaeger(client, net.name)
+        # ⚠ **走共用的 remove_network_obj，不要在這裡重寫一次。** 這段原本自己做了
+        #   `only_jaeger_left` → `detach_jaeger` → `remove` 的同一組動作，於是那個不變式
+        #   有兩份，而**只有這一份會被執行到**（by-uid 那支的呼叫端全是測試，審查 F-038）
+        #   ——改一邊、另一邊留在原地是遲早的事，而測試只蓋得到沒有人走的那一份。
+        # ⚠ 吃物件的版本（不是 by-uid 那支）：這裡手上已經有 net，而且 label 壞掉、
+        #   認不出 uid 的網路也只有這條路走得通。
         with suppress(docker.errors.NotFound, docker.errors.APIError):
-            if isolated(f"收掉沒人用的網路 {net.name}", net.remove) is not STUCK:
+            if isolated(f"收掉沒人用的網路 {net.name}",
+                        user_proxy.remove_network_obj, client, net) is True:
                 reaped += 1
     return reaped
 
@@ -678,13 +737,14 @@ def main(argv: list[str] | None = None) -> int:
         try:
             # 租約 TTL 給兩倍輪詢間隔：正常會在到期前續約；持有者掛掉後
             # 其他實例最多等這麼久就能接手。
-            if not acquire_lease("reconciler", owner, args.interval * 2 + 10):
+            _ttl = args.interval * 2 + 10
+            if not acquire_lease("reconciler", owner, _ttl):
                 if args.once:
                     print("[reconciler] 另一個實例持有租約，本輪跳過", flush=True)
                     return 0
                 _stopping.wait(args.interval)   # 可被訊號立即喚醒
                 continue
-            stats = reconcile_once(client, owner=owner)
+            stats = reconcile_once(client, owner=owner, lease_ttl=_ttl)
             if any(stats.values()):
                 print(f"[reconciler] {stats}", flush=True)
         except Exception as e:  # noqa: BLE001 — 常駐程序：任一輪失敗都不可終止迴圈，下輪再試

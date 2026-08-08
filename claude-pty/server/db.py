@@ -8,6 +8,22 @@
 （搶 port、算配額、租約接手）都必須走 `session_scope(immediate=True)`，
 在交易一開始就取得寫鎖，讓整段「讀-判斷-寫」真正互斥。沒有第二套機制，
 所以這條路必須被測試釘住，不能靠「反正只有一個 worker」。
+
+⚠ **但「需不需要互斥」不是唯一的判準，甚至不是最常咬人的那個。** WAL 之下 deferred 交易
+  先讀後寫時，中途只要有別人 commit 過，升級寫鎖會**當場**回 `SQLITE_BUSY`，而
+  `busy_timeout` 對這種快照衝突無效（它等的是鎖，不是衝突）——`auth.create_user` 上面
+  記著量過的數字：4 併發 × 20 輪、12.5% 回 500 `database is locked`。這個機制與互斥無關，
+  **只要先 SELECT 後 UPDATE 就中**。全樹有 21 處是這個形狀（審查 F-024），其中
+  `touch` / `resize` / `rename` / 改密碼 / 設 token 都在使用者路徑上。
+
+  逐條追過之後，那 21 處**沒有一處會產生「兩個行程同時通過檢查」的靜默錯誤結果**
+  （全是後寫者贏且兩值皆對、冪等、或由租約保證單寫者），所以這不是資料正確性問題，
+  是偶發 500。真正要改的是判準：**「這筆交易會不會寫」比「需不需要互斥」更接近機制。**
+  SQLite 本來就單寫者，寫交易一律 IMMEDIATE 幾乎沒有額外成本。
+
+  ⚠ 唯一要另外想的是 `reconciler` 的 step 0（讀全表再逐列寫）：它會在整個迴圈期間持寫鎖
+    擋住 web 的寫入，那一支該改成「先讀一份清單、再逐列小交易寫」而不是直接加 immediate。
+    在那之前它維持現狀——被 SQLITE_BUSY 丟掉重來的代價是整輪對帳，值得先想清楚再動。
 """
 
 from __future__ import annotations
@@ -16,7 +32,7 @@ import os
 import threading
 from contextlib import contextmanager, suppress
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import UniqueConstraint, create_engine, event
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.orm import sessionmaker
@@ -135,6 +151,8 @@ def init_db() -> None:
     with suppress(OperationalError):
         Base.metadata.create_all(engine)
     _add_missing_columns(engine)
+    with suppress(Exception):      # noqa: BLE001 — 這只是診斷，不可以擋住啟動
+        _warn_missing_constraints(engine)
 
 
 def _add_missing_columns(engine) -> None:
@@ -174,6 +192,41 @@ def _add_missing_columns(engine) -> None:
                 print(f"[claude-pty] ⚠ {table.name}.{col.name} 宣告了 "
                       f"index/unique/foreign key，但既有表的索引與約束無法由輕量升級"
                       f"補上，需要 alembic", flush=True)
+
+
+def _warn_missing_constraints(engine) -> None:
+    """既有表少了 `__table_args__` 宣告的 UNIQUE 就大聲講——**只報不補**。
+
+    ⚠ `_add_missing_columns` 只對**它自己新增的欄位**檢查 index/unique/foreign_keys 並警告；
+      寫在 `__table_args__` 裡的 table-level 約束（`uq_views_port`、`uq_views_session`、
+      `uq_history_session`）完全不在那個範圍內，而 `create_all` 又跳過既有表（審查 F-039）。
+      少了 views 那兩條的部署，`_claim_port` 的 IntegrityError 分岔永遠不觸發、`_PEER` 那條
+      路是死的，兩個 worker 會為同一個 session 各起一顆 ttyd（review H1 要防的正是這件事）
+      ——而**沒有任何訊息**。
+
+    ⚠ **不自動補**：ALTER TABLE 加不了 UNIQUE，真的要補得走 alembic 重建表。這裡的職責與
+      欄位那一半一致——把「輕量升級做不到的事」講出來，讓人決定，而不是假裝做到了。
+    """
+    from sqlalchemy import inspect as _inspect
+    from sqlalchemy import text as _text
+    insp = _inspect(engine)
+    with engine.connect() as conn:
+        for table in Base.metadata.sorted_tables:
+            want = {c.name for c in table.constraints
+                    if isinstance(c, UniqueConstraint) and c.name}
+            if not want or not insp.has_table(table.name):
+                continue
+            with suppress(OperationalError):
+                have = {r[1] for r in conn.execute(
+                    _text(f"PRAGMA index_list('{table.name}')")).fetchall() if r[2]}
+            # SQLite 對 `UNIQUE` 生的是 sqlite_autoindex_*，名字對不上宣告的 name，
+            # 所以比**數量**而不是比名字——少了幾條就是少了幾條。
+            if len(have) < len(want):
+                print(f"[claude-pty] ⚠ {table.name} 少了 table-level 的 UNIQUE 約束"
+                      f"（宣告 {len(want)} 條、實際 {len(have)} 條）。輕量升級補不上它"
+                      f"（ALTER TABLE 加不了 UNIQUE），需要 alembic 重建表。"
+                      f"views 少了它的症狀是兩個 worker 為同一 session 各起一顆 ttyd，"
+                      f"而且沒有任何錯誤訊息。", flush=True)
 
 
 def reset_engine() -> None:

@@ -124,7 +124,10 @@ def account_page():
     return _page("account.html", active="account",
                  gitlab_enabled=config.gitlab_enabled(),
                  gitlab_host=config.GITLAB_HOST,
-                 gitlab_pat_set=auth.get_user(g.user["id"])["gitlab_pat_configured"],
+                 # ⚠ `get_user` 是 `dict | None`——直接下標在那一列剛好消失時會變成
+                 #   500 HTML 錯誤頁，而 gate 對同一件事的答案是導回登入頁（審查 F-032）。
+                 gitlab_pat_set=(auth.get_user(g.user["id"]) or {})
+                 .get("gitlab_pat_configured", False),
                  # 代理**連續**起不來時 nginx 說的那句話（診斷麵包屑，見
                  # auth.gitlab_proxy_error）。沒有它，使用者只會看到「GitLab 連不到」，
                  # 然後往 token／網路／GitLab 是不是掛了這些錯的方向查。

@@ -71,6 +71,28 @@ docker 預設 `bridge`**——那張網住著這台機器上每一顆沒指定�
 `test_network_isolation` 刻意用最陽春的容器（沒有 iptables、沒有 NET_ADMIN、沒跑
 `init-firewall.sh`）來證明這件事：連那一層都沒有還是連不到，擋住封包的就只可能是網路。
 
+### 這條邊界上有一個刻意的例外：jaeger
+
+`attach_jaeger` 把**同一顆** jaeger 容器接上**每一張**使用者網路（telemetry 的前提，見下方
+〈jaeger〉）。所以它是這條邊界上唯一橫跨所有人的東西，而它的查詢 API 沒有認證——任何一場
+session 裡的程式碼都 `curl` 得到 `http://jaeger:16686/api/traces`，讀得到**跨使用者**的
+span 中繼資料（`user.email`、`user.id`、`session.id`、模型與 token 計數）。
+
+**這是接受的，不是漏的**，理由是這套系統從來沒有宣稱使用者之間有機密性——README 的
+〈安全邊界〉開宗明義寫「開帳號給誰，就等於請他信任你」，[ADR 0013](0013-web-entry-bind-address.md)
+也寫著「**仍不是租戶隔離**……只適合互信操作者」。屬性層想擋也擋不完（`user.id`、
+`session.id`、`organization.id` 全都是識別性屬性，而且會再長出新的）。
+
+⚠ **但這條邊界的另一半沒有被這個例外破壞，而那一半才是這一節在講的**：跨使用者的**橫向
+連通性**仍然成立。實測（2026-08-09）：session 容器打得到 `jaeger:16686`（HTTP 200），
+打不到控制平面的 `control:8000`（連線失敗）——jaeger 掛著多張網路，但它不轉送封包。
+所以「一場 session 打不到另一個人的 session 容器」這條性質不受影響。
+
+⚠ prompt 內容目前不在 span 裡（CLI 預設把 `user_prompt` 遮成 `<REDACTED>`，已實測），
+但**那道遮蔽是上游 CLI 的預設值，不是這裡的任何一道防線**。上游改一次預設，同一條路就
+開始運送 prompt 全文——真的要收的話，正確的形狀是在使用者網路上只放一顆 receive-only 的
+collector，把查詢面留在 jaeger 自己那張網上。
+
 ### 不得退回共用網路（硬規則）
 
 **位址池滿、網路建不出來時，正確的行為是讓 session 開不起來，並把下一步講清楚。**

@@ -1,10 +1,14 @@
 """持久化 registry 的 SQLAlchemy models（ADR 0008）。
 
-三張表，壽命與職責分明：
-  users    — 帳號（argon2id 雜湊），authn/authz 地基（ADR 0005）
-  sessions — session registry，container 為王（ADR 0007：DB 是便利/路由層，真相在
-             container + ~/.claude mount）。不存 ttyd pid——ttyd 屬於「一次觀看」。
-  views    — on-demand ttyd 的暫態記錄；port 加 UNIQUE 由 DB 當跨 worker 的分配仲裁。
+五張表，壽命與職責分明：
+  users           — 帳號（argon2id 雜湊），authn/authz 地基（ADR 0005）
+  sessions        — session registry，container 為王（ADR 0007：DB 是便利/路由層，真相在
+                    container + 掛進去的設定目錄）。只放**進行中**的；不存 ttyd pid
+                    ——ttyd 屬於「一次觀看」。
+  session_history — 結束的 session 的**永久**快照（ADR 0010）。與 sessions 分開的理由是
+                    壽命：那張要被對帳、要算配額，這張只被讀。
+  views           — on-demand ttyd 的暫態記錄；port 加 UNIQUE 由 DB 當跨 worker 的分配仲裁。
+  leases          — 互斥租約，讓「只該有一個執行者」的工作真的只有一個（reconciler）。
 """
 
 from __future__ import annotations

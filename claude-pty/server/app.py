@@ -41,6 +41,13 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",         # 跨站請求不帶 cookie（防 CSRF 的第一層）
     SESSION_COOKIE_SECURE=config.COOKIE_SECURE,
     PERMANENT_SESSION_LIFETIME=timedelta(days=config.SESSION_LIFETIME_DAYS),
+    # ⚠ 靜態資源快取一年。`web.asset_url` 已經在每個網址後面加了版本戳（所有 static 檔案
+    #   最新的 mtime），**改檔就換網址**——但沒有人兌現它：Flask 的預設是 None，werkzeug
+    #   於是送 `Cache-Control: no-cache`，每次換頁都對 app.css(121KB)、app.js(112KB)、
+    #   fontawesome 與字體各發一次條件式 GET（審查 F-023）。版本戳做完了，只差這一行。
+    #   HTML 不受影響：它在 `_security_headers` 裡是 no-store，那是對的（頁內的 <script>
+    #   就是應用程式本身，被快取的話改版後使用者會繼續看到舊行為而沒有任何跡象）。
+    SEND_FILE_MAX_AGE_DEFAULT=31536000,
 )
 init_db()  # 建表（冪等）；registry 持久化於 DB（ADR 0008），多 worker 共用同一份
 manager = SessionManager()
@@ -517,6 +524,14 @@ def auth_view():
 
     nginx 收到 /session/<id>/ 時先打這裡：驗 cookie（authn）+ 擁有權（authz），
     通過就回 200 並以 `X-Ttyd-Port` 告訴 nginx 要 proxy 到哪個 loopback port。
+
+    ⚠ **這是一個有副作用的 GET**，而 RFC 9110 說 GET 不該有副作用：沒有存活的 view 時它
+      會生一個 ttyd 行程並 `touch` 一筆 DB。動詞不是我們選的（auth_request 只發 GET），
+      而正式部署擋得住——`deploy/nginx.conf` 有 `location = /api/auth/view { return 404; }`。
+      但 **BEHIND_PROXY=0 的開發部署沒有 nginx**，那時一個 top-level 導覽就會帶著 Lax
+      cookie 走進來（`<a href="/api/auth/view?session=…">`），生出一個 ttyd（審查 F-009）。
+      所以 spawn 那一段 gate 在 BEHIND_PROXY 上：沒有 nginx 的部署只查詢、不生東西，
+      要開終端走前端本來就在用的 `POST /api/sessions/<sid>/view`。
     """
     sid = request.args.get("session", "")
     try:
@@ -530,6 +545,10 @@ def auth_view():
         # WebSocket → ttyd 自殺 → 重整後的請求就找不到 view，使用者被踢回首頁。
         # 在這裡重建讓重整變成無感；終端內容不受影響（container 一直在跑，重新
         # docker attach 即可，畫面由 TUI 自行重繪——ADR 0003）。
+        if not config.BEHIND_PROXY:
+            # 沒有 nginx 擋在前面（開發部署），這條就是一個外部打得到、且會生行程的 GET。
+            # 查得到就回、查不到就 403，不在這裡生任何東西。
+            return "", 403
         try:
             view = views.open_view(sid, session_info["container"],
                                    g.user.get("ttyd_bin"))
@@ -606,8 +625,11 @@ def set_prefs():
     # --- 驗完了，這裡開始才會寫入 ---
     if "ttyd_bin" in body:
         auth.set_ttyd_bin(g.user["id"], body["ttyd_bin"])
-    user = auth.get_user(g.user["id"])
-    return jsonify(ttyd_bin=user["ttyd_bin"])
+    # ⚠ `get_user` 的型別是 `dict | None`。走到這裡它幾乎不可能是 None（gate 剛驗過），
+    #   但「幾乎」在這裡換到的是一頁 HTML traceback 的 500，而 gate 對同一件事的答案是
+    #   401（審查 F-032）。直接用剛寫進去的值就好，不必再問一次 DB。
+    user = auth.get_user(g.user["id"]) or {}
+    return jsonify(ttyd_bin=config.ttyd_bin_or_default(user.get("ttyd_bin")))
 
 
 # --- 帳號管理 ----------------------------------------------------------------------
@@ -815,7 +837,11 @@ def create_session():
 def list_sessions():
     """?limit=&offset= 分頁。admin 看全部，一般使用者只看自己的。
 
-    `total` 刻意在 list 之後才算：list 會把已消失的 container 從登錄清掉，先算會多報。
+    ⚠ `total` 與這一頁都只讀 DB，**順序不影響結果**（ADR 0012 之後列表不再對帳）。
+    這裡原本寫著「total 刻意在 list 之後才算：list 會把已消失的 container 從登錄清掉」
+    ——那個行為早就沒有了，而 `SessionManager.count` 的 docstring 講的正好相反，兩份文件
+    在一次呼叫的兩端互相矛盾（審查 F-013）。真正還成立的不變量是另一個：**count 必須套用
+    與 list 相同的 filters**，否則總筆數會多報、頁碼跟著錯、最後一頁空白。
 
     `credentials` 搭列表的順風車回去（見 list_history 的同一個決定）。
     """
@@ -945,7 +971,13 @@ def upload_file(sid: str):
     """
     if request.headers.get("X-Requested-With") != "fetch":
         raise BadInput("此端點只收前端 fetch（缺 X-Requested-With 標頭）")
-    _owned(sid, peek=True)          # 擁有權是 DB 事實，不必為了收檔問 dockerd
+    _s = _owned(sid, peek=True)     # 擁有權是 DB 事實，不必為了收檔問 dockerd
+    # ⚠ **落點要跟著 session 的擁有者走，不是跟著上傳者。** `_owned` 對 admin 放行任何人的
+    #   session，而回傳的路徑是容器內的 `DATA_BIND`——在那一場的容器裡，它掛的是**擁有者**
+    #   的 persistent-data（config.user_mounts）。用 g.user 當落點的話，admin 幫別人上傳會
+    #   把檔案寫進自己的空間、卻回一條在目標容器裡根本不存在的路徑，而 API 回 201、
+    #   終端裡 file not found，全程沒有任何錯誤（審查 F-007）。
+    _owner_id = _s["user_id"]
     f = request.files.get("file")
     if f is None or not f.filename:
         raise BadInput("缺少檔案欄位 file")
@@ -958,7 +990,7 @@ def upload_file(sid: str):
     # 貼進終端的路徑不該需要引號才安全。
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._")[:80] or "file"
 
-    updir = os.path.join(config.user_space(g.user["id"], host=False),
+    updir = os.path.join(config.user_space(_owner_id, host=False),
                          "persistent-data", "uploads")
     os.makedirs(updir, mode=0o700, exist_ok=True)
     # O_EXCL 搶名：同一秒兩發（連貼兩張圖）不互相覆蓋，撞名就加序號重試。
@@ -1000,6 +1032,10 @@ def upload_file(sid: str):
 def resize_session(sid: str):
     _owned(sid)
     body = _body()
+    # ⚠ 這條原本沒有 `_reject_unknown`，而它是唯一漏掉的變更端點：送 {"row": 200} 會回 204、
+    #   rows 靜靜落回預設值——正是那支 helper 的 docstring 寫著要防的「我設了但沒生效」
+    #   （審查 F-010）。
+    _reject_unknown(body, {"rows", "cols", "redraw"})
     # redraw：套完尺寸後再強迫 TUI 整個重畫一次（見 SessionManager._nudge_redraw）。
     # 開啟終端時尺寸常常與上次相同，那樣不會有 SIGWINCH，TUI 就沿用上一次的版面。
     manager.resize(sid, _int_in(body, "rows", config.DEFAULT_ROWS, 1, 500),

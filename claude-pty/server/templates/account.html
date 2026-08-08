@@ -213,6 +213,20 @@
 
 {% block scripts %}
 <script>
+  // ⚠ **送出中要 disable，而且要 finally。** 這一頁的四個表單原本都是 `await api(...)`
+  //   直接接 toast，沒有任何 in-flight 狀態——而同 repo 的 sessions.html 做得完整
+  //   （disable + spinner + finally）。最尖的是改密碼：伺服端 argon2 本來就慢，成功後又
+  //   `setTimeout` 才跳頁，那段時間內再按一次，第二發帶的是**已經失效的舊密碼**，畫面上
+  //   會同時出現成功 toast 與「原密碼錯誤」（審查 F-015）。
+  //   ⚠ 一定要 `finally`：失敗時沒有解鎖的話，使用者改完錯誤還得重新整理才能再送一次。
+  const submitting = (form, fn) => async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector('button[type="submit"], button:not([type])');
+    const was = btn ? btn.disabled : null;
+    if (btn) btn.disabled = true;
+    try { await fn(e); } finally { if (btn) btn.disabled = was === null ? false : was; }
+  };
+
   const isAdmin = {{ 'true' if user.is_admin else 'false' }};
   const rolePicker = isAdmin ? createPicker(document.getElementById("pick-role"), [
     { value: "0", label: "一般使用者", icon: "fa-solid fa-user" },
@@ -264,7 +278,9 @@
     tokenInput.addEventListener("input", () => {
       saveBtn.disabled = !tokenInput.value.trim();
     });
-    document.getElementById("token-form").addEventListener("submit", async (e) => {
+
+    document.getElementById("token-form").addEventListener("submit",
+    submitting(document.getElementById("token-form"), async (e) => {
       e.preventDefault();
       try {
         await api("/api/users/me/token", { method: "PUT",
@@ -272,7 +288,7 @@
         toast("憑證已儲存", "success", { body: "之後開的 session 會用它登入" });
         setTimeout(() => location.reload(), 900);
       } catch (ex) { toastError("儲存憑證", ex); }
-    });
+    }));
     clearBtn.addEventListener("click", async () => {
       try {
         await api("/api/users/me/token", { method: "DELETE" });
@@ -297,7 +313,8 @@
     patInput.addEventListener("input", () => {
       patSave.disabled = !patInput.value.trim();
     });
-    document.getElementById("pat-form").addEventListener("submit", async (e) => {
+    document.getElementById("pat-form").addEventListener("submit",
+    submitting(document.getElementById("pat-form"), async (e) => {
       e.preventDefault();
       try {
         await putPat(patInput.value);
@@ -306,7 +323,7 @@
                       + "還沒接上的要開新的一場" });
         setTimeout(() => location.reload(), 900);
       } catch (ex) { toastError("儲存 GitLab 憑證", ex); }
-    });
+    }));
     patClear.addEventListener("click", async () => {
       try {
         await putPat("");
@@ -341,7 +358,8 @@
   [oldPw, newPw, confirmPw].forEach((el) => el.addEventListener("input", validatePw));
   validatePw();
 
-  document.getElementById("pw-form").addEventListener("submit", async (e) => {
+  document.getElementById("pw-form").addEventListener("submit",
+    submitting(document.getElementById("pw-form"), async (e) => {
     e.preventDefault();
     try {
       await api("/api/users/me/password", {
@@ -355,7 +373,7 @@
             { body: "所有裝置的登入與開著的終端都已失效；容器不受影響，重新登入即可接回" });
       setTimeout(() => { location.href = "/login"; }, 1200);
     } catch (ex) { toastError("更新密碼", ex); }
-  });
+  }));
 
   if (isAdmin) {
     const body = document.getElementById("roster-body");
@@ -459,7 +477,8 @@
       } catch (ex) { toastError("操作", ex); }
     });
 
-    document.getElementById("user-form").addEventListener("submit", async (e) => {
+    document.getElementById("user-form").addEventListener("submit",
+    submitting(document.getElementById("user-form"), async (e) => {
       e.preventDefault();
       // 先取出來：表單 reset 之後就讀不到了，而通知訊息要用它
       const username = document.getElementById("new-user").value;
@@ -491,7 +510,7 @@
         await gotoUserPage(username);
         await loadUsers();
       } catch (ex) { toastError("建立帳號", ex); }
-    });
+    }));
 
     loadUsers();
 

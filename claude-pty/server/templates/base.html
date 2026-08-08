@@ -59,7 +59,11 @@
     {% set built = build_info().modules[0].built_at %}
     {% if built %}
     <div class="footer__built">
-      建置於 <time class="footer__at" datetime="{{ built }}"></time>
+      {# ⚠ 伺服端先把 ISO 字串塞進去當文字，JS 再換成本地時間。原本是空的、完全靠 JS 填，
+   於是 JS 沒跑時（例如 storage 被封鎖讓 initTheme 拋出，見 app.js 的 lsGet）畫面上
+   是「建置於」後面一片空白——而頁尾整段的立場是「空白會讓人去查」，這裡的空白卻是
+   意外不是設計（審查 F-030）。 #}
+        建置於 <time class="footer__at" datetime="{{ built }}">{{ built }}</time>
       <span class="footer__rel" data-for="{{ built }}"></span>
     </div>
     {% endif %}

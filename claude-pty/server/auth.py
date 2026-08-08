@@ -95,7 +95,12 @@ def _clean_username(raw) -> str:
 
     ⚠ 型別要先驗。`raw.strip()` 遇到 int/bool/list/dict 會拋 AttributeError，那是
       未捕捉的例外——回應變成 500 的 HTML 錯誤頁，日誌裡還留一整段 traceback。
-      而這條路 **未登入就打得到**（login 也走同一個正規化），等於誰都能刷日誌。
+      而這條路 **未登入就打得到**（`create_user` 由 admin 走，但同樣的型別問題在
+      `authenticate` 也存在，見那支自己的防護），等於誰都能刷日誌。
+      ⚠ **login 並不走這支。** 這裡原本寫著「login 也走同一個正規化」，但
+        `_clean_username` 只有 create_user 呼叫；`authenticate` 自己做型別檢查後對
+        `username.strip()` 精確比對（那是刻意的，見 create_user 裡的說明）。照原本
+        那句話讀，會以為登入也繼承了隱形字元的拒絕——它沒有（審查 F-014）。
 
     禁空白與不可列印字元：帳號名稱會出現在清單、下拉、稽核紀錄裡，含換行或 Tab 的
     名字在那些地方與含空白的名字**看起來一模一樣**，而這個系統沒有刪除帳號的功能

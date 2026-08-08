@@ -27,6 +27,7 @@ from dataclasses import dataclass, replace
 
 import docker
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 from . import config, crypto, gitlab_proxy, user_proxy
 from . import auth as auth_mod
@@ -147,7 +148,7 @@ class Filters:
     比對哪一個時間欄由呼叫端決定：執行中的表比 created_at，已結束的表比 ended_at
     （「一週內」在已結束的語境下自然是「一週內結束的」）。
 
-    ⚠ profile 的三項存在 `profile` 這個 JSON 欄位裡，所以是 JSON 取值比對。
+    ⚠ profile 的四項存在 `profile` 這個 JSON 欄位裡，所以是 JSON 取值比對。
       **現階段刻意不加索引**：
       sessions 只有數十列、history 數百列，全表掃在 SQLite 是微秒級。真的需要時補
       **運算式索引**即可（`CREATE INDEX ... ON sessions(json_extract(profile_json,'$.cli'))`，
@@ -171,7 +172,7 @@ class Filters:
     telemetry: bool | None = None
 
     def apply(self, q, model, date_col):
-        """把條件套上查詢。`date_col` 是 since_days 要比對的欄位。"""
+        """把條件套上查詢。`date_col` 是 since_at／until_at 要比對的欄位。"""
         if self.since_at is not None:
             q = q.filter(date_col >= self.since_at)
         if self.until_at is not None:
@@ -525,11 +526,6 @@ def _guard_credentials(user_id: int | None) -> None:
         "把輸出貼到帳號管理頁的「CLI 憑證」再開。")
 
 
-# telemetry 探測的 TCP 逾時（秒）。短——這是「開場前順手探一下」，不是可靠性偵測；
-# 探不到就降級照開場（見 create），不值得為它讓建立 session 卡住。
-_JAEGER_PROBE_TIMEOUT = float(os.environ.get("CLAUDE_PTY_JAEGER_PROBE_TIMEOUT", "0.6"))
-
-
 def _jaeger_reachable() -> bool:
     """OTEL_ENDPOINT 的 host:port 此刻連得上嗎（TCP connect）。
 
@@ -548,8 +544,8 @@ def _jaeger_reachable() -> bool:
         host, port = u.hostname, u.port or 4317
         if not host:
             return False
-        import socket
-        with socket.create_connection((host, port), timeout=_JAEGER_PROBE_TIMEOUT):
+        with socket.create_connection((host, port),
+                                      timeout=config.JAEGER_PROBE_TIMEOUT):
             return True
     except Exception:      # noqa: BLE001 — 探測壞掉＝當成連不上，見 docstring
         return False
@@ -562,7 +558,13 @@ def ensure_system_user() -> int:
     所有 session 掛在這個 owner 下。password_hash 填不可用值（`!` 為 Unix 慣例的「停用」
     標記，argon2 驗證永遠不會通過），確保這個帳號無法被登入。
     """
-    with session_scope() as s:
+    # ⚠ `immediate=True`：這是典型的「檢查再動作」（查有沒有 → 沒有就插），而 db.py 的
+    #   模組 docstring 把那條規則寫成絕對的。它原本用預設的 deferred，是全樹唯一的反例
+    #   （審查 F-037）——兩條執行緒同時走到會雙雙判定「不存在」，第二個插入撞 username
+    #   UNIQUE 拋 IntegrityError，而 app.py 沒有它的 errorhandler → 500 HTML traceback。
+    #   不會真的建出兩個 system 帳號（UNIQUE 擋住了），所以是錯誤呈現問題；但留著它，
+    #   下一個人就有理由相信那條規則只是建議。
+    with session_scope(immediate=True) as s:
         user = s.query(User).filter_by(username=config.SYSTEM_USERNAME).one_or_none()
         if user is None:
             user = User(username=config.SYSTEM_USERNAME, password_hash="!", is_admin=True)
@@ -1396,6 +1398,12 @@ class SessionManager:
             # 執行中的表比 created_at：這裡的「一週內」問的是「一週內開的」
             q = filters.apply(q, SessionRow, SessionRow.created_at)
         q = q.order_by(SessionRow.created_at.desc())
+        # ⚠ **eager load 擁有者。** `_to_dict` 每一列會碰兩次 `row.user`（owner 與
+        #   gitlab_pat_set），而 models 的那個 relationship 沒有設 lazy=，預設就是
+        #   `lazy="select"`——所以「走已經載進來的 row.user」那句註解只做到一半：它避掉了
+        #   「在列表交易裡開巢狀交易」，N+1 還在（一頁 20 筆、20 個不同使用者＝20 發查詢，
+        #   審查 F-036）。joinedload 讓它變成一次 JOIN。
+        q = q.options(joinedload(SessionRow.user))
         return q.limit(limit).offset(offset) if limit is not None else q
 
     def peek(self, sid: str) -> dict:
@@ -1726,6 +1734,9 @@ def _to_dict(row: SessionRow, live_state: str | None = None,
         #   逐列跑的——那是 N+1，而且是在 SQLite 上對同一個檔案開巢狀交易。這條路上的
         #   「順手多問一次 DB」正是先前把控制平面打成 `database is locked` 的形狀。
         #   `is_readable` 不把明文交出去，答案與三態的 `ok` 一致。
+        #   ⚠ 「已經載進來的」是靠 `_page()` 的 `joinedload` 保證的，不是自動的——那個
+        #     relationship 預設是 lazy=select，少了 joinedload 這裡每一列仍會各發一次
+        #     SELECT（審查 F-036）。改動查詢那一側時要一起看。
         "gitlab_proxy": row.gitlab_proxy,
         "gitlab_pat_set": bool(
             config.gitlab_enabled() and row.user is not None

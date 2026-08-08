@@ -218,7 +218,12 @@ def _await_peer_view(session_id: str, timeout: float | None = None) -> dict | No
             if row is None:
                 return None                     # 不存在 → 純粹是 port 撞號
             ready = row.pid is not None and _process_alive(row.pid)
-            snapshot = _view_dict(row.id, row.session_id, row.port, row.pid) if ready else None
+            # ⚠ `row.ttyd_bin` 一定要傳：漏了的話 ttyd_flavor 變 None，抽屜的 C/Rust
+            #   標籤在**跨 worker 沿用**這條路上靜靜消失，而 _view_dict 的註解正是在
+            #   保證「回的是當初起它的那一顆」（審查 F-025）。值一定拿得到——這裡只在
+            #   row.pid 有值時才回，而 open_view 在同一筆交易裡寫 pid 與 ttyd_bin。
+            snapshot = (_view_dict(row.id, row.session_id, row.port, row.pid,
+                                   row.ttyd_bin) if ready else None)
         if snapshot and _port_open(snapshot["port"]):
             return snapshot
         time.sleep(0.2)

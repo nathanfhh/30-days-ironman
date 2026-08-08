@@ -167,6 +167,12 @@ services:
       #   ——session 現在住在每個使用者自己的網路上（ADR 0016），由控制平面按需建立，
       #   compose 給不了也不該給。下面的 `networks:` 區塊是**控制平面自己**那張，與
       #   session 無關，不要因為名字像就一起改。
+    # ⚠ 預設的 json-file driver **沒有大小上限**。control 每個請求一行 access log、
+    #   nginx 也有、reconciler 每 30 秒一輪，三者都 restart: unless-stopped——磁碟被吃滿時
+    #   的症狀是 SQLite 寫入失敗，那個症狀完全指不到 log 檔（審查 F-017）。
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
     networks: [claude-pty-net]
     restart: unless-stopped
 
@@ -183,6 +189,13 @@ services:
         # 顯示「commit 未知」而不是猜一個。
         GIT_SHA: ${GIT_SHA:-}
         BUILT_AT: ${BUILT_AT:-}
+        # ⚠ **這兩行 control 有、這裡也一定要有。** 檔頭第 79 行記著「reconciler 沒有這兩行
+        #   ＝兩個服務用不同的 commit 建同一份 Dockerfile」，而當時的修法只拿掉了 control
+        #   的預設值、沒有把兩行補過來；第 81 行又明講「臨時換版在 .env 設 TTYD_RUST_REF」。
+        #   照做的結果：control 用新 ref、reconciler 用 Dockerfile 預設，Rust stage 編兩次
+        #   （五分鐘起跳），而下面那句「與 control 同 image、同設定」不再成立（審查 F-018）。
+        TTYD_RUST_REPO:
+        TTYD_RUST_REF:
     # ⚠ 共用 control 的 PID namespace：ttyd 跑在 control 容器內，reconciler 若有自己的
     #   namespace，os.kill(pid, 0) 一律看不到那些 pid → 會把還活著的 view 記錄全部誤刪
     #   （2026-07-25 實測）。共用後 pid 可比，_process_alive 才有意義。
@@ -204,6 +217,12 @@ services:
       CLAUDE_PTY_SELF_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
       CLAUDE_PTY_DB_PATH: /data/claude-pty.db
       CLAUDE_PTY_SECRET_KEY: ${CLAUDE_PTY_SECRET_KEY:?同上}
+    # ⚠ 預設的 json-file driver **沒有大小上限**。control 每個請求一行 access log、
+    #   nginx 也有、reconciler 每 30 秒一輪，三者都 restart: unless-stopped——磁碟被吃滿時
+    #   的症狀是 SQLite 寫入失敗，那個症狀完全指不到 log 檔（審查 F-017）。
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
     networks: [claude-pty-net]
     depends_on: [control]
     restart: unless-stopped
@@ -219,6 +238,12 @@ services:
       - "${CLAUDE_PTY_BIND_ADDR:-127.0.0.1}:8080:8080"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro
+    # ⚠ 預設的 json-file driver **沒有大小上限**。control 每個請求一行 access log、
+    #   nginx 也有、reconciler 每 30 秒一輪，三者都 restart: unless-stopped——磁碟被吃滿時
+    #   的症狀是 SQLite 寫入失敗，那個症狀完全指不到 log 檔（審查 F-017）。
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
     networks: [claude-pty-net]
     depends_on: [control]
     restart: unless-stopped

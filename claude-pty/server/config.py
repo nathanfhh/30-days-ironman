@@ -694,6 +694,13 @@ REDRAW_SETTLE_SECONDS = float(os.environ.get("CLAUDE_PTY_REDRAW_SETTLE", "0.15")
 # 還沒有任何訊息說在等什麼。這只是一個中繼資料，等不到就留 NULL。
 CLI_VERSION_TIMEOUT = float(os.environ.get("CLAUDE_PTY_CLI_VERSION_TIMEOUT", "5"))
 
+# telemetry 探測的 TCP 逾時（秒）。短——這是「開場前順手探一下」，不是可靠性偵測；
+# 探不到就降級照開場（見 sessions.create），不值得為它讓建立 session 卡住。
+# ⚠ 這個值原本住在 sessions.py，是全樹唯一一個在 config 之外自己讀 os.environ 的可調值，
+#   而下方 VIEW_PEER_WAIT 那段正好寫著「本區其餘每一個等待值都在這裡」——那句話當時是
+#   假的（審查 F-028）。搬過來讓它變成真的。
+JAEGER_PROBE_TIMEOUT = float(os.environ.get("CLAUDE_PTY_JAEGER_PROBE_TIMEOUT", "0.6"))
+
 # 開終端前確認 container 還活著的逾時（SessionManager.probe_container）。這一問跑在
 # 使用者按下「開啟」的當下，所以要短：問不到就當作不知道、照常開（fail-open），
 # 寧可偶爾開到一個已經死掉的終端，也不要讓 dockerd 慢的時候整個功能不能用。

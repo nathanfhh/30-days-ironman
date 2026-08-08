@@ -185,10 +185,9 @@ def attach_jaeger(client: docker.DockerClient, net_names) -> int:
     ⚠ **jaeger 不在就安靜跳過**：它是選配設施，不是缺陷。任何失敗都不可以影響 session
       建立或控制平面啟動，所以整支 best-effort、不拋。
     """
-    from urllib.parse import urlparse
     attached = 0
     try:
-        jname = urlparse(config.OTEL_ENDPOINT).hostname
+        jname = jaeger_name()          # 別再 inline 寫一次 urlparse，那份會漂（審查 F-027）
         if not jname:
             return 0
         jg = client.containers.get(jname)
@@ -249,9 +248,8 @@ def jaeger_on_network(client: docker.DockerClient, net_name: str) -> bool:
       ——只憑探測就設 OTEL env 的話，會得到「畫面說有在錄、實際一筆都沒有」，而那比探測
       失敗更難查。
     """
-    from urllib.parse import urlparse
     try:
-        jname = urlparse(config.OTEL_ENDPOINT).hostname
+        jname = jaeger_name()          # 同 attach_jaeger：走共用的那一支
         if not jname:
             return False
         jg = client.containers.get(jname)
@@ -279,8 +277,22 @@ def remove_network(client: docker.DockerClient, user_id: int) -> bool:
         net = client.networks.get(name)
     except docker.errors.NotFound:
         return False
-    if only_jaeger_left(net):
-        detach_jaeger(client, name)
+    return remove_network_obj(client, net)
+
+
+def remove_network_obj(client: docker.DockerClient, net) -> bool:
+    """同上，但吃一個**已經拿到手的** Network 物件。
+
+    ⚠ **不變式只有這一份。** `remove_network`（by-uid）與 reconciler 的 `_reap_user_networks`
+      （手上已經有物件）原本各自寫了一遍「只剩 jaeger 就拔掉、還有別人就不拔也不收」，而
+      **只有 reconciler 那一份會被執行到**（by-uid 那支的呼叫端全是測試，審查 F-038）。
+      收斂成這一支，兩邊都走它——改一次就是兩邊都改到。
+    ⚠ 拆成兩支而不是讓 reconciler 走 by-uid：它手上已經有物件，再用名字查一次是多一次
+      往返，而且在 label 壞掉、認不出 uid 的網路上根本無從查起。
+    """
+    if not only_jaeger_left(net):
+        return False        # 還有 session 容器掛著＝這一輪還不能收，交給下一輪
+    detach_jaeger(client, net.name)
     try:
         net.remove()
         return True

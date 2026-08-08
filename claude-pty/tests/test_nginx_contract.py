@@ -38,7 +38,15 @@ check("port 真的被用在 proxy_pass（取回來卻沒用＝路由斷掉）",
       re.search(r"proxy_pass http://\$\w+:\$ttyd_port;", code) is not None)
 
 print("== 未授權 → 302 導回，不露 403 裸頁 ==")
-check("401/403 都接到具名 location", "error_page 401 403 = @view_denied;" in code)
+# ⚠ 驗的是**性質**不是字面：401/403 與 5xx 都要接到那個具名 location。
+#   只列 401 403 的話，auth_request 的其餘失敗（control 不在、X-Ttyd-Port 空）會漏出
+#   nginx 的裸錯誤頁，而抽屜會把它當終端顯示（審查 F-012）。
+_ep = re.search(r"error_page ([\d ]+)= @view_denied;", code)
+check("有一條 error_page 接到具名 location", _ep is not None)
+_codes = set((_ep.group(1) if _ep else "").split())
+check("401/403 都接到", {"401", "403"} <= _codes)
+check("🔴 5xx 也接得到（auth_request 的其餘失敗不可以漏出裸錯誤頁）",
+      bool(_codes & {"500", "502", "503", "504"}))
 check("導回首頁（302）",
       re.search(r"location @view_denied \{\s*\n\s*return 302 /;", code) is not None)
 

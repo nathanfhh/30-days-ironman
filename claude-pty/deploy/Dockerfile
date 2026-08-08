@@ -103,7 +103,10 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     && echo "${TTYD_SHA}  /usr/local/bin/ttyd" | sha256sum --check --strict - \
     && chmod +x /usr/local/bin/ttyd \
     && ttyd --version \
-    && apt-get purge -y gnupg && apt-get autoremove -y \
+    # ⚠ curl 也要 purge：它只在 build 期用來抓 keyring 與 ttyd，而這顆容器掛著
+    #   docker.sock（審查 F-030）。執行期沒有任何東西呼叫它——redeploy.sh 的健康檢查
+    #   跑在 host 上，不在容器內。
+    && apt-get purge -y gnupg curl && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust 版擺在旁邊，**檔名不同、預設不啟用**。選哪一顆是使用者的偏好、存在 DB
