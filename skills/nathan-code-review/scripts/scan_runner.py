@@ -145,12 +145,40 @@ class RunResult:
     missing: bool = False
 
 
+def _scanner_env() -> dict[str, str]:
+    """The environment a scanner runs in — with this process's virtualenv stripped.
+
+    ``VIRTUAL_ENV`` leaks in for a mundane reason with an ugly consequence. This
+    skill is normally installed as a symlink into a repository, so running
+    ``uv run scripts/scan_runner.py`` from the skill directory makes uv resolve
+    *that* repository as the project and export its ``.venv``. ``ty`` honours
+    ``VIRTUAL_ENV`` over the reviewed project's own ``.venv``, so it type-checks
+    the code under review against a completely unrelated set of dependencies.
+
+    What makes it worse than noise is that the label does not notice:
+    ``ty_environment`` decides the mode from ``pyvenv.cfg`` existing in the
+    reviewed repo, so it still reports ``resolved`` — and because the mode says
+    resolved, the runner does **not** move ``unresolved-import`` into
+    ``suppressed``. Every third-party import of the reviewed project is then
+    forwarded as a real diagnostic (56 of them on the run that surfaced this),
+    and a genuinely wrong import path is indistinguishable from the noise.
+
+    Stripping it here rather than at the ty call site: every scanner should see
+    the reviewed project, never the reviewer's own environment.
+    """
+    env = os.environ.copy()
+    for var in ("VIRTUAL_ENV", "PYTHONHOME", "PYTHONPATH", "CONDA_PREFIX"):
+        env.pop(var, None)
+    return env
+
+
 def run_process(argv: list[str], cwd: Path) -> RunResult:
     """Run a scanner. Never uses a shell, always bounded by a timeout."""
     try:
         proc = subprocess.run(
             argv,
             cwd=str(cwd),
+            env=_scanner_env(),
             capture_output=True,
             text=True,
             errors="replace",  # scanner output can carry undecodable bytes
@@ -797,9 +825,20 @@ def ty_environment(root: Path) -> tuple[str, str]:
     something the scan reaches out and changes. Setting an environment up is
     the operator's decision, taken outside this tool.
     """
+    # ⚠ **這支只看得到「有沒有一個 venv」，看不到「ty 剛才用了誰」。** 兩者曾經不一致：
+    #   VIRTUAL_ENV 從呼叫端洩進去時，ty 用的是別的專案的環境，而這裡照樣回報 resolved
+    #   ——標籤與現實脫節，而且因為它說 resolved，unresolved-import 不會被收進 suppressed，
+    #   於是受審專案每一個第三方 import 都被當成真的診斷送出去。洩漏本身已經在
+    #   `_scanner_env()` 堵掉；這段註解留著，是因為下一個在這裡加判斷的人要知道：
+    #   **這個函式回答的是環境的形狀，不是 ty 的實際行為。** 要斷言後者，得看 ty 的輸出。
+    leaked = [v for v in ("VIRTUAL_ENV", "CONDA_PREFIX") if os.environ.get(v)]
     for candidate in (root / ".venv", root / "venv"):
         if (candidate / "pyvenv.cfg").is_file():
-            return "resolved", f"使用受審 repo 既有的虛擬環境 {candidate.name}/，第三方型別已解析。"
+            note = f"使用受審 repo 既有的虛擬環境 {candidate.name}/，第三方型別已解析。"
+            if leaked:
+                note += (f"（呼叫端環境帶著 {'／'.join(leaked)}，已在執行掃描器時剝除，"
+                         f"否則 ty 會改用那一個而這個標籤會說謊。）")
+            return "resolved", note
     return "bare", (
         "受審 repo 沒有可用的虛擬環境，ty 以 bare 模式執行："
         "第三方型別未解析，推導範圍僅專案內部與標準庫。"
