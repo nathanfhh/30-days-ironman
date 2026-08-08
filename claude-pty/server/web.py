@@ -108,7 +108,13 @@ def login_page():
 def sessions_page():
     # claude 的模型白名單在伺服端就給，列表的 chip 直接照它畫。
     return _page("sessions.html", active="sessions",
-                 claude_models=list(config.CLAUDE_MODELS))
+                 claude_models=list(config.CLAUDE_MODELS),
+                 # 這套部署有沒有開 GitLab 代理（ADR 0016）。列表的 GitLab 標記靠它 gate。
+                 # ⚠ **一定要 gate**：功能關掉時每一場的 `gitlab_proxy` 都是 False，不擋的話
+                 #   每一列都會掛一顆灰色 GitLab 圖示，對著使用者講一件這台機器上根本不存在
+                 #   的事。這是部署層的事實，不是 per-session 的，所以在伺服端算好給模板，
+                 #   不從列表 API 的每一列推。
+                 gitlab_enabled=config.gitlab_enabled())
 
 
 @web.get("/account")

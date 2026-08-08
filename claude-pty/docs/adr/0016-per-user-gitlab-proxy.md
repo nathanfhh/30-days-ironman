@@ -339,11 +339,6 @@ PAT 輪替解決的是「憑證本身可能外流」，它換掉的是鑰匙；�
 
 ## 要讀兩個事實，不是一個
 
-> **現況：這兩個事實已經由 `/api/sessions` 回出來（`gitlab_proxy` 與 `gitlab_pat_set`），
-> 但 session 列表還沒有畫對應的標記。** 帳號頁那一塊是完整的。下面寫的是那個標記**被加上
-> 去時**必須遵守的規則，不是對現況的描述——別把它讀成「已經這樣顯示了」。
-
-
 - `sessions.gitlab_proxy` ＝**這場當初有沒有接上代理的網路**。不可變。
 - 擁有者**現在**還有沒有 PAT ＝ 那條路的另一端還在不在。
 
@@ -356,6 +351,29 @@ PAT 輪替解決的是「憑證本身可能外流」，它換掉的是鑰匙；�
 歷史紀錄的時間視角不同：session 結束後已經沒有「現在是否可用」，所以歸檔時把快照原樣搬到
 `session_history.gitlab_proxy`。欄位上線前的舊歷史是 `NULL`，**不畫**——把不知道畫成暗燈
 是在謊稱「確定未啟用」。
+
+### 畫出來長什麼樣（已實作）
+
+列表那排純圖示標記（網路 · 錄製 · telemetry）後面多一顆 `fa-brands fa-gitlab`，
+語意全靠 tone 與 tooltip（`sessions.html` 的 `chips()`）：
+
+| `gitlab_proxy` | `gitlab_pat_set` | tone | 說法 |
+|---|---|---|---|
+| `true` | `true` | accent | 本場可用 |
+| `true` | `false` | **warn** | 當初接上了，但你現在沒有 token → git 會失敗；填回去一個對帳週期內恢復 |
+| `false` | 不看 | off | 本場沒有——開場時沒接上，事後補 token 救不了，要開新的一場 |
+| `null` | — | **不畫** | 欄位上線前的舊列，是「不知道」 |
+
+歷史那張表只讀一欄：`true` → accent「期間曾啟用」、`false` → off、`null` → 不畫。
+
+⚠ **整顆標記由部署層的總開關 gate**（`web.sessions_page()` 把 `config.gitlab_enabled()`
+給模板）。沒有這道 gate 的話，**沒設 `CLAUDE_PTY_GITLAB_HOST` 的部署**——也就是預設——
+每一場的 `gitlab_proxy` 都是 `False`，於是整欄長出灰色 GitLab 圖示，對著使用者講一件那台
+機器上根本不存在的事。這是部署層的事實，不從列表 API 的每一列去推。
+
+⚠ 危險的是 `true` + 沒有 token 那一格：它最容易被寫成 accent（「有接上啊」），而那正是
+使用者清掉 token 之後畫面說「可用」、git 全部失敗的那個情境。`e2e_gitlab_chip` 釘著它，
+連同「`null` 不畫」與「功能關掉時一顆都沒有」。
 
 ## 收斂：代理是期望狀態
 

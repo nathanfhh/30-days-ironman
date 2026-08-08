@@ -380,6 +380,9 @@
 
   // 一般使用者只看得到自己的 session，每列都掛自己的名字只是浪費空間
   const isAdmin = {{ 'true' if user.is_admin else 'false' }};
+  // 這套部署有沒有開 GitLab 代理（ADR 0016）。關掉時每一場的 gitlab_proxy 都是 false，
+  // 不 gate 的話整欄會長出灰色 GitLab 圖示，講一件這台機器上不存在的事。
+  const gitlabEnabled = {{ 'true' if gitlab_enabled else 'false' }};
 
   function chips(s, historical = false) {
     const p = s.profile || {};
@@ -429,6 +432,34 @@
     } else {
       marks.push(["Telemetry：已要求送 Jaeger（實際是否送出以容器 log 為準）",
                   "fa-solid fa-chart-line", "accent"]);
+    }
+    // GitLab 代理（ADR 0016）。**這一顆要讀兩個事實，只看任何一個都會說謊**：
+    //   · s.gitlab_proxy   ＝這場**當初**有沒有接上代理的網路。不可變——網路必須在容器
+    //     start 之前接（防火牆放行的是那一刻的路由快照），所以事後補 token 救不了。
+    //   · s.gitlab_pat_set ＝擁有者**現在**還有沒有 token，也就是那條路的另一端在不在。
+    // 只看前者：使用者清掉 token 之後畫面會一直說「可用」，而 git 全部失敗。
+    // 只看後者：事後補 token 會讓畫面對著一場根本沒接上網路的 session 說「可用」。
+    //
+    // ⚠ **null／undefined 一律不畫。** 那是這個欄位上線前建立的舊列，事實是「不知道」
+    //   ——畫成暗燈等於謊稱「確定未啟用」，而那正是這排標記存在的反面。
+    // ⚠ 歷史那張表**只有一個事實**：session 都結束了，沒有「現在能不能用」可言，
+    //   所以 historical 時不看 token（`_history_to_dict` 也不回那一欄）。
+    const proxied = s.gitlab_proxy;
+    if (gitlabEnabled && proxied !== null && proxied !== undefined) {
+      if (!proxied) {
+        marks.push([historical
+          ? "GitLab：期間未啟用"
+          : "GitLab：本場沒有——開場時沒接上代理網路，事後補 token 也救不了這一場（網路要在容器啟動前接），要用就開新的一場",
+          "fa-brands fa-gitlab", "off"]);
+      } else if (historical) {
+        marks.push(["GitLab：期間曾啟用", "fa-brands fa-gitlab", "accent"]);
+      } else if (s.gitlab_pat_set) {
+        marks.push(["GitLab：本場可用", "fa-brands fa-gitlab", "accent"]);
+      } else {
+        marks.push([
+          "GitLab：本場當初接上了代理網路，但你現在沒有設 token——git 與 API 都會失敗。到帳號頁填回去，一個對帳週期內會自己恢復",
+          "fa-brands fa-gitlab", "warn"]);
+      }
     }
 
     // ⚠ tone 也要逸出：它曾經只有 "owner"/"accent" 兩個字面常數，現在其中一個是
