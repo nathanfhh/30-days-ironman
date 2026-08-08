@@ -17,7 +17,6 @@ import json
 import os
 import re
 import socket
-import sys
 import tarfile
 import tempfile
 import threading
@@ -813,14 +812,22 @@ def preflight() -> list[str]:
         # （`config.SESSION_UID`，實測 1001 而不是直覺的 1000——見那個常數的說明）。
         # 兩者不同時 0700 的目錄容器就進不去：transcript 寫不下、種子讀不到，症狀是
         # 每一場都撞 onboarding 對話，而最後那道預設停在「No, exit」。
-        # ⚠ 只在 Linux 上檢查：macOS Docker Desktop 的 virtiofs 會做 uid 對映，host 的
-        #   501 與容器裡的 1001 本來就對得起來，在那邊喊是純噪音。
-        if sys.platform == "linux" and os.getuid() != config.SESSION_UID:
+        # ⚠ **只在 host 是 Linux 時檢查**（`config.host_is_linux()`）：只有那裡的 bind mount
+        #   會原樣把 uid 帶過去；Docker Desktop（macOS／Windows）都做 uid 對映，在那邊喊是
+        #   純噪音。
+        # ⚠ 這裡原本寫的是 `sys.platform == "linux"`，而那是**錯的問題**：控制平面跑在容器裡
+        #   （ADR 0009），容器內 `sys.platform` 永遠是 linux——那道 guard 從來沒有在正式部署
+        #   裡生效過，於是 macOS host 每次啟動都收到這句假警報。問的必須是 host 的作業系統，
+        #   而那件事只有 host 講得出來（見 config.HOST_PLATFORM）。
+        if config.host_is_linux() and os.getuid() != config.SESSION_UID:
             problems.append(
                 f"控制平面以 uid {os.getuid()} 執行，但 session 容器內的寫入者是 "
                 f"nathan(uid {config.SESSION_UID})。per-user 空間是 0700，uid 對不上時"
                 f"容器進不去那些目錄——症狀是每一場都撞 onboarding 對話。"
-                f"請把 deploy/.env 的 APP_UID 設成 {config.SESSION_UID} 重新 build。")
+                f"請把 deploy/.env 的 APP_UID 設成 {config.SESSION_UID} 重新 build。"
+                f"（host 判定為 "
+                f"{config.HOST_PLATFORM or '未指明，退回容器內的判斷——那不一定準'}；"
+                f"你的 host 不是 Linux 的話這是誤報，deploy/redeploy.sh 會自動帶對這個值）")
     if config.PAGE_SIZE_CLAMPED is not None:
         problems.append(
             f"CLAUDE_PTY_PAGE_SIZE={config.PAGE_SIZE_CLAMPED} 不在 1–{config.MAX_PAGE_SIZE} "

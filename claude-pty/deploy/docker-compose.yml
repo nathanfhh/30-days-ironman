@@ -143,6 +143,15 @@ services:
       # 自己 mkdir 用的可以不同），而不是因為這裡真的會不一樣。
       CLAUDE_PTY_SPACE: ${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}
       CLAUDE_PTY_SPACE_SELF: ${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}
+      # host 的作業系統（`uname -s`）。**只有 control 需要**——preflight 只在它裡面跑
+      # （reconciler 的 main() 只做 init_db）。
+      # ⚠ 控制平面在容器裡問不到這件事：`sys.platform` 永遠是 linux，講的是容器不是 host。
+      #   它決定 APP_UID 那道檢查要不要喊（只有 Linux 的 bind mount 會原樣帶 uid 過去；
+      #   Docker Desktop 在 macOS/Windows 都做對映）。少了它，macOS 上每次啟動都會收到一句
+      #   叫你去改 APP_UID 的假警報——而喊狼來了的訊號比沒有訊號更糟。
+      # ⚠ redeploy.sh 會自動算好帶進來（shell 環境變數優先於 .env）。用別的方式部署才需要
+      #   自己在 .env 填。
+      CLAUDE_PTY_HOST_PLATFORM: ${CLAUDE_PTY_HOST_PLATFORM:-}
       # --- ttyd 在本容器內起，nginx 是同網路的兄弟 → 綁 0.0.0.0，port 不發布到 host ---
       CLAUDE_PTY_TTYD_BIND: "0.0.0.0"
       CLAUDE_PTY_TTYD_HOST: control

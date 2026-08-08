@@ -2,6 +2,7 @@
 前端不得指定）。前端只選得了 profile 的幾個面向，值一律走白名單。"""
 
 import os
+import sys
 from contextlib import suppress
 
 # 目標 image：`dev-container/` 建出來的那一顆（見它的 run script）。session 容器就是
@@ -34,6 +35,34 @@ _SELF_HOME = os.path.expanduser("~")
 
 HOST_REPO_ROOT = os.environ.get("CLAUDE_PTY_HOST_REPO_ROOT", _SELF_REPO_ROOT)
 HOST_HOME = os.environ.get("CLAUDE_PTY_HOST_HOME", _SELF_HOME)
+
+# 路徑不是控制平面唯一看不到的 host 事實，**作業系統是第二件**（ADR 0009）。
+# 值就是 host 的 `uname -s`（`Linux` / `Darwin` / `MINGW64_NT-…`），空＝不知道。
+# 由 `deploy/redeploy.sh` 算好、compose 注進來（**只給 control**，preflight 只在它裡面跑）。
+HOST_PLATFORM = os.environ.get("CLAUDE_PTY_HOST_PLATFORM", "").strip()
+
+
+def host_is_linux() -> bool:
+    """host 的 bind mount 會不會**原樣把 uid 帶過去**（＝uid 對不上就真的寫不進去）。
+
+    用途只有一個：決定 preflight 的 `APP_UID` 檢查要不要喊。只有 Linux 的 bind mount 會
+    原樣帶 uid；Docker Desktop（macOS／Windows）都做 uid 對映，那裡 uid 不同是正常的。
+
+    ⚠ **不可以改回 `sys.platform`。** 容器化部署（ADR 0009，也就是正式的那個形狀）下它
+      永遠是 `linux`——講的是**容器**不是 host。原本那道 `if sys.platform == "linux"` 的
+      用意正是「macOS 上別喊」，但它**從來沒有在正式部署裡生效過**：2026-08-08 一次
+      redeploy 之後才發現，macOS host 每次啟動都收到一句叫他去改 APP_UID 的假警報，
+      而 session 明明好好的。一條喊狼來了的訊號，比沒有訊號更糟。
+
+    ⚠ 判準是**白名單**「host 是不是 Linux」而不是黑名單「是不是 macOS」：Windows 的
+      Docker Desktop 同樣做 uid 對映，白名單讓它自己落在正確的一側，不必列舉，
+      也不會在多一種 host 時漏掉。
+
+    ⚠ 不知道（沒設）時退回 `sys.platform`：非容器化執行時那**就是** host 的真相；容器化
+      而沒設的人維持舊行為。誤報是安全的那個方向——漏報的代價是「真 Linux host 上每一場
+      session 都撞 onboarding 對話，而且完全沒有訊號」。
+    """
+    return (HOST_PLATFORM or sys.platform).lower().startswith("linux")
 
 # 走 entrypoint.sh 時 bind-mount repo 的 entrypoint.sh，保證 ADR 0006 的 env-skip 邏輯一定在
 # （免每次 rebuild image；比照 run script mount skills/addon 的 freshness 哲學）。

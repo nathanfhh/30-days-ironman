@@ -70,6 +70,20 @@
 - **`app` 的 uid 是 build arg（`APP_UID`）不是常數**：掛進來的 host 檔案帶著 host 的 uid，
   對不上就讀不到。Linux 上 `APP_UID` 要設成 `id -u`；改了要重新 build 才生效。
 
+⚠ **「這台 host 是不是 Linux」控制平面同樣看不到——那是路徑之外的第二件。** 上面那條 uid
+規則**只在 Linux 上成立**：只有那裡的 bind mount 會原樣把 uid 帶過去，Docker Desktop
+（macOS／Windows）都做 uid 對映，uid 不同是正常的。所以 preflight 的 `APP_UID` 檢查得先問
+「host 是什麼」，而容器內 `sys.platform` **永遠**是 `linux`——它講的是容器不是 host。
+
+那道 guard 原本就寫成了 `sys.platform == "linux"`，用意是「macOS 上別喊」，結果是它
+**從來沒有在正式部署裡生效過**（正式部署就是容器化的）。2026-08-08 一次 redeploy 之後才
+發現：macOS host 每次啟動都收到一句叫他去改 `APP_UID` 的假警報，而 session 好好地跑著。
+一條喊狼來了的訊號，比沒有訊號更糟。
+
+現在由 `deploy/redeploy.sh` 用 `uname -s` 算好、compose 以 `CLAUDE_PTY_HOST_PLATFORM` 注進
+control（判準見 `config.host_is_linux()`，`test_host_platform` 釘著兩條傳遞路徑）。
+**路徑要解耦，作業系統也要——凡是「host 的事實」，容器內問到的都不算數。**
+
 ## 後果
 
 - 部署一致（全 Docker），沿用 host daemon 既有的 network / image 生態，profile 能力無需

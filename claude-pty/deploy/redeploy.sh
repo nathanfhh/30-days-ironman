@@ -74,7 +74,15 @@ fi
 # 建置時間：**每次 build 都重取**。它回答的是「線上這包是什麼時候建出來的」——同一個
 # commit 可以在任何時候被重新打包，所以不能拿 commit 時間頂替。
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-export GIT_SHA BUILT_AT
+# host 的作業系統。**控制平面在容器裡問不到這件事**——`sys.platform` 永遠是 linux，講的是
+# 容器不是 host（ADR 0009 的「路徑解耦」是同一類問題，只是那時只認出了路徑）。它決定
+# preflight 的 APP_UID 檢查要不要喊：只有 Linux 的 bind mount 會原樣把 uid 帶過去。
+# ⚠ 用 `uname -s` 不用 `$OSTYPE`：後者是 bash 專屬，而這支是 `#!/bin/bash` 沒錯，但值的
+#   形式（`darwin24` 之類）也沒有標準。`uname -s` 到處都有、輸出穩定。
+# ⚠ shell 的環境變數**優先於 `.env`**，所以這一行會蓋掉使用者在 .env 裡手填的值。那是對的
+#   方向：`uname` 問到的是事實，手填的可能是上一台機器留下來的。
+CLAUDE_PTY_HOST_PLATFORM="$(uname -s)"
+export GIT_SHA BUILT_AT CLAUDE_PTY_HOST_PLATFORM
 
 # 有人正開著終端的話先講一聲：重建會拆掉 control 的 PID namespace，裡面的 ttyd 全部跟著死。
 # session 容器本身不受影響（它們是獨立容器），使用者重開網頁就會起一個新的 ttyd。
