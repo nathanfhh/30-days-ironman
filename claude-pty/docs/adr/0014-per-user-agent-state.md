@@ -22,8 +22,14 @@ B 的 transcript。這份 ADR 就是把狀態層切成 per-user 的那次變更�
 ${CLAUDE_PTY_SPACE}/user-{userId}/
 ├── claude/            → /home/nathan/.claude       （rw；含 .claude.json）
 ├── persistent-data/   → /home/nathan/persistent-data（rw；給使用者自己放東西）
-└── mitm/              → 錄製產出                    （rw）
+└── ncr/               → /home/nathan/ncr            （rw）
+    ├── mitm/          錄製產出（entrypoint.sh 的 CAPTURE_DIR）
+    └── {group}/{repo}/…  審查報告的 archive
 ```
+
+⚠ 第三項掛的是**那個根**（`config.NCR_HOME_BIND`），不是 `mitm/`。容器內兩條寫入路徑
+（錄製與報告）都落在它底下，只掛一個根就同時涵蓋——而且**不可以**把 `mitm/` 另外再掛
+一次：那會變成巢狀 bind mount，落點沒先建好就是啟動失敗。子目錄由 entrypoint 自己 mkdir。
 
 ```
 CLAUDE_CONFIG_DIR=/home/nathan/.claude

@@ -119,9 +119,10 @@ CLAUDE_MITM_SELF = os.path.join(_SELF_REPO_ROOT, "mitm")   # 存在性檢查用
 # 對不上就是「錄了個寂寞」，而且沒有任何錯誤訊息。
 MITM_ADDON_BIND = "/home/nathan/ncr-mitm"
 # ⚠ 這裡曾經有 MITM_OUTPUT_DIR / MITM_OUTPUT_DIR_SELF：capture 的 .mitm 共用落在
-#   host 的一個共用目錄。ADR 0014 之後那是 per-user 的（space 底下的 user-{id}/mitm，
-#   見 user_mounts）——那個目錄裡是**完整的 API 請求本文**，共用它是先前盤點時最容易
-#   漏掉的一項。容器內的落點仍是同一個路徑，見下方 MITM_BIND。
+#   host 的一個共用目錄。ADR 0014 之後那是 per-user 的（space 底下的 `user-{id}/ncr/mitm`
+#   ——掛的是 `ncr/` 那個**根**，不是 mitm 本身，見 user_mounts 與 NCR_HOME_BIND）
+#   ——那個目錄裡是**完整的 API 請求本文**，共用它是先前盤點時最容易漏掉的一項。
+#   容器內的落點仍是同一個路徑，見下方 MITM_BIND。
 
 # --- SSH agent 轉發：預設關，由部署者明確開啟（ADR 0011）------------------------------
 #

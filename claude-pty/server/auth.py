@@ -205,8 +205,14 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
                     require_old: bool = True) -> dict:
     """改密碼。require_old=True（使用者自行修改）時必須驗舊密碼；admin 代改可略過。
 
-    回傳改完之後的 user（含遞增過的 password_version）——呼叫端要靠它把「操作中的
-    這一台」的 cookie 續上，見 app.change_own_password。
+    回傳改完之後的 user（含遞增過的 password_version）。
+
+    ⚠ **不為「操作中的這一台」留特例**（ADR 0010）：password_version 一遞增，這個帳號的
+      每一張 cookie 都當場失效，包含按下送出的那一張——`app.change_own_password` 自己
+      `session.clear()` 收尾，`admin_change_password` 則本來就不是他在操作。留一個例外只
+      換到少按幾個鍵，卻讓「全部失效」變成說一套做一套。
+    ⚠ 而且 cookie 不是全部：版號管不到一條**已經升級完成的 WebSocket**（授權只發生在連線
+      交出去之前）。兩個呼叫端都要接著呼叫 `app._cut_live_terminals()`。
     """
     new_hash = hash_password(new_password)
     with session_scope() as s:

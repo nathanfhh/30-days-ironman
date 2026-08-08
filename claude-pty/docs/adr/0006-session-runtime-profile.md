@@ -46,14 +46,27 @@ CLI 有預設、進去也能隨時改。
 
 ### 第二層：控制平面補上 docker 層能力（env 給不了的部分）
 
-`build_run_kwargs` 依 profile 補上：防火牆需要的 `cap_add=["NET_ADMIN"]` + session
-network；錄製要 mount 的 addon；telemetry 的 OTEL env。env 只能「答選單」；`NET_ADMIN`
-這類能力必須由控制平面在 docker 層授予——兩層缺一不可。
+`build_run_kwargs` 依 profile 補上：防火牆需要的 `cap_add=["NET_ADMIN"]`、錄製要 mount 的
+addon、telemetry 的 OTEL env。env 只能「答選單」；`NET_ADMIN` 這類能力必須由控制平面在
+docker 層授予——兩層缺一不可。
+
+> **⚠ network 已經不在「依 profile」那一欄了**（[ADR 0016](0016-per-user-gitlab-proxy.md)
+> 改的）。這裡原本寫的是「`cap_add` + session network」，而實作也真的只在 `restricted` 或
+> `telemetry` 時才設 `network`——於是 **unrestricted 且不送 telemetry 的 session 落在 docker
+> 預設 `bridge`**，跟這台機器上每一顆沒指定網路的容器同網段。現在 network 是**無條件**的
+> （四種組合一律指定成 `claude-pty-user-{id}`），`build_run_kwargs` 那一行有一整段警告寫著
+> 不可以再退回條件式。**依 profile 而變的只剩 `NET_ADMIN`、mitm addon 與 OTEL env。**
 
 ### API 面：per-session profile
 
-create 端點接受 `profile`：`{"network": "restricted|unrestricted", "capture": bool,
-"telemetry": bool, "model"?, "effort"?}`，控制平面據此組出「docker flags + env」。
+create 端點接受 `profile`：`{"cli": "claude", "network": "restricted|unrestricted",
+"capture": bool, "telemetry": bool, "model"?, "effort"?, "token_delivery": "fd|env"}`，
+控制平面據此組出「docker flags + env」。值一律走白名單（`app._ENUMS`、`config.CLAUDE_MODELS`
+／`CLAUDE_EFFORTS`／`TOKEN_DELIVERIES`），未給則用 server 端預設。
+
+⚠ `token_delivery` 是後來加的，而且**不是偏好題**：它是「憑證走 fd 那條路壞掉時」的逃生口
+（`fd` 依賴一個沒有寫進官方文件的環境變數，見 `config.TOKEN_DELIVERIES`），預設一律 `fd`。
+放進 profile 是為了讓人**當場切得回去**，不必等改完程式重新部署。
 
 ## 後果
 

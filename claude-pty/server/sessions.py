@@ -5,7 +5,8 @@
 全由 DB 交易仲裁，故單 worker 與多 worker 同樣正確，無需改寫。
 
 瀏覽器看終端走 on-demand ttyd（ADR 0008；見 views.py），create 時**不**起 ttyd。
-ttyd 與就緒偵測共用 docker-py 的 `attach_socket`（見下方 attach 段）。
+ttyd 接的是它自己 spawn 的 `docker attach` **CLI 子程序**（ADR 0002），與這裡的
+`attach_socket` 是兩條各自獨立的路——後者只給伺服端內部的就緒偵測用（見下方 attach 段）。
 """
 
 from __future__ import annotations
@@ -1492,8 +1493,16 @@ class SessionManager:
     def attach_socket(self, sid: str):
         """回傳直連 dockerd PTY 的 raw socket。呼叫端負責 close（請用 `close_attach()`）。
 
-        用途有二：就緒偵測（等畫面靜止）與觸發重繪。**這條路不經 nginx/Flask 授權**
-        ——它只在伺服端內部使用，不對外開放。
+        唯一的用途是**就緒偵測**（連上去等畫面靜止，見 `_wait_pty_quiet`）。**這條路不經
+        nginx/Flask 授權**——它只在伺服端內部使用，不對外開放；瀏覽器那條終端走的是 ttyd
+        自己的 `docker attach` 子程序，與這裡無關。（觸發重繪早就改成送兩次 resize 了，
+        見 `_nudge_redraw`——不從這裡注入任何按鍵。）
+
+        ⚠ **這個 client 刻意不給 timeout**，是這個 codebase 裡唯一的例外（ADR 0012 的
+        「所有 docker client 給有界 timeout」在這裡不適用）：attach 會把底層 HTTP 連線
+        hijack 成 raw socket，client 的 timeout 會直接變成那條串流的 `recv` 逾時——而
+        「一直收不到 bytes」正是就緒偵測要的答案，不是失敗。逾時由呼叫端在 socket 上設
+        （`attached(timeout=…)` → `raw.settimeout()`），尺度也不同（0.3 秒一輪）。
 
         ⚠ **用獨立的 docker client，不共用 self._docker**。attach 會把底層的 HTTP 連線
         hijack 成 raw socket，但 docker-py 的連線池並不知道這件事——它仍把那條連線視為
@@ -1572,8 +1581,11 @@ class SessionManager:
             self._docker.api.resize(row["container"], height=rows, width=cols)
         except docker.errors.NotFound as e:
             raise SessionError(f"session {sid} 的 container 已不存在") from e
-        # 記下來：讀畫面要用它把 bytes 餵進正確尺寸的終端模擬器，觸發重繪後也要還原成
+        # 記下來：下一次要判斷「尺寸有沒有變」靠它（見上面那段），觸發重繪後也要還原成
         # 這個值。docker 那邊 resize 成功才寫，免得記到一個沒真的套用的尺寸。
+        # ⚠ 這裡原本還寫著「讀畫面要用它把 bytes 餵進正確尺寸的終端模擬器」——那是一個
+        #   已經拆掉的功能留下的殘影，而且方向與 ADR 0003 相反（伺服端不維護螢幕狀態、
+        #   不引入 pyte，重繪交給 TUI 自己）。不要照著那句話把終端模擬器加回來。
         with session_scope() as s:
             db_row = s.get(SessionRow, sid)
             if db_row is not None:

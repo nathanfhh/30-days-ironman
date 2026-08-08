@@ -124,9 +124,9 @@ nginx、N 個獨立的計數桶——設定寫 `10r/s`，對 GitLab 的實際速
 | `192.168.0.0/16` 切成 size 20 | 16 |
 | **合計** | **31** |
 
-扣掉基礎設施吃掉的（docker 自己的 `bridge`、claude-pty 的 compose 專案網、jaeger 的
-`ncr-telemetry`、這台機器上其他 compose 專案，以及升級前留下的 `claude-pty-sessions`），
-實務上大約是**同時 26 人在線**。
+扣掉基礎設施吃掉的（docker 自己的 `bridge`、claude-pty 的 compose 專案網、這台機器上其他
+compose 專案，以及升級前留下的 `claude-pty-sessions`），實務上大約是**同時 26 人在線**。
+（jaeger **不佔**一格——它待在預設橋接上，見下方〈jaeger〉。）
 
 ⚠ **不要把這個數字寫死成宣稱。** 它取決於那台機器上還有多少別的東西，講死了就會變成一個
 比機制還準確的說法。程式裡的錯誤訊息也是講「大約」。
@@ -154,8 +154,9 @@ nginx、N 個獨立的計數桶——設定寫 `10r/s`，對 GitLab 的實際速
 
 ## jaeger：誰需要它，誰把它接過來
 
-jaeger 只擁有自己那張網（`ncr-telemetry`，見 `opentelemetry/jaeger-compose.yaml`）。
-需要送 trace 的一方負責 `docker network connect`：
+jaeger **不擁有、也不借任何一張網**——它待在 docker 內建的預設橋接上
+（`network_mode: bridge`，見 `opentelemetry/jaeger-compose.yaml`）。需要送 trace 的一方
+負責 `docker network connect`：
 
 - **claude-pty** — 控制平面把 jaeger 接到**每一張使用者網路**上（`user_proxy.attach_jaeger`）
 - **dev-container** — run wrapper 把 jaeger 接到 `gitlab-proxy` 那張網上，再開容器
@@ -163,6 +164,12 @@ jaeger 只擁有自己那張網（`ncr-telemetry`，見 `opentelemetry/jaeger-co
 ⚠ 反過來（jaeger 用 `external:` 去借別人的網）有兩個毛病：那張網必須**先存在**，於是產生
 開機順序（先起對方再起 jaeger，反過來就 `network not found`）；而且它只借得到**一張**，
 per-user 之後根本不夠用。
+
+⚠ **連「自己建一張」都不做**（原本它有一張 `ncr-telemetry`，2026-08-08 移除）：位址池是
+整台機器共用的，而這裡是一人一張網，所以 jaeger 那一格直接換算成「少一個人能同時在線」。
+它從來不主動連任何人，只被連——自己那張網平常一個封包都沒有，不值得花掉一格。
+預設橋接沒有內建 DNS 不影響：容器內用 `jaeger:4317` 找得到它，靠的是**接它過去的那張
+使用者網路**的 DNS。
 
 ⚠ **接線點必須有三個**，因為網路與 jaeger 都可能在任意時刻出現：網路剛建好時
 （`ensure_network`）、控制平面啟動時（`preflight`）、以及 reconciler 每一輪的差集補接

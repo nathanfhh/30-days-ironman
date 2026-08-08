@@ -37,8 +37,14 @@ attach 為唯一通道、重連依賴 TUI 自身重繪」的核心。但仍缺�
 - 容器內的 CLI 以非 root 執行。
 - **不得**把 host 的 docker socket mount 進 spawned container（否則 session 可反向控制
   host）。這條紅線在容器化部署後更形重要（見 [ADR 0009](0009-containerized-deployment-docker-socket.md)）。
-- 套用資源限制（`--memory` / `--cpus` / `--pids-limit`）與每人 session 上限；閒置
-  session 由背景回收。cap 與網路輪廓依 profile 按需收斂（見 [ADR 0006](0006-session-runtime-profile.md)）。
+- 套用資源限制（`--memory` / `--cpus` / `--pids-limit`）與每人 session 上限。cap 與網路
+  輪廓依 profile 按需收斂（見 [ADR 0006](0006-session-runtime-profile.md)、
+  [ADR 0016](0016-per-user-gitlab-proxy.md)）。
+- 閒置回收的機制做在 reconciler 裡（`_reclaim_idle`），但**預設停用**
+  （`CLAUDE_PTY_IDLE_TIMEOUT_HOURS=0`）。原因是這套東西的主要用途正是「長跑、偶爾回頭看」，
+  而 `last_active_at` 只在開 view 或改尺寸時更新——一個自主工作好幾小時的 session，在這個
+  量測下看起來完全閒置，照它回收就是殺掉正在幹活的那些。要開之前得先想清楚活躍度怎麼量，
+  所以它是一個**留著的能力**，不是現行的安全輪廓的一部分。
 
 ## 後果
 

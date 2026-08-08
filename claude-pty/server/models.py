@@ -174,10 +174,14 @@ class Session(Base):
     # 最後一次**真的問到 dockerd** 的容器狀態，與問到的時刻（ADR 0012）。
     # 列表不再自己打 docker（一顆卡住的容器會拖垮整張表），改讀這兩欄並把新鮮度顯示
     # 出來——「這是兩分鐘前跟 dockerd 求證過的」是誠實的，「看起來即時、其實卡住了」不是。
-    # ⚠ **唯一的寫入者是 reconciler。** 單筆查詢（status）問到即時狀態只放進 response，
-    #   **絕不寫 DB**：`/api/auth/view` 是 nginx 的 auth_request 掛載點，每開一次終端
-    #   併發打 4~5 發，一旦變成寫入交易就會撞出 500 `database is locked`（實際發生過，
-    #   上線 30 分鐘就炸）。這裡原本寫「問到時也順手更新」，那正是那個回歸。
+    # ⚠ **寫入者只有兩個，而界線是「這條路每個請求都會打嗎」。**
+    #   · reconciler 每輪對帳 —— 主要來源，列表顯示的就是它寫的。
+    #   · `sessions.probe_container()` —— 使用者**明確按下開啟終端**時跑一次，順手讓畫面
+    #     不必再等一個對帳週期才停止說謊；而且**只在狀態真的變了才開寫入交易**。
+    #   單筆查詢（`status`）問到的即時狀態只放進 response、**絕不寫 DB**：它經 `_owned()`
+    #   服務 `/api/auth/view`，那是 nginx 的 auth_request 掛載點，每開一次終端併發打 4~5 發
+    #   ——一旦變成寫入交易就會撞出 500 `database is locked`（實際發生過，上線 30 分鐘就炸）。
+    #   要再加第三個寫入者的話，先問它會不會被每個請求打到（ADR 0012）。
     # NULL＝從來沒問到過（剛建立、或建立於這兩欄存在之前）→ 前端顯示為尚未確認。
     # 兩欄都 nullable，所以既有列的 ALTER TABLE ADD COLUMN 不需要 server_default。
     docker_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
