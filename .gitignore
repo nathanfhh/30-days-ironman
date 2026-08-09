@@ -20,3 +20,7 @@ __pycache__/
 
 # 代理的 .env 裡有 GitLab PAT，絕不進版控。
 gitlab-proxy/.env
+
+# drawio 匯出的 PNG。衍生物：`docs/export-diagrams.sh` 一行重生，而每改一次圖
+# 就多一版好幾 MB 的二進位檔。要嵌文章時再產。
+diagram-png/

@@ -1,0 +1,181 @@
+<mxfile host="app.diagrams.net" agent="Claude" pages="1">
+  <diagram id="review-workflow" name="審查流程 Phase 0–4">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1740" pageHeight="1460" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="nathan-code-review — 一次審查的流程（Phase 0 → 4）" style="text;html=1;fontSize=22;fontStyle=1;align=left;fontColor=#111827;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="1000" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="sub" value="每一道閘的存在理由都不同：有的擋「資訊太早進來」，有的擋「工具不在卻假裝有跑」，有的擋「AI 自作主張對外發佈」。" style="text;html=1;fontSize=13;align=left;fontColor=#6b7280;" vertex="1" parent="1">
+          <mxGeometry x="40" y="48" width="1400" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============ Phase 0 ============ -->
+        <mxCell id="p0hdr" value="&lt;b&gt;Phase 0&lt;/b&gt;　entry point — 取得審查目標" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="86" width="1660" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pf" value="&lt;b&gt;preflight.py&lt;/b&gt;　先盤點工具與憑證&#10;&lt;font color=&quot;#166534&quot;&gt;這個 skill 裡沒有任何東西可以因為工具不在就安靜地略過。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="126" width="520" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pfq" value="缺的是哪一種工具？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="600" y="122" width="180" height="64" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pf_scan" value="&lt;b&gt;掃描器&lt;/b&gt;（trivy／opengrep／linter）&#10;→ 記進 scans[] 附原因，&lt;b&gt;在發佈的報告裡揭露&lt;/b&gt;&#10;→ 繼續（優雅降級）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="830" y="118" width="400" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pf_req" value="&lt;b&gt;required（git／uv）&lt;/b&gt;&#10;→ &lt;b&gt;停下來&lt;/b&gt;，用 zh-TW 說缺什麼、裝了能恢復什麼，&lt;b&gt;不再往下&lt;/b&gt;&#10;&lt;font color=&quot;#b91c1c&quot;&gt;沒有 diff 可讀，就沒有「縮水版的審查」可以給——略過 git 繼續跑的審查，report 的是空氣。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="112" width="440" height="72" as="geometry" />
+        </mxCell>
+
+        <mxCell id="modes" value="&lt;b&gt;依輸入決定模式&lt;/b&gt;　　GitLab MR URL → &lt;b&gt;mr&lt;/b&gt;（clone 到 /tmp，diff 在本地算）　·　分支名 → &lt;b&gt;local_branch&lt;/b&gt;（git diff --merge-base）　·　沒指定 → &lt;b&gt;local_branch&lt;/b&gt;（git diff HEAD）&#10;≤3 個檔案且無分支 → &lt;b&gt;local_files&lt;/b&gt;（輕量路徑：只跑 linter ＋ 九面向，結果留在對話裡——&lt;font color=&quot;#b45309&quot;&gt;不產 JSON、不歸檔、不追蹤 re-review、不發佈&lt;/font&gt;）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="196" width="1660" height="58" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cg" value="repo 就位後同步跑 &lt;b&gt;codegraph init&lt;/b&gt;（次秒級，Phase 3 會用到）；沒有或失敗 → 記下來，全程退回 grep" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#93c5fd;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="264" width="1660" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_pf" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;endArrow=block;" edge="1" parent="1" source="pf" target="pfq"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_pfs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#16a34a;endArrow=block;" edge="1" parent="1" source="pfq" target="pf_scan"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_pfr" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ef4444;endArrow=block;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="pfq" target="pf_req"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ Phase 0.5 ============ -->
+        <mxCell id="p05hdr" value="&lt;b&gt;Phase 0.5&lt;/b&gt;　intent — 讀完標題／說明／commit／異動檔案清單之後，在深入看程式碼之前" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="310" width="1660" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="q3" value="&lt;b&gt;三題快問&lt;/b&gt;&#10;1. 該不該做？&#10;2. 該在這個 MR 做？&#10;3. 該在這個時機做？" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="350" width="380" height="76" as="geometry" />
+        </mxCell>
+
+        <mxCell id="q3n" value="&lt;b&gt;存疑不會停下審查——繼續走。&lt;/b&gt;它進 intent_check，而且&lt;b&gt;必須出現在報告裡&lt;/b&gt;。&#10;&lt;font color=&quot;#166534&quot;&gt;因為那個決定屬於人，不屬於你。AI 可以指出「這件事也許不該在這裡做」，但不能替人決定要不要做。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ca8a04;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="450" y="350" width="1250" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e_q3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ca8a04;endArrow=block;" edge="1" parent="1" source="q3" target="q3n"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ Phase 1 ============ -->
+        <mxCell id="p1hdr" value="&lt;b&gt;Phase 1&lt;/b&gt;　first review or re-review — 去歸檔目錄找這個 MR 的前次報告" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="442" width="1660" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r1" value="&lt;b&gt;沒有前次報告&lt;/b&gt;&#10;→ round 1，直接進 Phase 2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="482" width="380" height="52" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r2" value="&lt;b&gt;有前次報告 → re-review，反錨定協定生效&lt;/b&gt;&#10;&lt;font color=&quot;#b91c1c&quot;&gt;先盲讀，審完之後才回頭比對。&lt;/font&gt;讀 references/re-review.md ——包含「現在還不准讀什麼，以及為什麼」。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="450" y="482" width="1250" height="52" as="geometry" />
+        </mxCell>
+
+        <!-- ============ Phase 2 ============ -->
+        <mxCell id="p2hdr" value="&lt;b&gt;Phase 2&lt;/b&gt;　deterministic scanning — 平行派出，各自獨立 context" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="550" width="1660" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sc1" value="ncr-scan-trivy&#10;相依／IaC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="590" width="180" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="sc2" value="ncr-scan-opengrep&#10;SAST" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="235" y="590" width="180" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="sc3" value="ncr-scan-lint&#10;ruff / ty / oxlint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="430" y="590" width="180" height="46" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sc_digest" value="各自把&lt;b&gt;完整輸出寫進歸檔路徑&lt;/b&gt;，只回傳精簡 digest&#10;&lt;font color=&quot;#166534&quot;&gt;主線程從頭到尾不把原始 scanner JSON 讀進 context。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#86efac;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="630" y="590" width="440" height="46" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ft" value="&lt;b&gt;僅 re-review：ncr-fetch-threads 同時跑&lt;/b&gt;——它是上面那句話唯一的例外&#10;&lt;font color=&quot;#b91c1c&quot;&gt;它只回傳「寫到哪個路徑」，其他一律不回：不回覆內容、不回則數、不回摘要。&lt;/font&gt;&#10;摘要正是盲讀階段封起來的那個東西，而&lt;b&gt;太早讀到的摘要，不管你有沒有打算讀，它都已經作用完了。&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="590" width="610" height="66" as="geometry" />
+        </mxCell>
+
+        <mxCell id="verify1" value="&lt;b&gt;掃描結果是線索，不是 finding&lt;/b&gt;：每一條都要自己對著程式碼驗證過，才准進報告。&#10;&lt;font color=&quot;#b45309&quot;&gt;⚠ 什麼都沒報的工具也要看 exit code——crash 掉的掃描器所發出的沉默，不是健康證明，那要記成 status: error。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="668" width="1030" height="52" as="geometry" />
+        </mxCell>
+
+        <!-- ============ Phase 3 ============ -->
+        <mxCell id="p3hdr" value="&lt;b&gt;Phase 3&lt;/b&gt;　deep review — 有順序，不能對調" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="736" width="1660" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fe" value="&lt;b&gt;① Fresh eyes&lt;/b&gt;　派 ncr-fresh-eyes 讀 diff&#10;它的 prompt &lt;b&gt;不准帶&lt;/b&gt;：類別清單、嚴重度詞彙、scanner digest、先前的 findings&#10;&lt;font color=&quot;#166534&quot;&gt;重點就是要一雙「沒有被這份 skill 塑形過」的眼睛。&lt;/font&gt;&#10;&lt;font color=&quot;#b91c1c&quot;&gt;派不出去就跳過並揭露——不可以自己 inline 模擬：讀到這一行的你，早就把整份檔案看完了。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="776" width="820" height="86" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ce" value="&lt;b&gt;② Critical operation enumeration&lt;/b&gt;（在類別檢核之前）&#10;列舉這次改動碰得到的危險操作，再對每一個列舉&lt;b&gt;所有&lt;/b&gt;到得了它的路徑。&#10;&lt;font color=&quot;#b91c1c&quot;&gt;找到一個 guard 不是「有沒有守」的答案——要問的是「每一條路徑是不是都經過 guard」。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="880" y="776" width="820" height="86" as="geometry" />
+        </mxCell>
+
+        <mxCell id="nine" value="&lt;b&gt;③ 九個面向 A–I&lt;/b&gt;（references/review-dimensions.md）　每一個都要給明確的 &lt;b&gt;pass / fail / na&lt;/b&gt;，&lt;b&gt;不准含糊&lt;/b&gt;——報告裡那張九宮格就是拿它們拼出來的。&#10;清單沒點到名的，用一般最佳實踐審。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="874" width="1660" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_fe" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1f2937;endArrow=block;" edge="1" parent="1" source="fe" target="ce"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_ce" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1f2937;endArrow=block;" edge="1" parent="1" source="ce" target="nine"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ Phase 4 ============ -->
+        <mxCell id="p4hdr" value="&lt;b&gt;Phase 4&lt;/b&gt;　delivery — 報告交付與發佈" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="940" width="1660" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d1" value="&lt;b&gt;1.&lt;/b&gt; 把報告 JSON 寫進歸檔路徑" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="980" width="400" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" value="&lt;b&gt;2.&lt;/b&gt; report_model.py &lt;b&gt;validate&lt;/b&gt;　修到過為止&#10;&lt;font color=&quot;#7e22ce&quot;&gt;模型繞不過去的那道閘：它會 exit 1。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e9d5ff;strokeColor=#9333ea;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="460" y="980" width="400" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" value="&lt;b&gt;3.&lt;/b&gt; 派 &lt;b&gt;ncr-quality-check&lt;/b&gt; 掃這份 JSON&#10;唯讀，回傳違規清單；你來改，改完再 validate 一次&#10;&lt;font color=&quot;#166534&quot;&gt;作者自己檢查自己的報告不算數。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="880" y="980" width="400" height="62" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gate" value="&lt;b&gt;4. 問使用者要不要發佈&lt;/b&gt;&#10;&lt;font color=&quot;#b91c1c&quot;&gt;發佈是對外且不可逆的——&lt;b&gt;絕不主動呼叫 GitLab 的寫入端點。&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;strokeWidth=2;fontSize=12;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="980" width="400" height="62" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d5" value="&lt;b&gt;5. 同意才做&lt;/b&gt;：render_report.py 產出 Markdown　→　貼成一則 discussion（可以被回覆的討論串）　→　把 discussion_id 與時間戳&lt;b&gt;回填進 JSON&lt;/b&gt;　→　把直達 URL 給使用者" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1060" width="1660" height="34" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#a855f7;endArrow=block;" edge="1" parent="1" source="d1" target="d2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#a855f7;endArrow=block;" edge="1" parent="1" source="d2" target="d3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#16a34a;endArrow=block;" edge="1" parent="1" source="d3" target="gate"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- 後續 -->
+        <mxCell id="after" value="&lt;b&gt;發佈之後：作者反駁（pushback）&lt;/b&gt;　不掛在任何 Phase，事件觸發——可能是幾天後。&#10;走一輪自我審查，判定&lt;b&gt;撤回／維持／拆分&lt;/b&gt;，結論加註回報告 JSON。&lt;font color=&quot;#b91c1c&quot;&gt;不偷偷改寫歷史：撤回也是一筆紀錄，不是把原來那條刪掉。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;dashed=1;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1112" width="1660" height="52" as="geometry" />
+        </mxCell>
+
+        <!-- 圖例 -->
+        <mxCell id="lg" value="圖例" style="text;html=1;fontSize=12;fontStyle=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1182" width="60" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1" value="Phase 標頭" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;fontColor=#ffffff;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1204" width="120" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2" value="獨立 context 的 subagent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="170" y="1204" width="160" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3" value="確定性腳本" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="340" y="1204" width="120" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="lg4" value="硬規則／不可跨越" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="470" y="1204" width="140" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="lg5" value="人的決定點" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="620" y="1204" width="120" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="foot" value="對照：skills/nathan-code-review/SKILL.md（Phase 0–4 與 Reference map）。每個 Phase 走到時才載入對應的 reference，見另一張「Skill 架構：漸進式揭露」。" style="text;html=1;fontSize=11;align=left;fontColor=#6b7280;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1252" width="1660" height="20" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
