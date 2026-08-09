@@ -5,6 +5,20 @@
 文章談的是怎麼把一套 Code Review 的判斷標準，從腦袋裡搬進一份 AI Agent 讀得懂的
 文件；這個 repo 放的就是那份文件本身，以及它需要的腳本。
 
+## 跟著連載讀
+
+大部分人是從某一天的文章連過來的，所以對照表放前面：
+
+| 連載 | 那幾天在做什麼 | 這裡看 |
+|---|---|---|
+| Day 3–13 | 把判準萃取成一份 skill，並替它建行為回歸測試 | `skills/nathan-code-review/`、`tests/` |
+| Day 14–15 | 拿 50 個真實 PR 的外部 benchmark 量它，然後懷疑那個分數 | `benchmarks/code-review-bench/` |
+| Day 17、19–20 | 可拋棄的容器、憑證怎麼借進來、網路邊界畫在哪 | `dev-container/` |
+| Day 18 | 讓憑證不進 session 的那顆代理 | `gitlab-proxy/` |
+| Day 21 | 一場審查的時間與成本歸因 | `opentelemetry/` |
+| Day 22–23 | 線上實際流過什麼，以及為什麼看得到 | `mitm/` |
+| Day 24–29 | 把整套搬到瀏覽器後面 | `claude-pty/` |
+
 ## 目錄
 
 ```
@@ -14,13 +28,15 @@ skills/
 dev-container/          可拋棄的審查環境：工具版本固定，憑證借進來、退出時還回去
 gitlab-proxy/           擋在 GitLab 前面的 nginx：憑證不進 session、端點白名單、限流
 claude-pty/             多人共用的網頁終端：瀏覽器裡開 session，每人一顆自己的 GitLab 代理
+mitm/                   L7 流量側錄：脫敏 addon 與單頁報表，看線上實際流過什麼
 opentelemetry/          觀測：Jaeger compose 與三支報表腳本（時間、錢、單場 HTML）
 tests/                  腳本的單元測試與 skill 的行為回歸 test case
 benchmarks/             code-review-bench：50 個真實 PR 的評測資料集與計分 harness
 ```
 
-後面兩個目錄是選配的。只想試 skill 的話，`install.sh` 裝完就能用；它們處理的是
-另一個問題——**當你要把這套流程交給 AI Agent 自己跑，該給它多少權限**。
+**只想試 skill 的話，`install.sh` 裝完就能用，其餘全部是選配的。** 它們處理的是
+另一個問題——**當你要把這套流程交給 AI Agent 自己跑，該給它多少權限、以及你怎麼
+知道它真的照做了**。
 
 ## 安裝
 
@@ -92,6 +108,45 @@ MR 說明裡一段 prompt injection 就能讓它拿那把 token 做 scope 內的
 「知道有這個端點」跟「決定放行這個端點」是兩件事。
 
 細節見 [`gitlab-proxy/README.md`](gitlab-proxy/README.md)。
+
+## claude-pty
+
+把上面那一整套搬到瀏覽器後面：打開網頁、開一場環境、跑完一套審查、關掉。
+一場 Session 的真身就是一個容器，生命週期交給 Docker Daemon 管。
+
+它可以有很多人，但不是給很多人「一起」用的：各自登入、各自的狀態空間、各自的
+GitLab 憑證都做了；沒做的是同一場裡兩個人一起看、一起打字。
+
+十六支 ADR 記著每一個決定當初在權衡什麼，包含幾個後來被推翻的：
+[`claude-pty/docs/adr/`](claude-pty/docs/adr/)。想知道為什麼某個地方看起來繞，
+先翻那裡。細節見 [`claude-pty/README.md`](claude-pty/README.md)。
+
+## mitm
+
+在自己跟模型之間插一台 proxy，把 HTTPS 解開來看。回答帳單與 trace 都答不了的
+問題：線上實際傳了多少 byte、其中多少是前一次就送過的、除了模型 API 還連了誰。
+
+三道界線寫在容器的 entrypoint 裡：CA 每一場現產不持久化、落地的是脫敏副本
+（活的那條連線一個 byte 都不碰）、脫敏程式不在就整場不錄而不是退回錄原始流量。
+**錄下來的目錄要當機敏目錄看待**：拿掉的是憑證，不是內容。
+
+細節見 [`mitm/README.md`](mitm/README.md)。
+
+## opentelemetry
+
+用 profiling 的姿態接觀測，不是用監控的姿態：帶著一個具體問題開始量，量到答案
+就可以收。三支腳本分別回答時間（trace）、錢（transcript）、以及把兩者收進同一
+份互動 HTML。
+
+細節見 [`opentelemetry/README.md`](opentelemetry/README.md)。
+
+## benchmarks
+
+`code-review-bench`：50 個真實 PR 的評測資料集、盲測校正的原始判定，以及計分
+harness。方法、數字、翻車的地方全部攤開，想量自己 skill 的人可以照著建。
+
+要自己重算的話，**分數以 `benchmarks/code-review-bench/scores/summary.json` 為準**，
+`REPORT.md` 記著四組不同算法各自的偏向與名次。
 
 ## 授權
 
