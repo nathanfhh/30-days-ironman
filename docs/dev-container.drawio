@@ -1,0 +1,302 @@
+<mxfile host="app.diagrams.net" agent="Claude" pages="3">
+  <diagram id="devcontainer-topology" name="1. Dev Container 拓撲與邊界">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1280" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Dev Container — 拓撲與邊界" style="text;html=1;fontSize=22;fontStyle=1;align=left;fontColor=#111827;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="700" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="sub" value="一次性容器（--rm）：非 root 執行、預設拒絕出網、憑證不落地成環境變數。三道問題在 agent 起跑之前問完，而且只有坐在鍵盤前的人答得到。" style="text;html=1;fontSize=13;align=left;fontColor=#6b7280;" vertex="1" parent="1">
+          <mxGeometry x="40" y="48" width="1500" height="20" as="geometry" />
+        </mxCell>
+        <!-- ========== HOST ========== -->
+        <mxCell id="hostbox" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;dashed=1;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="86" width="1720" height="192" as="geometry" />
+        </mxCell>
+        <mxCell id="hostlbl" value="HOST" style="text;html=1;fontSize=13;fontStyle=1;align=left;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry x="56" y="94" width="400" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="runsh" value="&lt;b&gt;run-ncr-dev-container.sh&lt;/b&gt;&#xa;人的路徑（wrapper）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="122" width="250" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="agent" value="&lt;b&gt;ssh-agent&lt;/b&gt;（host 的）&#xa;沒有就自己起一個並 ssh-add（不指定檔名）&#xa;有但空的 → 只警告，&lt;b&gt;不擅自 ssh-add&lt;/b&gt;&#xa;&lt;font color=&quot;#b45309&quot;&gt;退出時只 -k 自己起的那個&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="330" y="122" width="330" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="mounts" value="&lt;b&gt;掛載&lt;/b&gt;　~/.claude　~/.claude.json&#xa;$PWD → /home/nathan/&lt;b&gt;code-review&lt;/b&gt;（受審專案）&#xa;~/ncr（報告與側錄落地——容器是 --rm，不掛出來就沒了）&#xa;semgrep-rules&lt;font color=&quot;#b91c1c&quot;&gt;:ro&lt;/font&gt;　trivy cache　mitm/ → ncr-mitm&lt;font color=&quot;#b91c1c&quot;&gt;:ro&lt;/font&gt;　known_hosts&lt;font color=&quot;#b91c1c&quot;&gt;:ro&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="680" y="122" width="560" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="ports" value="&lt;b&gt;-p 127.0.0.1:&lt;動態&gt;:8081&lt;/b&gt;&#xa;mitmweb UI（一律發布，&#xa;因為 published port 是 docker run&#xa;當下的決定，選單在那之後）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="122" width="290" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="sshnote" value="&lt;b&gt;-v $SSH_AUTH_SOCK:/ssh/ssh_sock&lt;/b&gt;&#xa;人的路徑一定掛（詳見第 2 頁）" style="text;html=1;fontSize=11;align=left;verticalAlign=top;fontColor=#b45309;" vertex="1" parent="1">
+          <mxGeometry x="1570" y="126" width="190" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="netjoin" value="&lt;b&gt;--network gitlab-proxy&lt;/b&gt;（那張網存在才接；不存在就不帶，否則 docker run 直接報錯）　·　接上時一併給 NCR_GITLAB_API_BASE=http://gitlab-proxy:5678　·　&lt;font color=&quot;#b91c1c&quot;&gt;jaeger 必須在 docker run 之前接上&lt;/font&gt;——限制模式放行的是 entrypoint 起跑那一刻的直連網段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#94a3b8;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="216" width="1680" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_run_agent" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#0284c7;endArrow=block;" edge="1" parent="1" source="runsh" target="agent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- ========== 容器 ========== -->
+        <mxCell id="ctnbox" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1f2937;strokeWidth=2;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="304" width="1130" height="680" as="geometry" />
+        </mxCell>
+        <mxCell id="ctnlbl" value="&lt;b&gt;SESSION 容器&lt;/b&gt;　--rm　·　執行身分 &lt;b&gt;nathan（非 root）&lt;/b&gt;　·　&lt;b&gt;--cap-add=NET_ADMIN&lt;/b&gt; 只給這一個（為了套自己的 iptables）　·　預設指令 claude --dangerously-skip-permissions" style="text;html=1;fontSize=12;align=left;fontColor=#1f2937;" vertex="1" parent="1">
+          <mxGeometry x="56" y="312" width="1110" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ctnnote" value="煞車在牆上，不在每一次的允許提問裡——容器本身就是隔離層。" style="text;html=1;fontSize=11;align=left;fontColor=#6b7280;" vertex="1" parent="1">
+          <mxGeometry x="56" y="332" width="700" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="ep" value="&lt;b&gt;entrypoint.sh&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1f2937;strokeColor=#111827;fontColor=#ffffff;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="60" y="356" width="1090" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s0" value="&lt;b&gt;① 憑證：變成一個已開的 file descriptor，不是環境變數&lt;/b&gt;&#xa;NCR_TOKEN_FILE（控制平面 put_archive 進來）→ exec 4&amp;lt; → CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=4 → &lt;b&gt;立刻 rm&lt;/b&gt;（fd 已開，檔案可以消失）&#xa;&lt;font color=&quot;#b91c1c&quot;&gt;為什麼不用裸的環境變數：那個值進了環境，/proc/1/environ 讀得到，而且 CLI 底下每一個子行程都繼承它——CLI 會開 shell，shell 會執行 AI 要求的任何指令。&lt;/font&gt;&#xa;rm 失敗不弄死這一場（unlink 要的是父目錄權限，那是控制平面那側決定的），但&lt;b&gt;要吵&lt;/b&gt;：檔案還在是少掉的一個保障。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="398" width="1090" height="94" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" value="&lt;b&gt;② 三道選單（人答，在 agent 起跑之前）&lt;/b&gt;&#xa;1. 網路：&lt;b&gt;限制白名單（預設）&lt;/b&gt; / 完全開放&#xa;2. 錄不錄流量？錄的話範圍：&lt;b&gt;全錄（預設）&lt;/b&gt; / 只錄模型 API&#xa;3. 送不送 Jaeger&#xa;&lt;font color=&quot;#6b7280&quot;&gt;非互動（CI／控制平面）用 NCR_NET／NCR_CAPTURE／NCR_CAPTURE_SCOPE／NCR_OTEL 跳過。&#xa;⚠ 條件題要成對送：NCR_CAPTURE=1 沒帶 SCOPE 會停在那道 read。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="504" width="530" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="s1n" value="&lt;b&gt;為什麼是人選，而且每一場都要重選&lt;/b&gt;&#xa;「完全開放」不是沒想清楚才留的後門——要做研究、要讓 WebFetch&#xa;或瀏覽器自動化真的連得出去時，限制模式會擋住它們。&#xa;&lt;b&gt;重點是這個選擇必須是人做的，而且畫面上看得見選了哪個。&lt;/b&gt;&#xa;&#xa;這跟 CLI 的權限模式是不同層的兩件事：權限模式決定「要不要問你」，&#xa;這道牆決定「能不能出去」。一個被批准執行的 curl，打不打得出去是另一個問題。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#93c5fd;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="620" y="504" width="530" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="&lt;b&gt;③ sudo init-firewall.sh&lt;/b&gt;（限制模式才跑；政策見右）　sudoers 只允許&lt;b&gt;無參數&lt;/b&gt;呼叫——參數是呼叫端控制的輸入面" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="636" width="1090" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" value="&lt;b&gt;④ mitmproxy L7 側錄 — 三道界線&lt;/b&gt;&#xa;· CA &lt;b&gt;每一場在容器內現產&lt;/b&gt;（~/.mitmproxy 不持久化）→ 炸開的範圍就是這顆容器&#xa;· 落地的是&lt;b&gt;脫敏過的副本&lt;/b&gt;，addon &lt;b&gt;fail-closed&lt;/b&gt;：脫敏出錯就整條丟掉，絕不改寫成未脫敏版落地；addon 不在就&lt;b&gt;整場不錄&lt;/b&gt;，而不是退回錄原始流量&#xa;· &lt;b&gt;範圍由人選，預設全錄&lt;/b&gt;；選「只錄模型 API」時其餘 host 直連、不走 proxy。&lt;font color=&quot;#b45309&quot;&gt;選了什麼會寫進 meta.json——端點表看起來像「連過的全部」，實際上是「過濾器讓我看到的那些」，不記下來讀報表的人分不出這兩件事。&lt;/font&gt;&#xa;&#xa;&lt;b&gt;網頁 UI 顯示的是記憶體裡的即時 flow（未脫敏）&lt;/b&gt;，只綁本機、有隨機 token；&lt;b&gt;落到磁碟的永遠只有脫敏版&lt;/b&gt;，兩者是分開的。&#xa;⚠ 容器加入自訂 network 時，同網段的兄弟容器連得到 8081（token 又印在 docker logs 裡）→ 那種部署要 NCR_MITM_WEB_BIND=127.0.0.1 收回容器 loopback。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="682" width="1090" height="146" as="geometry" />
+        </mxCell>
+        <mxCell id="s4" value="&lt;b&gt;⑤ session id 自己產，不事後猜&lt;/b&gt;　uuid 讀 /proc/sys/kernel/random/uuid → 餵給 CLI --session-id&#xa;&lt;font color=&quot;#166534&quot;&gt;流量、防火牆計數、transcript 三份資料從此共用同一個確定的 id；一場一個資料夾，資料夾名就是 session id。&lt;/font&gt;&#xa;先前是收工時撈「capture 之後才被改到的那顆 transcript」——那是猜的，同時開兩個容器就會對到別人。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#22c55e;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="840" width="1090" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="s5" value="&lt;b&gt;⑥ 交棒給 CLI&lt;/b&gt;（claude / codex）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="918" width="1090" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ep0" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1f2937;endArrow=block;" edge="1" parent="1" source="ep" target="s0">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_01" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1f2937;endArrow=block;" edge="1" parent="1" source="s0" target="s1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1f2937;endArrow=block;" edge="1" parent="1" source="s1" target="s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_23" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1f2937;endArrow=block;" edge="1" parent="1" source="s2" target="s3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_34" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1f2937;endArrow=block;" edge="1" parent="1" source="s3" target="s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_45" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#1f2937;endArrow=block;" edge="1" parent="1" source="s4" target="s5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_mount" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#64748b;dashed=1;endArrow=open;" edge="1" parent="1" source="mounts" target="ep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- ========== 防火牆 ========== -->
+        <mxCell id="fwbox" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="304" width="560" height="680" as="geometry" />
+        </mxCell>
+        <mxCell id="fwlbl" value="&lt;b&gt;init-firewall.sh&lt;/b&gt;　預設拒絕，白名單放行" style="text;html=1;fontSize=13;align=left;fontColor=#1e40af;" vertex="1" parent="1">
+          <mxGeometry x="1216" y="312" width="500" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fworigin" value="改寫自 Anthropic 官方 devcontainer 的同名腳本。官方的目標是「讓 devcontainer 還能開發」（GitHub 全網段、npm registry、marketplace 都放行）；這份的目標是「讓 agent 只能做審查」。&lt;b&gt;差別不在誰比較嚴，在預設值想達成什麼。&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;fontSize=11;align=left;verticalAlign=top;fontColor=#6b7280;" vertex="1" parent="1">
+          <mxGeometry x="1216" y="334" width="528" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="fw0" value="&lt;b&gt;政策來源：build 時 root 寫入的檔案，不是環境變數&lt;/b&gt;&#xa;/etc/ncr/gitlab-ssh-host（0444）&#xa;&lt;font color=&quot;#b91c1c&quot;&gt;容器裡的 agent 以 nathan 執行，env 是它寫得到的東西。政策的來源如果是 env，等於讓被關的人自己挑監獄。&lt;/font&gt;&#xa;蓋掉它需要 CAP_SYS_ADMIN，而容器只有 NET_ADMIN。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1216" y="384" width="528" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="fw1" value="&lt;b&gt;1–3　先撈出 Docker 內部 DNS 的 NAT 規則再 flush&lt;/b&gt;&#xa;127.0.0.11 上沒有任何東西在 listen，是 nat 表把它轉到 daemon 開的真實 port。&#xa;&lt;font color=&quot;#b45309&quot;&gt;一沖掉，容器就從「連得到但被擋」變成「連名字都解不出來」，而錯誤訊息長得像網路壞掉。這段照抄官方，不要自作聰明。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#93c5fd;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1216" y="480" width="528" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fw2" value="&lt;b&gt;4b　SSH:22 只通 GitLab 那一台，而且只在 agent 真的在場時才開&lt;/b&gt;&#xa;&lt;b&gt;判準是 /ssh/ssh_sock 這個 socket 在不在&lt;/b&gt;，不是誰啟動了容器、也不是任何人傳進來的旗標。&#xa;&lt;font color=&quot;#166534&quot;&gt;一個事實有兩個來源就會漂：哪天網頁那條路也允許 opt-in agent，「這是哪條路徑」的旗標就會擋錯人。socket 在不在是就地觀察得到的事實。&lt;/font&gt;&#xa;&lt;font color=&quot;#b45309&quot;&gt;⚠ SYNC：路徑與 Dockerfile 的 ENV SSH_AUTH_SOCK 同值。改一邊沒改另一邊 → 永遠看不到 agent、22 永遠不開，而且沒有任何錯誤訊息。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1216" y="570" width="528" height="118" as="geometry" />
+        </mxCell>
+        <mxCell id="fw3" value="&lt;b&gt;5　ipset 白名單：只有 api.anthropic.com&lt;/b&gt;&#xa;&lt;font color=&quot;#b91c1c&quot;&gt;刻意不放行&lt;/font&gt;　registry.npmjs.org（放行了 agent 就能在牆內 npm install，&#xa;　工具版本 pin 死換來的可重現就沒了）　·　github.com（審查用不到，&#xa;　而它同時是最方便的資料外送出口）&#xa;連 statsig／sentry 也沒放 → 用量與錯誤回報靜默失敗，實測不影響功能，這是刻意的。&#xa;&lt;font color=&quot;#b45309&quot;&gt;已知限制：ipset 是開機當下的快照。動態跟隨 DNS＝把白名單的控制權交給 DNS 回應。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#93c5fd;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1216" y="698" width="528" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="fw4" value="&lt;b&gt;6　放行所有直連網段&lt;/b&gt;（逐條列出，不從 gateway 推 /24）&#xa;gitlab-proxy 與 jaeger 都靠這條，&lt;b&gt;前提是容器有接上那張 network&lt;/b&gt;。&#xa;&lt;font color=&quot;#b45309&quot;&gt;⚠ 這是「容器啟動那一刻」的快照：起來之後才 docker network connect 上去的，介面有了、路由有了，封包卻被 REJECT，而且不會自己好。&#xa;⚠ 本節是全協定全埠且排在 REJECT 之前——目標只要落在直連網段，4b 那個「SSH 只通一台」的收斂就等於不存在。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#93c5fd;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1216" y="820" width="528" height="104" as="geometry" />
+        </mxCell>
+        <mxCell id="fw5" value="&lt;b&gt;7–8　預設 DROP，其餘 REJECT&lt;/b&gt;（不是 DROP：要讓程式立刻收到錯誤，而不是卡 30 秒 timeout）&#xa;&lt;font color=&quot;#b45309&quot;&gt;⚠ 只碰 iptables（IPv4）。前提是容器沒有 IPv6——實測預設 bridge 上確實沒有，但那是前提不是保證。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1216" y="934" width="528" height="60" as="geometry" />
+        </mxCell>
+        <!-- 自我驗證 -->
+        <mxCell id="fw6" value="&lt;b&gt;9　自我驗證：不相信自己剛剛寫的規則&lt;/b&gt;　　example.com &lt;b&gt;必須不通&lt;/b&gt;　·　每個白名單網域 &lt;b&gt;必須通&lt;/b&gt;　→　任一不符就 &lt;b&gt;exit 1&lt;/b&gt;，entrypoint fail closed（啟動失敗，不是靜默漏水）&#xa;&lt;font color=&quot;#166534&quot;&gt;兩個方向都要測：只測「該擋的有沒有擋住」會漏掉「不小心把全部都擋掉」——那種情況下 agent 從第一次呼叫模型就開始失敗，而錯誤訊息不會說是防火牆。&lt;/font&gt;　curl 的 exit 0 涵蓋任何 HTTP 回應：Cloudflare 回 403 也證明連線建立了。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#22c55e;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1006" width="1720" height="62" as="geometry" />
+        </mxCell>
+        <!-- 網路鄰居 -->
+        <mxCell id="proxy" value="&lt;b&gt;gitlab-proxy:5678&lt;/b&gt;　&lt;font color=&quot;#6b7280&quot;&gt;單機共用一顆 nginx（不是 per-user）&lt;/font&gt;&#xa;token 只存在這顆容器的環境變數裡，agent 對代理裸打、由代理蓋 PRIVATE-TOKEN&#xa;&lt;b&gt;憑證不進 session&lt;/b&gt;　·　端點白名單（只放行 skill 真的會打的 6 條）　·　限流 2 req/s&#xa;&lt;font color=&quot;#6b7280&quot;&gt;（claude-pty 那條路徑另有 per-user 代理，見 ADR 0016）&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1084" width="760" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="jaeger" value="&lt;b&gt;jaeger:4317&lt;/b&gt;　OTLP trace sink&#xa;（Day 21 的成本／時間歸因）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="820" y="1084" width="300" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="ext" value="&lt;b&gt;api.anthropic.com&lt;/b&gt;（唯一的出網白名單，經 mitm 側錄）&lt;br&gt;院內 GitLab:22（僅在 agent socket 在場時）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="1084" width="380" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="rej" value="&lt;b&gt;其餘一律 REJECT&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1540" y="1084" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="foot" value="對照實作：dev-container/{Dockerfile, entrypoint.sh, init-firewall.sh, run-ncr-dev-container.sh, firewall-counters.sh, trust-mitm-ca.sh}　·　脫敏 addon 在 mitm/　·　代理在 gitlab-proxy/（ADR 0016）" style="text;html=1;fontSize=11;align=left;fontColor=#6b7280;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1170" width="1720" height="20" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="devcontainer-ssh" name="2. ssh-agent：兩條路徑，一條規則">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="960" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" value="ssh-agent：兩條路徑，一條規則" style="text;html=1;fontSize=22;fontStyle=1;align=left;fontColor=#111827;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="800" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="防火牆不問「你是誰啟動的」，只問「/ssh/ssh_sock 在不在」。兩條路徑因此自然分流，不需要任何人宣告身分。" style="text;html=1;fontSize=13;align=left;fontColor=#6b7280;" vertex="1" parent="1">
+          <mxGeometry x="40" y="48" width="1300" height="20" as="geometry" />
+        </mxCell>
+        <!-- 人的路徑 -->
+        <mxCell id="hbox" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="86" width="700" height="440" as="geometry" />
+        </mxCell>
+        <mxCell id="hl" value="&lt;b&gt;① 人的路徑&lt;/b&gt;　run-ncr-dev-container.sh" style="text;html=1;fontSize=14;align=left;fontColor=#166534;" vertex="1" parent="1">
+          <mxGeometry x="56" y="96" width="600" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="h1" value="host 有 agent 嗎？&#xa;&lt;b&gt;沒有&lt;/b&gt; → 自己 ssh-agent -s 起一個，ssh-add（不指定檔名，載入預設那幾把）&#xa;　　　　 起不來／載不到金鑰 → 只警告，&lt;b&gt;SSH 只是選配，不弄死腳本&lt;/b&gt;&#xa;&lt;b&gt;有但是空的&lt;/b&gt; → 只警告，&lt;b&gt;不擅自 ssh-add&lt;/b&gt;（那是使用者的 agent，&#xa;　　　　 載入的金鑰在腳本退出後還留著）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#86efac;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="126" width="660" height="94" as="geometry" />
+        </mxCell>
+        <mxCell id="h1n" value="⚠ macOS 的 launchd agent &lt;b&gt;永遠都在&lt;/b&gt;：SSH_AUTH_SOCK 一定有值、socket 一定連得上，&#xa;但沒 ssh-add 過就是空的。只檢查「有沒有 agent」會讓這裡靜靜通過。&#xa;所以看的是 ssh-add -l 的結束碼：&lt;b&gt;0＝有金鑰　1＝連得上但空的　2＝連不上&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="232" width="660" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="h2" value="&lt;b&gt;-v $SSH_AUTH_SOCK:/ssh/ssh_sock&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="316" width="660" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="h3" value="容器內 &lt;b&gt;socket 在&lt;/b&gt;　→　防火牆開 &lt;b&gt;GitLab:22&lt;/b&gt;（只有那一台）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbf7d0;strokeColor=#15803d;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="60" y="362" width="660" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="h4" value="&lt;b&gt;git over SSH 可用。&lt;/b&gt;退出時只 ssh-agent -k 掉&lt;b&gt;自己起的那個&lt;/b&gt;——&#xa;host 本來就有 agent 時去 -k，殺掉的是使用者原本那個。借得到，也還得回去。&#xa;（憑證檔與 agent 兩件善後必須寫在同一個函式裡，分開註冊會讓先註冊的那件默默不執行。）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#86efac;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="408" width="660" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="eh2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#16a34a;endArrow=block;" edge="1" parent="1" source="h1n" target="h2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eh3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#16a34a;endArrow=block;" edge="1" parent="1" source="h2" target="h3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eh4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#16a34a;endArrow=block;" edge="1" parent="1" source="h3" target="h4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- 網頁路徑 -->
+        <mxCell id="wbox" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#ef4444;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="770" y="86" width="690" height="440" as="geometry" />
+        </mxCell>
+        <mxCell id="wl" value="&lt;b&gt;② 網頁路徑&lt;/b&gt;　claude-pty 控制平面" style="text;html=1;fontSize=14;align=left;fontColor=#b91c1c;" vertex="1" parent="1">
+          <mxGeometry x="786" y="96" width="600" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="w1" value="&lt;b&gt;CLAUDE_PTY_SSH_AUTH_SOCK 有設嗎？&lt;/b&gt;&#xa;&lt;b&gt;預設空 → 完全不掛&lt;/b&gt;（測試釘死這個預設值：&#xa;「哪天有人手滑給它一個預設值，這裡要立刻紅」）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#fca5a5;fontSize=12;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="790" y="126" width="650" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="w2" value="容器內 &lt;b&gt;socket 不在&lt;/b&gt;　→　防火牆&lt;b&gt;不開 22&lt;/b&gt;&#xa;&lt;font color=&quot;#166534&quot;&gt;不需要「這是網頁路徑」這種旗標——同一條規則自然得到不同結果。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=12;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="790" y="208" width="650" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="w3" value="&lt;b&gt;有設的話&lt;/b&gt;（部署者自己延伸 host 能力）&#xa;掛 /ssh/ssh_sock，但走 &lt;b&gt;mounts 而非 volumes&lt;/b&gt;：&#xa;· volumes(Binds) 在來源不存在時，dockerd 會在 host 上建一個 root:root 目錄頂替，&#xa;　卡在 socket 該出現的位置 → &lt;b&gt;下次登入時壞掉的是 host&lt;/b&gt;&#xa;· mounts(type=bind) 直接讓建立 session 失敗 —— &lt;font color=&quot;#166534&quot;&gt;那才是要的失敗方向&lt;/font&gt;&#xa;· 非唯讀：連 unix socket 需要寫權限，ro 會 EACCES，掛了等於沒掛" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#fca5a5;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="790" y="274" width="650" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="w4" value="&lt;b&gt;⚠ 它是部署層開關，沒有 per-user&lt;/b&gt;　一掛就是&lt;b&gt;每一個能建 session 的帳號&lt;/b&gt;都拿得到那把 key。&#xa;啟動自檢每次都唸一次。要限縮只能在 host 端做：另起一個只加了受限 key 的 agent，把那個 socket 指過來。&#xa;&lt;font color=&quot;#166534&quot;&gt;而 GitLab 本來就走別條路：per-user PAT ＋ HTTPS 代理（ADR 0016）。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="790" y="398" width="650" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="ew1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ef4444;endArrow=block;" edge="1" parent="1" source="w1" target="w2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ew3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ef4444;endArrow=block;" edge="1" parent="1" source="w3" target="w4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- 為什麼 22 的判準是 socket -->
+        <mxCell id="why" value="&lt;b&gt;為什麼判準是 socket，而不是「哪一條路徑」&lt;/b&gt;&#xa;22 當初進白名單，就是為了服務轉發進來的 agent。後來 agent 變成 opt-in，&lt;b&gt;白名單卻沒跟著動&lt;/b&gt;——規則活得比它的理由久，留下一個沒有用途的出口。&#xa;沒有 agent 的容器開著 22 不會讓任何事情變得可能，只是多一個攻擊面。&#xa;&lt;font color=&quot;#166534&quot;&gt;而判準要選「就地觀察得到的事實」而不是「有人傳進來的訊號」：一個事實有兩個來源就會漂。哪天網頁那條路徑也允許 opt-in agent，「這是哪一條路徑」那種旗標就會擋錯人。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#475569;fontSize=11;align=left;spacingLeft=12;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="548" width="1420" height="96" as="geometry" />
+        </mxCell>
+        <!-- 為什麼範圍畫在網路層 -->
+        <mxCell id="why2" value="&lt;b&gt;為什麼範圍只能畫在網路層&lt;/b&gt;&#xa;轉發交出去的是「簽章的能力」而不是私鑰本體，這點沒錯——&lt;b&gt;但那個能力沒有範圍限制&lt;/b&gt;：它能對任何一台連得到、且認得那把公鑰的主機簽章。&#xa;而多數人的 SSH 金鑰是複用的（同一把進 GitLab、也進其他伺服器）。&lt;b&gt;所以範圍不能在 SSH 那一層畫，只能在網路這一層畫：只放行我們真的會 push/pull 的那台。&lt;/b&gt;&#xa;&lt;font color=&quot;#b45309&quot;&gt;已知限制：GitLab IP 在 boot 時解析一次，換了就得重開容器。解析失敗只警告不中斷——git over SSH 這回合不能用，但審查本身照跑。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;fontSize=11;align=left;spacingLeft=12;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="660" width="1420" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="f2" value="對照：dev-container/init-firewall.sh §4b　·　dev-container/run-ncr-dev-container.sh　·　claude-pty/server/{config.py, sessions.py}　·　claude-pty/docs/adr/0011-optional-ssh-agent-forwarding.md" style="text;html=1;fontSize=11;align=left;fontColor=#6b7280;" vertex="1" parent="1">
+          <mxGeometry x="40" y="772" width="1420" height="20" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="devc-highlevel" name="Dev Container（一頁版）">
+    <mxGraphModel dx="505" dy="268" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1526" pageHeight="548" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="devc-highlevel_t" parent="1" style="text;html=1;fontSize=24;fontStyle=1;align=left;fontColor=#111827;" value="Dev Container — 四道邊界" vertex="1">
+          <mxGeometry height="34" width="1400" x="44" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_s" parent="1" style="text;html=1;fontSize=14;align=left;fontColor=#6b7280;" value="一次性容器（--rm）：非 root 執行、預設拒絕出網、憑證不落地成環境變數。三道問題在 agent 起跑之前問完。" vertex="1">
+          <mxGeometry height="24" width="1445" x="44" y="74" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_h0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;① 身分&lt;/b&gt;&lt;br&gt;非 root" vertex="1">
+          <mxGeometry height="52" width="340" x="44" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_q0" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;誰在跑&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="44" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_b0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="以 nathan 執行，不是 root。&lt;br&gt;唯一給的能力是 NET_ADMIN——為了套自己的防火牆，&lt;br&gt;不是為了改別人的。" vertex="1">
+          <mxGeometry height="150" width="340" x="44" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_h1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;② 憑證&lt;/b&gt;&lt;br&gt;file descriptor" vertex="1">
+          <mxGeometry height="52" width="340" x="410" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_q1" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;值不進環境&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="410" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="token 寫進檔案 → 開成 fd → 立刻刪檔。&lt;br&gt;環境裡只剩一個數字，log、docker inspect、&lt;br&gt;/proc/1/environ 都撈不到值。" vertex="1">
+          <mxGeometry height="150" width="340" x="410" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_a1" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="386" y="158" as="sourcePoint" />
+            <mxPoint x="408" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="devc-highlevel_h2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;③ 出網&lt;/b&gt;&lt;br&gt;預設拒絕" vertex="1">
+          <mxGeometry height="52" width="340" x="776" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_q2" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;誰答應的&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="776" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_b2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="白名單只有模型 API。&lt;br&gt;限制或開放，每一場由坐在鍵盤前的人現場選&lt;br&gt;不是設定檔的預設值替他決定。" vertex="1">
+          <mxGeometry height="150" width="340" x="776" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_a2" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="752" y="158" as="sourcePoint" />
+            <mxPoint x="774" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="devc-highlevel_h3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;④ 驗證&lt;/b&gt;&lt;br&gt;自我檢查" vertex="1">
+          <mxGeometry height="52" width="340" x="1142" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_q3" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;憑什麼相信&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="1142" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_b3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="不相信自己剛寫的規則：&lt;br&gt;該擋的必須真的不通、該通的必須真的通，&lt;br&gt;任一不符就 exit 1，啟動失敗而不是靜默漏水。" vertex="1">
+          <mxGeometry height="150" width="340" x="1142" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_a3" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1118" y="158" as="sourcePoint" />
+            <mxPoint x="1140" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="devc-highlevel_n" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;dashed=1;fontSize=12;align=left;spacingLeft=14;verticalAlign=middle;" value="&lt;b&gt;為什麼是人選，而且每一場都要重選&lt;/b&gt;　「完全開放」不是沒想清楚才留的後門——要研究、要讓 WebFetch 或瀏覽器自動化的時候就得出去。重點是這個選擇必須由人做，而且畫面上看得見選了哪個。" vertex="1">
+          <mxGeometry height="52" width="1438" x="44" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="devc-highlevel_f" parent="1" style="text;html=1;fontSize=12;align=left;fontColor=#9ca3af;" value="每一道邊界實際怎麼實作，見另一頁「Dev Container 拓撲與邊界」。對照：dev-container/{Dockerfile, entrypoint.sh, init-firewall.sh}" vertex="1">
+          <mxGeometry height="22" width="1429" x="44" y="478" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

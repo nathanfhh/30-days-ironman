@@ -30,11 +30,15 @@ fi
 #   新增頁面時記得同步這張表，否則新頁不會被匯出，而且不會有任何錯誤訊息。
 JOBS=(
     "docs/skill-architecture.drawio:1:skill-architecture.png"
+    "docs/skill-architecture.drawio:2:skill-architecture-highlevel.png"
     "docs/review-workflow.drawio:1:review-workflow.png"
+    "docs/review-workflow.drawio:2:review-workflow-highlevel.png"
     "docs/architecture.drawio:1:architecture-1-overview.png"
     "docs/architecture.drawio:2:architecture-2-claude-pty.png"
-    "dev-container/dev-container.drawio:1:dev-container-1-topology.png"
-    "dev-container/dev-container.drawio:2:dev-container-2-ssh.png"
+    "docs/architecture.drawio:3:architecture-3-highlevel.png"
+    "docs/dev-container.drawio:1:dev-container-1-topology.png"
+    "docs/dev-container.drawio:2:dev-container-2-ssh.png"
+    "docs/dev-container.drawio:3:dev-container-3-highlevel.png"
 )
 
 mkdir -p "$OUT_DIR"

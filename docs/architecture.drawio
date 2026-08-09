@@ -1,10 +1,9 @@
-<mxfile host="app.diagrams.net" modified="2026-08-07T00:00:00.000Z" agent="drawio" version="24.0.0">
+<mxfile host="app.diagrams.net" agent="drawio" pages="3">
   <diagram id="overview" name="整體">
     <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1250" pageHeight="850" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-
         <!-- actors -->
         <mxCell id="p1-actor-term" value="人（終端機）" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
           <mxGeometry x="110" y="50" width="50" height="80" as="geometry" />
@@ -12,7 +11,6 @@
         <mxCell id="p1-actor-web" value="人（瀏覽器）" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
           <mxGeometry x="1055" y="50" width="50" height="80" as="geometry" />
         </mxCell>
-
         <!-- two entry paths -->
         <mxCell id="p1-runscript" value="run-ncr-dev-container.sh&lt;br&gt;（dev-container/）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
           <mxGeometry x="30" y="200" width="220" height="80" as="geometry" />
@@ -20,14 +18,12 @@
         <mxCell id="p1-pty" value="claude-pty/（見分頁 2）&lt;br&gt;nginx → control plane → dockerd" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
           <mxGeometry x="950" y="200" width="260" height="80" as="geometry" />
         </mxCell>
-
         <mxCell id="p1-note-left" value="此路徑另有：Keychain／ssh-agent、&lt;br&gt;mitm UI port、trivy DB／semgrep 掛載" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="30" y="300" width="230" height="50" as="geometry" />
         </mxCell>
         <mxCell id="p1-note-right" value="此路徑另有：per-user 狀態空間、&lt;br&gt;fd 憑證交付、對帳迴圈、per-user 代理" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="950" y="300" width="260" height="50" as="geometry" />
         </mxCell>
-
         <!-- shared session container -->
         <mxCell id="p1-sess" value="session 容器 ＝ 同一顆 image（dev-container/Dockerfile）" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
           <mxGeometry x="360" y="180" width="480" height="260" as="geometry" />
@@ -38,7 +34,6 @@
         <mxCell id="p1-cli" value="Claude Code ＋ skills/nathan-code-review（:ro）" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="390" y="330" width="420" height="80" as="geometry" />
         </mxCell>
-
         <!-- bottom services -->
         <mxCell id="p1-glp" value="gitlab-proxy/&lt;br&gt;單機共用一顆" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
           <mxGeometry x="120" y="560" width="220" height="70" as="geometry" />
@@ -52,7 +47,6 @@
         <mxCell id="p1-gitlab" value="GitLab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="500" y="700" width="220" height="60" as="geometry" />
         </mxCell>
-
         <!-- edges -->
         <mxCell id="p1-e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="p1-actor-term" target="p1-runscript">
           <mxGeometry relative="1" as="geometry" />
@@ -107,12 +101,10 @@
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-
         <!-- browser -->
         <mxCell id="p2-browser" value="瀏覽器" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
           <mxGeometry x="70" y="60" width="50" height="80" as="geometry" />
         </mxCell>
-
         <!-- nginx edge -->
         <mxCell id="p2-nginx" value="nginx（edge，唯一對外口）" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
           <mxGeometry x="230" y="40" width="340" height="130" as="geometry" />
@@ -123,7 +115,6 @@
         <mxCell id="p2-nginx-rb" value="路由 B：/session/&lt;sid&gt;/ → auth_request 子請求&lt;br&gt;通過才 proxy 到 ttyd（終端資料流，不經 Flask）" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="250" y="115" width="310" height="45" as="geometry" />
         </mxCell>
-
         <!-- control container -->
         <mxCell id="p2-controlbox" value="control 容器" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;dashed=1;fillColor=none;strokeColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="650" y="30" width="500" height="250" as="geometry" />
@@ -137,22 +128,18 @@
         <mxCell id="p2-db" value="SQLite（唯一仲裁者）&lt;br&gt;session 列・view port UNIQUE・加密憑證" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
           <mxGeometry x="680" y="175" width="190" height="90" as="geometry" />
         </mxCell>
-
         <!-- reconciler -->
         <mxCell id="p2-rec" value="reconciler（獨立容器）&lt;br&gt;對帳迴圈：每輪收斂&lt;br&gt;代理／孤兒／idle／ready" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
           <mxGeometry x="1220" y="70" width="230" height="100" as="geometry" />
         </mxCell>
-
         <!-- dockerd -->
         <mxCell id="p2-dockerd" value="dockerd（docker socket）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
           <mxGeometry x="680" y="360" width="190" height="60" as="geometry" />
         </mxCell>
-
         <!-- token delivery note -->
         <mxCell id="p2-toknote" value="憑證進容器：per-session 二選一（config.TOKEN_DELIVERIES）&lt;br&gt;・fd（預設）：env 只給路徑 NCR_TOKEN_FILE，值由 create 後 put_archive 送入；&lt;br&gt;　entrypoint exec 4&amp;lt; 開檔 → rm 檔案 → 環境裡只剩 fd 號碼&lt;br&gt;・env：CLAUDE_CODE_OAUTH_TOKEN 直接進環境（退路）" style="shape=note;whiteSpace=wrap;html=1;align=left;fontSize=10;size=14;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
           <mxGeometry x="920" y="330" width="380" height="120" as="geometry" />
         </mxCell>
-
         <!-- user A network -->
         <mxCell id="p2-netA" value="docker network claude-pty-user-1（使用者 A 專屬）" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;dashed=1;fillColor=none;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="60" y="560" width="630" height="310" as="geometry" />
@@ -166,7 +153,6 @@
         <mxCell id="p2-pA" value="nginx 代理（A 的）&lt;br&gt;alias：gitlab-proxy&lt;br&gt;注入 A 的 PAT・端點白名單・限流" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
           <mxGeometry x="420" y="650" width="240" height="130" as="geometry" />
         </mxCell>
-
         <!-- user B network -->
         <mxCell id="p2-netB" value="docker network claude-pty-user-2（使用者 B 專屬）" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;dashed=1;fillColor=none;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="760" y="560" width="630" height="310" as="geometry" />
@@ -177,12 +163,10 @@
         <mxCell id="p2-pB" value="nginx 代理（B 的）&lt;br&gt;alias：gitlab-proxy&lt;br&gt;注入 B 的 PAT・端點白名單・限流" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
           <mxGeometry x="1120" y="650" width="240" height="130" as="geometry" />
         </mxCell>
-
         <!-- isolation note -->
         <mxCell id="p2-isonote" value="alias 相同・network 不同 → A 的 session 解析到的永遠是 A 的代理，看不到 B 的；&lt;br&gt;限流桶因此對得上「人」（server/user_proxy.py・server/gitlab_proxy.py・ADR 0016）" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="60" y="890" width="440" height="60" as="geometry" />
         </mxCell>
-
         <!-- gitlab + jaeger -->
         <mxCell id="p2-gitlab" value="GitLab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="620" y="930" width="220" height="60" as="geometry" />
@@ -190,7 +174,6 @@
         <mxCell id="p2-jaeger" value="Jaeger（OTLP :4317）&lt;br&gt;不佔位址池（network_mode: bridge）&lt;br&gt;控制平面接上每張使用者網路" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
           <mxGeometry x="1180" y="930" width="210" height="60" as="geometry" />
         </mxCell>
-
         <!-- edges -->
         <mxCell id="p2-e-b-n" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.4;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-browser" target="p2-nginx">
           <mxGeometry relative="1" as="geometry" />
@@ -215,7 +198,7 @@
         <mxCell id="p2-e-f-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;startArrow=classic;startFill=1;" edge="1" parent="1" source="p2-flask" target="p2-db">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="p2-e-f-dockerd" value="① create（network=使用者網）②&#160;put_archive(token) ③ start&lt;br&gt;網路必須早於 start：防火牆放行的是 entrypoint&lt;br&gt;起跑那一刻的路由快照" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0;exitY=0.75;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-flask" target="p2-dockerd">
+        <mxCell id="p2-e-f-dockerd" value="① create（network=使用者網）② put_archive(token) ③ start&lt;br&gt;網路必須早於 start：防火牆放行的是 entrypoint&lt;br&gt;起跑那一刻的路由快照" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0;exitY=0.75;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-flask" target="p2-dockerd">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="620" y="130" />
@@ -293,6 +276,80 @@
               <mxPoint x="885" y="945" />
             </Array>
           </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="pty-highlevel" name="claude-pty（一頁版）">
+    <mxGraphModel dx="534" dy="283" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1526" pageHeight="538" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="pty-highlevel_t" parent="1" style="text;html=1;fontSize=24;fontStyle=1;align=left;fontColor=#111827;" value="claude-pty — 一場 session 就是一顆容器" vertex="1">
+          <mxGeometry height="34" width="1400" x="44" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_s" parent="1" style="text;html=1;fontSize=14;align=left;fontColor=#6b7280;" value="瀏覽器開的終端，背後是一顆真的容器。四個角色，各自只做一件事。" vertex="1">
+          <mxGeometry height="24" width="1458" x="44" y="74" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_h0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;邊界&lt;/b&gt;&lt;br&gt;nginx" vertex="1">
+          <mxGeometry height="52" width="340" x="44" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_q0" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;唯一對外口&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="44" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_b0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="全系統只發布這一個 port。&lt;br&gt;控制流與終端資料流在這裡就分開，&lt;br&gt;之後不再交會。" vertex="1">
+          <mxGeometry height="140" width="340" x="44" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_h1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;決策&lt;/b&gt;&lt;br&gt;control plane" vertex="1">
+          <mxGeometry height="52" width="340" x="410" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_q1" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;開一場、關一場&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="410" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="帳號、授權、生命週期。&lt;br&gt;它不碰終端的資料，你敲的每一個鍵&lt;br&gt;都繞過它直接到 ttyd。" vertex="1">
+          <mxGeometry height="140" width="340" x="410" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_a1" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="386" y="158" as="sourcePoint" />
+            <mxPoint x="408" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pty-highlevel_h2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;仲裁&lt;/b&gt;&lt;br&gt;SQLite" vertex="1">
+          <mxGeometry height="52" width="340" x="776" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_q2" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;唯一的事實&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="776" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_b2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="誰擁有哪一場、port 給了誰、租約在誰手上。&lt;br&gt;互斥不靠約定，靠這裡的交易。" vertex="1">
+          <mxGeometry height="140" width="340" x="776" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_a2" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="752" y="158" as="sourcePoint" />
+            <mxPoint x="774" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pty-highlevel_h3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;收斂&lt;/b&gt;&lt;br&gt;reconciler" vertex="1">
+          <mxGeometry height="52" width="340" x="1142" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_q3" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;把帳面校正回現實&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="1142" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_b3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="每一輪比對 DB 與 dockerd 的落差：&lt;br&gt;孤兒容器、過期代理、沒人用的終端，&lt;br&gt;一輪一輪收乾淨。" vertex="1">
+          <mxGeometry height="140" width="340" x="1142" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_a3" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1118" y="158" as="sourcePoint" />
+            <mxPoint x="1140" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pty-highlevel_n" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;dashed=1;fontSize=12;align=left;spacingLeft=14;verticalAlign=middle;" value="&lt;b&gt;隔離做在哪一層&lt;/b&gt;　每個使用者一張自己的 docker network，他所有的 session 只住在那張網上。跨使用者在拓撲上就沒有那條路——不是靠容器裡的防火牆擋，那擋不住完全開放的網路模式。" vertex="1">
+          <mxGeometry height="52" width="1438" x="44" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="pty-highlevel_f" parent="1" style="text;html=1;fontSize=12;align=left;fontColor=#9ca3af;" value="完整拓撲見另一頁「claude-pty 放大」。對照：claude-pty/docs/adr/0016-per-user-gitlab-proxy.md" vertex="1">
+          <mxGeometry height="22" width="1438" x="44" y="468" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

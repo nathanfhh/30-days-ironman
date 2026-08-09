@@ -1,157 +1,172 @@
-<mxfile host="app.diagrams.net" agent="Claude" pages="1">
+<mxfile host="app.diagrams.net" agent="Claude" pages="2">
   <diagram id="skill-architecture" name="Skill 架構：漸進式揭露">
     <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1720" pageHeight="1180" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-
         <mxCell id="title" value="nathan-code-review — Skill 架構（漸進式揭露 / progressive disclosure）" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#111827;" vertex="1" parent="1">
           <mxGeometry x="50" y="18" width="1100" height="34" as="geometry" />
         </mxCell>
         <mxCell id="subtitle" value="入口只有 11.9 KB 常駐；其餘 73 KB 依 Phase 按需載入。模型不是「讀完整份 skill 再工作」，是「走到哪一步、才讀那一步需要的那一份」。" style="text;html=1;fontSize=13;align=left;verticalAlign=middle;fontColor=#6b7280;" vertex="1" parent="1">
           <mxGeometry x="50" y="50" width="1400" height="22" as="geometry" />
         </mxCell>
-
         <!-- ===== 觸發層 ===== -->
-        <mxCell id="trigger" value="使用者請求&#10;（MR 連結／「幫我 review」／無參數）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f9fafb;strokeColor=#9ca3af;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="trigger" value="使用者請求&#xa;（MR 連結／「幫我 review」／無參數）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f9fafb;strokeColor=#9ca3af;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="50" y="96" width="230" height="56" as="geometry" />
         </mxCell>
-        <mxCell id="fm" value="frontmatter&#10;&lt;b&gt;description&lt;/b&gt;&#10;（唯一「永遠在 context 裡」的東西）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="fm" value="frontmatter&#xa;&lt;b&gt;description&lt;/b&gt;&#xa;（唯一「永遠在 context 裡」的東西）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="320" y="96" width="230" height="56" as="geometry" />
         </mxCell>
         <mxCell id="e_trig" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;endArrow=block;" edge="1" parent="1" source="trigger" target="fm">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <mxCell id="note_fm" value="⚠ description 寫壞 = skill 永遠不會被叫起來。&#10;它不是說明文字，是&lt;b&gt;路由條件&lt;/b&gt;。" style="text;html=1;fontSize=11;align=left;verticalAlign=top;fontColor=#b91c1c;" vertex="1" parent="1">
+        <mxCell id="note_fm" value="⚠ description 寫壞 = skill 永遠不會被叫起來。&#xa;它不是說明文字，是&lt;b&gt;路由條件&lt;/b&gt;。" style="text;html=1;fontSize=11;align=left;verticalAlign=top;fontColor=#b91c1c;" vertex="1" parent="1">
           <mxGeometry x="570" y="100" width="330" height="48" as="geometry" />
         </mxCell>
-
         <!-- ===== 入口層 ===== -->
-        <mxCell id="skillmd" value="&lt;b&gt;SKILL.md&lt;/b&gt;　11.9 KB　—　入口，載入後常駐&#10;Routing／Severity 定義／Phase 0–4 的骨架／Reference map（哪一步該讀哪一份）／Running the scripts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1f2937;strokeColor=#111827;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" vertex="1" parent="1">
+        <mxCell id="skillmd" value="&lt;b&gt;SKILL.md&lt;/b&gt;　11.9 KB　—　入口，載入後常駐&#xa;Routing／Severity 定義／Phase 0–4 的骨架／Reference map（哪一步該讀哪一份）／Running the scripts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1f2937;strokeColor=#111827;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" vertex="1" parent="1">
           <mxGeometry x="50" y="180" width="1620" height="64" as="geometry" />
         </mxCell>
         <mxCell id="e_fm_skill" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#ef4444;endArrow=block;exitX=0.5;exitY=1;entryX=0.2;entryY=0;" edge="1" parent="1" source="fm" target="skillmd">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
         <!-- ===== Phase 欄 ===== -->
-        <mxCell id="p0" value="&lt;b&gt;Phase 0&lt;/b&gt;&#10;entry point&#10;取得審查目標" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="p0" value="&lt;b&gt;Phase 0&lt;/b&gt;&#xa;entry point&#xa;取得審查目標" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="50" y="290" width="250" height="62" as="geometry" />
         </mxCell>
-        <mxCell id="p05" value="&lt;b&gt;Phase 0.5&lt;/b&gt;&#10;intent&#10;意圖合理性快篩" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="p05" value="&lt;b&gt;Phase 0.5&lt;/b&gt;&#xa;intent&#xa;意圖合理性快篩" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="320" y="290" width="250" height="62" as="geometry" />
         </mxCell>
-        <mxCell id="p1" value="&lt;b&gt;Phase 1&lt;/b&gt;&#10;first review or re-review&#10;分流：初審／複審" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="p1" value="&lt;b&gt;Phase 1&lt;/b&gt;&#xa;first review or re-review&#xa;分流：初審／複審" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="590" y="290" width="250" height="62" as="geometry" />
         </mxCell>
-        <mxCell id="p2" value="&lt;b&gt;Phase 2&lt;/b&gt;&#10;deterministic scanning&#10;確定性掃描" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="p2" value="&lt;b&gt;Phase 2&lt;/b&gt;&#xa;deterministic scanning&#xa;確定性掃描" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="860" y="290" width="250" height="62" as="geometry" />
         </mxCell>
-        <mxCell id="p3" value="&lt;b&gt;Phase 3&lt;/b&gt;&#10;deep review&#10;九面向深度審查" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="p3" value="&lt;b&gt;Phase 3&lt;/b&gt;&#xa;deep review&#xa;九面向深度審查" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="1130" y="290" width="250" height="62" as="geometry" />
         </mxCell>
-        <mxCell id="p4" value="&lt;b&gt;Phase 4&lt;/b&gt;&#10;delivery&#10;報告交付與發佈" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="p4" value="&lt;b&gt;Phase 4&lt;/b&gt;&#xa;delivery&#xa;報告交付與發佈" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="1400" y="290" width="250" height="62" as="geometry" />
         </mxCell>
-
-        <mxCell id="e01" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p0" target="p05"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e02" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p05" target="p1"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e03" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p1" target="p2"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e04" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p2" target="p3"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e05" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p3" target="p4"><mxGeometry relative="1" as="geometry" /></mxCell>
-
+        <mxCell id="e01" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p0" target="p05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e02" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p05" target="p1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e03" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p1" target="p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e04" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p2" target="p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e05" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3b82f6;endArrow=block;" edge="1" parent="1" source="p3" target="p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <!-- ===== references 層 ===== -->
         <mxCell id="reflabel" value="references/　—　54.7 KB，&lt;b&gt;按需載入&lt;/b&gt;（走到該 Phase 才讀）" style="text;html=1;fontSize=13;fontStyle=1;align=left;fontColor=#b45309;" vertex="1" parent="1">
           <mxGeometry x="50" y="380" width="600" height="20" as="geometry" />
         </mxCell>
-
-        <mxCell id="r_ws" value="workspace-paths.md&#10;&lt;font color=&quot;#92400e&quot;&gt;5.6 KB&lt;/font&gt;&#10;clone／產物／歸檔報告的落點" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="r_ws" value="workspace-paths.md&#xa;&lt;font color=&quot;#92400e&quot;&gt;5.6 KB&lt;/font&gt;&#xa;clone／產物／歸檔報告的落點" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="50" y="408" width="250" height="58" as="geometry" />
         </mxCell>
-        <mxCell id="r_gl" value="gitlab-api.md　&lt;font color=&quot;#92400e&quot;&gt;8.4 KB&lt;/font&gt;&#10;&lt;b&gt;跨 Phase&lt;/b&gt;：Phase 0 取 MR、Phase 4 發佈都用&#10;端點／URL 解析／認證／discussions vs notes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;dashed=1;" vertex="1" parent="1">
+        <mxCell id="r_gl" value="gitlab-api.md　&lt;font color=&quot;#92400e&quot;&gt;8.4 KB&lt;/font&gt;&#xa;&lt;b&gt;跨 Phase&lt;/b&gt;：Phase 0 取 MR、Phase 4 發佈都用&#xa;端點／URL 解析／認證／discussions vs notes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="50" y="474" width="250" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="r_rr" value="re-review.md&#10;&lt;font color=&quot;#92400e&quot;&gt;3.9 KB&lt;/font&gt;&#10;反錨定協定：先盲讀，&lt;b&gt;之後&lt;/b&gt;才比對前次報告" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="r_rr" value="re-review.md&#xa;&lt;font color=&quot;#92400e&quot;&gt;3.9 KB&lt;/font&gt;&#xa;反錨定協定：先盲讀，&lt;b&gt;之後&lt;/b&gt;才比對前次報告" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="590" y="408" width="250" height="64" as="geometry" />
         </mxCell>
-        <mxCell id="r_sc" value="scanners.md&#10;&lt;font color=&quot;#92400e&quot;&gt;11.4 KB&lt;/font&gt;&#10;呼叫方式／diff 歸因規則／&#10;工具不在時怎麼辦" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="r_sc" value="scanners.md&#xa;&lt;font color=&quot;#92400e&quot;&gt;11.4 KB&lt;/font&gt;&#xa;呼叫方式／diff 歸因規則／&#xa;工具不在時怎麼辦" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="860" y="408" width="250" height="64" as="geometry" />
         </mxCell>
-        <mxCell id="r_rd" value="review-dimensions.md&#10;&lt;font color=&quot;#92400e&quot;&gt;&lt;b&gt;16.0 KB — 最大的一份&lt;/b&gt;&lt;/font&gt;&#10;九個面向的完整檢核" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fde68a;strokeColor=#d97706;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="r_rd" value="review-dimensions.md&#xa;&lt;font color=&quot;#92400e&quot;&gt;&lt;b&gt;16.0 KB — 最大的一份&lt;/b&gt;&lt;/font&gt;&#xa;九個面向的完整檢核" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fde68a;strokeColor=#d97706;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1130" y="408" width="250" height="64" as="geometry" />
         </mxCell>
-        <mxCell id="r_rf" value="report-format.md&#10;&lt;font color=&quot;#92400e&quot;&gt;5.5 KB&lt;/font&gt;&#10;JSON 欄位／發佈版面／發佈規則" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="r_rf" value="report-format.md&#xa;&lt;font color=&quot;#92400e&quot;&gt;5.5 KB&lt;/font&gt;&#xa;JSON 欄位／發佈版面／發佈規則" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1400" y="408" width="250" height="64" as="geometry" />
         </mxCell>
         <mxCell id="r_pb" value="pushback.md　&lt;font color=&quot;#92400e&quot;&gt;3.9 KB&lt;/font&gt;　—　&lt;b&gt;不掛在任何 Phase&lt;/b&gt;：作者反駁已發佈的 finding 時才讀（事件觸發，可能是幾天後）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;dashed=1;fontSize=11;align=left;spacingLeft=12;" vertex="1" parent="1">
           <mxGeometry x="50" y="556" width="1600" height="38" as="geometry" />
         </mxCell>
-
-        <mxCell id="e_p0r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p0" target="r_ws"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e_p1r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p1" target="r_rr"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e_p2r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p2" target="r_sc"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e_p3r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p3" target="r_rd"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e_p4r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p4" target="r_rf"><mxGeometry relative="1" as="geometry" /></mxCell>
-
+        <mxCell id="e_p0r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p0" target="r_ws">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p1r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p1" target="r_rr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p2r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p2" target="r_sc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p3r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p3" target="r_rd">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p4r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#f59e0b;dashed=1;endArrow=open;" edge="1" parent="1" source="p4" target="r_rf">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <!-- ===== agents 層 ===== -->
         <mxCell id="aglabel" value="agents/　—　18.7 KB，各自獨立 context 的 subagent（掃描結果不佔主線程 context）" style="text;html=1;fontSize=13;fontStyle=1;align=left;fontColor=#15803d;" vertex="1" parent="1">
           <mxGeometry x="50" y="620" width="800" height="20" as="geometry" />
         </mxCell>
-
-        <mxCell id="a_ft" value="ncr-fetch-threads&#10;取回作者回覆" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="a_ft" value="ncr-fetch-threads&#xa;取回作者回覆" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="590" y="648" width="250" height="46" as="geometry" />
         </mxCell>
-        <mxCell id="a_lint" value="ncr-scan-lint&#10;ruff / ty / oxlint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="a_lint" value="ncr-scan-lint&#xa;ruff / ty / oxlint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="860" y="648" width="120" height="46" as="geometry" />
         </mxCell>
-        <mxCell id="a_trivy" value="ncr-scan-trivy&#10;相依／IaC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="a_trivy" value="ncr-scan-trivy&#xa;相依／IaC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="990" y="648" width="120" height="46" as="geometry" />
         </mxCell>
-        <mxCell id="a_og" value="ncr-scan-opengrep&#10;SAST" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="a_og" value="ncr-scan-opengrep&#xa;SAST" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="860" y="702" width="250" height="46" as="geometry" />
         </mxCell>
-        <mxCell id="a_fe" value="ncr-fresh-eyes&#10;&lt;b&gt;無 checklist 的素讀&lt;/b&gt;&#10;（只給 raw diff）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbf7d0;strokeColor=#16a34a;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="a_fe" value="ncr-fresh-eyes&#xa;&lt;b&gt;無 checklist 的素讀&lt;/b&gt;&#xa;（只給 raw diff）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbf7d0;strokeColor=#16a34a;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1130" y="648" width="250" height="56" as="geometry" />
         </mxCell>
-        <mxCell id="a_qc" value="ncr-quality-check&#10;&lt;b&gt;盲檢報告&lt;/b&gt;&#10;（作者自己檢查不算數）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbf7d0;strokeColor=#16a34a;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="a_qc" value="ncr-quality-check&#xa;&lt;b&gt;盲檢報告&lt;/b&gt;&#xa;（作者自己檢查不算數）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbf7d0;strokeColor=#16a34a;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1400" y="648" width="250" height="56" as="geometry" />
         </mxCell>
-
-        <mxCell id="e_p1a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#22c55e;endArrow=open;" edge="1" parent="1" source="r_rr" target="a_ft"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e_p3a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#22c55e;endArrow=open;" edge="1" parent="1" source="r_rd" target="a_fe"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e_p4a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#22c55e;endArrow=open;" edge="1" parent="1" source="r_rf" target="a_qc"><mxGeometry relative="1" as="geometry" /></mxCell>
-
+        <mxCell id="e_p1a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#22c55e;endArrow=open;" edge="1" parent="1" source="r_rr" target="a_ft">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p3a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#22c55e;endArrow=open;" edge="1" parent="1" source="r_rd" target="a_fe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p4a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#22c55e;endArrow=open;" edge="1" parent="1" source="r_rf" target="a_qc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <!-- ===== scripts 層 ===== -->
         <mxCell id="sclabel" value="scripts/　—　PEP 723 單檔腳本，&lt;b&gt;確定性的那一半&lt;/b&gt;：不交給模型判斷的事，寫成程式" style="text;html=1;fontSize=13;fontStyle=1;align=left;fontColor=#7e22ce;" vertex="1" parent="1">
           <mxGeometry x="50" y="782" width="900" height="20" as="geometry" />
         </mxCell>
-
-        <mxCell id="s_pf" value="preflight.py&#10;盤點工具與憑證&#10;（先知道少什麼）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="s_pf" value="preflight.py&#xa;盤點工具與憑證&#xa;（先知道少什麼）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="50" y="810" width="250" height="56" as="geometry" />
         </mxCell>
-        <mxCell id="s_gl" value="gitlab_api.py&#10;重試／不跟隨轉址／逾時" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="s_gl" value="gitlab_api.py&#xa;重試／不跟隨轉址／逾時" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="320" y="810" width="250" height="56" as="geometry" />
         </mxCell>
-        <mxCell id="s_sr" value="scan_runner.py&#10;統一掃描器呼叫" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="s_sr" value="scan_runner.py&#xa;統一掃描器呼叫" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="860" y="810" width="250" height="56" as="geometry" />
         </mxCell>
-        <mxCell id="s_rm" value="report_model.py&#10;&lt;b&gt;schema 驗證（會 exit 1）&lt;/b&gt;&#10;模型繞不過去的那道閘" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e9d5ff;strokeColor=#9333ea;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="s_rm" value="report_model.py&#xa;&lt;b&gt;schema 驗證（會 exit 1）&lt;/b&gt;&#xa;模型繞不過去的那道閘" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e9d5ff;strokeColor=#9333ea;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1130" y="810" width="250" height="56" as="geometry" />
         </mxCell>
-        <mxCell id="s_rr2" value="render_report.py&#10;JSON → Markdown&#10;（套 assets/report_template.md）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="s_rr2" value="render_report.py&#xa;JSON → Markdown&#xa;（套 assets/report_template.md）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#a855f7;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1400" y="810" width="250" height="56" as="geometry" />
         </mxCell>
-
-        <mxCell id="e_s1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#a855f7;endArrow=open;" edge="1" parent="1" source="a_og" target="s_sr"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e_s2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#a855f7;endArrow=open;" edge="1" parent="1" source="a_qc" target="s_rm"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e_s3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#9333ea;endArrow=block;" edge="1" parent="1" source="s_rm" target="s_rr2"><mxGeometry relative="1" as="geometry" /></mxCell>
-
+        <mxCell id="e_s1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#a855f7;endArrow=open;" edge="1" parent="1" source="a_og" target="s_sr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_s2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#a855f7;endArrow=open;" edge="1" parent="1" source="a_qc" target="s_rm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_s3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#9333ea;endArrow=block;" edge="1" parent="1" source="s_rm" target="s_rr2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <!-- ===== 上線方式 ===== -->
-        <mxCell id="install" value="&lt;b&gt;install.sh&lt;/b&gt;　建立的是 &lt;b&gt;symlink，不是複製&lt;/b&gt;：skills/ 連進 ~/.claude/skills/，agents/ 底下每一支&lt;b&gt;另外&lt;/b&gt;連進 ~/.claude/agents/&#10;改一行，下一次對話就吃得到。好處是迭代快，代價是&lt;b&gt;沒有暫存區&lt;/b&gt;——改壞了就是直接壞在下一次真實審查上。&#10;&lt;font color=&quot;#b45309&quot;&gt;連帶後果：腳本以&lt;b&gt;安裝後的 skill 目錄&lt;/b&gt;為基準（cd &amp;lt;skill-dir&amp;gt; &amp;amp;&amp;amp; uv run scripts/…），而工作目錄是受審專案；傳進去的 --root/--out 則一律絕對路徑，cd 動不到它們。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#475569;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+        <mxCell id="install" value="&lt;b&gt;install.sh&lt;/b&gt;　建立的是 &lt;b&gt;symlink，不是複製&lt;/b&gt;：skills/ 連進 ~/.claude/skills/，agents/ 底下每一支&lt;b&gt;另外&lt;/b&gt;連進 ~/.claude/agents/&#xa;改一行，下一次對話就吃得到。好處是迭代快，代價是&lt;b&gt;沒有暫存區&lt;/b&gt;——改壞了就是直接壞在下一次真實審查上。&#xa;&lt;font color=&quot;#b45309&quot;&gt;連帶後果：腳本以&lt;b&gt;安裝後的 skill 目錄&lt;/b&gt;為基準（cd &amp;lt;skill-dir&amp;gt; &amp;amp;&amp;amp; uv run scripts/…），而工作目錄是受審專案；傳進去的 --root/--out 則一律絕對路徑，cd 動不到它們。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#475569;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
           <mxGeometry x="50" y="898" width="1600" height="70" as="geometry" />
         </mxCell>
-
         <!-- ===== 圖例 ===== -->
         <mxCell id="lg" value="圖例" style="text;html=1;fontSize=12;fontStyle=1;align=left;" vertex="1" parent="1">
           <mxGeometry x="50" y="978" width="60" height="18" as="geometry" />
@@ -174,11 +189,83 @@
         <mxCell id="lgnote" value="虛線箭頭＝按需載入（走到才讀）　·　實線＝流程或呼叫" style="text;html=1;fontSize=11;align=left;fontColor=#6b7280;" vertex="1" parent="1">
           <mxGeometry x="710" y="1006" width="420" height="18" as="geometry" />
         </mxCell>
-
         <mxCell id="footnote" value="數字為 main 分支實測位元組數（2026-08-09，skills/nathan-code-review）。比例才是重點：入口 11.9 KB，其餘 73.4 KB 分散在 7 份 reference 與 6 支 subagent 定義裡——一次審查通常只會碰到其中幾份。" style="text;html=1;fontSize=11;align=left;verticalAlign=top;fontColor=#6b7280;" vertex="1" parent="1">
           <mxGeometry x="50" y="1044" width="1600" height="36" as="geometry" />
         </mxCell>
-
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="skill-highlevel" name="Skill 架構（一頁版）">
+    <mxGraphModel dx="718" dy="381" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1526" pageHeight="528" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="skill-highlevel_t" parent="1" style="text;html=1;fontSize=24;fontStyle=1;align=left;fontColor=#111827;" value="nathan-code-review — Skill 是怎麼被讀進去的" vertex="1">
+          <mxGeometry height="34" width="1400" x="44" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_s" parent="1" style="text;html=1;fontSize=14;align=left;fontColor=#6b7280;" value="入口常駐、其餘按需載入。模型不是「讀完整份再工作」，是「走到哪一步、才讀那一步要的那份」。" vertex="1">
+          <mxGeometry height="24" width="1410" x="44" y="74" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_h0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;入口&lt;/b&gt;&lt;br&gt;SKILL.md" vertex="1">
+          <mxGeometry height="52" width="340" x="44" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_q0" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;永遠在&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="44" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_b0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=left;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="唯一常駐的一份。裡面只有路由、嚴重度定義、Phase 骨架，&lt;br&gt;以及一張「哪一步該讀哪一份」的對照表。" vertex="1">
+          <mxGeometry height="130" width="340" x="44" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_h1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;按需&lt;/b&gt;&lt;br&gt;references/" vertex="1">
+          <mxGeometry height="52" width="340" x="410" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_q1" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;走到才讀&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="410" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=left;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="七份參考文件。Phase 2 才讀掃描器那份、&lt;br&gt;Phase 4 才讀報告格式那份：&lt;div&gt;沒走到的那幾份不佔 context。&lt;/div&gt;" vertex="1">
+          <mxGeometry height="130" width="340" x="410" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_a1" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="386" y="158" as="sourcePoint" />
+            <mxPoint x="408" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="skill-highlevel_h2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;外包&lt;/b&gt;&lt;br&gt;agents/" vertex="1">
+          <mxGeometry height="52" width="340" x="776" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_q2" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;不佔主線程&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="776" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_b2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=left;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="六支 subagent，各自獨立 context。&lt;br&gt;掃描器吐出的原始 JSON 從頭到尾不進主線程。" vertex="1">
+          <mxGeometry height="130" width="340" x="776" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_a2" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="752" y="158" as="sourcePoint" />
+            <mxPoint x="774" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="skill-highlevel_h3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;寫死&lt;/b&gt;&lt;br&gt;scripts/" vertex="1">
+          <mxGeometry height="52" width="340" x="1142" y="132" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_q3" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;不交給模型判斷&lt;/b&gt;" vertex="1">
+          <mxGeometry height="26" width="340" x="1142" y="194" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_b3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=left;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="確定性的那一半：驗 schema、渲染報告、呼叫 API。&lt;br&gt;能寫成程式的事，就不要留給模型自由發揮。" vertex="1">
+          <mxGeometry height="130" width="340" x="1142" y="226" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_a3" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1118" y="158" as="sourcePoint" />
+            <mxPoint x="1140" y="158" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="skill-highlevel_n" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;dashed=1;fontSize=12;align=left;spacingLeft=14;verticalAlign=middle;" value="&lt;b&gt;為什麼要拆&lt;/b&gt;　一份審查通常只會碰到其中幾份。全部塞進去的代價不是錢，是模型的注意力被不相干的規則稀釋掉。" vertex="1">
+          <mxGeometry height="52" width="1438" x="44" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-highlevel_f" parent="1" style="text;html=1;fontSize=12;align=left;fontColor=#9ca3af;" value="每一份多大、哪個 Phase 讀哪一份，見另一頁「Skill 架構：漸進式揭露」。" vertex="1">
+          <mxGeometry height="22" width="1438" x="44" y="458" as="geometry" />
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>
