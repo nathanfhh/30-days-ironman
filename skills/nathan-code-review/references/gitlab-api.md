@@ -155,9 +155,9 @@ Replying to the author uses the last endpoint.
 `GET  /projects/:id/merge_requests/:merge_request_iid/notes`
 `POST /projects/:id/merge_requests/:merge_request_iid/notes`
 
-For one-off remarks. **The report is never published this way** — an individual
-note cannot be replied to as a thread or marked resolved, which is exactly what
-the report needs to support.
+For one-off remarks. **The report is never published this way** — posting one
+hands back a note id, not a `discussion_id`, and that handle is what the next
+round needs in order to find the author's replies.
 
 ### Notes versus discussions
 
@@ -165,10 +165,10 @@ A note is the atom; a discussion is the container. Every note lives inside some
 discussion, without exception — including the system-generated ones ("added 1
 commit"). What differs is the container:
 
-- **Individual note discussion** — holds exactly one note. The UI's "Comment"
-  button. Cannot be threaded, cannot be resolved.
+- **Individual note discussion** — holds one note. The UI's "Comment" button.
 - **Thread** — holds a root note plus replies. The UI's "Start thread". Can be
-  replied to and resolved. A variant carries a `position` anchoring it to a
+  replied to and resolved, and `POST …/discussions` returns its `discussion_id`
+  straight away. A variant carries a `position` anchoring it to a
   specific line of the diff; that is the inline comment familiar from code
   review.
 
