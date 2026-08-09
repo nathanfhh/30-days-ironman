@@ -17,7 +17,11 @@
 | Day 18 | 讓憑證不進 session 的那顆代理 | `gitlab-proxy/` |
 | Day 21 | 一場審查的時間與成本歸因 | `opentelemetry/` |
 | Day 22–23 | 線上實際流過什麼，以及為什麼看得到 | `mitm/` |
-| Day 24–29 | 把整套搬到瀏覽器後面 | `claude-pty/` |
+| Day 24–25、27–29 | 把整套搬到瀏覽器後面 | `claude-pty/` |
+| Day 26 | 為了一個旗標重寫 ttyd，然後確認自己沒改壞 | [`nathanfhh/ttyd`](https://github.com/nathanfhh/ttyd)（Rust 版在 `rust/`）與 `claude-pty/` |
+
+Day 1–2（為什麼做這件事）、Day 16（規則什麼時候該拿掉）與 Day 30（收束）沒有列在上面，
+因為那幾天講的是判斷，沒有對應的程式產出物。
 
 ## 目錄
 
