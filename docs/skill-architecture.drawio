@@ -69,7 +69,7 @@
         <mxCell id="r_ws" value="workspace-paths.md&#10;&lt;font color=&quot;#92400e&quot;&gt;5.6 KB&lt;/font&gt;&#10;clone／產物／歸檔報告的落點" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="50" y="408" width="250" height="58" as="geometry" />
         </mxCell>
-        <mxCell id="r_gl" value="gitlab-api.md　&lt;font color=&quot;#92400e&quot;&gt;8.3 KB&lt;/font&gt;&#10;&lt;b&gt;跨 Phase&lt;/b&gt;：Phase 0 取 MR、Phase 4 發佈都用&#10;端點／URL 解析／認證／discussions vs notes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;dashed=1;" vertex="1" parent="1">
+        <mxCell id="r_gl" value="gitlab-api.md　&lt;font color=&quot;#92400e&quot;&gt;8.4 KB&lt;/font&gt;&#10;&lt;b&gt;跨 Phase&lt;/b&gt;：Phase 0 取 MR、Phase 4 發佈都用&#10;端點／URL 解析／認證／discussions vs notes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="50" y="474" width="250" height="70" as="geometry" />
         </mxCell>
         <mxCell id="r_rr" value="re-review.md&#10;&lt;font color=&quot;#92400e&quot;&gt;3.9 KB&lt;/font&gt;&#10;反錨定協定：先盲讀，&lt;b&gt;之後&lt;/b&gt;才比對前次報告" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="1">
