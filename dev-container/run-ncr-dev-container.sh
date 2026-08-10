@@ -89,24 +89,34 @@ fi
 # 跑完即棄），再把 cache 目錄 mount 進審查容器。更新失敗（離線、逾時）→ 沿用既有 DB
 # 並警告；連既有 DB 都沒有 → 警告，A2 軌道本場會依 skill 的降級規則處理（skip + 揭露）。
 #
-# 用獨立目錄、不共用 host 自己的 ~/.cache/trivy：host 若也裝著 trivy，兩邊版本不同時
+# 用獨立的 cache、不共用 host 自己的 ~/.cache/trivy：host 若也裝著 trivy，兩邊版本不同時
 # DB schema 可能不相容，隔離開來誰也不會弄壞誰。
-TRIVY_CACHE_DIR="$HOME/.cache/ncr-trivy"
-mkdir -p "$TRIVY_CACHE_DIR"
+#
+# ⚠ 它是 **named volume 不是 host 目錄**（ADR 0018）。差別在擁有權：volume 首次掛載且
+#   為空時，docker 用 image 裡 /home/nathan/.cache/trivy 的內容與擁有者初始化它，所以
+#   host 帳號的 uid 完全不進場。用 host 目錄的話，那個目錄屬於**你**（`id -u`），而寫它
+#   的是容器裡的 nathan——兩個號碼在 Linux 上不會自動一樣（見 ADR 0017）。
+# ⚠ 名稱固定，claude-pty 的 compose 也掛同一顆，兩條路徑共用那 ~1.2 GB。改名等於分家。
+TRIVY_CACHE_VOLUME="ncr-trivy-cache"
 # --entrypoint bash：繞過 image 的互動式啟動選單，只跑更新就退出。
 # timeout 給硬上限——網路半死不活時，不讓「更新 DB」變成「卡住啟動」。
 if docker run --rm --entrypoint bash \
-    -v "$TRIVY_CACHE_DIR":/home/nathan/.cache/trivy \
+    -v "$TRIVY_CACHE_VOLUME":/home/nathan/.cache/trivy \
     "$IMAGE" -c 'timeout -k 10 180 trivy image --download-db-only' >/dev/null 2>&1; then
-    echo "🗃️  Trivy DB 已更新（${TRIVY_CACHE_DIR}）"
-elif [ -s "$TRIVY_CACHE_DIR/db/trivy.db" ]; then
+    echo "🗃️  Trivy DB 已更新（volume ${TRIVY_CACHE_VOLUME}）"
+elif docker run --rm --entrypoint bash \
+    -v "$TRIVY_CACHE_VOLUME":/home/nathan/.cache/trivy \
+    "$IMAGE" -c '[ -s /home/nathan/.cache/trivy/db/trivy.db ]' >/dev/null 2>&1; then
+    # ⚠ 「有沒有既有 DB」只能**進容器裡問**——volume 的內容 host 上看不到（它在
+    #   /var/lib/docker 底下，macOS 更是在 VM 裡）。這裡曾經是 `[ -s "$DIR/db/trivy.db" ]`，
+    #   改成 volume 之後那個判斷會永遠是 false，於是「有舊 DB」被誤報成「完全沒有」。
     echo "⚠️  Trivy DB 更新失敗，沿用既有版本"
 else
     echo "⚠️  Trivy DB 更新失敗且沒有既有 cache，本場 Trivy（A2）無 DB 可用。"
 fi
 # 不加 :ro——trivy 除了 DB 還會往同一個 cache 寫掃描的分析結果。DB 的完整性不靠唯讀，
 # 靠「更新在牆外做、審查容器在牆內連不到 ghcr.io」這個順序保證。
-RUN_MOUNTS+=(-v "$TRIVY_CACHE_DIR":/home/nathan/.cache/trivy)
+RUN_MOUNTS+=(-v "$TRIVY_CACHE_VOLUME":/home/nathan/.cache/trivy)
 
 # git 的 SSH 憑證：轉發 host 的 ssh-agent socket，而不是把 ~/.ssh 掛進去。
 # 差別是「能力」與「秘密」——容器只能請 agent 簽章，拿不到私鑰本體；

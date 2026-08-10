@@ -33,7 +33,6 @@ DB 過期就是一路過期下去，而 A2 照樣「跑完」、照樣回報，�
 from __future__ import annotations
 
 import datetime as _dt
-import json
 import os
 import socket
 
@@ -60,48 +59,54 @@ def _owner() -> str:
     return f"{socket.gethostname()}:{os.getpid()}"
 
 
-def is_fresh(now: _dt.datetime | None = None) -> bool | None:
-    """看 metadata.json 判斷 DB 還新不新鮮。
+def is_fresh(now: _dt.datetime | None = None) -> bool:
+    """距離上次成功更新，還在節流間隔內嗎。
 
-    回 `True`／`False`／`None`（讀不到，無從判斷）。
+    ⚠ 這**不是**在判斷 trivy 的 DB 本身新不新鮮，只是「要不要費事起一顆容器」的節流器。
+      真正的鮮度判斷在容器裡由 trivy 自己做——`--download-db-only` 本來就會看 metadata
+      決定要不要抓。所以這支保守一點（讀不到就回 False → 起容器）永遠是安全的，
+      只是多花一次容器啟動。
 
-    ⚠ **讀不到一律當「不新鮮」處理**（呼叫端把 None 視同 False）。理由是這支讀的是
-      `TRIVY_CACHE_SELF`——控制平面自己看得到的那個路徑——而它不保證存在（本機開發、
-      或哪天 cache 改成 named volume 就讀不到了）。讀不到就起容器，讓 trivy 自己用
-      `--download-db-only` 判斷：它本來就會檢查鮮度，該 no-op 的時候會 no-op。
-      這條 fallback 讓「省一顆容器」變成純優化，而不是正確性的前提。
+    ⚠ **為什麼不直接讀 volume 裡的 metadata.json**：那要把 volume 掛進控制平面，而控制
+      平面的 image 沒有 `/home/nathan/.cache/trivy`。實測的規則是「**掛載時仍為空**就會被
+      該 image 初始化」——掛了而沒寫東西還救得回來，但一旦有東西在 root 擁有的狀態下被
+      寫進去就**永久**卡住，而且無聲。不掛它也達得到目的，就不要多開這個機會。
     """
-    path = os.path.join(config.TRIVY_CACHE_SELF, "db", "metadata.json")
     try:
-        with open(path, encoding="utf-8") as f:
-            meta = json.load(f)
-        nxt = meta.get("NextUpdate")
-        if not nxt:
-            return None
-        # trivy 寫的是 RFC3339；Python 3.11 前的 fromisoformat 不吃結尾的 Z。
-        deadline = _dt.datetime.fromisoformat(str(nxt).replace("Z", "+00:00"))
-    except Exception:                      # noqa: BLE001 — 檔案不在／壞掉／格式改了都算讀不到
-        return None
+        last = os.path.getmtime(config.TRIVY_DB_STAMP)
+    except OSError:
+        return False                       # 沒更新過（或看不到）→ 去更新
     now = now or _dt.datetime.now(_dt.timezone.utc)
-    if deadline.tzinfo is None:
-        deadline = deadline.replace(tzinfo=_dt.timezone.utc)
-    return now < deadline
+    return (now.timestamp() - last) < config.TRIVY_DB_MIN_INTERVAL
+
+
+def _touch_stamp() -> None:
+    """記下「這次更新成功了」。失敗不影響結果，只是下次少一個節流的依據。"""
+    try:
+        os.makedirs(os.path.dirname(config.TRIVY_DB_STAMP), exist_ok=True)
+        with open(config.TRIVY_DB_STAMP, "w", encoding="utf-8") as f:
+            f.write(_dt.datetime.now(_dt.timezone.utc).isoformat())
+    except OSError:
+        pass
 
 
 def _has_db() -> bool | None:
-    """本機看得到既有的 DB 檔嗎。回 True／False／None（無從判斷）。
+    """曾經成功更新過嗎——**用時間戳推**，不是去看 DB 檔。
 
-    ⚠ 「檔案不在」與「這個路徑我根本看不到」是**兩個不同的答案**，不可以混為一談：
-      前者是確定沒有 DB（→ `missing`，要明講 A2 這場沒東西可掃），後者只是控制平面
-      看不到那份 cache（本機開發、或哪天改成 named volume），那時不該擅自宣稱沒有。
-      初版把兩者都回 None，於是「真的沒有 DB」被降級報成 `stale`——測試當場抓到。
+    回 True／False／None（無從判斷）。
+
+    ⚠ cache 改成 named volume 之後，控制平面**看不到**那份 DB（理由見 `is_fresh`），
+      所以「有沒有既有 DB」只能從自己的紀錄推。判準是保守的：曾經成功過就當還有
+      （→ `stale`，警告但照常開場），從沒成功過才敢說沒有（→ `missing`）。
+      寧可把「其實沒有」報成 stale，也不要把「其實有」報成 missing——後者會讓人白跑
+      一趟去救一個沒壞的東西。
     """
-    path = os.path.join(config.TRIVY_CACHE_SELF, "db", "trivy.db")
     try:
-        return os.path.getsize(path) > 0
+        os.stat(config.TRIVY_DB_STAMP)
+        return True
     except FileNotFoundError:
-        # cache 根目錄看得到 → 檔案不在就是真的不在；連根都看不到才是無從判斷。
-        return False if os.path.isdir(config.TRIVY_CACHE_SELF) else None
+        # 目錄看得到 → 真的沒更新成功過；連目錄都看不到才是無從判斷。
+        return False if os.path.isdir(os.path.dirname(config.TRIVY_DB_STAMP)) else None
     except OSError:
         return None
 
@@ -125,8 +130,8 @@ def update(client: docker.DockerClient | None = None) -> dict:
     if not config.TRIVY_DB_UPDATE:
         return {"status": "disabled", "detail": "CLAUDE_PTY_TRIVY_DB_UPDATE 已關閉"}
 
-    if is_fresh() is True:
-        return {"status": "fresh", "detail": "DB 仍在有效期內，未起容器"}
+    if is_fresh():
+        return {"status": "fresh", "detail": "距上次更新未滿節流間隔，未起容器"}
 
     owner = _owner()
     if not acquire_lease(LEASE_NAME, owner, _lease_ttl()):
@@ -145,13 +150,14 @@ def update(client: docker.DockerClient | None = None) -> dict:
             command=["-c", f"timeout -k 10 {config.TRIVY_DB_TIMEOUT} "
                            f"trivy image --download-db-only"],
             entrypoint="bash",
-            volumes={config.TRIVY_CACHE_HOST: {
+            volumes={config.TRIVY_CACHE_VOLUME: {
                 "bind": "/home/nathan/.cache/trivy", "mode": "rw"}},
             remove=True,
             detach=False,
             stdout=False,
             stderr=False,
         )
+        _touch_stamp()
         return {"status": "ok", "detail": "DB 已更新"}
     except docker.errors.ContainerError as e:
         # 容器跑起來了但 trivy 回非 0（離線、逾時、鏡像站掛掉）。

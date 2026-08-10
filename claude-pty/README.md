@@ -29,6 +29,51 @@ docker compose exec control python -m server.cli create-admin alice   # 第一�
 
 之後改了 `server/` 就再跑一次 `./redeploy.sh`；只改 nginx.conf 之類用 `--no-build`。
 
+### Linux：三個 uid 要對齊（macOS 跳過這段）
+
+Linux 的 bind mount 不做 uid 翻譯，而 per-user 狀態空間是 0700、注入容器的憑證檔是
+0600。所以三個號碼必須相同（完整推導見 [ADR 0017](docs/adr/0017-uid-alignment.md)）：
+
+| | 誰 | 怎麼設 |
+|---|---|---|
+| ① | 你（跑 `redeploy.sh` 的帳號） | `id -u` |
+| ② | 控制平面的 `app` | `.env` 的 `APP_UID` |
+| ③ | session image 裡的 `nathan` | build dev-container 時 `--build-arg NCR_UID` |
+
+```bash
+APP_UID=$(id -u)                                    # 寫進 deploy/.env
+cd ../dev-container && docker build --build-arg NCR_UID=$(id -u) -t ncr-dev-container .
+```
+
+對不上的症狀是**每一場都撞 onboarding 對話**、**終端停在登入提示**、**restricted 每次
+卡滿逾時**——沒有一個看起來像 uid 問題。控制平面啟動時會把三個數字一起報出來。
+
+⚠ **換過 uid 的話，既有資料要跟著搬**：
+
+```bash
+chown -R "$(id -u)":"$(id -g)" "${CLAUDE_PTY_SPACE:-$HOME/claude-pty-space}"
+docker volume rm ncr-trivy-cache     # volume 有內容後就不再初始化，擁有者停在舊 uid
+```
+
+### 升級到 ADR 0018（trivy cache 改 named volume）
+
+**順序是硬要求：先 rebuild image、後 redeploy 控制平面。** 反過來的話，控制平面已經指向
+volume 而 image 還沒有 `/home/nathan/.cache/trivy`，空 volume 就會被初始化成 root:0755，
+接著第一次 trivy 更新以 root 寫進去，**從此永久卡住**——trivy 再也寫不進去。**這一條 macOS 也會中**（它不是 uid 問題，是 volume
+初始化問題）。
+
+舊的 `~/.cache/ncr-trivy`（約 1.2 GB）升級後變孤兒。可以直接刪，或搬進 volume 省掉一次
+重抓：
+
+```bash
+docker run --rm -v "$HOME/.cache/ncr-trivy":/old \
+    -v ncr-trivy-cache:/home/nathan/.cache/trivy ncr-dev-container \
+    bash -c 'cp -a /old/. /home/nathan/.cache/trivy/'
+```
+
+⚠ 這顆容器一定要用 **session 的 image**——換成 alpine 之類的做這件事，就是上面那個毒化
+情境本身。
+
 ### 要部署在哪裡
 
 一句話版本：**專用的機器，或至少一台專用的 VM。**

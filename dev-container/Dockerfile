@@ -222,5 +222,13 @@ LABEL ncr.uid=${NCR_UID}
 
 USER nathan
 
+# trivy 的 cache 落點要**先在 image 裡存在，而且屬於 nathan**。
+# ⚠ 這一行是 named volume 能運作的前提，不是整潔問題：docker 只在 volume **第一次掛載
+#   且為空**時，用 image 裡該路徑的內容與擁有者去初始化它。路徑不在 image 裡的話，
+#   volume 會被建成 **root 所有的 0755**——實測以 uid 1999 的容器掛上去，一個字都寫不進
+#   （而 trivy 除了 DB 還要往同一個 cache 寫掃描結果）。
+# ⚠ 放在 `USER nathan` **之後**：以他的身分建，擁有者自然就對，不必再 chown。
+RUN mkdir -p /home/nathan/.cache/trivy
+
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["claude", "--dangerously-skip-permissions"]

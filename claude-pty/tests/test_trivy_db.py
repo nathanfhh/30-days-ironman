@@ -6,7 +6,6 @@
 因為呼叫它的地方是 `sessions.create()` 的熱路徑，而 A2 沒有 DB 是可降級的，開不了場不是。
 """
 import datetime as _dt
-import json
 import os
 import sys
 import tempfile
@@ -62,30 +61,22 @@ def _container_error(exit_status=1):
 
 # --- 假的 cache 目錄 ---------------------------------------------------------------
 
-_cache = tempfile.mkdtemp(prefix="claude-pty-trivycache-")
-config.TRIVY_CACHE_SELF = _cache
-config.TRIVY_CACHE_HOST = _cache
-_dbdir = os.path.join(_cache, "db")
-os.makedirs(_dbdir, exist_ok=True)
+# ⚠ cache 是 named volume，控制平面**看不到它的內容**（ADR 0018），所以這裡完全不造
+#   假的 cache 目錄——能被測的只有控制平面自己持有的那個時間戳。
+_stampdir = tempfile.mkdtemp(prefix="claude-pty-trivystamp-")
+config.TRIVY_DB_STAMP = os.path.join(_stampdir, "trivy-db-updated-at")
 
 
-def set_metadata(next_update: _dt.datetime | None):
-    p = os.path.join(_dbdir, "metadata.json")
-    if next_update is None:
-        if os.path.exists(p):
-            os.remove(p)
+def set_stamp(when: _dt.datetime | None):
+    """把「上次更新成功」設成某個時間；None = 從來沒成功過。"""
+    if when is None:
+        if os.path.exists(config.TRIVY_DB_STAMP):
+            os.remove(config.TRIVY_DB_STAMP)
         return
-    with open(p, "w", encoding="utf-8") as f:
-        json.dump({"NextUpdate": next_update.isoformat().replace("+00:00", "Z")}, f)
-
-
-def set_db(present: bool):
-    p = os.path.join(_dbdir, "trivy.db")
-    if present:
-        with open(p, "wb") as f:
-            f.write(b"x" * 16)
-    elif os.path.exists(p):
-        os.remove(p)
+    with open(config.TRIVY_DB_STAMP, "w", encoding="utf-8") as f:
+        f.write(when.isoformat())
+    ts = when.timestamp()
+    os.utime(config.TRIVY_DB_STAMP, (ts, ts))
 
 
 def clear_lease():
@@ -93,8 +84,8 @@ def clear_lease():
     leases.release_lease(trivy_db.LEASE_NAME, trivy_db._owner())
 
 
-_future = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=6)
-_past = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=6)
+_recent = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=5)
+_old = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=48)
 
 print("== 開關：關掉就什麼都不做 ==")
 config.TRIVY_DB_UPDATE = False
@@ -104,17 +95,16 @@ check("status=disabled", r["status"] == "disabled")
 check("🔴 一顆容器都沒起", c.calls == [])
 config.TRIVY_DB_UPDATE = True
 
-print("\n== 新鮮度短路：還沒到期就不起容器 ==")
-set_metadata(_future)
-set_db(True)
+print("\n== 節流：距上次成功更新還在間隔內就不起容器 ==")
+set_stamp(_recent)
 clear_lease()
 c = FakeClient()
 r = trivy_db.update(c)
 check("status=fresh", r["status"] == "fresh")
-check("🔴 沒起容器（這就是短路的全部價值）", c.calls == [])
+check("🔴 沒起容器（這就是節流的全部價值）", c.calls == [])
 
-print("\n== 過期：才會真的去更新 ==")
-set_metadata(_past)
+print("\n== 超過間隔：才會真的去更新 ==")
+set_stamp(_old)
 clear_lease()
 c = FakeClient()
 r = trivy_db.update(c)
@@ -127,24 +117,33 @@ check("命令帶了 timeout 硬上限，且與設定一致",
       f"timeout -k 10 {config.TRIVY_DB_TIMEOUT}" in " ".join(kw.get("command") or []))
 check("跑的是 --download-db-only",
       "--download-db-only" in " ".join(kw.get("command") or []))
-check("cache 掛在容器內的固定落點",
-      (kw.get("volumes") or {}).get(config.TRIVY_CACHE_HOST, {}).get("bind")
+# ⚠ key 是 **volume 名**不是 host 路徑：host 路徑會把 cache 的擁有權綁回部署者的 uid，
+#   那正是 ADR 0018 要拆掉的耦合。
+check("cache 掛的是 named volume，落點固定",
+      (kw.get("volumes") or {}).get(config.TRIVY_CACHE_VOLUME, {}).get("bind")
       == "/home/nathan/.cache/trivy")
+check("🔴 沒有任何 host 路徑出現在 volumes 裡",
+      not any(str(k).startswith("/") for k in (kw.get("volumes") or {})))
 check("用完即棄（remove=True）", kw.get("remove") is True)
 # ⚠ 這條是真的踩得到：帶了 session label 的話，reconciler 的孤兒清理會把這顆
 #   「有 label 卻不在 DB 裡」的容器當成孤兒。--rm 很快就走，但那是在賭時序。
 check("🔴 沒有帶任何 label（不能進 reconciler 的視野）",
       not kw.get("labels"))
 
-print("\n== metadata 讀不到：當成過期，不是當成新鮮 ==")
-set_metadata(None)
+print("\n== 從來沒更新過：要去更新，不是當成新鮮 ==")
+set_stamp(None)
 clear_lease()
 c = FakeClient()
 r = trivy_db.update(c)
-check("🔴 讀不到就去更新（fail-safe 的方向要對）", r["status"] == "ok" and len(c.calls) == 1)
+check("🔴 沒有時間戳就去更新（fail-safe 的方向要對）",
+      r["status"] == "ok" and len(c.calls) == 1)
+check("🔴 更新成功要寫下時間戳（否則每一場都會重跑一次）",
+      os.path.exists(config.TRIVY_DB_STAMP))
+c2 = FakeClient()
+check("🔴 而且下一次就會被節流掉", trivy_db.update(c2)["status"] == "fresh" and c2.calls == [])
 
 print("\n== 租約：別人持有時跳過，而且不等 ==")
-set_metadata(_past)
+set_stamp(_old)
 clear_lease()
 leases.acquire_lease(trivy_db.LEASE_NAME, "someone-else", 300)
 c = FakeClient()
@@ -154,43 +153,74 @@ check("🔴 沒起第二顆容器（否則就是重複下載 103 MiB）", c.call
 clear_lease()
 
 print("\n== 租約用完要還：下一次要能繼續 ==")
-set_metadata(_past)
+# ⚠ 兩次之間要把時間戳撥回去，否則第二次會被**節流**擋掉而回 fresh——那樣這條就不是在
+#   測租約了，是在測節流，而且會是綠的。兩個機制要分開測。
+set_stamp(_old)
 clear_lease()
-c = FakeClient()
-trivy_db.update(c)
+trivy_db.update(FakeClient())
+set_stamp(_old)
 c2 = FakeClient()
 r2 = trivy_db.update(c2)
 check("🔴 同一個 process 連續兩次都做得成（沒有被自己的租約卡住）",
       r2["status"] == "ok" and len(c2.calls) == 1)
 
 print("\n== 更新失敗：有舊 DB → stale，沒有 → missing，兩者都不拋 ==")
-set_metadata(_past)
-set_db(True)
+set_stamp(_old)
 clear_lease()
 r = trivy_db.update(FakeClient(raises=_container_error(7)))
 check("有既有 DB → stale", r["status"] == "stale")
 check("訊息帶得出 exit code", "7" in r["detail"])
 
-set_db(False)
+set_stamp(None)
 clear_lease()
 r = trivy_db.update(FakeClient(raises=_container_error(7)))
 check("沒有既有 DB → missing", r["status"] == "missing")
 
 print("\n== docker 本身出問題：error，而且不拋 ==")
-set_metadata(_past)
+set_stamp(_old)
 clear_lease()
 r = trivy_db.update(FakeClient(raises=docker.errors.DockerException("daemon down")))
 check("status=error", r["status"] == "error")
 check("訊息說得出是什麼錯", "DockerException" in r["detail"])
 
 print("\n== 失敗之後租約也要還（不能把後面的人鎖死）==")
-set_metadata(_past)
-set_db(True)
+set_stamp(_old)
 clear_lease()
 trivy_db.update(FakeClient(raises=_container_error()))
+set_stamp(_old)          # 同上：把節流排除掉，這條測的是租約
 c = FakeClient()
 r = trivy_db.update(c)
 check("🔴 前一次失敗不會讓下一次被判成 skipped", r["status"] == "ok")
+
+print("\n== preflight 不可以拿路徑檢查去問一個 volume 名 ==")
+# ⚠ 真的會咬人：MOUNTS 的 key 現在混著「host 路徑」與「volume 名」，而 preflight 對
+#   非容器化部署會逐個 os.path.exists()。volume 名恆 False → 每次啟動都喊一句
+#   「掛載來源不存在」，而那是假的。假警報喊久了，真警報就沒人看。
+from server import sessions  # noqa: E402
+
+_old_mounts = config.MOUNTS
+_old_host_home, _old_self_home = config.HOST_HOME, config._SELF_HOME
+_old_space = config.SPACE_SELF
+_probe_dir = tempfile.mkdtemp(prefix="claude-pty-probe-")
+try:
+    # 模擬**非容器化**（HOST 與 SELF 相同），那是唯一會跑這道檢查的情境
+    config.HOST_HOME = config._SELF_HOME = os.path.expanduser("~")
+    config.SPACE_SELF = _probe_dir
+    config.MOUNTS = {
+        "ncr-trivy-cache": {"bind": "/home/nathan/.cache/trivy", "mode": "rw"},
+        _probe_dir: {"bind": "/x", "mode": "rw"},                 # 存在的路徑
+        os.path.join(_probe_dir, "nope"): {"bind": "/y", "mode": "rw"},  # 不存在的路徑
+    }
+    msgs = [m for m in sessions.preflight() if "掛載來源不存在" in m]
+finally:
+    config.MOUNTS = _old_mounts
+    config.HOST_HOME, config._SELF_HOME = _old_host_home, _old_self_home
+    config.SPACE_SELF = _old_space
+
+check("🔴 volume 名不會被誤報成『掛載來源不存在』",
+      not any("ncr-trivy-cache" in m for m in msgs))
+check("但真的不存在的 host 路徑仍然要喊（不能因此把檢查關掉）",
+      any("nope" in m for m in msgs))
 
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)

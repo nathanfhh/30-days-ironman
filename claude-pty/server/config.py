@@ -178,18 +178,11 @@ SSH_AUTH_SOCK_BIND = "/ssh/ssh_sock"
 #   導出的金鑰加密，拿到設定檔加資料庫就全部解得開，而管理員還能代改任何人的密碼。
 #   把帳號開給誰，等於請他信任你——這是開帳號時就要做的判斷，不是事後補得回來的。
 
-# trivy 漏洞 DB 的快取目錄（與 run script 掛同一份，見下方 MOUNTS）。
-# HOST 版供掛載（daemon 解讀）、SELF 版供控制平面自己 mkdir（ADR 0009）。
-# ⚠ 必須由我們先建立：讓 docker daemon 隱式建立的話，Linux 上會是 root:root，容器內那個
-# 使用者（SESSION_UID）寫不進去 → trivy 下載失敗 → restricted 每次卡滿 120 秒逾時，
-# 比不掛還糟。
-# ⚠ 預設值**與 dev-container 的 run script 同一個目錄**（它也是 `$HOME/.cache/ncr-trivy`）：
-#   兩條路徑共用同一份 DB，人先跑過一次容器之後，網頁開的第一場就直接命中快取。
-#   指到別的地方不會壞，只是每一場都要重抓約 1GB。
-TRIVY_CACHE_HOST = os.environ.get(
-    "CLAUDE_PTY_TRIVY_CACHE", os.path.join(HOST_HOME, ".cache", "ncr-trivy"))
-TRIVY_CACHE_SELF = os.environ.get(
-    "CLAUDE_PTY_TRIVY_CACHE_SELF", os.path.join(_SELF_HOME, ".cache", "ncr-trivy"))
+# [癒痕] trivy cache 曾經是 host 目錄的 bind mount（`~/.cache/ncr-trivy`，HOST/SELF 兩個
+# 常數 + 控制平面先 mkdir）。ADR 0018 改成 named volume，那兩個常數與那次 mkdir 一起退役。
+# 留這段是因為刪掉會弄丟一個反直覺的理由：**當時「必須由我們先建」是對的**——bind mount
+# 的來源不存在時 dockerd 會建成 root:root，容器內的 nathan 寫不進去。改成 volume 之後
+# 那件事由 docker 用 image 裡的路徑與擁有者初始化，所以不再需要，也**不可以**再加回來。
 
 # semgrep-rules（A4 SAST 軌道的規則 repo）：host 維護一份 clone，:ro **共用**掛進每個
 # session（比照 run script，規則庫沒有 per-user 的意義）。HOST 版供掛載（daemon 解讀）、
@@ -219,6 +212,24 @@ TRIVY_DB_UPDATE = os.environ.get("CLAUDE_PTY_TRIVY_DB_UPDATE", "1").strip() not 
 # 兩條路徑對「等多久算太久」講的應該是同一件事。網路半死不活時，不讓「更新 DB」變成
 # 「卡住開場」。
 TRIVY_DB_TIMEOUT = int(os.environ.get("CLAUDE_PTY_TRIVY_DB_TIMEOUT", "180"))
+
+# cache 改用 **named volume**（ADR 0018）：volume 首次掛載且為空時，docker 用 image 裡
+# 該路徑的內容與擁有者初始化它，host 的 uid 完全不進場——trivy 因此離開 uid 對齊那條鏈
+#（ADR 0017）。名字固定、不吃 compose 的 project 前綴，人的路徑（run script）才掛得到
+# 同一份，兩條路徑繼續共用那 ~1.2 GB。
+TRIVY_CACHE_VOLUME = os.environ.get("CLAUDE_PTY_TRIVY_CACHE_VOLUME", "ncr-trivy-cache")
+
+# 「上次更新成功是什麼時候」的時間戳，由控制平面自己持有。
+# ⚠ **為什麼不去讀 volume 裡的 metadata.json**：那要把 volume 掛進控制平面，而控制平面的
+#   image **沒有** /home/nathan/.cache/trivy 這個路徑。實測出來的規則是「**掛載時仍為空**
+#   就會被該 image 的內容與擁有者初始化」——所以控制平面掛了、只要沒寫東西，volume 還救
+#   得回來；但只要有任何東西在 root 擁有的狀態下被寫進去，它就**永久**卡在 root:root，
+#   而且無聲。我們不需要掛它就達得到目的，那就不要多開這個機會。
+#   所以寧可自己記一個時間戳——它只是「要不要費事起一顆容器」的節流器，真正的鮮度判斷
+#   仍然在容器裡由 trivy 自己做（`--download-db-only` 該 no-op 就 no-op）。
+#   路徑跟著 DB 走，定義在 `DB_PATH` 旁邊（那個常數在本檔案更下面才成立）。
+# 節流間隔（秒）。trivy 上游的 DB 每 6 小時更新一次，比它更密集地去問只是白起容器。
+TRIVY_DB_MIN_INTERVAL = int(os.environ.get("CLAUDE_PTY_TRIVY_DB_MIN_INTERVAL", str(6 * 3600)))
 
 # --- ttyd 綁定位址（ADR 0009）------------------------------------------------------
 # 非容器化：綁 127.0.0.1，nginx 在同一台 host。
@@ -373,7 +384,9 @@ MOUNTS = {} if os.environ.get("CLAUDE_PTY_NO_MOUNTS") else {
     #   0 次）。實際負責更新的是 `server/trivy_db.py`，由控制平面在建 session **之前**
     #   於一顆一次性容器裡跑，牆外、有租約串行化。放那裡而不是 entrypoint 的理由，
     #   見那支模組的說明（併發不會壞，但會重複下載）。
-    TRIVY_CACHE_HOST: {"bind": "/home/nathan/.cache/trivy", "mode": "rw"},
+    # ⚠ key 是 **volume 名稱**，不是 host 路徑（ADR 0018）。docker-py 的 volumes 參數
+    #   兩者同格式；下游任何「把 key 當路徑用」的程式碼都要能分辨（見 preflight）。
+    TRIVY_CACHE_VOLUME: {"bind": "/home/nathan/.cache/trivy", "mode": "rw"},
 }
 
 # 「這一輪是測試」的標記。用途：打在容器 label 上讓正式 reconciler 跳過測試建的容器，
@@ -737,6 +750,11 @@ if "://" in DB_PATH:
         f"CLAUDE_PTY_DB_PATH 收的是 SQLite 檔案路徑，不是連線字串（拿到：{DB_PATH}）。"
         "這套東西的資料庫就是 SQLite。")
 DB_URL = f"sqlite:///{DB_PATH}"
+
+# trivy DB「上次更新成功」的時間戳。放在 DB 旁邊是因為那個目錄本來就是**掛出來的、
+# 可寫的、會留著的**——三個條件缺一不可（見上方 TRIVY_DB_MIN_INTERVAL 那段的說明，
+# 那裡解釋了為什麼不去讀 volume 裡的 metadata.json）。
+TRIVY_DB_STAMP = os.path.join(os.path.dirname(DB_PATH), "trivy-db-updated-at")
 
 
 def _load_or_create_secret() -> str:

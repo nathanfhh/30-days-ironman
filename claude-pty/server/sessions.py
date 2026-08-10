@@ -827,10 +827,16 @@ def preflight() -> list[str]:
             f"容器化部署請設 CLAUDE_PTY_SELF_REPO_ROOT 指向掛進來的 repo 路徑。")
     # MOUNTS 的來源是 host 路徑，由 daemon 解讀；控制平面容器化後本來就看不到它們，
     # 故只在「HOST 與 SELF 相同」（非容器化）時檢查，否則會誤報。
+    # ⚠ MOUNTS 的 key **不一定是路徑**：trivy 的 cache 是 named volume（ADR 0018），
+    #   key 是 volume 名。拿 `os.path.exists()` 去問一個 volume 名永遠是 False，於是
+    #   非容器化部署每次啟動都收到一句「掛載來源不存在」的假警報。只查看起來是絕對
+    #   路徑的那些——volume 由 docker 自己負責存在，不需要我們檢查。
     if config.MOUNTS and config.HOST_HOME == config._SELF_HOME:
-        for host_path in config.MOUNTS:
-            if not os.path.exists(host_path):
-                problems.append(f"掛載來源不存在（session 內可能缺設定/憑證）：{host_path}")
+        for src in config.MOUNTS:
+            if not os.path.isabs(src):
+                continue                    # named volume，不是路徑
+            if not os.path.exists(src):
+                problems.append(f"掛載來源不存在（session 內可能缺設定/憑證）：{src}")
     # per-user 空間的根目錄（ADR 0014）。這一個查的是 **SELF**——控制平面得自己在裡面
     # mkdir 與寫種子檔，所以不是「daemon 看得到就好」，是「我現在就要寫得進去」。
     # 建不出來的話每一次建立 session 都會失敗，而錯誤會出現在很後面（provision 拋出），
@@ -1093,10 +1099,10 @@ class SessionManager:
             #   失敗就讓它往上拋，走下面的補償刪除，別留一個註定壞掉的 session。
             provision_user_space(user_id, owner_username)
             if config.MOUNTS:
-                # trivy DB 快取要**我們**先建，不能讓 docker daemon 隱式建立：那樣在 Linux 上
-                # 會是 root:root，容器內的 nathan 寫不進去，restricted 每次都卡滿 120 秒逾時。
-                with suppress(OSError):
-                    os.makedirs(config.TRIVY_CACHE_SELF, exist_ok=True)
+                # ⚠ 這裡曾經 `makedirs(TRIVY_CACHE_SELF)`——那是 cache 還是 host 目錄
+                #   bind mount 的時代，為了不讓 dockerd 把它建成 root:root。改成 named
+                #   volume（ADR 0018）之後那件事由 docker 自己處理，而且**擁有者是從
+                #   image 的 /home/nathan/.cache/trivy 複製過來的**，本來就對。
                 # DB 本身的更新（見 server/trivy_db.py）。**要在建容器之前**：restricted
                 # 的 session 一起來就套 iptables，那之後牆內抓不到 ghcr.io。
                 # ⚠ 整段包在 suppress 裡，而且 update() 自己也承諾不拋——它是選配設施，
