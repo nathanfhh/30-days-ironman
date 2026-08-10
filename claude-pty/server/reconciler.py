@@ -27,12 +27,12 @@ import docker
 
 from . import auth, config, gitlab_proxy, user_proxy, views
 from .db import init_db, session_scope
+from .leases import acquire_lease, still_leader  # noqa: F401  （still_leader 是 re-export）
 from .models import (
     END_EXITED,
     END_GONE,
     END_IDLE,
     STATUS_EXITED,
-    Lease,
     User,
     View,
     utcnow,
@@ -53,41 +53,9 @@ from .sessions import (
 STUCK = object()
 
 
-def acquire_lease(name: str, owner: str, ttl: int) -> bool:
-    """取得/續約互斥租約；被別人持有且未過期則回 False（review M2）。
-
-    交易以 immediate 開啟，讓「讀租約 → 判斷 → 寫回」在 SQLite 下也是互斥的，
-    否則兩個 reconciler 可能同時判定「沒人持有」。
-
-    ⚠ 互斥靠的就是這個 immediate：漏了它，兩個 reconciler 同時看到一張過期的租約
-      時會雙雙判定可接手，接著同時跑破壞性清理——正是這張租約要防的事
-      （`sessions.create()` 的配額交易與 `views._claim_port` 是同一個形狀的坑）。
-    """
-    now = utcnow()
-    with session_scope(immediate=True) as s:
-        row = s.get(Lease, name)
-        if row is None:
-            s.add(Lease(name=name, owner=owner,
-                        expires_at=now + _dt.timedelta(seconds=ttl)))
-            return True
-        if row.owner != owner and row.expires_at > now:
-            return False                    # 別人持有中且未過期
-        row.owner = owner                   # 自己續約，或接手已過期的租約
-        row.expires_at = now + _dt.timedelta(seconds=ttl)
-        return True
-
-
-def still_leader(name: str, owner: str) -> bool:
-    """租約是否仍屬於自己且未過期。
-
-    租約只在每輪**開頭**取得，但一輪可能跑很久（大量 exited container 要逐個
-    force-remove）。跑超過 TTL 時另一個實例會合法接手，而舊的仍在迴圈裡做破壞性操作
-    ——兩個 reconciler 同時刪同一批東西。破壞性動作前再確認一次，過期就讓這輪停手
-    （下一輪重新競爭租約）。
-    """
-    with session_scope() as s:
-        row = s.get(Lease, name)
-        return bool(row and row.owner == owner and row.expires_at > utcnow())
+# 租約原語搬到 `leases.py`：`sessions.py` 也要用它（建 session 前的 trivy DB 更新要
+# 串行化），而 reconciler 已經 import sessions——留在這裡就是循環 import。
+# 在這裡 re-export，既有的 `reconciler.acquire_lease(...)` 呼叫端與測試都不必改。
 
 
 def reconcile_once(client: docker.DockerClient | None = None,

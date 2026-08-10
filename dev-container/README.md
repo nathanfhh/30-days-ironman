@@ -21,6 +21,29 @@ cd dev-container
 docker build -t ncr-dev-container .
 ```
 
+### Linux：把容器內的 uid 對上你自己
+
+macOS / Docker Desktop 不用管這一段（bind mount 的擁有者會被對映），**原生 Linux 要**：
+
+```bash
+docker build --build-arg NCR_UID=$(id -u) -t ncr-dev-container .
+```
+
+容器內的 `nathan` 預設是 **1001**——那不是誰決定的數字，是 `ubuntu:24.04` 自己佔走了
+1000（使用者名 `ubuntu`），`useradd` 只好往下拿。而 Linux 的 bind mount **不做 uid 翻譯**，
+所以那個號碼要是跟你的 `id -u` 不同，容器就寫不進你掛進去的東西：
+
+- `~/ncr`（審查報告的 archive）寫不下
+- ssh-agent 的 socket connect 不了（`Permission denied`，見下方疑難排解）
+- `~/.claude/.credentials.json` 是 0600，讀不到
+
+`NCR_UID=1000` 時 build 會先把 base image 自帶的 `ubuntu` 帳號移掉再建
+（不移的話 `useradd` 會直接 `UID 1000 is not unique` 失敗）。那個帳號名下只有
+`/home/ubuntu` 與三個 skeleton dotfile，移掉不留孤兒。
+
+> 用 claude-pty 開容器的人：這個值要與 `deploy/.env` 的 `APP_UID` **相同**，
+> 兩邊都等於你的 `id -u`。控制平面啟動時會檢查並把三個數字報出來。
+
 ### 選配：告訴 image 你的 GitLab 在哪
 
 ```bash
@@ -289,7 +312,7 @@ attacker.example.com` 把任意網域加進去、重建整道牆，**而且自�
 | `Error connecting to agent: No such file or directory` | image 的 `SSH_AUTH_SOCK` 有值，但 socket 沒掛進來 | 這是「這條路沒接」不是「設定壞了」。檢查 host 的 `$SSH_AUTH_SOCK`，或你是不是設了 `NCR_NO_SSH_AGENT` |
 | 容器裡 `$SSH_AUTH_SOCK` 是**空字串** | image 比 Dockerfile 舊。這個變數是 image 的 ENV，改了 Dockerfile 不重 build 就不會生效 | `docker build -t ncr-dev-container .`。啟動時印的 `image built:` 時間比你改 Dockerfile 的時間早就是這個情況 |
 | `Error connecting to agent: Permission denied`（Docker Desktop：macOS / WSL2 / Docker Desktop for Linux） | socket 掛進來了，但 Docker Desktop 代理出來的 socket 節點是 `root:root 0660`，而容器跑 uid 1001 | wrapper 只要沒有確定認出「原生 Linux Docker」就會補 `--group-add 0`（判不出來時也補）。還是出現代表你是自己下 `docker run`，補上這個參數 |
-| `Error connecting to agent: Permission denied`（原生 Linux Docker） | socket 帶的是 **host 自己的 uid** 且通常 0600，跟容器內的 uid 1001 對不上。補 `--group-add 0` 在這裡沒有用（group 補不回 uid），wrapper 也因此刻意不加 | 真因是 uid 不符，只能讓兩邊對上：改 `Dockerfile` 的 `useradd` 帶上你的 uid（`id -u`）後重 build。不想處理就 `NCR_NO_SSH_AGENT=1` 關掉轉發，git 改走 HTTPS。放寬 socket 權限不是解法——那等於把 agent 開給機器上所有人 |
+| `Error connecting to agent: Permission denied`（原生 Linux Docker） | socket 帶的是 **host 自己的 uid** 且通常 0600，跟容器內的 uid 1001 對不上。補 `--group-add 0` 在這裡沒有用（group 補不回 uid），wrapper 也因此刻意不加 | 真因是 uid 不符，只能讓兩邊對上：`docker build --build-arg NCR_UID=$(id -u) …` 重 build（見上方 Build 那節）。不想處理就 `NCR_NO_SSH_AGENT=1` 關掉轉發，git 改走 HTTPS。放寬 socket 權限不是解法——那等於把 agent 開給機器上所有人 |
 | `ssh-add -l` 說 `The agent has no identities` | agent 在跑但袋子是空的。macOS 的 launchd agent **永遠都在**，所以「有 agent」不等於「有金鑰」 | host 上先 `ssh-add`，再啟動容器。wrapper 會在轉發前先檢查並警告，但不會替你載入——那個 agent 是你的，而且可能是刻意只放了受限 key |
 | git 認證失敗但 agent 有 key | 那把 key 沒有註冊到 GitLab | 到 GitLab 的 SSH Keys 頁面確認 |
 | `❌ Keychain 沒有 Claude Code 憑證` | host 沒登入過 | 先在 host 跑一次 `claude` 登入，或 `export CLAUDE_CODE_OAUTH_TOKEN` |

@@ -84,21 +84,55 @@ import docker  # noqa: E402
 _old_from_env = docker.from_env
 docker.from_env = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("測試不連 docker"))
 try:
-    NEEDLE = "APP_UID"
+    # ⚠ 判準改成「這一條在講 uid 對齊嗎」，不再是字面的 APP_UID：訊息現在分三個分支
+    #   （image 查得到／image 沒 stamp／image 問不到），只有一條會提到 APP_UID。
+    #   三條共用的是那段附註，拿它當錨最穩。
+    NEEDLE = "host 判定為"
     _old_plat = config.HOST_PLATFORM
+    _old_image_uid = sessions.image_uid
+
+    def _run(platform, image_uid_result):
+        config.HOST_PLATFORM = platform
+        sessions.image_uid = lambda *a, **k: image_uid_result
+        return [p for p in sessions.preflight() if NEEDLE in p]
+
     try:
-        config.HOST_PLATFORM = "Darwin"
-        darwin = [p for p in sessions.preflight() if NEEDLE in p]
-        config.HOST_PLATFORM = "Linux"
-        linux = [p for p in sessions.preflight() if NEEDLE in p]
+        # (a) macOS：不管 image 回什麼都不該喊——bind mount 的 uid 在那邊本來就會被對映
+        darwin = _run("Darwin", ("ok", os.getuid() + 1))
+        # (b) Linux + image 讀得到真值，而且對不上 → 要喊，且要報得出三個數字
+        linux_real = _run("Linux", ("ok", os.getuid() + 1))
+        # (c) Linux + image 讀得到真值且三者一致 → 不該喊（避免狼來了）
+        _old_sess_uid = config.SESSION_UID
+        config.SESSION_UID = os.getuid()
+        linux_aligned = _run("Linux", ("ok", os.getuid()))
+        config.SESSION_UID = _old_sess_uid
+        # (d) Linux + image 沒有 stamp → 退回舊的兩旋鈕比對，並要說「驗不到真值」
+        linux_unstamped = _run("Linux", ("unstamped", None))
+        # (e) Linux + image 問不到 → 要明講「這一輪沒驗過」，不可以靜靜跳過
+        linux_unavail = _run("Linux", ("unavailable", None))
     finally:
         config.HOST_PLATFORM = _old_plat
-    check("🔴 host=Darwin：preflight 一句 APP_UID 的話都沒有", darwin == [])
-    check("🔴 host=Linux 且 uid 對不上：preflight 有喊", len(linux) == 1)
+        sessions.image_uid = _old_image_uid
+
+    check("🔴 host=Darwin：preflight 一句 uid 的話都沒有", darwin == [])
+    check("🔴 host=Linux 且 image 真值對不上：有喊", len(linux_real) == 1)
+    # ⚠ 這條是這次改版的核心：舊版比的是 APP_UID 與 SESSION_UID **兩個旋鈕**，
+    #   兩個一起設成同一個錯的數字就完全靜音。現在要以 image 裡的真值為準。
+    check("🔴 喊的那句把三個數字都報出來（image／APP_UID／設定值）",
+          bool(linux_real) and all(str(n) in linux_real[0] for n in
+                                   (os.getuid() + 1, os.getuid(), config.SESSION_UID)))
+    check("🔴 三者一致時不喊（不能變成狼來了）", linux_aligned == [])
+    check("image 沒 stamp：仍然退回舊比對，而且說得出驗不到真值",
+          len(linux_unstamped) >= 1 and any("驗不到" in p for p in linux_unstamped))
+    check("🔴 image 問不到：明講『沒有驗過』，不可以當成通過",
+          len(linux_unavail) == 1 and "沒有驗過" in linux_unavail[0])
     # 喊的時候要講得出「我憑什麼這樣判斷」，不然誤報的人無從查起——這正是修之前的處境。
-    check("喊的那句話說得出 host 判定的來源", bool(linux) and "host 判定為 Linux" in linux[0])
+    check("每一個分支都說得出 host 判定的來源",
+          all("host 判定為 Linux" in p
+              for p in (linux_real + linux_unstamped + linux_unavail)))
     check("而且告訴人這可能是誤報、以及誰會帶對這個值",
-          bool(linux) and "誤報" in linux[0] and "redeploy.sh" in linux[0])
+          all("誤報" in p and "redeploy.sh" in p
+              for p in (linux_real + linux_unstamped + linux_unavail)))
 finally:
     docker.from_env = _old_from_env
     config.SESSION_UID = _old_uid

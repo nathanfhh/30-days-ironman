@@ -29,7 +29,7 @@ import docker
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
-from . import config, crypto, gitlab_proxy, user_proxy
+from . import config, crypto, gitlab_proxy, trivy_db, user_proxy
 from . import auth as auth_mod
 from .db import session_scope
 from .models import (
@@ -718,6 +718,42 @@ def provision_user_space(user_id: int, username: str) -> None:
         _write_json_atomic(seed_path, existing)
 
 
+def image_uid(client: docker.DockerClient | None = None) -> tuple[str, int | None]:
+    """問那顆 session image：它裡面的 `nathan` 到底是幾號。
+
+    回 `(status, uid)`，status 三選一：
+      - `"ok"`         → 讀到了，`uid` 是真值
+      - `"unstamped"`  → image 在，但沒有 `NCR_UID` 標記（改版前 build 的那些）
+      - `"unavailable"`→ image 不在本機，或 daemon 問不到
+
+    ⚠ **這是整條 uid 鏈上唯一的「現實」。** `APP_UID` 與 `CLAUDE_PTY_SESSION_UID` 都是
+      旋鈕：兩個一起設錯，就沒有任何人會反對（那正是舊版檢查的破口——它比的是兩個
+      旋鈕彼此，不是旋鈕跟現實）。所以判斷一律以這裡讀回來的值為準。
+
+    LABEL 與 ENV 兩個都讀：build 時兩邊都有 stamp，讀得到哪個算哪個——只認一種查法的話，
+    哪天 stamp 的方式改了，這支會安靜地退化成 `unstamped`。
+    """
+    try:
+        c = client or docker.from_env(timeout=config.DOCKER_TIMEOUT)
+        attrs = c.images.get(config.IMAGE).attrs
+    except Exception:                      # noqa: BLE001 — image 不在／daemon 不通都算查不到
+        return ("unavailable", None)
+    cfg = attrs.get("Config") or {}
+    raw = (cfg.get("Labels") or {}).get("ncr.uid")
+    if raw is None:
+        for kv in (cfg.get("Env") or []):
+            if kv.startswith("NCR_UID="):
+                raw = kv.split("=", 1)[1]
+                break
+    if raw is None or not str(raw).strip():
+        return ("unstamped", None)
+    try:
+        return ("ok", int(str(raw).strip()))
+    except ValueError:
+        # stamp 壞掉（build-arg 被塞了非數字）。當成沒有 stamp，別讓一個爛值冒充現實。
+        return ("unstamped", None)
+
+
 def preflight() -> list[str]:
     """啟動自檢：回傳需要提醒使用者的問題清單。
 
@@ -821,15 +857,49 @@ def preflight() -> list[str]:
         #   （ADR 0009），容器內 `sys.platform` 永遠是 linux——那道 guard 從來沒有在正式部署
         #   裡生效過，於是 macOS host 每次啟動都收到這句假警報。問的必須是 host 的作業系統，
         #   而那件事只有 host 講得出來（見 config.HOST_PLATFORM）。
-        if config.host_is_linux() and os.getuid() != config.SESSION_UID:
-            problems.append(
-                f"控制平面以 uid {os.getuid()} 執行，但 session 容器內的寫入者是 "
-                f"nathan(uid {config.SESSION_UID})。per-user 空間是 0700，uid 對不上時"
-                f"容器進不去那些目錄——症狀是每一場都撞 onboarding 對話。"
-                f"請把 deploy/.env 的 APP_UID 設成 {config.SESSION_UID} 重新 build。"
-                f"（host 判定為 "
-                f"{config.HOST_PLATFORM or '未指明，退回容器內的判斷——那不一定準'}；"
-                f"你的 host 不是 Linux 的話這是誤報，deploy/redeploy.sh 會自動帶對這個值）")
+        # ⚠ 比對的對象是 **image 裡的真值**，不是 `config.SESSION_UID`。後者是旋鈕，而
+        #   `os.getuid()` 也是旋鈕（APP_UID）——舊版拿這兩個互比，把兩個一起設成同一個
+        #   錯的數字就完全靜音，而真正決定成敗的第三個數字從來沒被問過。
+        if config.host_is_linux():
+            # ⚠ 這段附註不是客套。喊的時候要講得出「我憑什麼這樣判斷」，否則收到誤報的
+            #   人無從查起——那正是修之前的處境（容器內問 sys.platform，macOS 每次啟動
+            #   都被喊一次）。**三個分支共用同一段**，少掛在哪一條上就等於那條沒說清楚。
+            _hint = (f"（host 判定為 "
+                     f"{config.HOST_PLATFORM or '未指明，退回容器內的判斷——那不一定準'}；"
+                     f"你的 host 不是 Linux 的話這是誤報，"
+                     f"deploy/redeploy.sh 會自動帶對這個值）")
+            _status, _real = image_uid()
+            if _status == "unavailable":
+                # ⚠ 查不到**不等於通過**。這一格是整條鏈唯一的現實來源，問不到就要說
+                #   問不到——靜靜跳過會讓人以為驗過了。
+                problems.append(
+                    f"無法查證 image「{config.IMAGE}」裡的 uid（image 不在本機或 daemon "
+                    f"問不到），所以這一輪**沒有驗過** uid 是否對齊。"
+                    f"先把 image build 出來再重啟控制平面。{_hint}")
+            elif _status == "unstamped":
+                # 改版前 build 的 image。退回舊的兩旋鈕比對當 fallback——它擋得住一部分
+                # 情況，總比什麼都不檢查好，但要明講它驗不到真值。
+                if os.getuid() != config.SESSION_UID:
+                    problems.append(
+                        f"控制平面以 uid {os.getuid()} 執行，但設定說 session 的寫入者是 "
+                        f"{config.SESSION_UID}。per-user 空間是 0700，對不上時容器進不去"
+                        f"——症狀是每一場都撞 onboarding 對話。{_hint}")
+                problems.append(
+                    f"image「{config.IMAGE}」沒有 NCR_UID 標記（改版前 build 的）。"
+                    f"這一輪只比對得了設定值彼此，**驗不到 image 裡的真實 uid**。"
+                    f"重 build 一次（`--build-arg NCR_UID=$(id -u)`）之後這道檢查才有意義。"
+                    f"{_hint}")
+            elif _real != os.getuid() or _real != config.SESSION_UID:
+                problems.append(
+                    f"uid 沒有對齊：image「{config.IMAGE}」裡的 nathan 是 **{_real}**、"
+                    f"控制平面以 **{os.getuid()}** 執行（APP_UID）、設定值 "
+                    f"CLAUDE_PTY_SESSION_UID 是 **{config.SESSION_UID}**。"
+                    f"三者必須相同——per-user 空間是 0700、憑證檔是 0600，"
+                    f"對不上的症狀是每一場撞 onboarding 對話、終端停在登入提示、"
+                    f"restricted 卡滿逾時，沒有一個看起來像 uid 問題。"
+                    f"做法：`APP_UID={os.getuid()}` 與 image 的 "
+                    f"`--build-arg NCR_UID={os.getuid()}` 對齊（Linux 上請用 `id -u`），"
+                    f"並把既有的 {config.SPACE_SELF}/user-* 一併 chown。{_hint}")
     if config.PAGE_SIZE_CLAMPED is not None:
         problems.append(
             f"CLAUDE_PTY_PAGE_SIZE={config.PAGE_SIZE_CLAMPED} 不在 1–{config.MAX_PAGE_SIZE} "
@@ -1027,6 +1097,17 @@ class SessionManager:
                 # 會是 root:root，容器內的 nathan 寫不進去，restricted 每次都卡滿 120 秒逾時。
                 with suppress(OSError):
                     os.makedirs(config.TRIVY_CACHE_SELF, exist_ok=True)
+                # DB 本身的更新（見 server/trivy_db.py）。**要在建容器之前**：restricted
+                # 的 session 一起來就套 iptables，那之後牆內抓不到 ghcr.io。
+                # ⚠ 整段包在 suppress 裡，而且 update() 自己也承諾不拋——它是選配設施，
+                #   任何失敗都只降級、不擋開場。沒有 DB 的 A2 由 skill 走它的降級規則
+                #   （跳過並揭露），那比「開不了場」好。
+                # ⚠ 但**結果一定要印出來**：靜靜跳過的話，「DB 三天沒更新」跟「剛更新完」
+                #   在畫面上長得一模一樣，而那正是這支存在的理由。
+                with suppress(Exception):  # noqa: BLE001 — 見上
+                    _db = trivy_db.update()
+                    print(f"[sessions] trivy DB：{_db['status']} — {_db['detail']}",
+                          flush=True)
             # 這個使用者的 GitLab 代理（ADR 0016）。**要在建容器之前**：session 一起來就
             # 可能立刻打 API，代理得先在網路上待命。網路本身在交易之前就建好了（見上）。
             #

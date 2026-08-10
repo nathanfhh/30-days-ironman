@@ -208,6 +208,18 @@ SEMGREP_RULES_SELF = os.environ.get(
     os.environ.get("NCR_OPENGREP_RULES", os.path.join(_SELF_HOME, "semgrep-rules")))
 SEMGREP_RULES_BIND = "/home/nathan/semgrep-rules"
 
+# trivy DB 的更新（見 server/trivy_db.py）。
+# ⚠ 這是**網頁這條路徑原本完全沒有的東西**：entrypoint.sh 裡 trivy 出現 0 次，所以從
+#   網頁開的 session 從來沒更新過 DB，全靠「這台機器上曾經有人跑過 run script」。
+# 關掉它的意思是「我自己負責維護那份 cache」——不是「不需要 DB」。關了之後 A2 用的是
+# 那份 cache 當下的內容，可能很舊，而且沒有任何人會提醒你。
+TRIVY_DB_UPDATE = os.environ.get("CLAUDE_PTY_TRIVY_DB_UPDATE", "1").strip() not in (
+    "", "0", "false", "no", "off")
+# 那顆一次性更新容器的硬上限（秒）。**與 run script 的 `timeout -k 10 180` 對齊**：
+# 兩條路徑對「等多久算太久」講的應該是同一件事。網路半死不活時，不讓「更新 DB」變成
+# 「卡住開場」。
+TRIVY_DB_TIMEOUT = int(os.environ.get("CLAUDE_PTY_TRIVY_DB_TIMEOUT", "180"))
+
 # --- ttyd 綁定位址（ADR 0009）------------------------------------------------------
 # 非容器化：綁 127.0.0.1，nginx 在同一台 host。
 # 控制平面容器化：ttyd 跑在控制平面容器內，nginx 是同網路的兄弟容器，故要綁 0.0.0.0
@@ -353,10 +365,14 @@ MOUNTS = {} if os.environ.get("CLAUDE_PTY_NO_MOUNTS") else {
     # ——它們吃同一個 CLAUDE_PTY_NO_MOUNTS 開關（見該函式），測試才隔離得掉。
     #
     # trivy 漏洞 DB 的持久化快取（與 run script 掛同一個 host 目錄，共用同一份）。
-    # ⚠ 這不是效能微調，是 restricted profile 的啟動時間關鍵：entrypoint.sh 在套 iptables
-    #   之前**必須**等 DB 更新跑完（firewall 一鎖網路就會切斷半截下載）。沒有這個掛載，
-    #   每開一個 session 都是全新的空 cache，得重新抓解壓後約 1GB 的 DB——實測整整 36 秒，
-    #   而 firewall 本身只花 0.5 秒。掛上之後 `--download-db-only` 會檢查鮮度並直接 no-op。
+    # ⚠ 這不是效能微調：沒有這個掛載，每開一個 session 都是全新的空 cache，得重新抓、
+    #   解開約 1GB 的 DB——實測整整 36 秒。而 restricted profile 更慘：firewall 的白名單
+    #   沒有 ghcr.io，牆內根本抓不到，A2 軌道會整場空轉。
+    # ⚠ **更新不是在 entrypoint 做的。** 這段註解一度寫著「entrypoint.sh 在套 iptables
+    #   之前必須等 DB 更新跑完」——那個機制從來不存在（`entrypoint.sh` 裡 trivy 出現
+    #   0 次）。實際負責更新的是 `server/trivy_db.py`，由控制平面在建 session **之前**
+    #   於一顆一次性容器裡跑，牆外、有租約串行化。放那裡而不是 entrypoint 的理由，
+    #   見那支模組的說明（併發不會壞，但會重複下載）。
     TRIVY_CACHE_HOST: {"bind": "/home/nathan/.cache/trivy", "mode": "rw"},
 }
 

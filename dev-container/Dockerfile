@@ -17,6 +17,24 @@ FROM ubuntu:24.04
 #   既有指令不受影響；但之後新增 RUN 時要知道自己拿到的是 bash。
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# 容器內 `nathan` 的 uid。**Linux 上這個值必須等於部署者的 `id -u`**，而 claude-pty 的
+# APP_UID 也要等於同一個數字——三者對不上就會在很後面炸開（每一場撞 onboarding 對話、
+# 終端停在登入提示、restricted 卡滿逾時），而且沒有一個症狀看起來像 uid 問題。
+# 完整推導見 claude-pty/docs/adr（uid 對齊那份）。
+#
+# ⚠ 原本這裡是 `useradd … nathan`（不指定 uid），拿到什麼號碼**取決於 base image 還剩
+#   什麼**——ubuntu:24.04 自己佔了 1000（使用者名 `ubuntu`），所以 nathan 實測是 1001。
+#   那是一個沒有人決定過、卻被四個地方依賴的數字。釘成 build-arg 不是新增限制，是把
+#   一個既有卻無法指定的限制變成可指定的。
+#
+# ⚠ 預設 1001 ＝ **維持現狀的位元級相容**：不帶這個 arg 重 build，出來的 image 與過去
+#   完全一樣。要換號碼的人才需要動它。
+#
+# ⚠ NCR_UID=1000 時會撞到 base image 自帶的 `ubuntu`（實測 `useradd: UID 1000 is not
+#   unique`, exit 4）。下面那行條件式會先把它移掉——image 裡屬於 1000 的只有
+#   /home/ubuntu 與三個 skeleton dotfile（實測 4 個檔），userdel -r 不留孤兒。
+ARG NCR_UID=1001
+
 # apt 走 HTTPS：部分 Docker Desktop 代理環境下，容器內純 HTTP/80 會連線失敗。
 # base image 沒有 ca-certificates，先以暫時關閉 TLS 驗證的方式 bootstrap
 #（套件完整性仍由 InRelease 的 GPG 簽章保護），裝完隨即恢復正常驗證。
@@ -30,7 +48,8 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
     ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
     echo "Asia/Taipei" > /etc/timezone && \
     rm -rf /var/lib/apt/lists/* && \
-    useradd -m -s /bin/bash -d /home/nathan nathan
+    if [ "$(id -u ubuntu 2>/dev/null)" = "${NCR_UID}" ]; then userdel -r ubuntu; fi && \
+    useradd -m -s /bin/bash -d /home/nathan -u "${NCR_UID}" nathan
 
 # sudoers：nathan 只能跑 init-firewall.sh，而且**只能無參數地跑**。
 #
@@ -191,6 +210,16 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/init-firewall.sh \
     printf '%s' "$GITLAB_SSH_HOST" > /etc/ncr/gitlab-ssh-host && \
     chmod 0444 /etc/ncr/gitlab-ssh-host && \
     date -Iseconds > /etc/image-build-time
+
+# 把 build 時決定的 uid 烙進 image，讓**外面問得到**。
+# ⚠ 這不是裝飾：claude-pty 的 preflight 靠它驗「設定值有沒有跟現實一致」。少了它，
+#   那道檢查只能比兩個都由使用者設定的旋鈕，一起轉錯就完全靜音（那正是它要防的事）。
+# ENV 與 LABEL 兩個都寫：ENV 給容器內的腳本讀，LABEL 給 docker inspect 讀，
+# 兩邊都拿得到才不會因為查法不同而失效。
+ARG NCR_UID
+ENV NCR_UID=${NCR_UID}
+LABEL ncr.uid=${NCR_UID}
+
 USER nathan
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
