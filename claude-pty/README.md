@@ -53,14 +53,24 @@ cd ../dev-container && docker build --build-arg NCR_UID=$(id -u) -t ncr-dev-cont
 ```bash
 chown -R "$(id -u)":"$(id -g)" "${CLAUDE_PTY_SPACE:-$HOME/claude-pty-space}"
 docker volume rm ncr-trivy-cache     # volume 有內容後就不再初始化，擁有者停在舊 uid
+docker compose exec control rm -f /data/trivy-db-updated-at   # ⚠ 見下
 ```
+
+⚠ **砍掉 volume 就一定要把時間戳一起砍掉。** 控制平面用那個檔節流（預設 6 小時內不
+重試），砍了 volume 卻留著時間戳的話，接下來 6 小時內它會一路回報 `fresh`、連容器都不
+起——而新 volume 是空的、restricted 在牆內又抓不到，**A2 就這樣無聲地沒有 DB**。
+（`docker compose down -v` 會刪掉 compose 宣告的 volume，同一個窗口，同樣要清時間戳。）
 
 ### 升級到 ADR 0018（trivy cache 改 named volume）
 
 **順序是硬要求：先 rebuild image、後 redeploy 控制平面。** 反過來的話，控制平面已經指向
-volume 而 image 還沒有 `/home/nathan/.cache/trivy`，空 volume 就會被初始化成 root:0755，
-接著第一次 trivy 更新以 root 寫進去，**從此永久卡住**——trivy 再也寫不進去。**這一條 macOS 也會中**（它不是 uid 問題，是 volume
-初始化問題）。
+volume 而 image 還沒有 `/home/nathan/.cache/trivy`，空 volume 會是 root:0755，而更新容器
+以 nathan 執行、寫不進去 → **A2 全壞，而且症狀不像 uid 問題**。**這一條 macOS 也會中**
+（它不是 uid 問題，是 volume 初始化問題）。
+
+好消息是它**不是永久的**：寫不進去代表 volume 一直空著，rebuild image 之後下一次掛載就
+會被正確初始化、自己好起來。真正修不回來的是「有東西在 root 擁有的狀態下被寫進去」，
+而這條路徑不會發生（更新容器不是 root）。
 
 舊的 `~/.cache/ncr-trivy`（約 1.2 GB）升級後變孤兒。可以直接刪，或搬進 volume 省掉一次
 重抓：

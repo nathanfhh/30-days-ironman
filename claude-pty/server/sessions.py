@@ -740,7 +740,7 @@ def image_uid(client: docker.DockerClient | None = None) -> tuple[str, int | Non
         return ("unavailable", None)
     cfg = attrs.get("Config") or {}
     raw = (cfg.get("Labels") or {}).get("ncr.uid")
-    if raw is None:
+    if not raw:                            # None 或空字串都要往下找 ENV，不然空 LABEL 會蓋掉它
         for kv in (cfg.get("Env") or []):
             if kv.startswith("NCR_UID="):
                 raw = kv.split("=", 1)[1]

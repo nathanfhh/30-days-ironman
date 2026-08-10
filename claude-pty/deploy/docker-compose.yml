@@ -251,8 +251,8 @@ volumes:
   # 人的路徑（dev-container/run-ncr-dev-container.sh）要掛得到同一顆，兩條路徑才共用得了
   # 那 ~1.2 GB。改名等於分家，兩邊各抓一份。
   # ⚠ 擁有者在**第一次被掛載時**就烙死了（從 image 的 /home/nathan/.cache/trivy 複製）。
-  #   換 NCR_UID 之後要 `docker volume rm ncr-trivy-cache` 讓它重新初始化，否則新 uid
-  #   寫不進舊 volume。
+  #   ⚠ volume **一旦有內容就不會再被初始化**，擁有者停在當初那個 uid。換 NCR_UID 之後
+  #   要 `docker volume rm ncr-trivy-cache`，否則新 uid 寫不進舊 volume。
   trivy-cache:
     name: ncr-trivy-cache
 

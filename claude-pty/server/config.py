@@ -375,7 +375,7 @@ MOUNTS = {} if os.environ.get("CLAUDE_PTY_NO_MOUNTS") else {
     # 這裡只留**所有使用者共用**的掛載。per-user 的那些由 user_mounts() 依 user_id 組出來
     # ——它們吃同一個 CLAUDE_PTY_NO_MOUNTS 開關（見該函式），測試才隔離得掉。
     #
-    # trivy 漏洞 DB 的持久化快取（與 run script 掛同一個 host 目錄，共用同一份）。
+    # trivy 漏洞 DB 的持久化快取（與 run script 掛**同一顆 named volume**，共用同一份）。
     # ⚠ 這不是效能微調：沒有這個掛載，每開一個 session 都是全新的空 cache，得重新抓、
     #   解開約 1GB 的 DB——實測整整 36 秒。而 restricted profile 更慘：firewall 的白名單
     #   沒有 ghcr.io，牆內根本抓不到，A2 軌道會整場空轉。

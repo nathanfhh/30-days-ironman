@@ -10,7 +10,10 @@ import os
 import sys
 import tempfile
 
-# ⚠ 自己的 DB：不設就會連上使用者**真實的** claude-pty.db（租約寫在 DB 裡）。
+# ⚠ 自己的 DB：不隔離就會寫進使用者**真實的** claude-pty.db（租約住在 DB 裡）。
+# ⚠ **真正生效的是下面那行 `config.DB_URL = ...` 加 `reset_engine()`**，不是這個 env
+#   ——config 讀的是 `CLAUDE_PTY_DB_PATH`（檔案路徑），沒有 `CLAUDE_PTY_DB_URL` 這個東西。
+#   這裡設 env 只是與其他測試檔的寫法一致；**刪掉下面那兩行就會寫進真的 DB**。
 _tmp = tempfile.mkdtemp(prefix="claude-pty-trivydb-")
 os.environ["CLAUDE_PTY_DB_URL"] = f"sqlite:///{os.path.join(_tmp, 'test.db')}"
 
@@ -192,12 +195,45 @@ c = FakeClient()
 r = trivy_db.update(c)
 check("🔴 前一次失敗不會讓下一次被判成 skipped", r["status"] == "ok")
 
+print("\n== 租約層自己拋出來，也不能讓 update() 拋 ==")
+# ⚠ 這一段是審查抓到的漏洞：「永遠不拋」寫在四個地方，但**唯一還會拋的那層**
+#   （acquire/release 走 SQLite BEGIN IMMEDIATE，busy_timeout 用盡就 OperationalError）
+#   原本在 try 之外，而測試只驗過 docker 層的例外。
+_real_acquire, _real_release = trivy_db.acquire_lease, trivy_db.release_lease
+try:
+    set_stamp(_old)
+    trivy_db.acquire_lease = lambda *a, **k: (_ for _ in ()).throw(
+        RuntimeError("database is locked"))
+    r = trivy_db.update(FakeClient())
+    check("🔴 取租約拋出 → 回 error，不往外拋", r["status"] == "error")
+    check("訊息說得出是取租約失敗", "取租約" in r["detail"])
+
+    trivy_db.acquire_lease = _real_acquire
+    trivy_db.release_lease = lambda *a, **k: (_ for _ in ()).throw(
+        RuntimeError("database is locked"))
+    set_stamp(_old)
+    clear_lease_direct = _real_release
+    clear_lease_direct(trivy_db.LEASE_NAME, "someone-else")
+    clear_lease_direct(trivy_db.LEASE_NAME, trivy_db._owner())
+    c = FakeClient()
+    r = trivy_db.update(c)
+    # ⚠ 重點不只是「不拋」，是**已經算好的 ok 不可以被 finally 吃掉**。
+    check("🔴 還租約拋出 → 仍然回得到 ok（結果沒有被 finally 取代）",
+          r["status"] == "ok" and len(c.calls) == 1)
+finally:
+    trivy_db.acquire_lease, trivy_db.release_lease = _real_acquire, _real_release
+    clear_lease()
+
 print("\n== preflight 不可以拿路徑檢查去問一個 volume 名 ==")
 # ⚠ 真的會咬人：MOUNTS 的 key 現在混著「host 路徑」與「volume 名」，而 preflight 對
 #   非容器化部署會逐個 os.path.exists()。volume 名恆 False → 每次啟動都喊一句
 #   「掛載來源不存在」，而那是假的。假警報喊久了，真警報就沒人看。
 from server import sessions  # noqa: E402
 
+# ⚠ preflight 會呼叫 `user_proxy.attach_jaeger`，那會**真的去接你正式環境的網路**。
+#   整段包在 suppress 裡，所以讓 from_env 直接拋就安靜跳過了（同 test_host_platform）。
+_old_from_env = docker.from_env
+docker.from_env = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("測試不連 docker"))
 _old_mounts = config.MOUNTS
 _old_host_home, _old_self_home = config.HOST_HOME, config._SELF_HOME
 _old_space = config.SPACE_SELF
@@ -213,6 +249,7 @@ try:
     }
     msgs = [m for m in sessions.preflight() if "掛載來源不存在" in m]
 finally:
+    docker.from_env = _old_from_env
     config.MOUNTS = _old_mounts
     config.HOST_HOME, config._SELF_HOME = _old_host_home, _old_self_home
     config.SPACE_SELF = _old_space

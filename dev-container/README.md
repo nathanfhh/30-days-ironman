@@ -166,15 +166,21 @@ wrapper 啟動前會 best-effort `git pull`（離線就沿用現有版本），�
 弱點 DB（下載約 60MB，解開後落地超過 1GB）。這件事不能留給審查容器自己做——
 容器用完即丟（每場重抓重解一次），而且限制模式的白名單裡沒有 ghcr.io（牆內根本抓不到）。
 
-所以 DB 也由 host 供給，而且全自動、不用像規則那樣先手動 clone：wrapper 啟動前
-先在**牆外**用一個一次性容器 `trivy image --download-db-only` 更新
-`~/.cache/ncr-trivy`，再把這個目錄掛進審查容器。更新失敗就沿用既有 DB；
+所以 DB 由**一顆共用的 named volume** 供給，而且全自動、不用像規則那樣先手動 clone：
+wrapper 啟動前先在**牆外**用一個一次性容器 `trivy image --download-db-only` 更新
+`ncr-trivy-cache` 這顆 volume，再把它掛進審查容器。更新失敗就沿用既有 DB；
 連既有 DB 都沒有，那一場的供應鏈軌道會被 skip 並在報告中揭露。
+
+⚠ **為什麼是 volume 不是 host 目錄**：volume 只要在掛載時仍為空，docker 就用 image 裡
+`/home/nathan/.cache/trivy` 的內容與擁有者初始化它——host 帳號的 uid 完全不進場。用 host
+目錄的話，那個目錄屬於你（`id -u`）而寫它的是容器裡的 nathan，兩個號碼在 Linux 上不會
+自動一樣。名稱固定是為了讓 claude-pty 掛得到同一顆，兩條路徑共用那份 ~1.2 GB。
+（完整推導見 `claude-pty/docs/adr/0018-trivy-db-cache-and-update.md`。）
 
 cache 掛的是讀寫（trivy 會往同一個目錄寫掃描的分析結果）。DB 的完整性不靠唯讀，
 靠順序：更新發生在防火牆之外，審查容器在牆內連不到 ghcr.io，改不了 DB 的來源。
 
-目錄刻意不共用 host 自己的 `~/.cache/trivy`——host 若也裝著 trivy，兩邊版本不同時
+這顆 volume 刻意不共用 host 自己的 `~/.cache/trivy`——host 若也裝著 trivy，兩邊版本不同時
 DB schema 可能不相容，隔離開來誰也不會弄壞誰。
 
 ### 5. Telemetry（選配）
