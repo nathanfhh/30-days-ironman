@@ -266,5 +266,27 @@ check("🔴 volume 名不會被誤報成『掛載來源不存在』",
 check("但真的不存在的 host 路徑仍然要喊（不能因此把檢查關掉）",
       any("nope" in m for m in msgs))
 
+print("\n== 兩條路徑的耦合：改一邊沒改另一邊，會安靜地分家 ==")
+# ⚠ 這兩條是無守衛的耦合，補測試的理由是**症狀與原因完全連不起來**：
+#   volume 改了名不會報錯，只會讓 run script 與 claude-pty 各自建一顆、各抓一份 1.2 GB，
+#   而人看到的只是「怎麼又在下載」。timeout 兩邊不一致則是「同一件事在兩條路上有兩個
+#   耐心值」，出事時你會以為是網路不穩。
+_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+with open(os.path.join(_root, "dev-container", "run-ncr-dev-container.sh"),
+          encoding="utf-8") as f:
+    _runsh = f.read()
+with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "deploy", "docker-compose.yml"), encoding="utf-8") as f:
+    _compose = f.read()
+
+check("🔴 run script 與 config 指的是同一顆 volume（改名＝分家，各抓一份 1.2 GB）",
+      f'TRIVY_CACHE_VOLUME="{config.TRIVY_CACHE_VOLUME}"' in _runsh)
+check("🔴 compose 宣告的 volume 名也是同一個（不然會吃到 project 前綴）",
+      f"name: {config.TRIVY_CACHE_VOLUME}" in _compose)
+check("兩條路徑掛到容器內的落點相同",
+      _runsh.count('"$TRIVY_CACHE_VOLUME":/home/nathan/.cache/trivy') >= 1)
+check(f"🔴 run script 的 timeout 與 config.TRIVY_DB_TIMEOUT 一致（{config.TRIVY_DB_TIMEOUT}）",
+      f"timeout -k 10 {config.TRIVY_DB_TIMEOUT} " in _runsh)
+
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)
