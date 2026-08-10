@@ -18,16 +18,24 @@ wrapper 偵測到 Jaeger 在跑就配置錄製、啟動選單再確認要不要�
 
 ```bash
 cd dev-container
-docker build -t ncr-dev-container .
+./build.sh
 ```
+
+`build.sh` 只做一件 `docker build` 做不到的事：**替你把 uid 那個 build-arg 帶對**
+（Linux 帶 `$(id -u)`、macOS 不帶）。其餘參數原樣透傳，例如
+`./build.sh --build-arg GITLAB_SSH_HOST=…`；換 tag 用 `NCR_IMAGE=my-tag ./build.sh`。
 
 ### Linux：把容器內的 uid 對上你自己
 
-macOS / Docker Desktop 不用管這一段（bind mount 的擁有者會被對映），**原生 Linux 要**：
+macOS / Docker Desktop 不用管這一段（bind mount 的擁有者會被對映），**原生 Linux 要**。
+`./build.sh` 已經替你做了，等同於：
 
 ```bash
 docker build --build-arg NCR_UID=$(id -u) -t ncr-dev-container .
 ```
+
+⚠ **直接 `docker build` 不會失敗**，只會在 Linux 上安靜地給你預設的 1001——症狀要等到
+開場之後才出現，而且沒有一個看起來像 uid 問題。這就是為什麼有那支腳本。
 
 容器內的 `nathan` 預設是 **1001**——那不是誰決定的數字，是 `ubuntu:24.04` 自己佔走了
 1000（使用者名 `ubuntu`），`useradd` 只好往下拿。而 Linux 的 bind mount **不做 uid 翻譯**，

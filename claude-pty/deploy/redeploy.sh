@@ -136,6 +136,44 @@ for d in "${SPACE}" "${HOME}/.claude-pty" data; do
   fi
 done
 
+# --- session image 的 uid 對不對得上（ADR 0017）------------------------------------
+#
+# 三個數字要相同：① 你（`id -u`）、② APP_UID、③ session image 裡的 nathan。
+# ③ 是 build 時烤進去的，而**直接 `docker build` 不會失敗**，只會安靜地給預設值 1001。
+#
+# ⚠ 為什麼擋在這裡而不是只靠 preflight：preflight 是**控制平面起來之後**才喊，那時你
+#   已經離開鍵盤了；而這裡你正在打指令，訊息能直接告訴你下一句該打什麼。preflight 那道
+#   留著當第二層（它涵蓋「沒經過這支腳本」的部署）。
+# ⚠ 只在 host 是 Linux 時檢查——Docker Desktop 做 uid 對映，在那邊喊是純噪音。
+if [ "${CLAUDE_PTY_HOST_PLATFORM}" = "Linux" ]; then
+  SESSION_IMAGE="${CLAUDE_PTY_IMAGE:-ncr-dev-container}"
+  IMG_UID="$(docker image inspect -f '{{index .Config.Labels "ncr.uid"}}' \
+             "${SESSION_IMAGE}" 2>/dev/null || true)"
+  MY_UID="$(id -u)"
+  APP_UID_EFF="${APP_UID:-$(sed -n 's/^[[:space:]]*APP_UID=//p' .env 2>/dev/null | tail -1)}"
+  if [ -z "${IMG_UID}" ] || [ "${IMG_UID}" = "<no value>" ]; then
+    # image 不在、或是改版前 build 的（沒有 stamp）。不擋——你可能正要第一次部署，
+    # 而 session image 不是控制平面起得來的前提。但要講清楚它沒被驗過。
+    echo "⚠ 沒能查證 session image「${SESSION_IMAGE}」裡的 uid（image 不在，或是加上"
+    echo "  NCR_UID 標記之前 build 的）。要驗得到請重建：dev-container/build.sh"
+  elif [ "${IMG_UID}" != "${MY_UID}" ] || [ "${APP_UID_EFF}" != "${MY_UID}" ]; then
+    echo "✗ uid 沒有對齊，先修好再部署（Linux 的 bind mount 不做 uid 翻譯）：" >&2
+    echo "    你（id -u）                 ${MY_UID}" >&2
+    echo "    .env 的 APP_UID             ${APP_UID_EFF:-（未設）}" >&2
+    echo "    image ${SESSION_IMAGE} 的 nathan   ${IMG_UID}" >&2
+    echo "  三個要相同。做法：" >&2
+    echo "    在 .env 設 APP_UID=${MY_UID}" >&2
+    echo "    重建 session image：  ../../dev-container/build.sh" >&2
+    echo "  已經用舊 uid 開過場的話，那些狀態目錄也要一起搬：" >&2
+    echo "    chown -R ${MY_UID}:$(id -g) \"${SPACE}\"" >&2
+    echo "    docker volume rm ncr-trivy-cache" >&2
+    echo "    docker compose exec control rm -f /data/trivy-db-updated-at" >&2
+    exit 1
+  else
+    echo "🔢 uid 對齊：你 / APP_UID / image 都是 ${MY_UID}"
+  fi
+fi
+
 # ⚠ 先收 reconciler，理由見檔頭。-s 送停止訊號、-f 不再問一次。
 # 這裡不用 `|| true`：rm 失敗代表狀態比預期更亂，那時候繼續 up 只會把問題蓋掉。
 docker compose rm -sf reconciler >/dev/null

@@ -41,9 +41,12 @@ Linux 的 bind mount 不做 uid 翻譯，而 per-user 狀態空間是 0700、注
 | ③ | session image 裡的 `nathan` | build dev-container 時 `--build-arg NCR_UID` |
 
 ```bash
-APP_UID=$(id -u)                                    # 寫進 deploy/.env
-cd ../dev-container && docker build --build-arg NCR_UID=$(id -u) -t ncr-dev-container .
+APP_UID=$(id -u)                     # 寫進 deploy/.env
+cd ../../dev-container && ./build.sh # 它自己帶 --build-arg NCR_UID=$(id -u)
 ```
+
+⚠ **直接 `docker build` 不會失敗**，只會安靜地給預設的 1001。所以 `redeploy.sh` 在
+build 之前會先查 image 的 `ncr.uid`，三個數字對不上就**當場擋下來**並印出該打的指令。
 
 對不上的症狀是**每一場都撞 onboarding 對話**、**終端停在登入提示**、**restricted 每次
 卡滿逾時**——沒有一個看起來像 uid 問題。控制平面啟動時會把三個數字一起報出來。
