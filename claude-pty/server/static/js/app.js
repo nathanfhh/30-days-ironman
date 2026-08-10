@@ -987,7 +987,7 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
                記錄——**不是**這個人現在的偏好：改偏好不會換掉已經在跑的 ttyd。
                舊的 view 記錄沒有這個值，那就不顯示（不知道就別猜）。 -->
           ${flavor ? `<span class="drawer__bin tip" data-testid="drawer-bin"
-                data-tip="這個終端由 ${esc(flavor)} 版 ttyd 提供。要換另一顆請到「設定」——只影響之後開的終端，不會換掉正在跑的。"
+                data-tip="這個終端由 ${esc(flavor)} 版 ttyd 提供。要換另一顆請到「設定」——新開的 session 立刻套用，這一場要把終端分頁全部關掉、下次再開才會換。"
                 >${esc(flavor)}</span>` : ""}
         </div>
         <div class="drawer__tools">
@@ -1938,12 +1938,12 @@ function settingsModal() {
         <section class="settings__row">
           <div class="settings__head">
             <span class="settings__label">終端程式</span>
-            <span class="settings__note">只影響之後開的終端，已經在跑的不會被換掉</span>
+            <span class="settings__note">新開的 session 立刻套用；已經開著的那一場，要把終端分頁全部關掉、下次再開才會換</span>
           </div>
           <div id="pick-ttyd"></div>
           <p class="settings__note" style="margin:var(--space-2) 0 0">
-            兩顆有一個實質差異：Rust 版的網頁標題由伺服器端換掉，命令列不會送到瀏覽器；
-            C 版只是把畫面上的標題蓋掉，完整命令仍然送給每一個連上的分頁。
+            兩顆有一個實質差異：網頁標題 Rust 版由伺服器端決定，C 版是在瀏覽器端蓋掉的。
+            在意這一點就選 Rust 版。
           </p>
         </section>
       </div>
@@ -1981,7 +1981,8 @@ function settingsModal() {
                                 { method: "PATCH", body: { ttyd_bin: picker.value } });
         const label = (opts.find((o) => o.value === saved.ttyd_bin) || {}).label
                       || saved.ttyd_bin;
-        toast(`之後開的終端會用 ${label} 版；已經開著的不受影響`);
+        toast(`新開的 session 會用 ${label} 版；已經開著的那一場，`
+              + `要把終端分頁全部關掉、下次再開才會換`);
       } catch (ex) {
         picker.value = d.ttyd_bin;    // 存不進去就轉回真實值，不要留假象
         toast(`設定沒存成功：${ex.message}`, "error");

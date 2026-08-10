@@ -191,7 +191,8 @@
     </div>
     <p class="panel__lede">
       「在聽」與「連線」是去問那顆行程自己的 socket 得到的，不是 DB 記的。<br>
-      「在聽」比的是<strong>它實際綁的 port</strong> 與<strong>左邊 DB 記的 port</strong>，對不上就是這一節要抓的東西。
+      「在聽」把<strong>它實際綁的 port</strong> 跟<strong>左邊 DB 記的 port</strong> 對起來：相符代表兩邊講的是同一件事；<br>
+      對不上代表 DB 記錯了——照 DB 那個 port 連不到終端，而它真正占著的那個沒有人在管。
     </p>
     {# ⚠ 沒有 psutil 時一定要喊。不喊的話下面那個空的孤兒區看起來就像「掃過了，很乾淨」，
        而這一節整個存在的理由就是不讓「沒查到」被讀成「沒問題」。 #}
