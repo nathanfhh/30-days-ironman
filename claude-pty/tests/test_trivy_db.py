@@ -128,6 +128,13 @@ check("cache 掛的是 named volume，落點固定",
 check("🔴 沒有任何 host 路徑出現在 volumes 裡",
       not any(str(k).startswith("/") for k in (kw.get("volumes") or {})))
 check("用完即棄（remove=True）", kw.get("remove") is True)
+# ⚠ 這條是端到端實測踩到才補的：`detach=False` 時 docker-py 會去撈容器輸出，
+#   `stdout=False, stderr=False` 兩個都關 → daemon 回 400
+#   「you must choose at least one stream」→ **容器其實跑完了、DB 也更新了**，
+#   這支卻回 error、時間戳也沒寫，下一場再更新一次。假 client 驗不到這種事
+#   （它不照真 API 的規則檢查參數），所以改成明確斷言。
+check("🔴 沒有把兩個輸出串都關掉（關掉的話 docker daemon 會回 400）",
+      not (kw.get("stdout") is False and kw.get("stderr") is False))
 # ⚠ 這條是真的踩得到：帶了 session label 的話，reconciler 的孤兒清理會把這顆
 #   「有 label 卻不在 DB 裡」的容器當成孤兒。--rm 很快就走，但那是在賭時序。
 check("🔴 沒有帶任何 label（不能進 reconciler 的視野）",

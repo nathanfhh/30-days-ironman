@@ -161,8 +161,13 @@ def update(client: docker.DockerClient | None = None) -> dict:
                 "bind": "/home/nathan/.cache/trivy", "mode": "rw"}},
             remove=True,
             detach=False,
-            stdout=False,
-            stderr=False,
+            # ⚠ **不可以把 stdout 與 stderr 都設成 False。** `detach=False` 時 docker-py
+            #   跑完會去撈那顆容器的輸出，兩個都關掉它就送出 `?stdout=0&stderr=0`，
+            #   daemon 直接回 400「you must choose at least one stream」——於是**容器真的
+            #   跑完了、DB 也更新了，這支卻回 error，時間戳也沒寫**，下一場再更新一次。
+            #   2026-08-10 端到端實測踩到。假 client 的單元測試驗不到：它不會照真 API
+            #   的規則檢查參數，只記下你傳了什麼。
+            #   回傳的 bytes 直接丟掉——我們只要結束碼，不要那串進度條。
         )
         _touch_stamp()
         return {"status": "ok", "detail": "DB 已更新"}
