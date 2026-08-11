@@ -54,8 +54,17 @@ uv run opentelemetry/cost-report.py <session.jsonl>    # 指定場次
 | token、成本、快取命中率 | session transcript | 逐請求 usage 才是帳單事實；trace 上的成本只能估 |
 
 成本算法已與 ccusage 對同一 session 對帳：四項 token 逐位一致、總金額一致到小數
-第 8 位（2026-08-06，Claude Code 2.1.222）。牌價快照在 `cost-report.py` 開頭，
-模型不在表上就只報 token、金額標「無牌價」，不猜。
+第 8 位（2026-08-06，Claude Code 2.1.222）。
+
+**費率抓 LiteLLM 的 `model_prices_and_context_window.json`**——ccusage 也是抓這一份，
+兩邊對帳才對得起來。抓到的存一份快取（`~/.cache/ncr-litellm-prices.json`，24 小時），
+連不到就退回 `cost-report.py` 開頭的快照，報表最後一行會標明這次用了哪個來源。
+`--offline` 可以強制用快照（訊息會與「連不到」區分）。模型兩邊都查不到就只報 token、
+金額標「無牌價」，不猜。
+
+> 費率本來是寫死在腳本裡的。2026-08-10 Anthropic 宣布 Sonnet 5 推廣價永久維持（原訂
+> 9/1 調成 3/15 的那次取消），寫死的那份當場把 Sonnet 高估 1.5 倍，而報表照樣印得
+> 理直氣壯——**價目表自己就是會動的東西**，所以跟著上游走。
 
 快取命中率 = cache 讀 ÷（輸入＋cache 讀＋cache 寫）。
 

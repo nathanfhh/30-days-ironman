@@ -22,9 +22,16 @@ ccusage 也是這樣做的。
 input / output / cache-read / cache-write 四項 token 逐位一致，
 總金額一致到小數第 8 位（驗證於 2026-08-06，Claude Code 2.1.222）。
 
-牌價快照（2026-08，USD per MTok；cache read = 0.1×input、寫入 5 分鐘 TTL = 1.25×、
-1 小時 TTL = 2×——這組比例是官方定價規則，跟著 input 價走）。模型不在表上就只報
-token、金額標「無牌價」，不要猜。
+費率來源：**LiteLLM 的 `model_prices_and_context_window.json`**（ccusage 也是抓這一份，
+所以兩邊對帳才對得起來）。抓得到就用線上的，抓不到退回檔案裡的快照，報表會標明用了哪個。
+模型兩邊都查不到就只報 token、金額標「無牌價」，不要猜。
+
+⚠ **不要把快照當唯一真相。** 這張表原本是寫死的，2026-08-10 Anthropic 宣布 Sonnet 5 推廣價
+永久維持（原訂 9/1 調成 3/15 的那次取消），寫死的那份當場高估 Sonnet 1.5 倍，而報表照樣
+印得理直氣壯。價目表本身就是會動的東西，跟著上游走才不會沉默地算錯。
+
+cache 的費率仍由 input 派生（read = 0.1×、寫入 5 分鐘 TTL = 1.25×、1 小時 TTL = 2×）：
+那組比例是官方的定價規則、不是每個模型各自的數字，而且與 ccusage 對帳一致的算法是這一版。
 """
 
 from __future__ import annotations
@@ -34,20 +41,103 @@ import glob
 import json
 import os
 import sys
+import time
 import unicodedata
+import urllib.request
 from collections import defaultdict
+from contextlib import suppress
 
-# {模型字串前綴: (input, output) per MTok}。cache 費率由 input 派生。
+# 上游費率表：ccusage 也是抓這一份，兩邊對帳才有意義。
+LITELLM_URL = ("https://raw.githubusercontent.com/BerriAI/litellm/main/"
+               "model_prices_and_context_window.json")
+LITELLM_CACHE = os.path.expanduser("~/.cache/ncr-litellm-prices.json")
+LITELLM_TTL = 24 * 3600          # 快取多久算新鮮；過期就重抓，抓不到照樣用舊的
+
+# {模型字串前綴: (input, output) per MTok}。**這是 fallback，不是真相**——連不到上游
+# （離線、GitHub 掛掉、公司網路擋住）時才會用到，報表會標明。cache 費率由 input 派生。
 # 比對取「最長命中前綴」，不吃清單順序——靠排序的話，日後加一個互為前綴的
 # 項目（如 claude-opus-4 vs claude-opus-4-5）就是等著被踩的陷阱。
-RATES: list[tuple[str, tuple[float, float]]] = [
+# ⚠ 快照日期：2026-08-11。Sonnet 5 是 2/10（推廣價於 2026-08-10 宣布永久維持）。
+SNAPSHOT: list[tuple[str, tuple[float, float]]] = [
     ("claude-haiku-4-5", (1.0, 5.0)),
     ("claude-sonnet-4", (3.0, 15.0)),
-    ("claude-sonnet-5", (3.0, 15.0)),   # 正式牌價；促銷期實際帳單可能更低
+    ("claude-sonnet-5", (2.0, 10.0)),
     ("claude-opus-4", (5.0, 25.0)),
     ("claude-opus-5", (5.0, 25.0)),
     ("claude-fable-5", (10.0, 50.0)),
 ]
+RATES: list[tuple[str, tuple[float, float]]] = list(SNAPSHOT)
+RATES_SOURCE = "快照"
+
+
+def _load_litellm(url: str = LITELLM_URL, cache: str = LITELLM_CACHE,
+                  ttl: int = LITELLM_TTL) -> dict | None:
+    """把上游費率表讀進來（有快取）。任何失敗都回 None，讓呼叫端退回快照。
+
+    ⚠ **不可以讓這一步弄死報表。** 它是價格來源的升級，不是必要條件；離線的人照樣要
+      算得出東西，只是標成用了快照。
+    ⚠ 抓不到時**先用過期的快取**再退快照：上游的舊資料仍然比檔案裡手寫的那份新。
+    """
+    def _read(path: str) -> dict | None:
+        with suppress(Exception), open(path, encoding="utf-8") as f:
+            return json.load(f)
+        return None
+
+    with suppress(Exception):
+        if os.path.isfile(cache) and (time.time() - os.path.getmtime(cache)) < ttl:
+            fresh = _read(cache)
+            if fresh is not None:
+                return fresh
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            raw = r.read().decode("utf-8")
+        data = json.loads(raw)
+    except Exception:                                                # noqa: BLE001
+        return _read(cache)
+    with suppress(Exception):
+        os.makedirs(os.path.dirname(cache), exist_ok=True)
+        with open(cache, "w", encoding="utf-8") as f:
+            f.write(raw)
+    return data
+
+
+def _rates_from_litellm(data: dict) -> list[tuple[str, tuple[float, float]]]:
+    """挑出第一方 Claude 的條目，轉成本腳本的 (前綴, (in, out)) 形狀。
+
+    ⚠ 只收**不帶 provider 前綴**的鍵（`claude-sonnet-5`），不收 `vertex_ai/…`、
+      `us.anthropic.…`、`azure_ai/…`：那些是各雲的區域價（實測會貴 10%），而 transcript
+      裡的 model 字串是第一方的名字。混進去會讓最長前綴比對挑到錯的價。
+    """
+    out: list[tuple[str, tuple[float, float]]] = []
+    for key, v in data.items():
+        if not isinstance(v, dict) or not key.startswith("claude-"):
+            continue
+        i, o = v.get("input_cost_per_token"), v.get("output_cost_per_token")
+        if not isinstance(i, (int, float)) or not isinstance(o, (int, float)):
+            continue
+        out.append((key, (i * 1e6, o * 1e6)))
+    return out
+
+
+def refresh_rates(data: dict | None = None, offline: bool = False) -> str:
+    """把 RATES 換成上游的（拿不到就維持快照）。回傳這次用的來源，供報表標示。
+
+    ⚠ **「使用者要離線」與「連不到上游」要分開講。** 兩者都用快照，但一個是選擇、一個是
+      故障；印同一句話會讓真的連不到的那次看起來像是自己選的（第一版就是這樣寫的）。
+    """
+    global RATES, RATES_SOURCE
+    if not offline and data is None:
+        data = _load_litellm()
+    upstream = [] if offline else (_rates_from_litellm(data) if data else [])
+    if upstream:
+        # 上游沒收錄的型號仍由快照兜底（例如剛發、還沒進 LiteLLM 的）
+        have = {k for k, _ in upstream}
+        RATES = upstream + [(k, r) for k, r in SNAPSHOT if k not in have]
+        RATES_SOURCE = "LiteLLM 上游"
+    else:
+        RATES = list(SNAPSHOT)
+        RATES_SOURCE = "快照（指定離線）" if offline else "快照（連不到上游）"
+    return RATES_SOURCE
 
 
 def rate_for(model: str) -> tuple[float, float] | None:
@@ -165,7 +255,12 @@ def rpad(s: str, width: int) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("session", nargs="?", help="session 的 .jsonl 或其目錄；不給就拿最新的")
+    ap.add_argument("--offline", action="store_true",
+                    help="不連上游費率表，直接用檔案裡的快照")
     args = ap.parse_args()
+
+    # 費率先就位再算錢。連不到上游不會中斷，只是報表標成用了快照。
+    source = refresh_rates(offline=args.offline)
 
     main_jsonl, session_dir = find_session(args.session)
     print(f"session：{os.path.basename(main_jsonl)}")
@@ -225,7 +320,10 @@ def main() -> None:
     print(
         f"\n總成本：${total_cost:.4f}" + ("" if total_known else "（不含無牌價的模型）")
     )
-    print("（金額 = token × 牌價快照，見腳本開頭；與 ccusage 對帳一致。促銷價或企業合約另計。）")
+    # ⚠ 來源要印出來。價目表會變，而「這份報表用的是哪一版費率」是事後對帳唯一的線索
+    #   ——不印的話，離線那次算出來的舊價數字看起來跟線上那次一模一樣。
+    print(f"（金額 = token × 費率，來源：{source}；與 ccusage 對帳一致。"
+          "企業合約或特殊費率另計。）")
 
 
 if __name__ == "__main__":

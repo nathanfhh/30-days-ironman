@@ -223,7 +223,10 @@ def test_main_attributes_roles_from_subagent_meta(cost, tmp_path, monkeypatch, c
     (sub / "agent-x.jsonl").write_text(usage_line("r2", "m2", "claude-haiku-4-5", 200))
     (sub / "agent-x.meta.json").write_text(json.dumps({"agentType": "ncr-scan-lint"}))
 
-    monkeypatch.setattr(sys, "argv", ["cost-report.py", str(tmp_path / "abc123.jsonl")])
+    # 🔴 **測試不得連外。** main() 會去抓上游費率表，這裡用 --offline 讓它直接用快照。
+    #    忘了這一行的話，這支測試會在沒網路的機器上變慢又不穩，而且是靜默的。
+    monkeypatch.setattr(sys, "argv",
+                        ["cost-report.py", "--offline", str(tmp_path / "abc123.jsonl")])
     cost.main()
     out = capsys.readouterr().out
     assert "ncr-scan-lint" in out and "主線程" in out
@@ -381,3 +384,64 @@ def test_build_page_lists_transcript_only_roles_and_counts_their_cost(sr):
     page = sr.build_page("sid12345", agg, [], [], tokens, None)
     assert "trace 未拍到" in page and "ncr-scan-lint" in page
     assert "$100.00" in page  # 總成本卡含 transcript-only 角色，不靜默少算
+
+# ------------------------------------------------- 費率來源（LiteLLM 上游 vs 快照）
+#
+# 這張表原本是寫死的。2026-08-10 Anthropic 宣布 Sonnet 5 推廣價永久維持（原訂 9/1 調成
+# 3/15 的那次取消），寫死的那份當場把 Sonnet 高估 1.5 倍，而報表照樣印得理直氣壯。
+# 改成跟 ccusage 同一個上游（LiteLLM 的 model_prices JSON）之後，這幾條守住的是：
+# 解析對、fallback 會動、而且**不准連外**。
+
+FAKE_LITELLM = {
+    "claude-sonnet-5": {"input_cost_per_token": 2e-6, "output_cost_per_token": 1e-5},
+    "claude-opus-5": {"input_cost_per_token": 5e-6, "output_cost_per_token": 2.5e-5},
+    # 雲端的區域價：貴 10%，而且鍵名帶 provider 前綴。**不可以被收進來**
+    "us.anthropic.claude-sonnet-5": {"input_cost_per_token": 2.2e-6,
+                                     "output_cost_per_token": 1.1e-5},
+    "vertex_ai/claude-sonnet-5": {"input_cost_per_token": 2e-6,
+                                  "output_cost_per_token": 1e-5},
+    # 非 Claude、以及沒有價格欄位的髒資料
+    "gpt-4o": {"input_cost_per_token": 1e-6, "output_cost_per_token": 1e-6},
+    "claude-broken": {"input_cost_per_token": None, "output_cost_per_token": None},
+    "sample_spec": {"input_cost_per_token": 0.0, "output_cost_per_token": 0.0},
+}
+
+
+def test_litellm_rates_take_first_party_keys_only(cost):
+    got = dict(cost._rates_from_litellm(FAKE_LITELLM))
+    assert got["claude-sonnet-5"] == (2.0, 10.0)
+    # 🔴 區域價混進來的話，最長前綴比對會挑到貴 10% 的那個，而金額看起來很合理
+    assert not [k for k in got if "/" in k or k.startswith(("us.", "eu.", "vertex"))]
+    assert "gpt-4o" not in got            # 只收 claude-*
+    assert "claude-broken" not in got     # 價格欄位不是數字就跳過，不要當 0
+
+
+def test_refresh_rates_uses_upstream_then_reports_source(cost):
+    try:
+        src = cost.refresh_rates(FAKE_LITELLM)
+        assert "LiteLLM" in src
+        assert cost.rate_for("claude-sonnet-5-20260630") == (2.0, 10.0)
+        # 上游沒收的型號由快照兜底，不會突然變成無牌價
+        assert cost.rate_for("claude-haiku-4-5-20251001") == (1.0, 5.0)
+    finally:
+        cost.refresh_rates({})
+
+
+def test_refresh_rates_falls_back_to_snapshot_offline(cost):
+    # 🔴 連不到上游不可以讓報表死掉，也不可以靜默用舊價：要退回快照**並且說出來**
+    src = cost.refresh_rates({})
+    assert "快照" in src
+    assert cost.rate_for("claude-sonnet-5") == (2.0, 10.0)
+    assert cost.rate_for("some-unknown-model") is None
+
+
+def test_snapshot_matches_upstream_shape(cost):
+    # 快照與上游對同一個模型不該給出不同的價：真的分岔了就是快照該更新的訊號。
+    # （這裡比的是**形狀**——上游有的那幾格要一致；沒有網路，用假資料。）
+    try:
+        cost.refresh_rates(FAKE_LITELLM)
+        for key, snap in cost.SNAPSHOT:
+            if key in FAKE_LITELLM:
+                assert cost.rate_for(key) == snap, f"{key} 快照與上游分岔"
+    finally:
+        cost.refresh_rates({})
