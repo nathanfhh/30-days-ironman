@@ -7,7 +7,7 @@ set -euo pipefail
 echo "📦 ncr-dev-container｜image built: $(cat /etc/image-build-time 2>/dev/null || echo unknown)"
 
 # 憑證：網頁版把 token 放在一個檔案裡（NCR_TOKEN_FILE，由控制平面 put_archive 進來），
-# 這裡把它變成一個**已開的 file descriptor** 再交給 CLI。
+# 最後由 `prepare_token_fd` 變成一個**已開的 file descriptor** 交給 CLI。
 #
 # ⚠ 為什麼不把檔案內容直接指派給那個「裸的」token 環境變數：那個值會進到環境，於是
 #   （這裡刻意不把那行反例寫成可執行的樣子——test_profile_mapping 用子字串守「entrypoint
@@ -15,24 +15,13 @@ echo "📦 ncr-dev-container｜image built: $(cat /etc/image-build-time 2>/dev/n
 #   `/proc/1/environ` 讀得到，而且 CLI 底下每一個子行程都繼承它——CLI 會開 shell，shell
 #   會執行 AI 要求的任何指令。CLI 自己在 spawn 子行程前就把這幾個憑證變數從環境刪掉，
 #   我們不該在外面一層又加回去。走 fd 只有一個數字進環境。
-# ⚠ `rm` 排在 `exec 4<` **之後**：fd 已經開著，檔案就可以立刻從檔案系統消失，而讀取照樣
-#   成立（實測驗過）。少一個躺在那裡等人 `cat` 的檔案。
-# ⚠ 這一段必須跑在任何 `exec` 或子行程**之前**，fd 才傳得下去。
-# ⚠ `rm` 失敗**不可以**弄死這一場。unlink 要的是父目錄的寫權限，而那是控制平面那側決定
-#   的事；哪天它換了落點、權限不對，症狀會是整個容器 exit 1（`set -e`），看起來像
-#   session 建不起來，而真正的原因是一行清理指令（2026-08-07 實測踩到）。所以吞掉錯誤，
-#   但**要吵**：檔案還在是一個少掉的保障，不是沒事。
-if [ -n "${NCR_TOKEN_FILE:-}" ] && [ -s "${NCR_TOKEN_FILE}" ]; then
-    exec 4< "${NCR_TOKEN_FILE}"
-    export CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=4
-    rm -f "${NCR_TOKEN_FILE}" 2>/dev/null \
-        || echo "⚠️  憑證檔刪不掉（${NCR_TOKEN_FILE} 仍在容器內），fd 已經讀到、這一場照常。"
-fi
-
+# ⚠ **這裡只確認憑證在不在，不開 fd。** 注入延到 `run_cli` 啟動 CLI 前的最後一刻——fd 一
+#   開，之後 fork 的每個行程都繼承它。理由與實測見 prepare_token_fd。
 if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] \
    && [ -z "${CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR:-}" ] \
+   && ! { [ -n "${NCR_TOKEN_FILE:-}" ] && [ -s "${NCR_TOKEN_FILE}" ]; } \
    && [ ! -s "$HOME/.claude/.credentials.json" ]; then
-    echo "⚠️  容器內沒有憑證（環境變數、fd 或 ~/.claude/.credentials.json），claude 會要求登入。"
+    echo "⚠️  容器內沒有憑證（環境變數、憑證檔或 ~/.claude/.credentials.json），claude 會要求登入。"
 fi
 
 # ------------------------------------------------------------------------------
@@ -301,10 +290,59 @@ resolve_session_id() {
     NCR_SESSION_ID=""
 }
 
+# 把 token 交給 CLI：檔案 → **anonymous pipe** → fd 4。
+#
+# ⚠ 為什麼不是 `exec 4< "$NCR_TOKEN_FILE"`（到 2026-08-11 為止的做法）：CLI 讀憑證的方式
+#   是 `open("/proc/self/fd/4")` 再讀，那會另開一個 open file description，**不會**動到
+#   我們這個 fd 的 offset。於是 regular file 的內容在 CLI 讀完之後原封不動躺在那裡，容器
+#   裡任何同 uid 的行程——CLI 會開 shell，shell 會跑 AI 要求的任何指令——都能用
+#   `cat /proc/<pid>/fd/4` 再讀一次，**即使檔案早就 unlink 了**。
+#   實測（2026-08-11、ncr-dev-container、canary 假 token）：
+#     regular file：readlink=`…/token (deleted)`，CLI 讀完後 `cat /proc/1/fd/4` 照樣吐出來
+#     pipe        ：readlink=`pipe:[…]`，CLI 讀完後再讀是空的
+#   strace 數過，兩種都只被 `openat("/proc/self/fd/4")` 開**一次**——換成 pipe 不影響 CLI
+#   拿憑證，只是讓它讀完就沒了。
+# ⚠ 為什麼延到這一刻才建：fd 一開，之後 fork 的每個行程都繼承。實測同一場錄製裡
+#   **mitmweb 也握著 fd 4**（`/proc/<mitmweb>/fd/4` 讀得到 token），而它跟憑證毫無關係。
+#   推到防火牆、mitmweb、telemetry 都起完之後才建，那些行程就從來沒有過它。
+# ⚠ **清檔案的動作必須排在 `cat` 之後、而且在同一個 subshell 裡。** process substitution
+#   是非同步的，在外面直接 truncate 會贏過還沒讀完的 `cat`，CLI 拿到空的（實測踩到）。
+#   `rm` 不受這個限制——unlink 不影響已開的 fd，所以它排在前面、而且是同步的。
+# ⚠ `rm` 失敗**不可以**弄死這一場。unlink 要的是父目錄的寫權限，那是控制平面那側決定的
+#   事；哪天它換了落點、權限不對，症狀會是整個容器 exit 1（`set -e`），看起來像 session
+#   建不起來（2026-08-07 實測踩到）。但檔案留著就是一份 `cat` 得到的憑證，所以退一步改
+#   清空內容：truncate 只要**檔案本身**的寫權限，正好是 unlink 失敗那個情境還具備的。
+# ⚠ token 只有幾百 bytes，遠小於 pipe 的 64 KB buffer，`cat` 寫完就結束、不會卡著等 reader。
+# ⚠ 這**不是**隔離邊界，是把成本從「一行 `cat`」提高到「ptrace 掃 CLI 的 heap」。同 uid 讀
+#   `/proc/<pid>/mem` 那條路仍然通（實測）；`PR_SET_DUMPABLE=0` 擋得住它，卻**撐不過
+#   execve**（實測 exec 後被重設回 1），所以從 entrypoint 這一側套不上去。
+prepare_token_fd() {
+    [ -n "${NCR_TOKEN_FILE:-}" ] && [ -s "${NCR_TOKEN_FILE}" ] || return 0
+    local f="${NCR_TOKEN_FILE}" rm_failed=0
+    exec 9< "$f"
+    rm -f "$f" 2>/dev/null || rm_failed=1
+    # ⚠ 這個 subshell 的 stdout **就是** pipe——除了 `cat` 之外任何輸出都會混進 token 裡，
+    #   所以訊息一律走 stderr。
+    exec 4< <(
+        cat <&9
+        if [ "$rm_failed" = 1 ]; then
+            if : > "$f" 2>/dev/null; then
+                echo "⚠️  憑證檔刪不掉（$f），已清空內容，這一場照常。" >&2
+            else
+                echo "⚠️  憑證檔刪不掉也清不掉（$f 仍有內容），這一場照常。" >&2
+            fi
+        fi
+    )
+    exec 9<&-
+    export CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=4
+}
+
 run_cli() {
     if [ "$NCR_INJECT_SESSION" = "1" ]; then
         set -- "$1" --session-id "$NCR_SESSION_ID" "${@:2}"
     fi
+    # ⚠ 就是這裡才建憑證 fd：firewall、mitmweb、telemetry 都已經起完，它們拿不到。
+    prepare_token_fd
     if [ -z "$CAPTURE_PID" ]; then
         exec "$@"
     fi
@@ -318,6 +356,14 @@ run_cli() {
     # 用 `-p` 測不出來（headless 不讀 stdin），要互動才會現形。
     "$@" <&0 &
     local child=$!
+    # ⚠ CLI 已經 fork 出去、帶著自己那份 fd 4。這支 bash 是 PID 1、會活到收尾結束，繼續
+    #   握著憑證只是多留一個 `/proc/1/fd/4` 給人讀（實測讀得到）。立刻放掉。
+    #   沒有 token 的場次 fd 4 從沒開過，關它不是錯（`set -euo pipefail` 下無聲 rc=0，實測）。
+    # ⚠ **不可以寫成 `exec 4<&- 2>/dev/null`。** 不帶命令的 `exec`，redirect 是永久套在當前
+    #   shell 上的——那會把 PID 1 之後所有的 stderr（stop_capture、write_capture_sidecar、
+    #   trap、bash 自己的錯誤）通通倒進 /dev/null（實測）。而且它本來就不需要。
+    exec 4<&-
+    unset CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR
     trap 'kill -TERM "$child" 2>/dev/null' TERM INT
     wait "$child"
     local rc=$?

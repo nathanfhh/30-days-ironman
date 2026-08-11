@@ -300,13 +300,18 @@ SESSION_UID = int(os.environ.get("CLAUDE_PTY_SESSION_UID", "1001"))
 #   `/proc/1/environ`，而且**每一個子行程都繼承它**——CLI 會開 shell，shell 會跑 AI 要求
 #   的任何指令，每一層都帶著這個值。CLI 自己在 spawn 子行程前就把這幾個憑證變數從環境
 #   刪掉，我們卻在外面一層又加回去。
-# ⚠ entrypoint.sh 讀完會立刻 `rm`，只留一個已開的 fd（實測：檔案不在了照樣讀得到）。
-#   所以容器內能看到這個檔的窗口是毫秒級，之後連容器裡也找不到它。
+# ⚠ entrypoint.sh 把內容灌進一個 **anonymous pipe** 再交給 CLI，並且 `rm` 這個檔
+#   （`rm` 其實排在灌 pipe 之前——unlink 不影響已開的 fd。順序的理由見 prepare_token_fd）。
+#   **「檔案不見了」不等於「內容拿不到」**——pathname 消失，但只要還有人握著那個 fd，
+#   內容就仍可經由 `/proc/<pid>/fd/N` 取得（2026-08-11 實測：舊的 regular-file 做法下，
+#   CLI 讀完之後同 uid 的 shell `cat /proc/1/fd/4` 照樣吐出 token）。改成 pipe 是為了讓
+#   它**讀一次就沒了**。完整推導與量測見 ADR 0019。
 # ⚠ **它必須待在一個 session 使用者自己擁有的目錄裡，不能直接放 `/run` 底下。**
 #   unlink 要的是**父目錄**的寫權限，不是檔案本身的——檔案給 0600 且屬於他也沒用，
 #   `/run` 是 root 的 0755，他刪不掉。實測症狀是 `rm: Permission denied`，而 entrypoint
 #   有 `set -e`，於是整個容器 exit 1，看起來像 session 建不起來（2026-08-07 踩到）。
 #   所以 `_put_cli_token` 的 tar 會連同 `cpty/` 這個目錄一起送，並且把它設成他的。
+#   （現在 rm 失敗會退而清空檔案內容，不再只是吵一句就算了——見 prepare_token_fd。）
 SESSION_TOKEN_DIR = "/run/cpty"
 SESSION_TOKEN_FILE = SESSION_TOKEN_DIR + "/token"
 

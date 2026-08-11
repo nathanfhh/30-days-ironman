@@ -124,10 +124,15 @@ docker run --rm -v "$HOME/.cache/ncr-trivy":/old \
 存放，開場時交給那一場的 CLI——誰的 session 用誰的憑證，host 上不需要準備任何憑證檔。
 
 **憑證預設不進容器的環境變數。** 值在 `create` 與 `start` 之間以 `put_archive` 寫進容器
-自己的檔案系統，entrypoint 讀完立刻 `rm`、只留一個已開的 fd——所以 `docker inspect`、
-`/proc/1/environ`、以及每一個子行程的環境都看不到它。理由很具體：CLI 會開 shell，shell
-會跑 AI 要求的任何指令，而**環境變數每一層都繼承**。CLI 自己在 spawn 子行程前就把這幾個
-憑證變數從環境刪掉了，我們不該在外面一層又加回去。
+自己的檔案系統，entrypoint 把它灌進一個 anonymous pipe 交給 CLI，並且 `rm` 掉那個檔——
+所以 `docker inspect`、`/proc/1/environ`、以及每一個子行程的環境都看不到它。理由很具體：
+CLI 會開 shell，shell 會跑 AI 要求的任何指令，而**環境變數每一層都繼承**。CLI 自己在
+spawn 子行程前就把這幾個憑證變數從環境刪掉了，我們不該在外面一層又加回去。
+
+⚠ **這是降低暴露面，不是隔離邊界。** 憑證離開環境變數之後，同一個容器裡同 uid 的行程
+仍有辦法取得它（讀 CLI 行程的記憶體）——AI 在這個容器裡本來就有任意執行權。pipe 的作用
+是讓憑證「讀一次就沒了」，把成本從一行 `cat` 提高到得去掃記憶體；真正的圍堵在別處：
+token 的權限範圍、壽命、以及 restricted 模式把出網掐掉。推導與量測見 ADR 0019。
 
 ⚠ 但這條路依賴一個**官方沒有寫進文件**的機制（`CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`），
 一次版本升級就可能改名或消失，而症狀會是「所有新 session 都要求登入」。所以建立表單留了

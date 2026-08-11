@@ -51,7 +51,7 @@
         <mxCell id="ep" value="&lt;b&gt;entrypoint.sh&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1f2937;strokeColor=#111827;fontColor=#ffffff;fontSize=13;" vertex="1" parent="1">
           <mxGeometry x="60" y="356" width="1090" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="s0" value="&lt;b&gt;① 憑證：變成一個已開的 file descriptor，不是環境變數&lt;/b&gt;&#xa;NCR_TOKEN_FILE（控制平面 put_archive 進來）→ exec 4&amp;lt; → CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=4 → &lt;b&gt;立刻 rm&lt;/b&gt;（fd 已開，檔案可以消失）&#xa;&lt;font color=&quot;#b91c1c&quot;&gt;為什麼不用裸的環境變數：那個值進了環境，/proc/1/environ 讀得到，而且 CLI 底下每一個子行程都繼承它——CLI 會開 shell，shell 會執行 AI 要求的任何指令。&lt;/font&gt;&#xa;rm 失敗不弄死這一場（unlink 要的是父目錄權限，那是控制平面那側決定的），但&lt;b&gt;要吵&lt;/b&gt;：檔案還在是少掉的一個保障。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+        <mxCell id="s0" value="&lt;b&gt;① 憑證政策：值不進環境變數（fd 本身到 ⑥ 前一刻才建，見下）&lt;/b&gt;&#xa;NCR_TOKEN_FILE（控制平面 put_archive 進來）。這裡只確認它在不在——&lt;b&gt;fd 一開，之後 fork 的每個行程都繼承&lt;/b&gt;（實測：開太早時連 mitmweb 都握著它）。&#xa;&lt;font color=&quot;#b91c1c&quot;&gt;為什麼不用裸的環境變數：那個值進了環境，/proc/1/environ 讀得到，而且 CLI 底下每一個子行程都繼承它——CLI 會開 shell，shell 會執行 AI 要求的任何指令。&lt;/font&gt;&#xa;⑤ 之後才 prepare_token_fd：檔案內容 → &lt;b&gt;anonymous pipe&lt;/b&gt; → fd 4 → rm 檔案（rm 失敗改清空內容，不弄死這一場）。ADR 0019" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
           <mxGeometry x="60" y="398" width="1090" height="94" as="geometry" />
         </mxCell>
         <mxCell id="s1" value="&lt;b&gt;② 三道選單（人答，在 agent 起跑之前）&lt;/b&gt;&#xa;1. 網路：&lt;b&gt;限制白名單（預設）&lt;/b&gt; / 完全開放&#xa;2. 錄不錄流量？錄的話範圍：&lt;b&gt;全錄（預設）&lt;/b&gt; / 只錄模型 API&#xa;3. 送不送 Jaeger&#xa;&lt;font color=&quot;#6b7280&quot;&gt;非互動（CI／控制平面）用 NCR_NET／NCR_CAPTURE／NCR_CAPTURE_SCOPE／NCR_OTEL 跳過。&#xa;⚠ 條件題要成對送：NCR_CAPTURE=1 沒帶 SCOPE 會停在那道 read。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
@@ -251,7 +251,7 @@
         <mxCell id="devc-highlevel_q1" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;值不進環境&lt;/b&gt;" vertex="1">
           <mxGeometry height="26" width="340" x="410" y="194" as="geometry" />
         </mxCell>
-        <mxCell id="devc-highlevel_b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="token 寫進檔案 → 開成 fd → 立刻刪檔。&lt;br&gt;環境裡只剩一個數字，log、docker inspect、&lt;br&gt;/proc/1/environ 都撈不到值。" vertex="1">
+        <mxCell id="devc-highlevel_b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="token 寫進檔案 → 灌進 anonymous pipe → fd 4 → 刪檔。&lt;br&gt;環境裡只剩一個數字，log、docker inspect、&lt;br&gt;/proc/1/environ 都撈不到值。&lt;br&gt;&lt;br&gt;pipe 讓它&lt;b&gt;讀一次就沒了&lt;/b&gt;——這是降低暴露面，&lt;br&gt;不是對同 uid 程式的隔離邊界。" vertex="1">
           <mxGeometry height="150" width="340" x="410" y="226" as="geometry" />
         </mxCell>
         <mxCell id="devc-highlevel_a1" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">

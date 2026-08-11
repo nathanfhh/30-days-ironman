@@ -29,7 +29,12 @@ DEPS=(--with flask --with docker --with sqlalchemy --with argon2-cffi
 NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
               test_reconciler test_entrypoint_human_path test_entrypoint_profile
               test_firewall_ssh_gate test_user_proxy test_network_isolation
-              test_gitlab_upstream_e2e test_restricted_proxy_reach e2e_flow)
+              test_gitlab_upstream_e2e test_restricted_proxy_reach e2e_flow
+              test_token_fd test_trivy_volume)
+# ⚠ 判準是「會不會真的起容器／建 volume」，不是「檔案裡有沒有出現 docker」。用假 client
+#   的那幾支（test_host_platform／test_jaeger_wiring／test_trivy_db／test_ttyd_identity）
+#   一個容器都不起，留在 quick 模式是對的。自我 SKIP 不能取代這道 gate：docker 在的開發機
+#   上它不會 SKIP，而是安靜地在 quick 模式裡真的跑起容器。
 
 # `fake_gitlab.py` 不是測試，是被 test_gitlab_upstream_e2e 掛進容器裡跑的假上游。
 # ⚠ 它的檔名沒有 `test_` 前綴正是為了不被下面那個 glob 撿走——改名前先想清楚。

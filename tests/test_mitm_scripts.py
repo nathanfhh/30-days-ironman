@@ -504,6 +504,10 @@ def test_run_cli_passes_stdin_through_on_the_capture_path():
         "CAPTURE_PID=1\n"          # 非空 ＝ 走背景那條路徑
         "stop_capture() { :; }\n"
         "write_capture_sidecar() { :; }\n"
+        # run_cli 啟動 CLI 前會呼叫它（見 entrypoint 的 prepare_token_fd）。這支守的是
+        # stdin、不是憑證，所以 stub 掉。不 stub 的話斷言其實照樣過（實測），只是 stderr
+        # 會多一行 command not found——真的壞掉那天，噪音會蓋掉訊號。
+        "prepare_token_fd() { :; }\n"
         + _run_cli_source()
         + "\nrun_cli cat\n"
     )
