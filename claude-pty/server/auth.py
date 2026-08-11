@@ -215,11 +215,14 @@ def authenticate(username: str, password: str) -> dict:
     # ⚠ 讀與寫分開之後中間有窗口，所以要守「hash 沒被別人換過才寫」——不然這一筆會蓋掉
     #   期間發生的改密碼（他改完密碼、這裡拿舊 hash 重算一份寫回去，等於把密碼改回去）。
     # ⚠ 失敗不可以害登入失敗：rehash 是保養，不是認證的一部分。下一次登入還會再試。
+    # ⚠ **雜湊要在交易外算。** argon2id 一次上百 ms，那正是這支函式一開始要避開的東西——
+    #   放進交易裡等於把剛趕出去的慢動作從前門請回來（第一版就是這樣寫的）。
     if needs_rehash:
+        new_hash = _ph.hash(password)
         with suppress(Exception), session_scope(immediate=True) as s:
             row = s.get(User, uid)
             if row is not None and row.password_hash == old_hash:
-                row.password_hash = _ph.hash(password)
+                row.password_hash = new_hash
     return info
 
 
@@ -247,6 +250,11 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
     from . import views       # 區域 import：views 不 import auth，但擺模組層會綁死載入順序
 
     new_hash = hash_password(new_password)
+    # ⚠ 這一筆的交易體裡有一次 argon2 verify（驗舊密碼）與一次 hash，兩者都是上百 ms 而且
+    #   都在寫鎖持有期內——**這是明知而接受的**，不是漏看：改密碼是人手動觸發的低頻動作，
+    #   而這支函式的不變式（password_version 遞增、當場收掉所有終端、system 帳號的擋門）
+    #   綁得很緊，為了那 100 ms 去拆讀寫兩段，換來的風險比省下的鎖時間大。
+    #   `authenticate` 的處置不同，因為它是**未登入就打得到**而且高頻——見那支的註解。
     with session_scope(immediate=True) as s:
         user = s.get(User, user_id)
         if user is None:
