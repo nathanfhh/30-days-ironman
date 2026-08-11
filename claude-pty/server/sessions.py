@@ -1148,7 +1148,28 @@ class SessionManager:
             container.start()
             with suppress(docker.errors.APIError):
                 self._docker.api.resize(container.id, height=rows, width=cols)  # 開機為 0x0
-            with session_scope() as s:  # 步驟 3：登錄轉正
+            # 環境快照。這兩個各要一次 docker 往返（`_image_created_at` 吃 DOCKER_TIMEOUT
+            # 15s，`_cli_version` 在容器裡跑一次 `--version`、吃 CLI_VERSION_TIMEOUT 5s）。
+            # ⚠ **必須算在交易外。** 它們原本寫在下面那個 scope 裡，deferred 時代那是免費的
+            #   ——SELECT 只拿 WAL 的讀快照，不擋任何人。改成 immediate 之後同一段程式碼變成
+            #   「抱著全域寫鎖等 docker」：最壞 20 秒，期間全站每一筆寫（touch、開終端、
+            #   登入、對帳）都在排隊，而排超過 busy_timeout 就是一片 `database is locked`
+            #   ——把原本只發生在建立路徑的錯誤放大成全站的。dockerd 變慢的時候尤其明顯，
+            #   而這個 repo 記過 dockerd 卡住 40 分鐘的場面。
+            # 取不到就留 NULL——這兩個是「回頭查」用的，絕不能因為它們失敗而害 session
+            # 開不起來（見各自的 helper）。
+            image_created_at = self._image_created_at()
+            cli_version = self._cli_version(container, profile.cli)
+            # ⚠ **`immediate=True` 不是為了互斥，是因為這筆交易會寫。** 這裡先 `s.get` 再改
+            #   欄位——WAL 下的 deferred 交易在升級寫鎖時，只要中間有別人 commit 過就**當場**
+            #   回 SQLITE_BUSY，`busy_timeout` 對快照衝突無效（見 db.py 開頭那段）。
+            #   2026-08-11 在真實部署上撞到：`POST /api/sessions` 回 500 `database is
+            #   locked`，而下面那個 `except` 的補償把**已經 start 起來的容器拆掉**——使用者
+            #   看到的不是「重試一下」，是開場失敗。同形狀的幾處一併改了，別再退回
+            #   deferred：test_mutex_semantics 有一條靜態檢查守著。
+            # ⚠ 連帶的紀律：**immediate 的交易體內不要放慢動作。** 拿鎖的時刻從 commit 提前
+            #   到 BEGIN，交易體有多長，全站就被擋多久（見上面那段搬走的理由）。
+            with session_scope(immediate=True) as s:  # 步驟 3：登錄轉正
                 row = s.get(SessionRow, sid)
                 # ⚠ **這一列可能已經不在了。** 使用者（或 admin）在建立中的那數十秒內按
                 #   終止 → terminate() → archive() 把列刪掉，這裡就會 AttributeError，
@@ -1161,10 +1182,8 @@ class SessionManager:
                     raise SessionNotFound(f"未知 session：{sid}")
                 row.container_id = container.id
                 row.status = STATUS_RUNNING
-                # 環境快照。取不到就留 NULL——這兩個是「回頭查」用的，絕不能因為它們
-                # 失敗而害 session 開不起來（見各自的 helper）。
-                row.image_created_at = self._image_created_at()
-                row.cli_version = self._cli_version(container, profile.cli)
+                row.image_created_at = image_created_at   # 交易外先算好，見上
+                row.cli_version = cli_version
                 # 這一場開場時，網路上有沒有一顆代理在待命（ADR 0016）。畫面照這一欄講
                 # 「有沒有路」，不照「這個帳號現在有沒有設 PAT」講——後者中途會變。
                 # ⚠ 這一欄記的是**開場那一刻**的事實。代理事後被補起來的話，正在跑的
@@ -1183,7 +1202,9 @@ class SessionManager:
             with suppress(Exception):
                 self._docker.api.remove_container(name, force=True)
             # 補償：釋放配額（刪除登錄列）。suppress 確保補償失敗不蓋掉原始例外。
-            with suppress(Exception), session_scope() as s:
+            # ⚠ 補償也是寫交易（見 db.py 的判準）。它撞 BUSY 會被 suppress 吞掉，登錄列
+            #   就留著＝那個人的配額被無聲佔住，要等 reconciler 過寬限期才歸檔。
+            with suppress(Exception), session_scope(immediate=True) as s:
                 row = s.get(SessionRow, sid)
                 if row is not None:
                     s.delete(row)
@@ -1541,7 +1562,7 @@ class SessionManager:
 
     def rename(self, sid: str, display_name: str | None) -> dict:
         """改顯示名稱（container 名稱不動，理由見 app.rename_session）。"""
-        with session_scope() as s:
+        with session_scope(immediate=True) as s:
             row = s.get(SessionRow, sid)
             if row is None:
                 raise SessionNotFound(f"未知 session：{sid}")
@@ -1583,10 +1604,14 @@ class SessionManager:
             state = "gone"
         except Exception:            # noqa: BLE001 — 逾時／連不上／APIError 都算「問不到」
             return None
-        with session_scope() as s:
+        with session_scope(immediate=True) as s:
             row = s.get(SessionRow, sid)
             # 沒變就不要寫。同一顆容器連按兩次「開啟」是很正常的操作，第二次沒有帶來
-            # 任何新資訊，不必為它開一個寫入交易（見上面那條 database is locked）。
+            # 任何新資訊。
+            # ⚠ 措辭修正：這個 scope 現在是 immediate，所以「沒變」那條路**還是取了寫鎖**
+            #   （拿鎖的時刻在 BEGIN，不在 commit）。留著這個 if 的理由變成「少一次 commit
+            #   與 fsync」，不再是「不開寫入交易」。真正省下的量級沒有以前寫的那麼大——
+            #   但交易體是 µs 級的 get＋比較，docker 探測在交易外，所以實害趨近零。
             if row is not None and row.docker_state != state:
                 row.docker_state = state
                 row.state_checked_at = utcnow()
@@ -1594,7 +1619,7 @@ class SessionManager:
 
     def touch(self, sid: str) -> None:
         """更新最後活動時間（idle 回收與 UI 顯示用）。"""
-        with session_scope() as s:
+        with session_scope(immediate=True) as s:
             row = s.get(SessionRow, sid)
             if row is not None:
                 row.last_active_at = utcnow()
@@ -1697,7 +1722,9 @@ class SessionManager:
         # ⚠ 這裡原本還寫著「讀畫面要用它把 bytes 餵進正確尺寸的終端模擬器」——那是一個
         #   已經拆掉的功能留下的殘影，而且方向與 ADR 0003 相反（伺服端不維護螢幕狀態、
         #   不引入 pyte，重繪交給 TUI 自己）。不要照著那句話把終端模擬器加回來。
-        with session_scope() as s:
+        # immediate：這筆會寫（見 db.py 的判準；F-024 那段點名的清單本來就含 resize）。
+        # docker 那邊的 resize 已經在上面做完了，這個交易體只剩 get + 兩個賦值。
+        with session_scope(immediate=True) as s:
             db_row = s.get(SessionRow, sid)
             if db_row is not None:
                 db_row.rows, db_row.cols = rows, cols

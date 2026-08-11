@@ -192,6 +192,11 @@ def authenticate(username: str, password: str) -> dict:
     #   上一輪修 username 時只改了一行，隔壁那一行是同一個洞。
     if not isinstance(password, str):
         password = ""
+    # ⚠ **這一筆刻意維持 deferred。** 穩態下它是純讀：唯一的寫是下面那個 rehash，而那只在
+    #   argon2 參數升級之後才會發生一次。而交易體內有一次 argon2id verify（幾十到上百 ms）
+    #   ——用 immediate 的話，每一發登入都抱著全域寫鎖跑那段雜湊，登入彼此序列化，還擋住
+    #   全站的 touch / 開終端 / 建立。而 login 是**未登入就打得到**的端點：灌一串假帳密就
+    #   能近乎獨佔寫鎖。判準是「這筆交易會不會寫」，這一筆平常不寫。
     with session_scope() as s:
         user = s.query(User).filter_by(username=username.strip()).one_or_none()
         stored = user.password_hash if user else _DUMMY_HASH
@@ -202,9 +207,20 @@ def authenticate(username: str, password: str) -> dict:
             raise AuthError("帳號或密碼錯誤") from None
         if user is None:                       # 假驗證竟通過也不可能放行
             raise AuthError("帳號或密碼錯誤")
-        if _ph.check_needs_rehash(user.password_hash):
-            user.password_hash = _ph.hash(password)  # 參數升級時自動換新雜湊
-        return _to_dict(user)
+        needs_rehash = _ph.check_needs_rehash(user.password_hash)
+        old_hash = user.password_hash
+        info = _to_dict(user)
+        uid = user.id
+    # 參數升級時自動換新雜湊。**另開一筆 immediate 小交易**：寫的部分很短，而上面那段慢。
+    # ⚠ 讀與寫分開之後中間有窗口，所以要守「hash 沒被別人換過才寫」——不然這一筆會蓋掉
+    #   期間發生的改密碼（他改完密碼、這裡拿舊 hash 重算一份寫回去，等於把密碼改回去）。
+    # ⚠ 失敗不可以害登入失敗：rehash 是保養，不是認證的一部分。下一次登入還會再試。
+    if needs_rehash:
+        with suppress(Exception), session_scope(immediate=True) as s:
+            row = s.get(User, uid)
+            if row is not None and row.password_hash == old_hash:
+                row.password_hash = _ph.hash(password)
+    return info
 
 
 def change_password(user_id: int, new_password: str, old_password: str | None = None,
@@ -231,7 +247,7 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
     from . import views       # 區域 import：views 不 import auth，但擺模組層會綁死載入順序
 
     new_hash = hash_password(new_password)
-    with session_scope() as s:
+    with session_scope(immediate=True) as s:
         user = s.get(User, user_id)
         if user is None:
             raise AuthError("使用者不存在")
@@ -274,7 +290,7 @@ def set_ttyd_bin(user_id: int, value: str) -> dict:
     # 型別先驗，理由同 app.set_prefs：`x in dict` 對不可 hash 的值會拋 TypeError。
     if not isinstance(value, str) or value not in config.TTYD_BINS:
         raise ValueError(f"不認得的 ttyd 種類：{value!r}")
-    with session_scope() as s:
+    with session_scope(immediate=True) as s:
         user = s.get(User, user_id)
         if user is None:
             raise ValueError("使用者不存在")
@@ -325,7 +341,7 @@ def set_cli_token(user_id: int, token) -> None:
         # tar，而 env 那條逃生口也還在；何況多行的「token」幾乎一定是整段終端輸出連說明
         # 文字一起貼進來了。兩條路都不該收，所以這道檢查與交付方式無關，一律擋。
         raise AuthError("token 只能是單行可見字元——看起來貼進來的不只 token 本身")
-    with session_scope() as s:
+    with session_scope(immediate=True) as s:
         user = s.get(User, user_id)
         if user is None:
             raise AuthError("使用者不存在")
@@ -333,7 +349,7 @@ def set_cli_token(user_id: int, token) -> None:
 
 
 def clear_cli_token(user_id: int) -> None:
-    with session_scope() as s:
+    with session_scope(immediate=True) as s:
         user = s.get(User, user_id)
         if user is None:
             raise AuthError("使用者不存在")
@@ -376,7 +392,7 @@ def set_gitlab_pat(user_id: int, value) -> None:
             value = gitlab_proxy.validate_pat(value)
         except gitlab_proxy.PatRejected as e:
             raise AuthError(str(e)) from e
-    with session_scope() as s:
+    with session_scope(immediate=True) as s:
         user = s.get(User, user_id)
         if user is None:
             raise AuthError("使用者不存在")

@@ -72,7 +72,7 @@ def open_view(session_id: str, container_name: str, ttyd_bin: str | None = None)
             pid = _spawn_detached(
                 _ttyd_argv(port, container_name, session_id, binary))
             if _wait_ready(port, pid, session_id):
-                with session_scope() as s:
+                with session_scope(immediate=True) as s:
                     row = s.get(View, view_id)
                     if row is None:          # 宣告被別人清掉了（不該發生）→ 當作失敗處理
                         raise ViewError("view 宣告已消失")
@@ -97,7 +97,7 @@ def close_views(session_id: str) -> int:
     正常情況不需呼叫——關網頁時 `-q` 會讓 ttyd 自己退出。
     """
     closed = 0
-    with session_scope() as s:
+    with session_scope(immediate=True) as s:
         rows = s.query(View).filter(View.session_id == session_id).all()
         for row in rows:
             if row.pid:
@@ -231,7 +231,7 @@ def _await_peer_view(session_id: str, timeout: float | None = None) -> dict | No
 
 
 def _drop_view(view_id: int) -> None:
-    with suppress(Exception), session_scope() as s:
+    with suppress(Exception), session_scope(immediate=True) as s:
         row = s.get(View, view_id)
         if row is not None:
             s.delete(row)

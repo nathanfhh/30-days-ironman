@@ -21,6 +21,13 @@
   是偶發 500。真正要改的是判準：**「這筆交易會不會寫」比「需不需要互斥」更接近機制。**
   SQLite 本來就單寫者，寫交易一律 IMMEDIATE 幾乎沒有額外成本。
 
+  **2026-08-11：使用者路徑上的 12 處已經照這個判準改掉**（`auth` 六處、`sessions` 的
+  create/rename/probe_container/touch、`views` 的 open_view/close_views）。動手的原因不是
+  巡邏，是真的撞到：`POST /api/sessions` 回 500 `database is locked`，而 `create()` 的
+  `except` 補償把**已經 start 起來的容器拆掉**——「偶發 500」在那一處的實際後果是開場失敗。
+  同一支測試量到的比原本記的更嚴重：4 併發 × 20 輪、**80 次裡 40 次**（改完 0 次）。
+  `test_mutex_semantics` 有兩條守著：一條真的開執行緒去撞，一條靜態擋「別再退回 deferred」。
+
   ⚠ 唯一要另外想的是 `reconciler` 的 step 0（讀全表再逐列寫）：它會在整個迴圈期間持寫鎖
     擋住 web 的寫入，那一支該改成「先讀一份清單、再逐列小交易寫」而不是直接加 immediate。
     在那之前它維持現狀——被 SQLITE_BUSY 丟掉重來的代價是整輪對帳，值得先想清楚再動。
