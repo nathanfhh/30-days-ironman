@@ -1,5 +1,7 @@
 # 30 Days Ironman
 
+[![tests](https://github.com/nathanfhh/30-days-ironman/actions/workflows/tests.yml/badge.svg)](https://github.com/nathanfhh/30-days-ironman/actions/workflows/tests.yml)
+
 30 天鐵人賽「AI 的駕馭之道」的程式產出物。
 
 文章談的是怎麼把一套 Code Review 的判斷標準，從腦袋裡搬進一份 AI Agent 讀得懂的

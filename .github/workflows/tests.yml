@@ -1,0 +1,18 @@
+# The whole suite is offline by design: HTTP goes to an in-process stub server,
+# linters are fake executables planted on PATH, and every dataset is synthetic.
+# No docker daemon, no real GitLab, no network beyond package installation.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+      - run: uv run pytest
