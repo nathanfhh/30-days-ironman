@@ -188,9 +188,9 @@ hardcoded credential like any other, with the three-part payload attached.
    throughout. Deviations are **Critical** — this is a hard team convention, and
    consistency is the whole value of a convention.
 2. **A missing validation schema is Critical.**
-3. **HTTP verb must match idempotency semantics** (RFC 9110) — a `GET` with side
-   effects is **Critical**. Retries, prefetchers, and caches all assume the
-   contract holds.
+3. **HTTP verb must match safe/idempotency semantics** (RFC 9110) — a `GET` with
+   side effects is **Critical**. Retries assume idempotency; prefetchers and
+   caches assume safety. Either broken contract bites.
 4. **Authentication is not authorisation.** `@jwt_required` establishes who the
    caller is. It says nothing about whether they may touch *this* record. Look
    for the ownership or role check separately.

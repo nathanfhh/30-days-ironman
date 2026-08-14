@@ -1,7 +1,7 @@
 ---
 name: nathan-code-review
 description: Reviews code changes against this team's conventions and severity calibration (Critical / Suggestion / Nit) and produces a Traditional Chinese report that can be published to a GitLab merge request. Use whenever the user pastes a GitLab merge request URL, asks for a code review or 程式碼審查, asks to review a branch, a diff, uncommitted work, or specific files, or asks to re-review a merge request that was reviewed before. Also use when a merge request author pushes back on a review that was already published and the position needs to be reassessed.
-version: 2026.08.09.01
+version: 2026.08.13.01
 ---
 
 # Nathan Code Review
