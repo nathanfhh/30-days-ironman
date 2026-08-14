@@ -1,5 +1,10 @@
 # nathan-code-review on Code Review Bench
 
+> ⚠️ **先讀這三行再看分數**：`scores/` 裡是**校正前的原始分數**。盲測稽核發現
+> golden set 有 16.8% 站不住，校正後名次完全不同——完整的方法、翻轉與自我扣分，
+> 見連載 Day 14–15。第三方 PR 資料屬上游 benchmark 專案（[withmartian/code-review-benchmark][crb]），
+> 不在本 repo 的 MIT 授權範圍內。
+
 Running this repo's review skill against [withmartian/code-review-benchmark][crb]
 — the offline half — and, while we are in there, checking the benchmark's own
 ground truth with the same instrument.
