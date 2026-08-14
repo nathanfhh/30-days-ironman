@@ -146,6 +146,17 @@ RUN uv tool install mitmproxy==12.2.3 && mitmdump --version
 
 # CodeGraph：程式碼知識圖譜 / 導航輔助（blast radius、caller 矩陣）。
 # 不 pin：輸出不進報告 finding，無可重現性需求。
+#
+# telemetry 政策層關閉（TELEMETRY.md：預設開，POST telemetry.getcodegraph.com）。
+# restricted 模式它本來就被防火牆 REJECT（codegraph 只安靜緩衝、不重試）；但「完全開放」
+# 模式牆不存在，而 skill 每場審查都對受審 repo 跑 codegraph init——index 事件帶著院內
+# 程式碼的語言與檔案數 bucket。statsig/sentry 都刻意擋了，這條沒理由例外。兩種網路模式
+# 的行為要一致，就得在政策層關，不能只靠牆。ENV 放在安裝之前，build 期間的事件一併壓掉。
+# ⚠ 刻意不用跨工具的 DO_NOT_TRACK=1：Claude Code 也認它，而 entrypoint 靠
+#   CLAUDE_CODE_ENABLE_TELEMETRY=1 送 traces 給 Jaeger。萬一某版把 OTel 也掛到
+#   DO_NOT_TRACK 底下，profiling 管線會安靜地死掉——OTLP fail open，沒人會發現。
+ENV CODEGRAPH_TELEMETRY=0 \
+    CODEGRAPH_NO_UPDATE_CHECK=1
 RUN curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh && \
     codegraph --version
 
