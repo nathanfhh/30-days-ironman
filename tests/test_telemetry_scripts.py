@@ -272,8 +272,13 @@ def test_find_session_accepts_session_dir_and_picks_latest_in_project_dir(cost, 
     old, new = tmp_path / "a-old.jsonl", tmp_path / "z-new.jsonl"
     old.write_text("")
     new.write_text("")
-    past = time.time() - 3600
+    # mtime 全部釘死：abc.jsonl 與 z-new.jsonl 同瞬間寫入時會平手，
+    # 「挑最新」就退化成看列舉順序（CI 第一跑抓到的 flake）。
+    now = time.time()
+    past = now - 3600
+    os.utime(tmp_path / "abc.jsonl", (past, past))
     os.utime(old, (past, past))
+    os.utime(new, (now, now))
     main, _ = cost.find_session(str(tmp_path))
     assert main.endswith("z-new.jsonl")
     assert "取 mtime 最新" in capsys.readouterr().out
