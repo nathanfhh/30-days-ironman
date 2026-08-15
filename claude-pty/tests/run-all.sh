@@ -45,6 +45,30 @@ NEEDS_TTYD=(test_view_lifecycle e2e_flow)
 have_ttyd=0
 command -v ttyd >/dev/null 2>&1 && have_ttyd=1
 
+# 只在 Linux 上驗得到的：這兩支問的性質在 macOS 上**不存在**，不是「驗過沒問題」。
+#   · test_trivy_volume  —— Docker Desktop 對 bind mount 做 uid 對映（同一個目錄在 uid 1001
+#     的容器裡就顯示 owner 1001，兩邊都可寫），整條 uid 鏈在 macOS 上沒有東西可驗。
+#     機制推導與 Linux 實機驗收見 `docs/linux-acceptance.md`（ADR 0017 / 0018）。
+#   · test_firewall_ssh_gate —— macOS 的 SSH_AUTH_SOCK 是 launchd 管的
+#     `/var/run/com.apple.launchd.*/Listeners`，掛不進容器（Docker Desktop 另給
+#     `/run/host-services/ssh-auth.sock`），「有 agent」那組情境根本組不起來。
+# ⚠ 為什麼要有這道 gate：在它之前，macOS 上跑 `--all` **永遠是紅的**，於是這五條紅燈
+#   被當成背景噪音消化掉——而 2026-08-15 就有一支真的壞掉的 fixture（假上游的 bare repo
+#   沒指定 `-b main`）藏在那片紅裡沒被發現。永遠紅的燈跟沒有燈是一樣的東西。
+NEEDS_LINUX=(test_trivy_volume test_firewall_ssh_gate)
+is_linux=0
+[ "$(uname -s)" = "Linux" ] && is_linux=1
+
+# 瀏覽器 e2e 需要 playwright 真的把 chromium 下載下來。沒下載的話每一支 e2e 都會吐一段
+# 「Executable doesn't exist」的 traceback——看起來像測試壞了，其實是少一個安裝步驟。
+# ⚠ 不可以只判「快取目錄在不在」：playwright 升版之後要的是**另一個 build 編號**，舊的那幾顆
+#   還留在快取裡，於是目錄在、要的那顆不在（2026-08-15 實際踩到：快取有 1208/1217/1223/1228，
+#   而當時的 playwright 要 1234）。所以問 playwright 自己要哪一顆，再去看那一顆在不在。
+have_browser=0
+_pw_dir="$(uv run "${DEPS[@]}" python -m playwright install --dry-run chromium-headless-shell 2>/dev/null \
+           | awk '/Install location:/ {print $3; exit}')"
+[ -n "${_pw_dir}" ] && [ -d "${_pw_dir}" ] && have_browser=1
+
 mode="${1:-quick}"
 case "${mode}" in
   quick|--quick) want_docker=0; want_e2e=1 ;;
@@ -105,6 +129,12 @@ run_one() {
   fi
   if in_list "${base}" "${NEEDS_TTYD[@]}" && [ "${have_ttyd}" -eq 0 ]; then
     skipped+=("${base}（host 上沒有 ttyd binary）"); return
+  fi
+  if in_list "${base}" "${NEEDS_LINUX[@]}" && [ "${is_linux}" -eq 0 ]; then
+    skipped+=("${base}（$(uname -s) 上驗不到這條性質，見 docs/linux-acceptance.md）"); return
+  fi
+  if [[ "${base}" == e2e_* ]] && [ "${have_browser}" -eq 0 ]; then
+    skipped+=("${base}（playwright 缺這版的瀏覽器：playwright install chromium-headless-shell）"); return
   fi
   printf '\n\033[1m== %s\033[0m\n' "${base}"
   ran=$((ran + 1))
