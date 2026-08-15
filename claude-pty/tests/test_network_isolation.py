@@ -179,17 +179,20 @@ try:
     #   （2026-08-15 這支第一次在 CI 上跑就是這樣紅的）。這裡要驗的是「有容器掛著就收
     #   不掉」這個機制，掛著的是不是真的 jaeger 不影響結論，所以缺的時候頂一顆同名的
     #   上去；名字要一致，否則 `only_jaeger_left` 會把它算成別人，上面那條判斷跟著錯。
+    # ⚠ 要問的是「**jaeger 那個名字**在不在這張網上」，不是「這張網上有沒有容器」——
+    #   這個時間點 a1／a2 還掛著，問後者永遠為真，頂替的容器一顆都不會建，
+    #   而症狀跟完全沒改一樣（2026-08-15 第一版就是這樣寫錯的）。
     net_a.reload()
-    if not (net_a.attrs.get("Containers") or {}):
-        _jname = user_proxy.jaeger_name()
-        if _jname:
-            made_containers.append(D.containers.run(
-                PROBE_IMAGE, name=_jname, network=name_a, detach=True,
-                entrypoint=["/bin/sh", "-c"], command=["sleep 120"],
-                labels={config.SESSION_LABEL_KEY: "netiso-jaeger-standin",
-                        config.TEST_LABEL_DEFAULT_KEY: "1"},
-                mem_limit="64m", pids_limit=32))
-            print(f"  ⓘ 環境裡沒有 jaeger，頂一顆同名容器（{_jname}）上去驗「掛著就收不掉」")
+    _attached = {c.get("Name") for c in (net_a.attrs.get("Containers") or {}).values()}
+    _jname = user_proxy.jaeger_name()
+    if _jname and _jname not in _attached:
+        made_containers.append(D.containers.run(
+            PROBE_IMAGE, name=_jname, network=name_a, detach=True,
+            entrypoint=["/bin/sh", "-c"], command=["sleep 120"],
+            labels={config.SESSION_LABEL_KEY: "netiso-jaeger-standin",
+                    config.TEST_LABEL_DEFAULT_KEY: "1"},
+            mem_limit="64m", pids_limit=32))
+        print(f"  ⓘ 環境裡沒有 jaeger，頂一顆同名容器（{_jname}）上去驗「掛著就收不掉」")
 
     check("網路上還有 session 容器時 → 不是「只剩 jaeger」（這一輪不可以收）",
           not user_proxy.only_jaeger_left(net_a))
