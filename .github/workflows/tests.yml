@@ -59,6 +59,19 @@ jobs:
       - name: build ncr-dev-container
         run: ./build.sh --load --cache-from type=gha --cache-to type=gha,mode=max
         working-directory: dev-container
+      # ⚠ 代理那顆 image 是產品**假設它已經在**的前提：`user_proxy` 建容器時不會自己拉，
+      #   缺的時候是一句 `404 Client Error ... No such image` 從 docker SDK 拋出來，
+      #   完全指不到「你少了一顆 image」。開發機上它通常早就在了（跑過正式 stack），
+      #   乾淨的機器上不會——CI 是第一個誠實回答這件事的地方。名字從 config 讀，
+      #   免得哪天改了 PROXY_IMAGE 這裡還在拉舊的。
+      - name: 預拉代理 image
+        working-directory: claude-pty
+        run: |
+          img=$(uv run --with flask --with sqlalchemy --with argon2-cffi --with docker \
+                       --with psutil --with cryptography \
+                       python -c "import sys; sys.path.insert(0, '.'); from server import config; print(config.PROXY_IMAGE)")
+          echo "代理 image：${img}"
+          docker pull "${img}"
       - name: playwright 瀏覽器
         # 版本要跟 run-all.sh 問到的那顆一致——它問的是 playwright 自己要哪一個 build，
         # 不是看快取目錄在不在（快取裡留著舊 build 是常態）。
@@ -71,14 +84,15 @@ jobs:
       - name: 跳過清單必須只剩已知的那些
         # ⚠ 「安靜地跳過」在 CI 上跟「跑過而且過了」長得一模一樣，這是假綠燈第一種形狀。
         #   Linux runner 上不該再有平台性跳過（uid 鏈、ssh-agent socket 在這裡是驗得到的），
-        #   image 也剛 build 過，playwright 也裝了。目前唯一預期的是 host 沒有 ttyd 的那兩支
-        #   （test_view_lifecycle / e2e_flow）——那是已知缺口，不是可以忽略的雜訊。
+        #   image 也剛 build 過，playwright 也裝了。預期只剩三支，而且都是已知缺口不是雜訊：
+        #   host 沒有 ttyd 的兩支（test_view_lifecycle / e2e_flow），以及沒有 claude 憑證的
+        #   test_entrypoint_human_path——憑證不該進 CI，那條路只能在有登入的機器上驗。
         working-directory: claude-pty
         run: |
           n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-all.log)
           n=${n:-0}
-          echo "跳過 ${n} 支（預期上限 2：host 沒有 ttyd）"
-          if [ "${n}" -gt 2 ]; then
+          echo "跳過 ${n} 支（預期上限 3：ttyd 兩支＋claude 憑證一支）"
+          if [ "${n}" -gt 3 ]; then
             sed -n '/^跳過/,$p' /tmp/pty-all.log
             echo "::error::跳過的數量超出預期——CI 上的跳過幾乎都是設定漏了，不是正當的環境限制"
             exit 1
