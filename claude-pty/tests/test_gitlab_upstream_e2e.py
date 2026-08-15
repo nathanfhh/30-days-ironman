@@ -133,7 +133,11 @@ make_certs(OTHER, ca_cn="unrelated CA")
 REPOS = os.path.join(_tmp, "repos")
 WORK = os.path.join(_tmp, "work")
 os.makedirs(os.path.join(REPOS, "grp"), exist_ok=True)
-sh("git", "init", "--quiet", "--bare", os.path.join(REPOS, "grp", "repo.git"))
+# ⚠ bare 這邊也要指定 `-b main`：不指定的話 HEAD 跟著 host 的 `init.defaultBranch` 走，
+#   而那個值沒設定時 git 仍然是 master。於是推上去的是 refs/heads/main、HEAD 指著不存在的
+#   refs/heads/master，clone 拿得到 packfile 卻 checkout 不出東西（`warning: remote HEAD
+#   refers to nonexistent ref`），三條正向斷言一起倒——而症狀完全指不到「預設分支」這件事。
+sh("git", "init", "--quiet", "--bare", "-b", "main", os.path.join(REPOS, "grp", "repo.git"))
 os.makedirs(WORK)
 sh("git", "init", "--quiet", "-b", "main", WORK)
 with open(os.path.join(WORK, "HELLO.txt"), "w", encoding="utf-8") as f:
