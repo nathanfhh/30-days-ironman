@@ -14,5 +14,72 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      # Version pinned so a ruff release can't flip this gate red on its own;
+      # config lives in pyproject.toml (root + claude-pty), resolved per directory.
+      - run: uvx ruff@0.16.3 check .
       - run: uv sync --locked
       - run: uv run pytest
+
+  claude-pty:
+    # quick 模式：跳過所有會真的起容器的整合測試，不需要 image，約一分鐘。
+    # ⚠ 這個 job 存在的理由寫在 run-all.sh 的檔頭：測試寫得再好，沒有機制保證它們被跑過
+    #   就等於少了一半。在它之前，claude-pty 那 11,000 行測試沒有任何自動觸發。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      # app.js 的語法檢查要 node；沒有的話 run-all.sh 會跳過它並講出來，但那一關壞掉時
+      # 症狀是「每支瀏覽器測試都停在登入逾時」，不該讓它在 CI 上缺席。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: ./tests/run-all.sh
+        working-directory: claude-pty
+
+  dev-container:
+    # build image ＋ 全套（含那 13 支要 docker 的）。
+    # ⚠ 這裡的 image 是從當下的原始碼現 build 的，所以「image 比它的原始碼還舊」在 CI 上
+    #   結構性不可能發生——那正是 2026-08-15 在開發機上撞到的坑：image 停在 8/05，
+    #   entrypoint.sh 已經多了 500 行，而測試驗的是原始碼。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # ⚠ install: true 把 `docker build` 換成 buildx，build.sh 才吃得到 --cache-from。
+      #   不改用 build-push-action，是因為「Linux 才帶 NCR_UID」那段判斷只寫在 build.sh
+      #   裡；重寫一份等於讓兩條路分家，而分家的那天不會有人發現。
+      - uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+      # Dockerfile 把貴的工具安裝排在前面、COPY entrypoint.sh 排在最後幾層，所以改
+      # entrypoint 只會讓尾巴失效：有 cache 的重建是分鐘級，不是十幾分鐘。
+      - name: build ncr-dev-container
+        run: ./build.sh --load --cache-from type=gha --cache-to type=gha,mode=max
+        working-directory: dev-container
+      - name: playwright 瀏覽器
+        # 版本要跟 run-all.sh 問到的那顆一致——它問的是 playwright 自己要哪一個 build，
+        # 不是看快取目錄在不在（快取裡留著舊 build 是常態）。
+        run: uv run --with playwright python -m playwright install --with-deps chromium-headless-shell
+      - name: 全套測試
+        working-directory: claude-pty
+        run: |
+          set -o pipefail
+          ./tests/run-all.sh --all 2>&1 | tee /tmp/pty-all.log
+      - name: 跳過清單必須只剩已知的那些
+        # ⚠ 「安靜地跳過」在 CI 上跟「跑過而且過了」長得一模一樣，這是假綠燈第一種形狀。
+        #   Linux runner 上不該再有平台性跳過（uid 鏈、ssh-agent socket 在這裡是驗得到的），
+        #   image 也剛 build 過，playwright 也裝了。目前唯一預期的是 host 沒有 ttyd 的那兩支
+        #   （test_view_lifecycle / e2e_flow）——那是已知缺口，不是可以忽略的雜訊。
+        working-directory: claude-pty
+        run: |
+          n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-all.log)
+          n=${n:-0}
+          echo "跳過 ${n} 支（預期上限 2：host 沒有 ttyd）"
+          if [ "${n}" -gt 2 ]; then
+            sed -n '/^跳過/,$p' /tmp/pty-all.log
+            echo "::error::跳過的數量超出預期——CI 上的跳過幾乎都是設定漏了，不是正當的環境限制"
+            exit 1
+          fi
