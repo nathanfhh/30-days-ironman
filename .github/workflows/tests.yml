@@ -72,6 +72,26 @@ jobs:
                        python -c "import sys; sys.path.insert(0, '.'); from server import config; print(config.PROXY_IMAGE)")
           echo "代理 image：${img}"
           docker pull "${img}"
+      # 兩支測試會在 host 上真的把 ttyd 生出來（不是在容器裡跑）。裝的是 C 版，因為
+      # TTYD_BIN_DEFAULT 就是它——Rust 那顆是可選的第二顆，要驗 --auth-url 那層才需要。
+      # ⚠ 版本與雜湊一律從 deploy/Dockerfile 讀，不在這裡抄一份：抄一份的那天，CI 驗的
+      #   就不是部署真的在跑的那一顆了。抽不到值直接失敗——不可以退化成「沒驗雜湊照樣裝」，
+      #   那正是 Dockerfile 那段註解在防的事（雜湊進版控，不從同一個位置抓答案）。
+      # ⚠ 先驗再裝：驗過才放進 PATH，中間不存在「可執行但還沒驗」的那一刻。
+      - name: ttyd（C 版，與 deploy/Dockerfile 同一份版本與雜湊）
+        run: |
+          set -euo pipefail
+          ver=$(sed -n 's/^ARG TTYD_VERSION=\(.*\)$/\1/p' claude-pty/deploy/Dockerfile | head -1)
+          sha=$(sed -n 's/^ARG TTYD_SHA256_AMD64=\(.*\)$/\1/p' claude-pty/deploy/Dockerfile | head -1)
+          if [ -z "${ver}" ] || [ -z "${sha}" ]; then
+            echo "::error::從 deploy/Dockerfile 抽不到 TTYD_VERSION／TTYD_SHA256_AMD64（ARG 改名了？）"
+            exit 1
+          fi
+          echo "ttyd ${ver}  sha256 ${sha}"
+          curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${ver}/ttyd.x86_64" -o /tmp/ttyd
+          echo "${sha}  /tmp/ttyd" | sha256sum --check --strict -
+          sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
+          ttyd --version
       - name: playwright 瀏覽器
         # 版本要跟 run-all.sh 問到的那顆一致——它問的是 playwright 自己要哪一個 build，
         # 不是看快取目錄在不在（快取裡留著舊 build 是常態）。
@@ -84,15 +104,14 @@ jobs:
       - name: 跳過清單必須只剩已知的那些
         # ⚠ 「安靜地跳過」在 CI 上跟「跑過而且過了」長得一模一樣，這是假綠燈第一種形狀。
         #   Linux runner 上不該再有平台性跳過（uid 鏈、ssh-agent socket 在這裡是驗得到的），
-        #   image 也剛 build 過，playwright 也裝了。預期只剩三支，而且都是已知缺口不是雜訊：
-        #   host 沒有 ttyd 的兩支（test_view_lifecycle / e2e_flow），以及沒有 claude 憑證的
-        #   test_entrypoint_human_path——憑證不該進 CI，那條路只能在有登入的機器上驗。
+        #   image 也剛 build 過，ttyd 與 playwright 也裝了。**預期只剩一支**：沒有 claude
+        #   憑證的 test_entrypoint_human_path——憑證不該進 CI，那條路只能在有登入的機器上驗。
         working-directory: claude-pty
         run: |
           n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-all.log)
           n=${n:-0}
-          echo "跳過 ${n} 支（預期上限 3：ttyd 兩支＋claude 憑證一支）"
-          if [ "${n}" -gt 3 ]; then
+          echo "跳過 ${n} 支（預期上限 1：claude 憑證）"
+          if [ "${n}" -gt 1 ]; then
             sed -n '/^跳過/,$p' /tmp/pty-all.log
             echo "::error::跳過的數量超出預期——CI 上的跳過幾乎都是設定漏了，不是正當的環境限制"
             exit 1
