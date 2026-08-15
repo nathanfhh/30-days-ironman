@@ -171,6 +171,26 @@ try:
     #   於是每一張使用者網路都變成永遠收不掉——位址池只出不進，而症狀要等到某天
     #   「開不了 session」才出現，那時已經完全看不出源頭。
     #   它是被清理階段的「無殘留」檢查抓到的，不是任何一條斷言主動測出來的，所以補這一段。
+    #
+    # ⚠ **jaeger 不在的機器上要自己頂一顆。** jaeger 是選配設施，`attach_jaeger` 找不到它
+    #   就安靜跳過（那是它該有的行為）。於是在 CI 或剛 clone 的開發機上，這張網路上一顆
+    #   容器都沒有掛著，`net_a.remove()` 會直接成功——下面那條斷言就以「拒絕沒有發生」
+    #   的形式紅掉，而真正的原因是**環境裡沒有 jaeger**，訊息完全指不到那裡
+    #   （2026-08-15 這支第一次在 CI 上跑就是這樣紅的）。這裡要驗的是「有容器掛著就收
+    #   不掉」這個機制，掛著的是不是真的 jaeger 不影響結論，所以缺的時候頂一顆同名的
+    #   上去；名字要一致，否則 `only_jaeger_left` 會把它算成別人，上面那條判斷跟著錯。
+    net_a.reload()
+    if not (net_a.attrs.get("Containers") or {}):
+        _jname = user_proxy.jaeger_name()
+        if _jname:
+            made_containers.append(D.containers.run(
+                PROBE_IMAGE, name=_jname, network=name_a, detach=True,
+                entrypoint=["/bin/sh", "-c"], command=["sleep 120"],
+                labels={config.SESSION_LABEL_KEY: "netiso-jaeger-standin",
+                        config.TEST_LABEL_DEFAULT_KEY: "1"},
+                mem_limit="64m", pids_limit=32))
+            print(f"  ⓘ 環境裡沒有 jaeger，頂一顆同名容器（{_jname}）上去驗「掛著就收不掉」")
+
     check("網路上還有 session 容器時 → 不是「只剩 jaeger」（這一輪不可以收）",
           not user_proxy.only_jaeger_left(net_a))
     for c in (a1, a2):
