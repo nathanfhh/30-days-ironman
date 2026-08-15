@@ -59,6 +59,14 @@ NEEDS_LINUX=(test_trivy_volume test_firewall_ssh_gate)
 is_linux=0
 [ "$(uname -s)" = "Linux" ] && is_linux=1
 
+# 需要 host 上有 claude 憑證的：這支用真 PTY 把 entrypoint 的互動選單走完，最後要看到
+# Claude Code 的畫面才算數（測試會複製一份憑證進沙盒，不掛使用者真正的 ~/.claude）。
+# ⚠ 沒有憑證時它不會快速失敗，而是 pexpect 一路等到逾時：2026-08-15 在 CI 上實測卡了
+#   153 秒才紅，佔整套 340 秒的四成五，而畫面上只有一串正則，看不出「你少了憑證」。
+NEEDS_CLAUDE_CRED=(test_entrypoint_human_path)
+have_claude_cred=0
+{ [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -f "${HOME}/.claude/.credentials.json" ]; } && have_claude_cred=1
+
 # 瀏覽器 e2e 需要 playwright 真的把 chromium 下載下來。沒下載的話每一支 e2e 都會吐一段
 # 「Executable doesn't exist」的 traceback——看起來像測試壞了，其實是少一個安裝步驟。
 # ⚠ 不可以只判「快取目錄在不在」：playwright 升版之後要的是**另一個 build 編號**，舊的那幾顆
@@ -132,6 +140,9 @@ run_one() {
   fi
   if in_list "${base}" "${NEEDS_LINUX[@]}" && [ "${is_linux}" -eq 0 ]; then
     skipped+=("${base}（$(uname -s) 上驗不到這條性質，見 docs/linux-acceptance.md）"); return
+  fi
+  if in_list "${base}" "${NEEDS_CLAUDE_CRED[@]}" && [ "${have_claude_cred}" -eq 0 ]; then
+    skipped+=("${base}（host 上沒有 claude 憑證可複製進沙盒）"); return
   fi
   if [[ "${base}" == e2e_* ]] && [ "${have_browser}" -eq 0 ]; then
     skipped+=("${base}（playwright 缺這版的瀏覽器：playwright install chromium-headless-shell）"); return
