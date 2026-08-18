@@ -3,7 +3,7 @@
 [![tests](https://github.com/nathanfhh/30-days-ironman/actions/workflows/tests.yml/badge.svg)](https://github.com/nathanfhh/30-days-ironman/actions/workflows/tests.yml)
 
 一套有立場、可測試的 AI Code Review agent：審查判準寫成 skill、行為回歸測試、外部 benchmark、
-可拋棄的審查容器、憑證隔離、遙測與側錄，最後搬進瀏覽器。
+可拋棄的審查容器、憑證隔離、遙測與側錄，最後從瀏覽器就開得出來：一場 Session 一顆容器。
 
 📖 隨 30 天鐵人賽連載一起長出來：[AI 的駕馭之道：一個 AI Code Reviewer 的養成、評測與邊界實錄](https://ithelp.ithome.com.tw/users/20183518/ironman/9187)
 
