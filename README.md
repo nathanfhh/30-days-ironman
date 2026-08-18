@@ -4,6 +4,8 @@
 
 30 天鐵人賽「AI 的駕馭之道」的程式產出物。
 
+📖 連載在這裡：[AI 的駕馭之道：一個 AI Code Reviewer 的養成、評測與邊界實錄](https://ithelp.ithome.com.tw/users/20183518/ironman/9187)
+
 文章談的是怎麼把一套 Code Review 的判斷標準，從腦袋裡搬進一份 AI Agent 讀得懂的
 文件；這個 repo 放的就是那份文件本身，以及它需要的腳本。
 
