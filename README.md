@@ -2,12 +2,12 @@
 
 [![tests](https://github.com/nathanfhh/30-days-ironman/actions/workflows/tests.yml/badge.svg)](https://github.com/nathanfhh/30-days-ironman/actions/workflows/tests.yml)
 
-30 天鐵人賽「AI 的駕馭之道」的程式產出物。
+一套有立場、可測試的 AI Code Review agent：審查判準寫成 skill、行為回歸測試、外部 benchmark、
+可拋棄的審查容器、憑證隔離、遙測與側錄，最後搬進瀏覽器。
 
-📖 連載在這裡：[AI 的駕馭之道：一個 AI Code Reviewer 的養成、評測與邊界實錄](https://ithelp.ithome.com.tw/users/20183518/ironman/9187)
+📖 隨 30 天鐵人賽連載一起長出來：[AI 的駕馭之道：一個 AI Code Reviewer 的養成、評測與邊界實錄](https://ithelp.ithome.com.tw/users/20183518/ironman/9187)
 
-文章談的是怎麼把一套 Code Review 的判斷標準，從腦袋裡搬進一份 AI Agent 讀得懂的
-文件；這個 repo 放的就是那份文件本身，以及它需要的腳本。
+文章談的是為什麼這樣選；這個 repo 放的是怎麼做的。
 
 ## 跟著連載讀
 
