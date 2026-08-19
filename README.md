@@ -9,6 +9,12 @@
 
 文章談的是為什麼這樣選；這個 repo 放的是怎麼做的。
 
+![專案架構圖：使用者→claude-pty 控制平面→每場 session 一顆容器→經 iptables／GitLab 代理／MITM 連外；OpenTelemetry 與 Jaeger 觀測](docs/architecture-overview.webp)
+
+左到右：使用者（瀏覽器，或本機 Claude Code 直接跑）→ claude-pty 控制平面 → 每場 session 一顆可拋棄的容器，
+裡面跑 Claude Code、skill、subagents 與掃描器 → 出站一律過 iptables 白名單，GitLab 走代理、LLM 走 MITM 側錄
+→ 觀測落到 OpenTelemetry／Jaeger 與場次報表。橘色虛線框是安全邊界。
+
 ## 跟著連載讀
 
 大部分人是從某一天的文章連過來的，所以對照表放前面：
