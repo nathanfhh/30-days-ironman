@@ -73,7 +73,7 @@
     }
   },
   "verbosity_curve": {
-    "note": "our candidates truncated per-PR by severity (Critical > Suggestion > Nit, report order within a tier), recall against the 114 validated golden; post-hoc truncation, so a lower bound",
+    "note": "our candidates truncated per-PR by severity (Critical > Suggestion > Nit > open questions, report order within a tier), recall against the 114 validated golden. Post-hoc truncation of the unconstrained output: truncate-after-generate is itself an implementable deployment policy, so the curve is a floor on what a capped deployment could achieve; it is not a measurement of how the tool behaves when prompted with a budget, which was never run. Open questions rank last because they carry no severity by design: the 775 candidates are 651 issues (77 Critical / 331 Suggestion / 243 Nit) plus 124 open questions, which is why the 408 breakpoint is Critical+Suggestion. Counting only .issues gives 651, not 775.",
     "points": {
       "150": 0.421,
       "200": 0.491,
