@@ -36,9 +36,9 @@ from .web import redirect_to_login, web
 app = Flask(__name__)
 app.register_blueprint(web)
 app.config.update(
-    SECRET_KEY=config.SECRET_KEY,          # 多 worker 共用同一把，cookie 才能互驗
-    SESSION_COOKIE_HTTPONLY=True,          # JS 取不到，降低 XSS 竊取風險
-    SESSION_COOKIE_SAMESITE="Lax",         # 跨站請求不帶 cookie（防 CSRF 的第一層）
+    SECRET_KEY=config.SECRET_KEY,  # 多 worker 共用同一把，cookie 才能互驗
+    SESSION_COOKIE_HTTPONLY=True,  # JS 取不到，降低 XSS 竊取風險
+    SESSION_COOKIE_SAMESITE="Lax",  # 跨站請求不帶 cookie（防 CSRF 的第一層）
     SESSION_COOKIE_SECURE=config.COOKIE_SECURE,
     PERMANENT_SESSION_LIFETIME=timedelta(days=config.SESSION_LIFETIME_DAYS),
     # ⚠ 靜態資源快取一年。`web.asset_url` 已經在每個網址後面加了版本戳（所有 static 檔案
@@ -52,7 +52,7 @@ app.config.update(
 init_db()  # 建表（冪等）；registry 持久化於 DB（ADR 0008），多 worker 共用同一份
 manager = SessionManager()
 
-for _problem in sessions_mod.preflight():   # 設定不對就大聲講，不要靜默降級
+for _problem in sessions_mod.preflight():  # 設定不對就大聲講，不要靜默降級
     print(f"[claude-pty] ⚠ {_problem}", flush=True)
 
 # 不需登入的端點：登入 API、登入頁、靜態資源、健康檢查。其餘一律過 gate。
@@ -74,7 +74,8 @@ def _session_not_found(e: SessionNotFound):
     """
     return jsonify(
         error=f"{e}——它可能已經結束了（在終端按 Ctrl+D 或被終止，container 一停就會歸檔），"
-              f"也可能不屬於你。對話沒有消失，建一場新的 session 就能用 /resume 接回來。"), 404
+        f"也可能不屬於你。對話沒有消失，建一場新的 session 就能用 /resume 接回來。"
+    ), 404
 
 
 @app.errorhandler(SessionError)
@@ -104,17 +105,22 @@ def _security_headers(resp):
     inline script/style 目前仍需 'unsafe-inline'（模板內有 <script> 與 style 屬性）——
     要收緊得先把它們外部化，屬後續工作，這裡先擋住最容易被利用的其餘方向。
     """
-    resp.headers.setdefault("Content-Security-Policy", "; ".join([
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline'",
-        "style-src 'self' 'unsafe-inline'",
-        "font-src 'self'",
-        "img-src 'self' data:",
-        "connect-src 'self'",
-        "frame-ancestors 'none'",          # 不給任何人嵌成 iframe（防點擊劫持）
-        "base-uri 'self'",
-        "form-action 'self'",
-    ]))
+    resp.headers.setdefault(
+        "Content-Security-Policy",
+        "; ".join(
+            [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-inline'",
+                "style-src 'self' 'unsafe-inline'",
+                "font-src 'self'",
+                "img-src 'self' data:",
+                "connect-src 'self'",
+                "frame-ancestors 'none'",  # 不給任何人嵌成 iframe（防點擊劫持）
+                "base-uri 'self'",
+                "form-action 'self'",
+            ]
+        ),
+    )
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "same-origin")
     resp.headers.setdefault("X-Frame-Options", "DENY")
@@ -128,6 +134,7 @@ def _security_headers(resp):
 
 
 # --- authn gate -------------------------------------------------------------------
+
 
 @app.before_request
 def _require_login():
@@ -143,7 +150,7 @@ def _require_login():
     if user is None:
         # 未登入、版號對不上（改過密碼），或那一列直接從 DB 消失了
         # ——應用層沒有刪除帳號的路徑（ADR 0010），所以最後一種只會是有人動了資料庫。
-        session.clear()       # 手上的 cookie 一律作廢
+        session.clear()  # 手上的 cookie 一律作廢
         # API 回 401 讓前端自行處理；HTML 頁面導向登入頁（同一個 gate，兩種呈現）
         if request.path.startswith("/api/"):
             return jsonify(error="未登入"), 401
@@ -196,28 +203,25 @@ def _require_json_for_writes():
     # 檔案上傳是**唯一**的 multipart 例外（它就是為了送 JSON 塞不下的東西而存在）。
     # 例外收到最窄：只有這一個端點、只有真的 multipart 才放行——而且它自己還要求一個
     # form 設不了的自訂標頭（見 upload_file），所以這裡放行的 <form> 到了那邊仍會被擋。
-    if request.endpoint == "upload_file" \
-            and (request.content_type or "").startswith("multipart/form-data"):
+    if request.endpoint == "upload_file" and (request.content_type or "").startswith("multipart/form-data"):
         return None
-    if request.method not in ("POST", "PUT", "PATCH", "DELETE") \
-            or not request.path.startswith("/api/"):
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE") or not request.path.startswith("/api/"):
         return None
     if request.is_json:
-        return None                      # 正常呼叫端
+        return None  # 正常呼叫端
     if request.content_type or request.get_data():
         return jsonify(error="請以 application/json 送出"), 415
     # 完全沒有 body、也沒有 Content-Type：`<form>` 送不出這種形狀，但 no-cors 的 fetch
     # 送得出來（見 docstring）。用一個 form 設不了、no-cors 也送不出去的標頭關掉它。
     if request.headers.get("X-Requested-With") == "fetch":
         return None
-    return jsonify(
-        error="缺少 X-Requested-With 標頭（沒有 body 的請求需要它，見前端 api()）"), 415
+    return jsonify(error="缺少 X-Requested-With 標頭（沒有 body 的請求需要它，見前端 api()）"), 415
 
 
 # --- 輸入驗證（review M5：malformed 輸入原本會變成 500）--------------------------
 
 _ENUMS = {
-    "cli": ("claude",),        # 這套東西只驅動 claude 一種 CLI
+    "cli": ("claude",),  # 這套東西只驅動 claude 一種 CLI
     "network": ("restricted", "unrestricted"),
     # 憑證交付方式。**不是偏好題，是 fd 那條壞掉時的逃生口**——見 config.TOKEN_DELIVERIES。
     "token_delivery": config.TOKEN_DELIVERIES,
@@ -381,12 +385,21 @@ def get_catalog():
     清單的順序只是選單的排列（世代新→舊），預設是另一個獨立的決定（見 config）。
     """
     return jsonify(
-        claude={"models": [{"slug": m, "display_name": m.capitalize(),
-                            "efforts": list(_CLAUDE_EFFORTS),
-                            "default_effort": config.DEFAULT_EFFORT}
-                           for m in _CLAUDE_MODELS],
-                "default_model": config.DEFAULT_MODEL,
-                "source": "static", "fetched_at": None})
+        claude={
+            "models": [
+                {
+                    "slug": m,
+                    "display_name": m.capitalize(),
+                    "efforts": list(_CLAUDE_EFFORTS),
+                    "default_effort": config.DEFAULT_EFFORT,
+                }
+                for m in _CLAUDE_MODELS
+            ],
+            "default_model": config.DEFAULT_MODEL,
+            "source": "static",
+            "fetched_at": None,
+        }
+    )
 
 
 def _tri_bool(args, key: str) -> bool | None:
@@ -420,7 +433,8 @@ def _iso_or_none(raw, key: str):
         # 講出來，否則對方會盯著一個看起來完全正確的字串查半天。
         raise BadInput(
             f"{key} 不是合法的時間格式（需 ISO 8601，例 2026-07-26T14:30:00+08:00）。"
-            f"若是手寫網址，注意時區的 + 要編成 %2B") from None
+            f"若是手寫網址，注意時區的 + 要編成 %2B"
+        ) from None
     if parsed.tzinfo is None:
         raise BadInput(f"{key} 必須帶時區偏移（例 2026-07-26T14:30:00+08:00）")
     return parsed
@@ -436,9 +450,7 @@ def _enum_or_none(args, key: str) -> str | None:
 
 
 def _filters_from_args() -> sessions_mod.Filters:
-    """把 query string 轉成 Filters。兩張列表共用同一組參數名。
-
-    """
+    """把 query string 轉成 Filters。兩張列表共用同一組參數名。"""
     args = request.args
     # 時間範圍有兩種寫法，但**只認一種同時存在**：
     #   `since=<天數>`      畫面上的「一週內」這種預設值
@@ -477,6 +489,7 @@ def admin_only(fn):
         if not g.user["is_admin"]:
             return jsonify(error="需要管理員權限"), 403
         return fn(*a, **kw)
+
     return _wrapped
 
 
@@ -495,6 +508,7 @@ def _owned(sid: str, *, peek: bool = False) -> dict:
 
 
 # --- 認證 -------------------------------------------------------------------------
+
 
 @app.post("/api/auth/login")
 def login():
@@ -550,8 +564,7 @@ def auth_view():
             # 查得到就回、查不到就 403，不在這裡生任何東西。
             return "", 403
         try:
-            view = views.open_view(sid, session_info["container"],
-                                   g.user.get("ttyd_bin"))
+            view = views.open_view(sid, session_info["container"], g.user.get("ttyd_bin"))
         except ViewError:
             return "", 403
         manager.touch(sid)
@@ -590,8 +603,10 @@ def auth_check():
 @app.get("/api/prefs")
 def get_prefs():
     """這個人的偏好設定 + 每一項的合法選項（畫面直接照它畫，不必在前端複製白名單）。"""
-    return jsonify(ttyd_bin=config.ttyd_bin_or_default(g.user.get("ttyd_bin")),
-                   ttyd_choices=[{"value": k, "label": v} for k, v in config.TTYD_BINS.items()])
+    return jsonify(
+        ttyd_bin=config.ttyd_bin_or_default(g.user.get("ttyd_bin")),
+        ttyd_choices=[{"value": k, "label": v} for k, v in config.TTYD_BINS.items()],
+    )
 
 
 @app.patch("/api/prefs")
@@ -633,6 +648,7 @@ def set_prefs():
 
 
 # --- 帳號管理 ----------------------------------------------------------------------
+
 
 @app.get("/api/ttyd/inspect")
 @admin_only
@@ -677,8 +693,7 @@ def list_user_options():
     成長——欄位砍到兩個就是為了讓代價夠小；真的大到有感時，該做的是後端搜尋，不是
     偷偷截斷。路由不會和 `/api/users/<int:uid>` 打架：那條的轉換器是 int。
     """
-    return jsonify(users=[{"id": u["id"], "username": u["username"]}
-                          for u in auth.list_users()])
+    return jsonify(users=[{"id": u["id"], "username": u["username"]} for u in auth.list_users()])
 
 
 @app.post("/api/users")
@@ -697,7 +712,8 @@ def create_user():
     if unknown:
         raise BadInput(f"不支援的欄位：{'、'.join(sorted(unknown))}")
     user = auth.create_user(
-        body.get("username", ""), body.get("password", ""),
+        body.get("username", ""),
+        body.get("password", ""),
         is_admin=_strict_bool(body, "is_admin", False),
     )
     return jsonify(user=user), 201
@@ -739,8 +755,9 @@ def change_own_password():
     """
     body = _body()
     _reject_unknown(body, {"old_password", "new_password"})
-    auth.change_password(g.user["id"], body.get("new_password", ""),
-                         old_password=body.get("old_password"), require_old=True)
+    auth.change_password(
+        g.user["id"], body.get("new_password", ""), old_password=body.get("old_password"), require_old=True
+    )
     # ⚠ 這一張 cookie 也作廢：session 清掉，下一個請求就會被 gate 送回登入頁。
     #   不清的話它會帶著舊版號活到下一次請求才被擋，中間那段是說一套做一套。
     session.clear()
@@ -787,8 +804,7 @@ def set_own_gitlab_pat():
     if not config.gitlab_enabled():
         # 部署者沒設 GitLab 主機就不收——存進去也沒有任何東西會用它，而畫面會顯示
         # 「已設定」，那是騙人的。
-        return jsonify(error="這套部署沒有設定 GitLab 主機（CLAUDE_PTY_GITLAB_HOST），"
-                             "無法使用 GitLab 代理"), 400
+        return jsonify(error="這套部署沒有設定 GitLab 主機（CLAUDE_PTY_GITLAB_HOST），無法使用 GitLab 代理"), 400
     body = _body()
     _reject_unknown(body, {"pat"})
     auth.set_gitlab_pat(g.user["id"], body.get("pat", ""))
@@ -815,6 +831,7 @@ def admin_change_password(uid: int):
 
 
 # --- session ----------------------------------------------------------------------
+
 
 @app.post("/api/sessions")
 def create_session():
@@ -851,9 +868,13 @@ def list_sessions():
     filters = _filters_from_args()
     items = manager.list(user_id=uid, limit=limit, offset=offset, filters=filters)
     # ⚠ count 要吃同一組 filters，否則總筆數多報、頁碼算錯、最後一頁是空白
-    return jsonify(sessions=items, total=manager.count(user_id=uid, filters=filters),
-                   limit=limit, offset=offset,
-                   credentials=sessions_mod.credentials_state(g.user["id"]))
+    return jsonify(
+        sessions=items,
+        total=manager.count(user_id=uid, filters=filters),
+        limit=limit,
+        offset=offset,
+        credentials=sessions_mod.credentials_state(g.user["id"]),
+    )
 
 
 @app.get("/api/sessions/history")
@@ -870,10 +891,14 @@ def list_history():
     uid = None if g.user["is_admin"] else g.user["id"]
     limit = _int_in(request.args, "limit", config.PAGE_SIZE, 1, config.MAX_PAGE_SIZE)
     offset = _int_in(request.args, "offset", 0, 0, 1_000_000)
-    items, total = manager.history(user_id=uid, limit=limit, offset=offset,
-                                   filters=_filters_from_args())
-    return jsonify(sessions=items, total=total, limit=limit, offset=offset,
-                   credentials=sessions_mod.credentials_state(g.user["id"]))
+    items, total = manager.history(user_id=uid, limit=limit, offset=offset, filters=_filters_from_args())
+    return jsonify(
+        sessions=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        credentials=sessions_mod.credentials_state(g.user["id"]),
+    )
 
 
 @app.get("/api/sessions/<sid>")
@@ -932,8 +957,9 @@ def open_view(sid: str):
         # container 不在了。訊息要說得出「所以我現在該做什麼」。
         return jsonify(
             error="這個 session 的 container 已經結束了（可能在終端裡按了 Ctrl+D 或被終止），"
-                  "沒有終端可以開。對話沒有消失——建一場新的 session 再用 /resume 接回來。",
-            docker_state=state), 409
+            "沒有終端可以開。對話沒有消失——建一場新的 session 再用 /resume 接回來。",
+            docker_state=state,
+        ), 409
     view = views.open_view(sid, s["container"], g.user.get("ttyd_bin"))
     manager.touch(sid)
     return jsonify(view), 201
@@ -952,6 +978,58 @@ def close_session_views(sid: str):
     return jsonify(closed=views.close_views(sid))
 
 
+def _open_uploads_dir(owner_id: int) -> int:
+    """回傳 `uploads/` 的 directory fd，路徑錨在**受信任的** user root 上。
+
+    ⚠ 這裡不能用「先算 realpath 再比對、然後照常 open」那一套。`persistent-data/` 底下
+      是 session 容器寫得進去的地方（config.user_mounts 把它掛成 rw），所以 `uploads/`
+      這個項目本身可以被換成一條指向別處的 symlink。而一旦換掉，`realpath(dest)` 與
+      `realpath(updir) + name` **會解析到同一個地方**，比對必過——這不需要搶時間差，
+      是換完之後每一次都成立的確定結果（`O_EXCL` 只把後果壓在「任意位置建新檔」）。
+
+    所以改成一次走一層，每一層都自己拒絕 symlink：
+
+      user-{id}/          ← 受信任：容器看不到這一層，只有控制平面寫得進去，正常解析
+        persistent-data/  ← O_NOFOLLOW：目錄項本身不可以是連結
+          uploads/        ← O_NOFOLLOW：同上，這一層是最可能被動手腳的
+
+    `O_NOFOLLOW` 只管**最後一個**路徑元件，所以「一次只走一層」正是讓它每一層都生效的
+    寫法。回傳的 fd 之後拿來 `openat` 檔案本身，落點就再也不經過任何字串路徑。
+    """
+    root = config.user_space(owner_id, host=False)
+    flags = os.O_RDONLY | os.O_DIRECTORY
+
+    def _step(parent_fd: int, name: str) -> int:
+        """在 `parent_fd` 底下備妥並開啟 `name`，拒絕任何形式的連結。
+
+        `mkdirat` 而不是 `makedirs`：後者會跟著 symlink 走，等於把要防的東西自己踩一遍。
+        已經存在就跳過建立，最後一律用 `O_NOFOLLOW` 開——這一手才是判定，
+        既有的空間可能在這段程式碼寫下之前就被動過手腳。
+        """
+        try:
+            os.mkdir(name, 0o700, dir_fd=parent_fd)
+        except FileExistsError:
+            pass
+        except OSError as e:
+            raise BadInput(f"上傳目錄備不起來（{name}），請聯絡管理員") from e
+        try:
+            return os.open(name, flags | os.O_NOFOLLOW, dir_fd=parent_fd)
+        except OSError as e:
+            raise BadInput(f"上傳目錄的 {name} 不是一個正常目錄，請聯絡管理員") from e
+
+    # 這一層在 SPACE_SELF 底下，容器看不到也掛不到，正常解析即可。
+    os.makedirs(root, mode=0o700, exist_ok=True)
+    root_fd = os.open(root, flags)
+    try:
+        data_fd = _step(root_fd, "persistent-data")
+    finally:
+        os.close(root_fd)
+    try:
+        return _step(data_fd, "uploads")
+    finally:
+        os.close(data_fd)
+
+
 @app.post("/api/sessions/<sid>/upload")
 def upload_file(sid: str):
     """把一個檔案放進這場 session 的持久化目錄，回容器內路徑（Day 26 的「貼圖」）。
@@ -962,7 +1040,8 @@ def upload_file(sid: str):
 
       1. 副檔名白名單（config.UPLOAD_EXTS）——收「給 AI 讀的東西」，不是任意檔案
       2. 大小上限（config.UPLOAD_MAX_BYTES 逐檔 + MAX_CONTENT_LENGTH 整包 + nginx）
-      3. 路徑穿越：檔名只取 basename、字元白名單化、落點 realpath 必須在 uploads/ 內
+      3. 路徑穿越：檔名只取 basename、字元白名單化、落點以 uploads/ 的 dir fd 為錨
+         （見 `_open_uploads_dir`，每一層都拒絕 symlink）
          ——三道各自獨立成立，任何一道被改壞另外兩道還在
       4. 自訂標頭 X-Requested-With：<form> 設不了它，堵掉 multipart 例外開出來的
          表單型 CSRF 缺口（SameSite=Lax 是 site 級的，擋不住 localhost 其他 port）
@@ -971,7 +1050,7 @@ def upload_file(sid: str):
     """
     if request.headers.get("X-Requested-With") != "fetch":
         raise BadInput("此端點只收前端 fetch（缺 X-Requested-With 標頭）")
-    _s = _owned(sid, peek=True)     # 擁有權是 DB 事實，不必為了收檔問 dockerd
+    _s = _owned(sid, peek=True)  # 擁有權是 DB 事實，不必為了收檔問 dockerd
     # ⚠ **落點要跟著 session 的擁有者走，不是跟著上傳者。** `_owned` 對 admin 放行任何人的
     #   session，而回傳的路徑是容器內的 `DATA_BIND`——在那一場的容器裡，它掛的是**擁有者**
     #   的 persistent-data（config.user_mounts）。用 g.user 當落點的話，admin 幫別人上傳會
@@ -984,48 +1063,47 @@ def upload_file(sid: str):
     stem, dot_ext = os.path.splitext(os.path.basename(f.filename))
     ext = dot_ext[1:].lower()
     if ext not in config.UPLOAD_EXTS:
-        raise BadInput(f"不支援的檔案類型 .{ext or '(無副檔名)'}"
-                       f"（收：{', '.join(sorted(config.UPLOAD_EXTS))}）")
+        raise BadInput(f"不支援的檔案類型 .{ext or '(無副檔名)'}（收：{', '.join(sorted(config.UPLOAD_EXTS))}）")
     # 字元白名單化，**不是**擋黑名單：../、絕對路徑、控制字元、shell 特殊字元一律變 _。
     # 貼進終端的路徑不該需要引號才安全。
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._")[:80] or "file"
 
-    updir = os.path.join(config.user_space(_owner_id, host=False),
-                         "persistent-data", "uploads")
-    os.makedirs(updir, mode=0o700, exist_ok=True)
-    # O_EXCL 搶名：同一秒兩發（連貼兩張圖）不互相覆蓋，撞名就加序號重試。
-    base = f"{_dt.datetime.now():%Y%m%d-%H%M%S}-{stem}.{ext}"
-    for n in range(100):
-        name = base if n == 0 else f"{base[:-len(ext) - 1]}-{n}.{ext}"
-        dest = os.path.join(updir, name)
-        # 落點必須在 uploads/ 底下——檔名已經白名單化，這道是獨立的最後防線
-        if os.path.realpath(dest) != os.path.join(os.path.realpath(updir), name):
-            raise BadInput("檔名不合法")
-        try:
-            fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            break
-        except FileExistsError:
-            continue
-    else:
-        raise BadInput("同名檔案太多，換個檔名再試")
-    written = 0
+    up_fd = _open_uploads_dir(_owner_id)
     try:
-        with os.fdopen(fd, "wb") as out:
-            while chunk := f.stream.read(64 * 1024):
-                written += len(chunk)
-                if written > config.UPLOAD_MAX_BYTES:
-                    raise RequestEntityTooLarge()
-                out.write(chunk)
-    except Exception:
-        with suppress(OSError):
-            os.remove(dest)         # 半個檔比沒有檔糟：路徑看起來能用，內容是斷的
-        raise
-    if written == 0:
-        with suppress(OSError):
-            os.remove(dest)
-        raise BadInput("檔案是空的")
-    return jsonify(path=f"{config.DATA_BIND}/uploads/{name}", name=name,
-                   bytes=written), 201
+        # O_EXCL 搶名：同一秒兩發（連貼兩張圖）不互相覆蓋，撞名就加序號重試。
+        # ⚠ 一律走 `dir_fd=up_fd` 的相對名稱，不再組字串路徑——`name` 已經白名單化成
+        #   `[A-Za-z0-9._-]`，不含 `/`，所以它在 openat 底下**沒有辦法**離開這個 fd。
+        #   `O_NOFOLLOW` 再擋一層：連結不會被跟過去，即使有人搶先種了一條同名的。
+        base = f"{_dt.datetime.now():%Y%m%d-%H%M%S}-{stem}.{ext}"
+        for n in range(100):
+            name = base if n == 0 else f"{base[: -len(ext) - 1]}-{n}.{ext}"
+            try:
+                fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=up_fd)
+                break
+            except FileExistsError:
+                continue
+        else:
+            raise BadInput("同名檔案太多，換個檔名再試")
+        written = 0
+        try:
+            with os.fdopen(fd, "wb") as out:
+                while chunk := f.stream.read(64 * 1024):
+                    written += len(chunk)
+                    if written > config.UPLOAD_MAX_BYTES:
+                        raise RequestEntityTooLarge()
+                    out.write(chunk)
+        except Exception:
+            with suppress(OSError):
+                # 半個檔比沒有檔糟：路徑看起來能用，內容是斷的
+                os.remove(name, dir_fd=up_fd)
+            raise
+        if written == 0:
+            with suppress(OSError):
+                os.remove(name, dir_fd=up_fd)
+            raise BadInput("檔案是空的")
+    finally:
+        os.close(up_fd)
+    return jsonify(path=f"{config.DATA_BIND}/uploads/{name}", name=name, bytes=written), 201
 
 
 @app.post("/api/sessions/<sid>/resize")
@@ -1038,15 +1116,18 @@ def resize_session(sid: str):
     _reject_unknown(body, {"rows", "cols", "redraw"})
     # redraw：套完尺寸後再強迫 TUI 整個重畫一次（見 SessionManager._nudge_redraw）。
     # 開啟終端時尺寸常常與上次相同，那樣不會有 SIGWINCH，TUI 就沿用上一次的版面。
-    manager.resize(sid, _int_in(body, "rows", config.DEFAULT_ROWS, 1, 500),
-                   _int_in(body, "cols", config.DEFAULT_COLS, 1, 1000),
-                   redraw=_as_bool(body.get("redraw"), False))
+    manager.resize(
+        sid,
+        _int_in(body, "rows", config.DEFAULT_ROWS, 1, 500),
+        _int_in(body, "cols", config.DEFAULT_COLS, 1, 1000),
+        redraw=_as_bool(body.get("redraw"), False),
+    )
     return "", 204
 
 
 def main() -> None:
     """本機開發用。正式部署走 gunicorn（見 deploy/Dockerfile）：
-        gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 server.app:app
+    gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 server.app:app
     """
     print("[claude-pty] ⚠ 使用 Flask 開發伺服器；正式部署請用 gunicorn", flush=True)
     app.run(host=config.CONTROL_HOST, port=config.CONTROL_PORT, threaded=True)

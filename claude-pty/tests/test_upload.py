@@ -109,6 +109,90 @@ for evil in ("../../etc/passwd.png", "..%2f..%2fx.png", "a/b/c.png", "....//....
 outside = os.path.join(os.path.dirname(updir), "passwd.png")
 check("uploads/ 的上一層沒有被寫進任何東西", not os.path.exists(outside))
 
+print("== 閘 3b：符號連結——uploads/ 這一層被換掉時不可以跟著走 ==")
+# 為什麼要單獨驗：舊版的判斷是「realpath(dest) == realpath(updir) + name」，而 uploads/
+# 本身被換成連結時**兩邊會解析到同一個地方**，比對必過。這不需要搶時間差，是換完之後
+# 每一次都成立的確定結果——所以下面每一條都先把連結種好、再送一發，沒有 race。
+_alice_root = config.user_space(alice["id"], host=False)
+_data = os.path.join(_alice_root, "persistent-data")
+_uploads = os.path.join(_data, "uploads")
+_outside = os.path.join(TMP, "outside")
+os.makedirs(_outside, exist_ok=True)
+
+
+def _swap_to_symlink(path, target):
+    """把 path 換成指向 target 的連結（模擬 session 容器在自己的 rw 掛載裡動手腳）。"""
+    if os.path.islink(path):
+        os.unlink(path)
+    elif os.path.isdir(path):
+        shutil.rmtree(path)
+    os.symlink(target, path)
+
+
+def _restore(path):
+    if os.path.islink(path):
+        os.unlink(path)
+    os.makedirs(path, mode=0o700, exist_ok=True)
+
+
+_swap_to_symlink(_uploads, _outside)
+r = send(ca, "sess-alice", "escape.png", b"pwned")
+check("uploads/ 是連結 → 被擋（不是 201）", r.status_code != 201)
+check("連結指向的目錄沒有被寫進東西", not os.listdir(_outside))
+_restore(_uploads)
+
+print("== 閘 3b：上一層（persistent-data/）被換成連結也要擋 ==")
+_outside2 = os.path.join(TMP, "outside2")
+os.makedirs(_outside2, exist_ok=True)
+_swap_to_symlink(_data, _outside2)
+r = send(ca, "sess-alice", "escape2.png", b"pwned")
+check("persistent-data/ 是連結 → 被擋", r.status_code != 201)
+check("連結指向的目錄沒有被寫進東西", not os.listdir(_outside2))
+if os.path.islink(_data):
+    os.unlink(_data)
+os.makedirs(_uploads, mode=0o700, exist_ok=True)
+
+print("== 閘 3b：指向另一位使用者的空間 ==")
+_bob_uploads = os.path.join(config.user_space(bob["id"], host=False), "persistent-data", "uploads")
+os.makedirs(_bob_uploads, mode=0o700, exist_ok=True)
+_swap_to_symlink(_uploads, _bob_uploads)
+r = send(ca, "sess-alice", "crossuser.png", b"x")
+check("uploads/ 指向 bob 的空間 → 被擋", r.status_code != 201)
+check("bob 的 uploads/ 沒有被寫進東西", not os.listdir(_bob_uploads))
+_restore(_uploads)
+
+print("== 閘 3b：指向容器裡的掛載點（/data、/app）==")
+for target in (config.DATA_BIND, "/app"):
+    _probe = os.path.join(TMP, "probe" + target.replace("/", "_"))
+    os.makedirs(_probe, exist_ok=True)
+    _swap_to_symlink(_uploads, _probe)  # 用可寫的替身模擬那兩個掛載點
+    r = send(ca, "sess-alice", "mount.png", b"x")
+    check(f"uploads/ 指向 {target} 這類掛載點 → 被擋", r.status_code != 201)
+    check(f"{target} 的替身沒有被寫進東西", not os.listdir(_probe))
+    _restore(_uploads)
+
+print("== 閘 3b：檔案本身被搶先種成連結（O_NOFOLLOW 這一層）==")
+# 連結種在 uploads/ 裡、名字剛好是我們要寫的那一個。O_EXCL 本來就會撞 EEXIST，
+# 但 O_NOFOLLOW 讓「即使 O_EXCL 被拿掉也不會跟著走」這件事有測試守著。
+_victim = os.path.join(TMP, "victim.txt")
+io.open(_victim, "w").write("original")
+_planted = os.path.join(_uploads, "planted.png")
+os.symlink(_victim, _planted)
+r = send(ca, "sess-alice", "planted.png", b"overwritten")
+check("種好的連結沒有被跟過去（受害檔內容不變）", io.open(_victim).read() == "original")
+check("上傳本身仍然成功（換一個名字落地）", r.status_code == 201)
+os.unlink(_planted)
+
+print("== 閘 3b：uploads/ 被換成一般檔案 ==")
+if os.path.isdir(_uploads) and not os.path.islink(_uploads):
+    shutil.rmtree(_uploads)
+io.open(_uploads, "w").write("not a directory")
+r = send(ca, "sess-alice", "notdir.png", b"x")
+check("uploads/ 是普通檔案 → 被擋", r.status_code != 201)
+os.unlink(_uploads)
+_restore(_uploads)
+check("擋完之後正常上傳仍然可用", send(ca, "sess-alice", "after.png", b"ok").status_code == 201)
+
 print("== 閘 4：反 CSRF——multipart 例外只對這個端點、且要自訂標頭 ==")
 check(
     "缺 X-Requested-With → 400（form 設不了這個標頭）",

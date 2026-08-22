@@ -73,7 +73,7 @@ def _close_socketio(sock) -> None:
         sock.close()
     if raw is not None:
         with suppress(Exception):
-            raw.close()          # 真正釋放 fd；dockerd 那側隨即收到 EPIPE 並自行收乾淨
+            raw.close()  # 真正釋放 fd；dockerd 那側隨即收到 EPIPE 並自行收乾淨
 
 
 def close_attach(sock) -> None:
@@ -93,6 +93,7 @@ def close_attach(sock) -> None:
     if client is not None:
         with suppress(Exception):
             client.close()
+
 
 def _discard_attach(sock, client) -> None:
     """attach 途中失敗時的清理：能關的都關掉，例外一律吞掉（我們正在處理另一個例外）。
@@ -130,9 +131,11 @@ def stamp_ready_if_first(s, sid: str) -> int:
     ⚠ 收 `s` 而不是自己開 `session_scope`：reconciler 是在**一筆**交易裡連續蓋很多個
       sid 並累加列數，自己開 scope 會把那筆交易拆成 N 筆。交易邊界屬於呼叫端。
     """
-    return s.query(SessionRow).filter(
-        SessionRow.id == sid, SessionRow.ready_at.is_(None)
-    ).update({SessionRow.ready_at: utcnow()}, synchronize_session=False)
+    return (
+        s.query(SessionRow)
+        .filter(SessionRow.id == sid, SessionRow.ready_at.is_(None))
+        .update({SessionRow.ready_at: utcnow()}, synchronize_session=False)
+    )
 
 
 @dataclass(frozen=True)
@@ -177,6 +180,7 @@ class Filters:
             q = q.filter(date_col >= self.since_at)
         if self.until_at is not None:
             q = q.filter(date_col <= self.until_at)
+
         # profile 的四項。欄位本身就是 JSON（見 models），直接取值即可。
         def field(key):
             return model.profile[key]
@@ -217,9 +221,10 @@ def archive(sids, reason: str, actor: dict | None = None) -> int:
     # 只管 container，沒有人依 port 或 process 掃描。那個 port 就此永久消失。
     # 放在這裡而不是各呼叫端：四個出口只有 list() 漏了，靠「每個呼叫端記得」擋不住。
     from .views import close_views
+
     for sid in sids:
         with suppress(Exception):
-            close_views(sid)          # 等冪：沒有 view 就回 0
+            close_views(sid)  # 等冪：沒有 view 就回 0
     try:
         return _archive_txn(sids, reason, actor)
     except IntegrityError:
@@ -235,28 +240,30 @@ def _archive_txn(sids: list[str], reason: str, actor: dict | None = None) -> int
             row = s.get(SessionRow, sid)
             if row is None:
                 continue
-            s.add(SessionHistory(
-                session_id=row.id,
-                container_name=row.container_name,
-                display_name=row.display_name,
-                user_id=row.user_id,
-                username=row.user.username if row.user else None,
-                profile=row.profile,
-                workdir=row.workdir,
-                created_at=row.created_at,
-                last_active_at=row.last_active_at,
-                ready_at=row.ready_at,               # 沒帶就算不出「這場啟動花多久」
-                cli_version=row.cli_version,         # 那場是用哪一版開起來的
-                image_created_at=row.image_created_at,
-                # 這場當初有沒有接上 GitLab 代理（ADR 0016）。原樣搬過來——歷史的時間視角
-                # 沒有「現在能不能用」，只剩「期間曾不曾啟用」，所以這一欄自己就是答案。
-                gitlab_proxy=row.gitlab_proxy,
-                ended_at=utcnow(),
-                ended_reason=reason,
-                ended_by_user_id=actor["id"] if actor else None,
-                ended_by_username=actor["username"] if actor else None,
-            ))
-            s.delete(row)      # cascade 連帶清掉其 views 記錄
+            s.add(
+                SessionHistory(
+                    session_id=row.id,
+                    container_name=row.container_name,
+                    display_name=row.display_name,
+                    user_id=row.user_id,
+                    username=row.user.username if row.user else None,
+                    profile=row.profile,
+                    workdir=row.workdir,
+                    created_at=row.created_at,
+                    last_active_at=row.last_active_at,
+                    ready_at=row.ready_at,  # 沒帶就算不出「這場啟動花多久」
+                    cli_version=row.cli_version,  # 那場是用哪一版開起來的
+                    image_created_at=row.image_created_at,
+                    # 這場當初有沒有接上 GitLab 代理（ADR 0016）。原樣搬過來——歷史的時間視角
+                    # 沒有「現在能不能用」，只剩「期間曾不曾啟用」，所以這一欄自己就是答案。
+                    gitlab_proxy=row.gitlab_proxy,
+                    ended_at=utcnow(),
+                    ended_reason=reason,
+                    ended_by_user_id=actor["id"] if actor else None,
+                    ended_by_username=actor["username"] if actor else None,
+                )
+            )
+            s.delete(row)  # cascade 連帶清掉其 views 記錄
             archived += 1
     return archived
 
@@ -269,7 +276,7 @@ def _slugify(name: str | None) -> str:
     if not name:
         return ""
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", name.strip()).strip("-").lower()
-    return slug[:config.NAME_SLUG_MAX]
+    return slug[: config.NAME_SLUG_MAX]
 
 
 def parse_docker_time(raw: str | None) -> _dt.datetime | None:
@@ -293,8 +300,7 @@ def parse_docker_time(raw: str | None) -> _dt.datetime | None:
     frac = f".{m.group(2)[:6]}" if m.group(2) else ""
     tz = m.group(3) or "+00:00"
     try:
-        return _dt.datetime.fromisoformat(
-            f"{m.group(1)}{frac}{'+00:00' if tz == 'Z' else tz}")
+        return _dt.datetime.fromisoformat(f"{m.group(1)}{frac}{'+00:00' if tz == 'Z' else tz}")
     except ValueError:
         return None
 
@@ -358,6 +364,7 @@ def _is_creating_within_grace(row) -> bool:
 @dataclass
 class Profile:
     """session 執行 profile（ADR 0006）。控制平面據此組出 entrypoint env + docker 能力。"""
+
     # ⚠ 預設一律引用 `config.DEFAULT_*`，**不要在這裡另寫一份字面值**。曾經兩邊各寫
     #   一份，然後 network 分岔了：dataclass 是 "unrestricted"、config 是 "restricted"
     #   ——而 config 那邊的註解白紙黑字寫著「安全預設應該是限制而非開放」。於是任何人
@@ -373,8 +380,8 @@ class Profile:
     #   完全有理由以為 `DEFAULT_*` 也能那樣改。真的要改就得改成 `default_factory`。
     #   `test_profile_mapping` 有一條斷言在守這件事：`Profile()` 必須等於當下的
     #   `config.DEFAULT_*`——它比對的正是「import 時的快照」與「當下讀值」。
-    cli: str = "claude"                        # 這套東西只驅動 claude 一種 CLI
-    network: str = config.DEFAULT_NET          # restricted | unrestricted
+    cli: str = "claude"  # 這套東西只驅動 claude 一種 CLI
+    network: str = config.DEFAULT_NET  # restricted | unrestricted
     capture: bool = config.DEFAULT_CAPTURE
     telemetry: bool = config.DEFAULT_TELEMETRY
     # 模型與思考深度：`claude --model` / `--effort` 的合法別名（見 config.CLAUDE_MODELS）
@@ -398,10 +405,15 @@ class Profile:
         )
 
     def as_dict(self) -> dict:
-        return {"cli": self.cli, "network": self.network,
-                "capture": self.capture, "telemetry": self.telemetry,
-                "model": self.model, "effort": self.effort,
-                "token_delivery": self.token_delivery}
+        return {
+            "cli": self.cli,
+            "network": self.network,
+            "capture": self.capture,
+            "telemetry": self.telemetry,
+            "model": self.model,
+            "effort": self.effort,
+            "token_delivery": self.token_delivery,
+        }
 
 
 def _stored_profile(profile: Profile) -> dict:
@@ -424,6 +436,7 @@ class SessionNotFound(SessionError):
 #   （中間曾經改走環境變數；那條路解掉了掛載問題，卻讓值出現在 `docker inspect` 與每一個
 #     子行程的環境裡。現在的做法兩個都避開，見 config.SESSION_TOKEN_FILE。）
 
+
 def _put_cli_token(container, user_id: int, delivery: str) -> bool:
     """把這個人的 CLI 憑證寫進容器自己的 writable layer，回傳有沒有真的寫。
 
@@ -443,8 +456,8 @@ def _put_cli_token(container, user_id: int, delivery: str) -> bool:
     if not token:
         return False
     data = token.encode()
-    stem = os.path.basename(config.SESSION_TOKEN_DIR)          # cpty
-    parent = os.path.dirname(config.SESSION_TOKEN_DIR)         # /run
+    stem = os.path.basename(config.SESSION_TOKEN_DIR)  # cpty
+    parent = os.path.dirname(config.SESSION_TOKEN_DIR)  # /run
 
     # ⚠ **目錄要一起送，而且要設成他的。** entrypoint 讀完就 `rm`，而 unlink 要的是父目錄
     #   的寫權限——檔案 0600 給對了人也沒用，`/run` 是 root 的。見 config 那段的實測。
@@ -464,8 +477,7 @@ def _put_cli_token(container, user_id: int, delivery: str) -> bool:
         container.put_archive(parent, buf.getvalue())
         return True
     except Exception as e:  # noqa: BLE001 — 見 docstring
-        print(f"[claude-pty] ⚠ 憑證送不進容器（{type(e).__name__}）：終端會停在登入提示",
-              flush=True)
+        print(f"[claude-pty] ⚠ 憑證送不進容器（{type(e).__name__}）：終端會停在登入提示", flush=True)
         return False
 
 
@@ -494,16 +506,24 @@ def claude_credentials_state(user_id: int | None) -> dict:
     """
     token = auth_mod.cli_token(user_id) if user_id is not None else None
     if token is None:
-        return {**_CLAUDE_BASE, "ok": False, "state": "bad",
-                "label": "Claude 未設定憑證",
-                "detail": "在 host 上執行 `claude setup-token`，把輸出貼到"
-                          "帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態"
-                          "啟動，開場只會看到登入提示。"}
-    return {**_CLAUDE_BASE, "ok": True, "state": "ok",
-            "label": "Claude 憑證已設定",
-            "detail": "token 過期不會有預告，症狀是新開的 session 開場失敗"
-                      "（終端停在登入提示）。遇到就在 host 重跑 `claude setup-token`，"
-                      "把新的貼回帳號管理頁。已在跑的 session 不受影響。"}
+        return {
+            **_CLAUDE_BASE,
+            "ok": False,
+            "state": "bad",
+            "label": "Claude 未設定憑證",
+            "detail": "在 host 上執行 `claude setup-token`，把輸出貼到"
+            "帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態"
+            "啟動，開場只會看到登入提示。",
+        }
+    return {
+        **_CLAUDE_BASE,
+        "ok": True,
+        "state": "ok",
+        "label": "Claude 憑證已設定",
+        "detail": "token 過期不會有預告，症狀是新開的 session 開場失敗"
+        "（終端停在登入提示）。遇到就在 host 重跑 `claude setup-token`，"
+        "把新的貼回帳號管理頁。已在跑的 session 不受影響。",
+    }
 
 
 def credentials_state(user_id: int | None) -> dict:
@@ -522,8 +542,8 @@ def _guard_credentials(user_id: int | None) -> None:
     if state["ok"]:
         return
     raise SessionError(
-        "尚未設定 Claude 憑證。請在 host 上執行 `claude setup-token`，"
-        "把輸出貼到帳號管理頁的「CLI 憑證」再開。")
+        "尚未設定 Claude 憑證。請在 host 上執行 `claude setup-token`，把輸出貼到帳號管理頁的「CLI 憑證」再開。"
+    )
 
 
 def _jaeger_reachable() -> bool:
@@ -539,15 +559,15 @@ def _jaeger_reachable() -> bool:
       「連不上」——探測本身壞掉不該比 jaeger 不在更嚴重。
     """
     from urllib.parse import urlparse
+
     try:
         u = urlparse(config.OTEL_ENDPOINT)
         host, port = u.hostname, u.port or 4317
         if not host:
             return False
-        with socket.create_connection((host, port),
-                                      timeout=config.JAEGER_PROBE_TIMEOUT):
+        with socket.create_connection((host, port), timeout=config.JAEGER_PROBE_TIMEOUT):
             return True
-    except Exception:      # noqa: BLE001 — 探測壞掉＝當成連不上，見 docstring
+    except Exception:  # noqa: BLE001 — 探測壞掉＝當成連不上，見 docstring
         return False
 
 
@@ -592,19 +612,21 @@ def _write_json_atomic(path: str, payload: dict) -> None:
             json.dump(payload, f, ensure_ascii=False, indent=2)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, path)    # 同目錄、同檔案系統 → POSIX 保證原子
+        os.replace(tmp, path)  # 同目錄、同檔案系統 → POSIX 保證原子
     except BaseException:
         with suppress(OSError):
-            os.unlink(tmp)       # 失敗不要留一地 .tmp-xxxx
+            os.unlink(tmp)  # 失敗不要留一地 .tmp-xxxx
         raise
 
 
 def _claude_json_seed() -> dict:
     """第一次要寫進 per-user `.claude.json` 的內容。"""
-    return {**config.CLAUDE_JSON_SEED,
-            # 信任狀態是 per-project 的，key 就是容器內的 cwd。**用 config 的值組**，
-            # 不可以寫死字面值。
-            "projects": {config.WORKDIR: {"hasTrustDialogAccepted": True}}}
+    return {
+        **config.CLAUDE_JSON_SEED,
+        # 信任狀態是 per-project 的，key 就是容器內的 cwd。**用 config 的值組**，
+        # 不可以寫死字面值。
+        "projects": {config.WORKDIR: {"hasTrustDialogAccepted": True}},
+    }
 
 
 def provision_user_space(user_id: int, username: str) -> None:
@@ -639,16 +661,26 @@ def provision_user_space(user_id: int, username: str) -> None:
         容器內正在寫同一個檔的 claude 互相覆蓋，但只在「剛改過 WORKDIR」這個罕見窗口
         內才會發生，而且被覆蓋掉的是 numStartups 那類會自己長回來的東西。
     """
-    if not config.MOUNTS:        # 測試隔離：不建任何東西（同 user_mounts）
+    if not config.MOUNTS:  # 測試隔離：不建任何東西（同 user_mounts）
         return
     root = config.user_space(user_id, host=False)
     for sub in ("claude", "persistent-data", "ncr"):
         os.makedirs(os.path.join(root, sub), mode=0o700, exist_ok=True)
+    # ⚠ `persistent-data/uploads` 由**控制平面**建，不讓上傳那條路徑臨時 `makedirs`。
+    #   那底下是 session 容器寫得進去的地方，而 `makedirs` 會跟著 symlink 走——先建好，
+    #   上傳時就只剩「開得開嗎」這一個問題（app._open_uploads_dir 仍會逐層拒絕連結，
+    #   因為既有空間可能在這一行加進來之前就被動過手腳）。
+    os.makedirs(os.path.join(root, "persistent-data", "uploads"), mode=0o700, exist_ok=True)
     # ⚠ `makedirs(mode=...)` **只對它新建的那一層生效**，已經存在的目錄權限不會動。
     #   所以每一層都要明確 chmod——升級前用預設 0755 建出來的空間，否則會一直維持
     #   世界可讀，而 `mitm/` 裡是完整的 API 請求本文。
-    for d in (root, *(os.path.join(root, x)
-                      for x in ("claude", "persistent-data", "ncr"))):
+    for d in (
+        root,
+        *(
+            os.path.join(root, x)
+            for x in ("claude", "persistent-data", "ncr", os.path.join("persistent-data", "uploads"))
+        ),
+    ):
         with suppress(OSError):
             os.chmod(d, 0o700)
 
@@ -660,7 +692,7 @@ def provision_user_space(user_id: int, username: str) -> None:
         with open(owner_path, encoding="utf-8") as f:
             owner = json.load(f)
     except FileNotFoundError:
-        owner = None         # 真的還沒有人認領——這一種才可以蓋章
+        owner = None  # 真的還沒有人認領——這一種才可以蓋章
     except (OSError, ValueError) as e:
         # ⚠ **壞掉的標記不等於沒有標記。** 當成「還沒有擁有者」就會直接重新蓋章，
         #   把上一個人的 transcript、persistent-data 與 mitm/ 的 prompt 全文靜默
@@ -668,7 +700,8 @@ def provision_user_space(user_id: int, username: str) -> None:
         raise SessionError(
             f"{owner_path} 讀不出來（{e}）——在確認這個空間屬於誰之前不會繼續。"
             f"請人工檢查：內容還原得了就修好它，確定是要重新指派就把整個 "
-            f"{root} 移走。") from e
+            f"{root} 移走。"
+        ) from e
     # ⚠ 「解析得出來」不等於「是我們寫的那個形狀」。內容是 `[]` 的話下面的
     #   `owner.get()` 會 AttributeError——那會變成 500，而不是這裡精心寫的
     #   SessionError。下面的 `.claude.json` 有這道 isinstance 護欄，這裡原本漏了。
@@ -676,7 +709,8 @@ def provision_user_space(user_id: int, username: str) -> None:
         raise SessionError(
             f"{owner_path} 的內容不是預期的物件（{type(owner).__name__}）——"
             f"在確認這個空間屬於誰之前不會繼續。請人工檢查後修好它，"
-            f"或把整個 {root} 移走。")
+            f"或把整個 {root} 移走。"
+        )
     if owner is None:
         # ⚠ 「沒有標記」只有在**空間本身也是全新的**時候才可以認領。已經有 .claude.json
         #   就代表這個目錄有人用過（那個檔是第一次 provision 就會寫的），而標記卻不在
@@ -686,14 +720,16 @@ def provision_user_space(user_id: int, username: str) -> None:
             raise SessionError(
                 f"{root} 裡已經有資料，卻沒有擁有者標記（owner.json）。在確認它屬於誰"
                 f"之前不會繼續：確定是 {username!r} 的就手動補上標記，不是的話把整個"
-                f"目錄移走。")
+                f"目錄移走。"
+            )
         _write_json_atomic(owner_path, {"user_id": user_id, "username": username})
     elif owner.get("username") != username:
         raise SessionError(
             f"{root} 是 {owner.get('username')!r} 的空間，但這個 session 的擁有者是 "
             f"{username!r}。這通常表示 registry 重建過、user id 被重新指派——"
             f"繼續下去會把別人的對話與 capture 交給現在這個帳號。請人工確認後"
-            f"改名或移走那個目錄再試。")
+            f"改名或移走那個目錄再試。"
+        )
 
     seed_path = os.path.join(root, "claude", ".claude.json")
     try:
@@ -736,12 +772,12 @@ def image_uid(client: docker.DockerClient | None = None) -> tuple[str, int | Non
     try:
         c = client or docker.from_env(timeout=config.DOCKER_TIMEOUT)
         attrs = c.images.get(config.IMAGE).attrs
-    except Exception:                      # noqa: BLE001 — image 不在／daemon 不通都算查不到
+    except Exception:  # noqa: BLE001 — image 不在／daemon 不通都算查不到
         return ("unavailable", None)
     cfg = attrs.get("Config") or {}
     raw = (cfg.get("Labels") or {}).get("ncr.uid")
-    if not raw:                            # None 或空字串都要往下找 ENV，不然空 LABEL 會蓋掉它
-        for kv in (cfg.get("Env") or []):
+    if not raw:  # None 或空字串都要往下找 ENV，不然空 LABEL 會蓋掉它
+        for kv in cfg.get("Env") or []:
             if kv.startswith("NCR_UID="):
                 raw = kv.split("=", 1)[1]
                 break
@@ -781,17 +817,20 @@ def preflight() -> list[str]:
         # 一個被靜靜忽略的旋鈕是最難查的那種：設了、重啟了、什麼都沒變，而且沒有訊息。
         problems.append(
             f"CLAUDE_PTY_NETWORK（目前是 {config.LEGACY_NETWORK_ENV}）**已經沒有作用**"
-            f"——session 現在住在每個使用者自己的網路上（ADR 0016）。請從 .env 移除。")
+            f"——session 現在住在每個使用者自己的網路上（ADR 0016）。請從 .env 移除。"
+        )
     with suppress(Exception):  # noqa: BLE001 — 查不到就別報，這只是提醒不是檢查
         _c = docker.from_env(timeout=config.DOCKER_TIMEOUT)
         # ⚠ 精確比對：docker 的 `names` filter 是**子字串**比對，撿回來還要對名字。
-        if any(n.name == config.LEGACY_SESSION_NETWORK
-               for n in _c.networks.list(names=[config.LEGACY_SESSION_NETWORK])):
+        if any(
+            n.name == config.LEGACY_SESSION_NETWORK for n in _c.networks.list(names=[config.LEGACY_SESSION_NETWORK])
+        ):
             problems.append(
                 f"舊的共用 session network {config.LEGACY_SESSION_NETWORK} 還在。"
                 f"已經沒有人會用它，但它佔著一格位址池（整台機器只有 31 格）。"
                 f"確認沒有 session 還掛在上面之後移除："
-                f"docker network rm {config.LEGACY_SESSION_NETWORK}")
+                f"docker network rm {config.LEGACY_SESSION_NETWORK}"
+            )
     # Telemetry 的接線：**jaeger 不歸我們管，但「它到不到得了」是我們的問題。**
     #
     # 規約是「需要 jaeger 的那一方，把 jaeger 接到自己的網路上」（見 user_proxy.attach_jaeger）。
@@ -807,7 +846,7 @@ def preflight() -> list[str]:
     with suppress(Exception):  # noqa: BLE001 — 見上
         _c = docker.from_env(timeout=config.DOCKER_TIMEOUT)
         _want = {n.name for n in user_proxy.list_networks(_c)}
-        with suppress(Exception):      # 沒跑在容器裡（本機開發）就只接使用者網路
+        with suppress(Exception):  # 沒跑在容器裡（本機開發）就只接使用者網路
             _me = _c.containers.get(socket.gethostname())
             _want |= set(_me.attrs["NetworkSettings"]["Networks"])
         user_proxy.attach_jaeger(_c, sorted(_want))
@@ -824,7 +863,8 @@ def preflight() -> list[str]:
         problems.append(
             f"找不到 {config.ENTRYPOINT_SH_SELF}——session 將使用 image 內烘的 entrypoint，"
             f"若該版本沒有 CLAUDE_PTY_* env-skip 就會停在互動選單。"
-            f"容器化部署請設 CLAUDE_PTY_SELF_REPO_ROOT 指向掛進來的 repo 路徑。")
+            f"容器化部署請設 CLAUDE_PTY_SELF_REPO_ROOT 指向掛進來的 repo 路徑。"
+        )
     # MOUNTS 的來源是 host 路徑，由 daemon 解讀；控制平面容器化後本來就看不到它們，
     # 故只在「HOST 與 SELF 相同」（非容器化）時檢查，否則會誤報。
     # ⚠ MOUNTS 的 key **不一定是路徑**：trivy 的 cache 是 named volume（ADR 0018），
@@ -834,7 +874,7 @@ def preflight() -> list[str]:
     if config.MOUNTS and config.HOST_HOME == config._SELF_HOME:
         for src in config.MOUNTS:
             if not os.path.isabs(src):
-                continue                    # named volume，不是路徑
+                continue  # named volume，不是路徑
             if not os.path.exists(src):
                 problems.append(f"掛載來源不存在（session 內可能缺設定/憑證）：{src}")
     # per-user 空間的根目錄（ADR 0014）。這一個查的是 **SELF**——控制平面得自己在裡面
@@ -851,7 +891,8 @@ def preflight() -> list[str]:
                 f"per-user 狀態空間不可寫（{config.SPACE_SELF}）：{e}。"
                 f"每個 session 的 ~/.claude 都住在這底下（ADR 0014），"
                 f"不能寫就一個 session 都建不起來。容器化部署請確認該路徑已掛進控制平面"
-                f"且擁有者是 APP_UID，並以 CLAUDE_PTY_SPACE_SELF 指明容器內看到的路徑。")
+                f"且擁有者是 APP_UID，並以 CLAUDE_PTY_SPACE_SELF 指明容器內看到的路徑。"
+            )
         # 控制平面建目錄用的是**它自己**的 uid，session 容器裡的寫入者則是 nathan
         # （`config.SESSION_UID`，實測 1001 而不是直覺的 1000——見那個常數的說明）。
         # 兩者不同時 0700 的目錄容器就進不去：transcript 寫不下、種子讀不到，症狀是
@@ -870,10 +911,12 @@ def preflight() -> list[str]:
             # ⚠ 這段附註不是客套。喊的時候要講得出「我憑什麼這樣判斷」，否則收到誤報的
             #   人無從查起——那正是修之前的處境（容器內問 sys.platform，macOS 每次啟動
             #   都被喊一次）。**三個分支共用同一段**，少掛在哪一條上就等於那條沒說清楚。
-            _hint = (f"（host 判定為 "
-                     f"{config.HOST_PLATFORM or '未指明，退回容器內的判斷——那不一定準'}；"
-                     f"你的 host 不是 Linux 的話這是誤報，"
-                     f"deploy/redeploy.sh 會自動帶對這個值）")
+            _hint = (
+                f"（host 判定為 "
+                f"{config.HOST_PLATFORM or '未指明，退回容器內的判斷——那不一定準'}；"
+                f"你的 host 不是 Linux 的話這是誤報，"
+                f"deploy/redeploy.sh 會自動帶對這個值）"
+            )
             _status, _real = image_uid()
             if _status == "unavailable":
                 # ⚠ 查不到**不等於通過**。這一格是整條鏈唯一的現實來源，問不到就要說
@@ -881,7 +924,8 @@ def preflight() -> list[str]:
                 problems.append(
                     f"無法查證 image「{config.IMAGE}」裡的 uid（image 不在本機或 daemon "
                     f"問不到），所以這一輪**沒有驗過** uid 是否對齊。"
-                    f"先把 image build 出來再重啟控制平面。{_hint}")
+                    f"先把 image build 出來再重啟控制平面。{_hint}"
+                )
             elif _status == "unstamped":
                 # 改版前 build 的 image。退回舊的兩旋鈕比對當 fallback——它擋得住一部分
                 # 情況，總比什麼都不檢查好，但要明講它驗不到真值。
@@ -889,12 +933,14 @@ def preflight() -> list[str]:
                     problems.append(
                         f"控制平面以 uid {os.getuid()} 執行，但設定說 session 的寫入者是 "
                         f"{config.SESSION_UID}。per-user 空間是 0700，對不上時容器進不去"
-                        f"——症狀是每一場都撞 onboarding 對話。{_hint}")
+                        f"——症狀是每一場都撞 onboarding 對話。{_hint}"
+                    )
                 problems.append(
                     f"image「{config.IMAGE}」沒有 NCR_UID 標記（改版前 build 的）。"
                     f"這一輪只比對得了設定值彼此，**驗不到 image 裡的真實 uid**。"
                     f"重 build 一次（`--build-arg NCR_UID=$(id -u)`）之後這道檢查才有意義。"
-                    f"{_hint}")
+                    f"{_hint}"
+                )
             elif _real != os.getuid() or _real != config.SESSION_UID:
                 problems.append(
                     f"uid 沒有對齊：image「{config.IMAGE}」裡的 nathan 是 **{_real}**、"
@@ -905,31 +951,36 @@ def preflight() -> list[str]:
                     f"restricted 卡滿逾時，沒有一個看起來像 uid 問題。"
                     f"做法：`APP_UID={os.getuid()}` 與 image 的 "
                     f"`--build-arg NCR_UID={os.getuid()}` 對齊（Linux 上請用 `id -u`），"
-                    f"並把既有的 {config.SPACE_SELF}/user-* 一併 chown。{_hint}")
+                    f"並把既有的 {config.SPACE_SELF}/user-* 一併 chown。{_hint}"
+                )
     if config.PAGE_SIZE_CLAMPED is not None:
         problems.append(
             f"CLAUDE_PTY_PAGE_SIZE={config.PAGE_SIZE_CLAMPED} 不在 1–{config.MAX_PAGE_SIZE} "
             f"之內，已夾成 {config.PAGE_SIZE}。不夾的話每一張列表都會回 400"
-            f"（預設頁大小會去撞 MAX_PAGE_SIZE 的上限檢查）。")
+            f"（預設頁大小會去撞 MAX_PAGE_SIZE 的上限檢查）。"
+        )
     if config.SSH_AUTH_SOCK_HOST:
         # 這不是「設錯了」而是「你開了一個很大的權限」——開著是合法的，但每次啟動都要
         # 講一次：沒有租戶隔離，這把 agent 等於發給每一個能建立 session 的帳號（ADR 0011）。
         problems.append(
             f"SSH agent 轉發已開啟（{config.SSH_AUTH_SOCK_HOST} → "
             f"{config.SSH_AUTH_SOCK_BIND}）：每個 session 都能以你的身分認證任何信任該 key "
-            f"的主機，且無法只給部分使用者。不需要就清掉 CLAUDE_PTY_SSH_AUTH_SOCK。")
+            f"的主機，且無法只給部分使用者。不需要就清掉 CLAUDE_PTY_SSH_AUTH_SOCK。"
+        )
         # 非容器化時（HOST==SELF）順手驗一下路徑真的在——容器化的話控制平面看不到 host
         # 路徑，硬查會誤報（同下方 MOUNTS 的理由）。
         if config.HOST_HOME == config._SELF_HOME and not os.path.exists(config.SSH_AUTH_SOCK_HOST):
             problems.append(
                 f"CLAUDE_PTY_SSH_AUTH_SOCK={config.SSH_AUTH_SOCK_HOST} 不存在——"
                 f"建立 session 會直接失敗（bind 來源不存在）。agent 沒起來？"
-                f"socket 路徑每次登入可能不同，請確認 `echo $SSH_AUTH_SOCK`。")
+                f"socket 路徑每次登入可能不同，請確認 `echo $SSH_AUTH_SOCK`。"
+            )
     if config.BEHIND_PROXY and not config.COOKIE_SECURE:
         problems.append(
             "BEHIND_PROXY=1 但 COOKIE_SECURE=0：登入 cookie 不帶 Secure，若該入口是 HTTP "
             "或經未加密網路，cookie 可被側錄重放（review H6）。上 TLS 後請設 "
-            "CLAUDE_PTY_COOKIE_SECURE=1；僅本機 loopback 測試可忽略此提醒。")
+            "CLAUDE_PTY_COOKIE_SECURE=1；僅本機 loopback 測試可忽略此提醒。"
+        )
     # 自訂 CA（內部憑證簽的 GitLab）。**填了卻找不到要在這裡喊。**
     #
     # ⚠ 不喊的話它會退化成一個沒有任何訊號的失敗：代理照樣建起來、容器健康、chip 綠燈，
@@ -944,13 +995,15 @@ def preflight() -> list[str]:
         if not config.gitlab_enabled():
             problems.append(
                 f"設了 CLAUDE_PTY_GITLAB_CA_FILE={config.GITLAB_CA_FILE}，但沒設 "
-                f"CLAUDE_PTY_GITLAB_HOST——GitLab 代理整個功能是關的，這個 CA 不會有人用。")
+                f"CLAUDE_PTY_GITLAB_HOST——GitLab 代理整個功能是關的，這個 CA 不會有人用。"
+            )
         elif not os.path.isfile(config.GITLAB_CA_FILE_SELF):
             problems.append(
                 f"CLAUDE_PTY_GITLAB_CA_FILE 指向的檔案不存在：{config.GITLAB_CA_FILE_SELF}。"
                 f"代理會照樣建起來、容器也健康，但每個 git / API 呼叫都會在 TLS 驗證失敗"
                 f"（502），而畫面上的代理狀態是綠的、不會有任何錯誤訊息。"
-                f"容器化部署請另外以 CLAUDE_PTY_GITLAB_CA_FILE_SELF 指明控制平面看得到的路徑。")
+                f"容器化部署請另外以 CLAUDE_PTY_GITLAB_CA_FILE_SELF 指明控制平面看得到的路徑。"
+            )
     return problems
 
 
@@ -979,7 +1032,7 @@ class SessionManager:
             # `parse_docker_time` 解得出來，存進去前端會排出「0001/01/01」這種假時刻。
             # 用一個明顯早於任何 image 的下限把它擋掉。
             return parsed if parsed is not None and parsed.year >= 2000 else None
-        except Exception:      # noqa: BLE001 —— 見本區塊開頭：查不到就留白，不擋建立
+        except Exception:  # noqa: BLE001 —— 見本區塊開頭：查不到就留白，不擋建立
             return None
 
     def _cli_version(self, container, cli: str) -> str | None:
@@ -999,21 +1052,23 @@ class SessionManager:
         """
         try:
             probe = docker.from_env(timeout=config.CLI_VERSION_TIMEOUT)
-            code, out = probe.containers.get(container.id).exec_run(
-                [cli, "--version"], demux=False)
+            code, out = probe.containers.get(container.id).exec_run([cli, "--version"], demux=False)
             if code != 0 or not out:
                 return None
             return out.decode("utf-8", "replace").strip().splitlines()[0][:64] or None
-        except Exception:      # noqa: BLE001 —— 見本區塊開頭
+        except Exception:  # noqa: BLE001 —— 見本區塊開頭
             return None
 
     # --- 生命週期 -------------------------------------------------------------
 
-    def create(self, rows: int = config.DEFAULT_ROWS,
-               cols: int = config.DEFAULT_COLS,
-               profile: Profile | None = None,
-               user_id: int | None = None,
-               display_name: str | None = None) -> dict:
+    def create(
+        self,
+        rows: int = config.DEFAULT_ROWS,
+        cols: int = config.DEFAULT_COLS,
+        profile: Profile | None = None,
+        user_id: int | None = None,
+        display_name: str | None = None,
+    ) -> dict:
         profile = profile or Profile.from_dict(None)
         user_id = user_id or ensure_system_user()
         if profile.cli == "claude":
@@ -1058,8 +1113,7 @@ class SessionManager:
         run_profile = profile
         telemetry_active = False
         if profile.telemetry:
-            telemetry_active = (_jaeger_reachable()
-                                and user_proxy.jaeger_on_network(self._docker, user_net_name))
+            telemetry_active = _jaeger_reachable() and user_proxy.jaeger_on_network(self._docker, user_net_name)
             if not telemetry_active:
                 run_profile = replace(profile, telemetry=False)  # 不送，但照開場
         stored_profile = _stored_profile(profile)
@@ -1077,16 +1131,26 @@ class SessionManager:
             # 交易外要用它驗 per-user 空間的擁有者（ADR 0014）。**在這裡取出來**——
             # 出了 session_scope 之後 owner 是 detached 的，再讀屬性會炸。
             owner_username = owner.username
-            active = (s.query(SessionRow)
-                       .filter(SessionRow.user_id == user_id)
-                       .filter(SessionRow.status.in_(config.ACTIVE_STATUSES))
-                       .count())
+            active = (
+                s.query(SessionRow)
+                .filter(SessionRow.user_id == user_id)
+                .filter(SessionRow.status.in_(config.ACTIVE_STATUSES))
+                .count()
+            )
             if active >= config.MAX_SESSIONS:
                 raise SessionError(f"session 數已達上限 {config.MAX_SESSIONS}")
-            s.add(SessionRow(id=sid, container_name=name, user_id=user_id,
-                             display_name=(display_name or "").strip() or None,
-                             workdir=config.WORKDIR, rows=rows, cols=cols,
-                             profile=stored_profile))
+            s.add(
+                SessionRow(
+                    id=sid,
+                    container_name=name,
+                    user_id=user_id,
+                    display_name=(display_name or "").strip() or None,
+                    workdir=config.WORKDIR,
+                    rows=rows,
+                    cols=cols,
+                    profile=stored_profile,
+                )
+            )
 
         # 步驟 2：起 container（慢 I/O，在交易外做）。任一步失敗都補償刪除登錄列 +
         # 收掉可能已建立的 container——makedirs 也必須在 try 內（否則繞過補償、白佔配額）。
@@ -1112,8 +1176,7 @@ class SessionManager:
                 #   在畫面上長得一模一樣，而那正是這支存在的理由。
                 with suppress(Exception):  # noqa: BLE001 — 見上
                     _db = trivy_db.update()
-                    print(f"[sessions] trivy DB：{_db['status']} — {_db['detail']}",
-                          flush=True)
+                    print(f"[sessions] trivy DB：{_db['status']} — {_db['detail']}", flush=True)
             # 這個使用者的 GitLab 代理（ADR 0016）。**要在建容器之前**：session 一起來就
             # 可能立刻打 API，代理得先在網路上待命。網路本身在交易之前就建好了（見上）。
             #
@@ -1182,7 +1245,7 @@ class SessionManager:
                     raise SessionNotFound(f"未知 session：{sid}")
                 row.container_id = container.id
                 row.status = STATUS_RUNNING
-                row.image_created_at = image_created_at   # 交易外先算好，見上
+                row.image_created_at = image_created_at  # 交易外先算好，見上
                 row.cli_version = cli_version
                 # 這一場開場時，網路上有沒有一顆代理在待命（ADR 0016）。畫面照這一欄講
                 # 「有沒有路」，不照「這個帳號現在有沒有設 PAT」講——後者中途會變。
@@ -1239,13 +1302,15 @@ class SessionManager:
                 "這台機器的 docker 位址池用完了，開不了新的 session。"
                 "目前每位使用者佔一張網路，預設上限大約是同時 26 人在線。"
                 "請關掉沒在用的 session，或請管理員在 daemon.json 調整 "
-                "default-address-pools（做法見 README）。") from e
+                "default-address-pools（做法見 README）。"
+            ) from e
         except Exception as e:
             # 其他失敗（daemon 不回應、label 衝突…）同樣是開不了場，但原因不明確——
             # 只講型別，不把可能夾帶設定內容的原始訊息端到畫面上。
             raise SessionError(
                 f"建立你的 session 網路失敗（{type(e).__name__}），這場開不起來。"
-                f"稍後再試一次；持續失敗請找管理員看控制平面的 log。") from e
+                f"稍後再試一次；持續失敗請找管理員看控制平面的 log。"
+            ) from e
 
     def _ensure_user_proxy(self, user_id: int) -> bool:
         """確保這個使用者的 GitLab 代理就位。回傳「網路上現在有沒有一顆代理」。
@@ -1263,19 +1328,19 @@ class SessionManager:
           狀態、且設定裡已經有 PAT 的容器。
         """
         if not config.gitlab_enabled():
-            return False                     # 部署者沒設 GitLab 主機＝整個功能關閉
+            return False  # 部署者沒設 GitLab 主機＝整個功能關閉
         if auth_mod.gitlab_pat_state(user_id) != "ok":
             return False
         pat = auth_mod.gitlab_pat(user_id)
         if not pat:
-            return False                     # 三態與明文之間的競態（剛好被清掉），視同沒設
+            return False  # 三態與明文之間的競態（剛好被清掉），視同沒設
         # 「本次呼叫親手建出來的那一顆」——補償只清得掉它，見下面 except 那段。
         mine: str | None = None
         try:
             existing = user_proxy.find(self._docker, user_id)
             if existing is None:
                 cid, won = user_proxy.create_or_adopt(self._docker, user_id, pat)
-                mine = cid if won else None      # 撞名撿到別人的 → 不是我的，別記
+                mine = cid if won else None  # 撞名撿到別人的 → 不是我的，別記
             elif existing.status == "created":
                 # ⚠ **`created` 不可以直接 start。** 它有兩種來源，而外觀完全一樣：
                 #   · `create_container` 完成、`put_archive` 還沒跑 → `/etc/nginx` 是
@@ -1312,8 +1377,11 @@ class SessionManager:
             return True
         except Exception as e:  # noqa: BLE001 — 見 docstring：一律降級不中斷
             # ⚠ 例外訊息可能夾帶設定內容（因而夾帶 PAT）——只印型別。
-            print(f"[claude-pty] ⚠ 使用者 {user_id} 的 GitLab 代理無法就緒"
-                  f"（{type(e).__name__}）：新開的 session 沒有 git / API 代理", flush=True)
+            print(
+                f"[claude-pty] ⚠ 使用者 {user_id} 的 GitLab 代理無法就緒"
+                f"（{type(e).__name__}）：新開的 session 沒有 git / API 代理",
+                flush=True,
+            )
             with suppress(Exception):
                 # ⚠ 「半顆」的判準是**「是不是我這次建的」**，不是「問不問得到 /_state」，
                 #   也不是年齡。
@@ -1350,7 +1418,7 @@ class SessionManager:
         if not cid:
             return False
 
-        while time.time() < deadline:        # 階段 1：等標記
+        while time.time() < deadline:  # 階段 1：等標記
             try:
                 if DRIVER_MARKER.encode() in self._docker.containers.get(cid).logs(tail=200):
                     break
@@ -1360,7 +1428,7 @@ class SessionManager:
         else:
             return False
 
-        return self._wait_pty_quiet(sid, deadline)   # 階段 2
+        return self._wait_pty_quiet(sid, deadline)  # 階段 2
 
     def _wait_pty_quiet(self, sid: str, deadline: float) -> bool:
         """attach 到 PTY，等畫面停止更新＝TUI 初次繪製完成。
@@ -1382,15 +1450,15 @@ class SessionManager:
                         # 而且也等不到任何畫面了。
                         return saw_any
                     except (TimeoutError, OSError):
-                        pass                      # 這一輪沒有新畫面，正常
+                        pass  # 這一輪沒有新畫面，正常
                     idle = time.time() - last
                     if saw_any and idle >= config.READY_QUIET_SECONDS:
                         return True
                     if not saw_any and idle >= config.READY_NO_OUTPUT_GRACE:
-                        return True               # 連上就一片安靜＝早就畫完了
+                        return True  # 連上就一片安靜＝早就畫完了
         except SessionError:
-            return False                          # container 已經不在了
-        return True      # 逾時仍視為就緒：寧可放行也不要卡死呼叫端
+            return False  # container 已經不在了
+        return True  # 逾時仍視為就緒：寧可放行也不要卡死呼叫端
 
     def _await_ready(self, sid: str) -> None:
         """背景執行緒：等 TUI 就緒，然後把 ready_at 記在偵測到的那一刻。
@@ -1406,7 +1474,7 @@ class SessionManager:
         finally:
             if ready:
                 with suppress(Exception):
-                    self._stamp_ready(sid)   # 就在偵測到的當下記，不是等誰來看
+                    self._stamp_ready(sid)  # 就在偵測到的當下記，不是等誰來看
 
     def _stamp_ready(self, sid: str) -> None:
         """就在偵測到的當下記下就緒時刻。單調性與 reconciler 的補漏共用同一句 UPDATE
@@ -1440,9 +1508,9 @@ class SessionManager:
 
     # --- 查詢 -----------------------------------------------------------------
 
-    def list(self, user_id: int | None = None,
-             limit: int | None = None, offset: int = 0,
-             filters: Filters | None = None) -> list[dict]:
+    def list(
+        self, user_id: int | None = None, limit: int | None = None, offset: int = 0, filters: Filters | None = None
+    ) -> list[dict]:
         """列出 session。**這條路徑完全不碰 docker**（ADR 0012）。
 
         每一列回的是「最後一次真的問到 dockerd 的狀態」加上「那是什麼時候問的」
@@ -1461,8 +1529,7 @@ class SessionManager:
             # ⚠ filters 一定要往下傳。少了它，count() 篩過而 list() 沒篩，API 會回出
             #   `total: 0` 配上兩筆資料這種自相矛盾的結果（2026-07-26 實測踩到）。
             rows = self._page(s, user_id, limit, offset, filters).all()
-            return [_to_dict(row, live_state=_last_known_state(row),
-                             ready=_ready_from_row(row)) for row in rows]
+            return [_to_dict(row, live_state=_last_known_state(row), ready=_ready_from_row(row)) for row in rows]
 
     def count(self, user_id: int | None = None, filters: Filters | None = None) -> int:
         """登錄筆數（分頁用）。
@@ -1476,9 +1543,9 @@ class SessionManager:
             return self._page(s, user_id, filters=filters).count()
 
     @staticmethod
-    def history(user_id: int | None = None,
-                limit: int | None = None, offset: int = 0,
-                filters: Filters | None = None) -> tuple[list[dict], int]:
+    def history(
+        user_id: int | None = None, limit: int | None = None, offset: int = 0, filters: Filters | None = None
+    ) -> tuple[list[dict], int]:
         """已結束 session 的永久紀錄（ADR 0010），新到舊。回傳 (該頁, 總筆數)。"""
         with session_scope() as s:
             q = s.query(SessionHistory)
@@ -1496,8 +1563,7 @@ class SessionManager:
             return [_history_to_dict(r) for r in q.all()], total
 
     @staticmethod
-    def _page(s, user_id: int | None, limit: int | None = None, offset: int = 0,
-              filters: Filters | None = None):
+    def _page(s, user_id: int | None, limit: int | None = None, offset: int = 0, filters: Filters | None = None):
         """共用的查詢條件（sessions 只存進行中的；已結束的在 session_history）。"""
         q = s.query(SessionRow)
         if user_id is not None:
@@ -1541,9 +1607,8 @@ class SessionManager:
                     logs = container.logs(tail=200)
             except docker.errors.NotFound:
                 state, fresh = "gone", True
-            except Exception as e:      # noqa: BLE001 — 逾時/daemon 暫時不可用都算「問不到」
-                print(f"[claude-pty] ⚠ 問不到 session {sid} 的容器狀態，改用最後已知值："
-                      f"{e!r}", flush=True)
+            except Exception as e:  # noqa: BLE001 — 逾時/daemon 暫時不可用都算「問不到」
+                print(f"[claude-pty] ⚠ 問不到 session {sid} 的容器狀態，改用最後已知值：{e!r}", flush=True)
         if fresh:
             row["state"] = state
         # 問不到就沿用 _row() 已經填好的最後已知狀態
@@ -1602,7 +1667,7 @@ class SessionManager:
                     probe.close()
         except docker.errors.NotFound:
             state = "gone"
-        except Exception:            # noqa: BLE001 — 逾時／連不上／APIError 都算「問不到」
+        except Exception:  # noqa: BLE001 — 逾時／連不上／APIError 都算「問不到」
             return None
         with session_scope(immediate=True) as s:
             row = s.get(SessionRow, sid)
@@ -1654,9 +1719,7 @@ class SessionManager:
         sock = None
         try:
             container = client.containers.get(row["container"])
-            sock = container.attach_socket(
-                params={"stdin": 1, "stdout": 1, "stderr": 1, "stream": 1}
-            )
+            sock = container.attach_socket(params={"stdin": 1, "stdout": 1, "stderr": 1, "stream": 1})
             # 讓 close_attach() 找得到這個 client，才收得乾淨。⚠ 這行必須在 try 內：
             # 它若丟例外（socket wrapper 不接受動態屬性），client 就再也沒人關得掉。
             sock._claude_pty_client = client
@@ -1731,7 +1794,6 @@ class SessionManager:
         if redraw or unchanged:
             self._nudge_redraw(row["container"], rows, cols)
 
-
     def _nudge_redraw(self, container: str, rows: int, cols: int) -> None:
         """強迫 TUI 把整個畫面重畫一次。
 
@@ -1757,7 +1819,7 @@ class SessionManager:
           那正是這一整段在防的那種靜默失敗。
         """
         try:
-            with suppress(Exception):   # 純視覺，失敗就算了，絕不可讓 resize 整支失敗
+            with suppress(Exception):  # 純視覺，失敗就算了，絕不可讓 resize 整支失敗
                 self._docker.api.resize(container, height=rows, width=max(2, cols - 1))
                 time.sleep(config.REDRAW_SETTLE_SECONDS)
         finally:
@@ -1776,8 +1838,7 @@ class SessionManager:
             row = s.get(SessionRow, sid)
             if row is None:
                 raise SessionNotFound(f"未知 session：{sid}")
-            return _to_dict(row, live_state=_last_known_state(row),
-                            ready=_ready_from_row(row))
+            return _to_dict(row, live_state=_last_known_state(row), ready=_ready_from_row(row))
 
 
 def _last_known_state(row: SessionRow) -> str:
@@ -1805,8 +1866,7 @@ def _ready_from_row(row: SessionRow) -> bool:
     return row.ready_at is not None
 
 
-def _to_dict(row: SessionRow, live_state: str | None = None,
-             ready: bool | None = None) -> dict:
+def _to_dict(row: SessionRow, live_state: str | None = None, ready: bool | None = None) -> dict:
     return {
         "id": row.id,
         "container": row.container_name,
@@ -1827,14 +1887,12 @@ def _to_dict(row: SessionRow, live_state: str | None = None,
         "profile": row.profile or {},
         # 環境快照：這場是用哪一版 CLI、哪一天打包的 image 開起來的
         "cli_version": row.cli_version,
-        "image_created_at": (row.image_created_at.isoformat()
-                             if row.image_created_at else None),
+        "image_created_at": (row.image_created_at.isoformat() if row.image_created_at else None),
         "created_at": row.created_at.isoformat(),
         "last_active_at": row.last_active_at.isoformat(),
         # `state` 是什麼時候跟 dockerd 求證來的（ADR 0012）。**None＝從來沒問到過**，
         # 前端要照實說「尚未確認」——把沒問到過畫成「剛剛確認」是這個欄位存在的反面。
-        "state_checked_at": (row.state_checked_at.isoformat()
-                             if row.state_checked_at else None),
+        "state_checked_at": (row.state_checked_at.isoformat() if row.state_checked_at else None),
         # GitLab 代理（ADR 0016）。**兩個事實一起給，因為單獨任一個都會說謊**：
         #   · gitlab_proxy      ＝這場**當初**有沒有接上代理網路。不可變（網路必須在容器
         #                         start 之前接），所以事後補 token 救不了已經在跑的場。
@@ -1853,9 +1911,10 @@ def _to_dict(row: SessionRow, live_state: str | None = None,
         #     SELECT（審查 F-036）。改動查詢那一側時要一起看。
         "gitlab_proxy": row.gitlab_proxy,
         "gitlab_pat_set": bool(
-            config.gitlab_enabled() and row.user is not None
-            and crypto.is_readable(row.user.gitlab_pat_enc,
-                                   purpose=crypto.Purpose.GITLAB_PAT)),
+            config.gitlab_enabled()
+            and row.user is not None
+            and crypto.is_readable(row.user.gitlab_pat_enc, purpose=crypto.Purpose.GITLAB_PAT)
+        ),
         **({"ready": ready} if ready is not None else {}),
     }
 
@@ -1873,8 +1932,7 @@ def _history_to_dict(row: SessionHistory) -> dict:
         "last_active_at": row.last_active_at.isoformat(),
         "ready_at": row.ready_at.isoformat() if row.ready_at else None,
         "cli_version": row.cli_version,
-        "image_created_at": (row.image_created_at.isoformat()
-                             if row.image_created_at else None),
+        "image_created_at": (row.image_created_at.isoformat() if row.image_created_at else None),
         # 期間**曾不曾**啟用 GitLab 代理（ADR 0016）。歷史只有這一個事實——session 都結束
         # 了，沒有「現在能不能用」可言，所以這裡不像執行中那樣需要配一個 gitlab_pat_set。
         # None＝欄位上線前的舊紀錄：不知道，不要畫成「未啟用」。
@@ -1926,17 +1984,22 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     #   mounts（type=bind）在來源不存在時直接讓 containers.run 失敗，錯誤看得見、
     #   host 不被動到。代價是這場 session 建不起來——那正是我們要的失敗方向。
     if config.SSH_AUTH_SOCK_HOST:
-        kwargs["mounts"] = [docker.types.Mount(
-            target=config.SSH_AUTH_SOCK_BIND, source=config.SSH_AUTH_SOCK_HOST,
-            # ⚠ read_only=True（2026-08-22 起）。:ro **不會**讓 socket 連不上
-            #   （connect 走 path_permission(MAY_WRITE)，是 inode 檢查，不經過
-            #    mnt_want_write，所以 MNT_READONLY 沒被諮詢；反例見
-            #    tests/test_ro_socket_mount.py）。
-            #   它擋的是「弄壞 host 那顆 socket」：bind mount 與 host 共用同一個 inode，
-            #   原生 Linux 上容器對它 chmod／chown 會改到 host 那一顆，症狀是使用者
-            #   其他終端機的 ssh 全部失效、且指不到容器。
-            #   ⚠ 這不是 agent 的安全邊界——簽章、列舉金鑰、轉送一項都擋不住。
-            type="bind", read_only=True)]
+        kwargs["mounts"] = [
+            docker.types.Mount(
+                target=config.SSH_AUTH_SOCK_BIND,
+                source=config.SSH_AUTH_SOCK_HOST,
+                # ⚠ read_only=True（2026-08-22 起）。:ro **不會**讓 socket 連不上
+                #   （connect 走 path_permission(MAY_WRITE)，是 inode 檢查，不經過
+                #    mnt_want_write，所以 MNT_READONLY 沒被諮詢；反例見
+                #    tests/test_ro_socket_mount.py）。
+                #   它擋的是「弄壞 host 那顆 socket」：bind mount 與 host 共用同一個 inode，
+                #   原生 Linux 上容器對它 chmod／chown 會改到 host 那一顆，症狀是使用者
+                #   其他終端機的 ssh 全部失效、且指不到容器。
+                #   ⚠ 這不是 agent 的安全邊界——簽章、列舉金鑰、轉送一項都擋不住。
+                type="bind",
+                read_only=True,
+            )
+        ]
 
     # **網路：無條件指定成這個使用者自己那張**（ADR 0016）。
     #
@@ -2064,7 +2127,7 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     # ⚠ network 的指定**已經移到 escape hatch 之前**（見那裡的說明）——留在這裡的話走
     #   `CLAUDE_PTY_ENTRYPOINT` 的容器會落在預設 bridge（審查 F-004）。
     if profile.network == "restricted":
-        kwargs["cap_add"] = ["NET_ADMIN"]              # init-firewall.sh 需要
+        kwargs["cap_add"] = ["NET_ADMIN"]  # init-firewall.sh 需要
     # ⚠ 這裡只看 profile.telemetry——是**純函式**，不探 jaeger。可達性的判斷與降級在
     #   create()：它探不到（或 jaeger 沒接上這個人的網路）就把傳進來的 run_profile 的
     #   telemetry 關掉，所以走到這裡時 telemetry=True 已經代表「真的送得到」。把探測放這裡
@@ -2075,7 +2138,7 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         env.update(_otel_env(sid))
     if profile.capture:
         # 存在性查 *_SELF、掛載用 host 路徑（同上，ADR 0009）
-        if os.path.isdir(config.CLAUDE_MITM_SELF):     # redact addon 在才掛（否則 entrypoint fail-closed 跳過）
+        if os.path.isdir(config.CLAUDE_MITM_SELF):  # redact addon 在才掛（否則 entrypoint fail-closed 跳過）
             volumes[config.CLAUDE_MITM_HOST] = {"bind": config.MITM_ADDON_BIND, "mode": "ro"}
         # capture 的落盤目錄已由 user_mounts() 掛成 per-user（ADR 0014）——它裡面是**完整的
         # API 請求本文**（prompt 全文），比 transcript 更敏感，共用一個目錄是先前盤點時
