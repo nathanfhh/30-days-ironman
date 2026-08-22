@@ -1928,11 +1928,15 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     if config.SSH_AUTH_SOCK_HOST:
         kwargs["mounts"] = [docker.types.Mount(
             target=config.SSH_AUTH_SOCK_BIND, source=config.SSH_AUTH_SOCK_HOST,
-            # read_only=False 不是必要條件：:ro 的掛載上 unix socket 照樣 connect 得了
-            # （connect 走 path_permission(MAY_WRITE)，是 inode 檢查，不經過
-            #  mnt_want_write，所以 MNT_READONLY 沒被諮詢）。維持 False 是既有決定；
-            # :ro 擋得到的只有 metadata 寫入，擋不到 agent 的任何能力。詳見 ADR 的勘誤。
-            type="bind", read_only=False)]
+            # ⚠ read_only=True（2026-08-22 起）。:ro **不會**讓 socket 連不上
+            #   （connect 走 path_permission(MAY_WRITE)，是 inode 檢查，不經過
+            #    mnt_want_write，所以 MNT_READONLY 沒被諮詢；反例見
+            #    tests/test_ro_socket_mount.py）。
+            #   它擋的是「弄壞 host 那顆 socket」：bind mount 與 host 共用同一個 inode，
+            #   原生 Linux 上容器對它 chmod／chown 會改到 host 那一顆，症狀是使用者
+            #   其他終端機的 ssh 全部失效、且指不到容器。
+            #   ⚠ 這不是 agent 的安全邊界——簽章、列舉金鑰、轉送一項都擋不住。
+            type="bind", read_only=True)]
 
     # **網路：無條件指定成這個使用者自己那張**（ADR 0016）。
     #

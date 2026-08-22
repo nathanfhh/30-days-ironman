@@ -185,13 +185,15 @@ try:
     #   在 host 上建一個 root:root 目錄頂替，把 host 自己的 agent socket 位置佔掉。
     check("type=bind（來源不存在要報錯，不可以讓 dockerd 在 host 上建目錄頂替）",
           m.get("Type") == "bind")
-    #   ⚠ 舊註解寫「唯讀掛會 EACCES、掛了等於沒掛」，那是錯的（已實測推翻）：
-    #   connect 走 path_permission(MAY_WRITE)，是 inode 檢查，不經過 mnt_want_write，
-    #   所以 :ro 的 MNT_READONLY 從來沒被諮詢，socket 照樣連得上。
-    #   反例見 tests/test_ro_socket_mount.py。這條斷言釘的只是「維持現狀」，
-    #   不是任何安全性質。
-    check("非唯讀（維持現狀；:ro 不會讓 socket 連不上，見 test_ro_socket_mount）",
-          m.get("ReadOnly") is False)
+    #   ⚠ **唯讀**（2026-08-22 起）。舊註解寫「唯讀掛會 EACCES、掛了等於沒掛」，
+    #   那是錯的：connect 走 path_permission(MAY_WRITE)，是 inode 檢查，不經過
+    #   mnt_want_write，所以 :ro 的 MNT_READONLY 從來沒被諮詢，socket 照樣連得上
+    #   （反例見 tests/test_ro_socket_mount.py）。
+    #   :ro 擋的是「弄壞 host 那顆 socket」——bind mount 共用同一個 inode，原生 Linux 上
+    #   容器對它 chmod 會改到 host 那一顆，症狀是使用者其他終端機的 ssh 全失效。
+    #   ⚠ 這條斷言釘的是那個保護，不是 agent 的能力邊界（:ro 擋不住簽章與轉送）。
+    check("🔴 socket 唯讀掛載（擋容器 chmod 壞 host 那顆；不影響 connect）",
+          m.get("ReadOnly") is True)
 
     # 部署層能力：不隨 profile 或 entrypoint 變。escape hatch 也要有，否則
     # 「bash 進去手動 git push」這條路徑會跟正常 session 行為不一致。

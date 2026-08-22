@@ -57,10 +57,17 @@ profile——後者會讓人誤以為「只有這一場有」，但開得起這�
 > `EROFS`，而 socket 的 connect/send/recv 成功。真正會讓 connect 失敗的是 inode 權限
 > （回 `EACCES`），也就是 Docker Desktop 那個 `root:root 0660` 的代理節點。
 >
-> 結論不變（仍維持非唯讀），但理由改成：`:ro` 擋得到的只有 metadata 寫入
-> （chmod／chown／setxattr），擋不到 agent 的任何一項能力。
-> ⚠ 它也不是全無作用：原生 Linux 上 uid 對齊時，容器可以 chmod host 的 agent socket、
-> 弄壞 host 使用者其他終端機的 ssh，而 `:ro` 擋得住那個。要重新考慮時，這是真正的取捨點。
+> **結論因此翻案：改為唯讀掛載（`read_only=True` / `:ro`）。**
+>
+> 原本反對 `:ro` 的唯一理由（會讓 socket 連不上）已證實為假，而它擋得住一個真實的破壞面：
+> bind mount 與 host **共用同一個 inode**，原生 Linux 上容器對那顆 socket 下
+> `chmod`／`chown` 會改到 host 那一顆，症狀是**使用者其他終端機的 ssh 全部失效**，
+> 而且完全指不到容器。`:ro` 讓那條路回 `EROFS`。
+> （macOS 的 Docker Desktop 換上自己的代理節點、碰不到 host 那顆，所以那裡本來就沒有這個
+> 風險；但同一份腳本兩種 host 都要跑，不構成不加的理由。）
+>
+> ⚠ `:ro` **不是** agent 的安全邊界：列舉金鑰、簽章、轉送一項都擋不住。它擋的只有
+> 「弄壞 host 上那顆 socket」。要限縮 agent 能力，只能在 host 端另起一個受限的 agent。
 >
 > 反例可重跑：`claude-pty/tests/test_ro_socket_mount.py`。
 
