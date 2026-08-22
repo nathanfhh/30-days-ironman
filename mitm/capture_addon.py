@@ -50,11 +50,15 @@ class RedactedCapture:
 
     def load(self, loader) -> None:
         loader.add_option(
-            "capture_out", str, "",
+            "capture_out",
+            str,
+            "",
             "寫出脫敏 .mitm 的路徑（必填；空字串＝不錄）。",
         )
         loader.add_option(
-            "capture_hosts", str, DEFAULT_HOSTS,
+            "capture_hosts",
+            str,
+            DEFAULT_HOSTS,
             "只錄 request host 落在這份逗號分隔清單裡的 flow（空字串＝全部）。",
         )
 
@@ -96,8 +100,8 @@ class RedactedCapture:
                 allowed = {h.strip() for h in want.split(",") if h.strip()}
                 if host not in allowed:
                     return
-            scrubbed = flow.copy()      # 絕不動活的 flow
-            scrubbed.id = flow.id       # copy() 會發新 id，紀錄要沿用原本那個
+            scrubbed = flow.copy()  # 絕不動活的 flow
+            scrubbed.id = flow.id  # copy() 會發新 id，紀錄要沿用原本那個
             redact_flow(scrubbed)
             self._writer.add(scrubbed)
             self._fh.flush()

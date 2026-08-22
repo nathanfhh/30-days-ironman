@@ -10,6 +10,7 @@
   之類）的特異性比 UA 樣式表的 `[hidden]{display:none}` 高，屬性是 true 而畫面上還在
   ——這個坑已經踩過一次（篩選列的 `.field`）。
 """
+
 import logging
 import os
 import socket
@@ -83,8 +84,8 @@ for _ in range(50):
 
 def names(page):
     return page.eval_on_selector_all(
-        '[data-testid="roster"] tr td:nth-child(2)',
-        "els => els.map(e => e.textContent.trim())")
+        '[data-testid="roster"] tr td:nth-child(2)', "els => els.map(e => e.textContent.trim())"
+    )
 
 
 def status(page):
@@ -94,8 +95,7 @@ def status(page):
 try:
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        ctx = browser.new_context(viewport={"width": 1440, "height": 1000},
-                                  timezone_id="Asia/Taipei")
+        ctx = browser.new_context(viewport={"width": 1440, "height": 1000}, timezone_id="Asia/Taipei")
         page = ctx.new_page()
 
         page.goto(f"{BASE}/login", wait_until="domcontentloaded")
@@ -108,12 +108,12 @@ try:
 
         print("== CLI 憑證面板：貼 token → 已設定；清除 → 未設定（D 階段的入口）==")
         check("初始是未設定（chip 紅）", "未設定" in page.inner_text("#token-state"))
-        check("招牌徽章也說未設定",
-              "未設定" in page.inner_text("#cred-badge"))
-        check("沒 token 時沒有清除鍵（沒東西可清）",
-              page.locator("#token-clear").is_hidden())
-        check("輸入框是 password 型別（貼進來的是憑證，畫面上不該讀得出來）",
-              page.get_attribute("#cli-token", "type") == "password")
+        check("招牌徽章也說未設定", "未設定" in page.inner_text("#cred-badge"))
+        check("沒 token 時沒有清除鍵（沒東西可清）", page.locator("#token-clear").is_hidden())
+        check(
+            "輸入框是 password 型別（貼進來的是憑證，畫面上不該讀得出來）",
+            page.get_attribute("#cli-token", "type") == "password",
+        )
         check("空欄位時儲存鍵按不下去", page.locator("#token-save").is_disabled())
         page.fill("#cli-token", "sk-ant-oat01-e2e-test-token")
         check("貼了字儲存鍵才亮", page.locator("#token-save").is_enabled())
@@ -121,38 +121,35 @@ try:
         # 成功後前端先 toast、900ms 才 location.reload()——不能只等時間，要等 chip
         # 真的翻過來（等時間就是在賭 reload 已完成，賭輸的樣子像功能壞掉）。
         page.wait_for_function(
-            "() => document.querySelector('#token-state')?.textContent.includes('已設定')",
-            timeout=8000)
+            "() => document.querySelector('#token-state')?.textContent.includes('已設定')", timeout=8000
+        )
         check("重載後 chip 變已設定", "已設定" in page.inner_text("#token-state"))
-        check("招牌徽章跟著轉綠（同一個真相來源）",
-              "已設定" in page.inner_text("#cred-badge"))
-        check("輸入框不吐回存過的值（永遠是空的）",
-              page.input_value("#cli-token") == "")
+        check("招牌徽章跟著轉綠（同一個真相來源）", "已設定" in page.inner_text("#cred-badge"))
+        check("輸入框不吐回存過的值（永遠是空的）", page.input_value("#cli-token") == "")
         check("清除鍵出現了", page.locator("#token-clear").is_visible())
         page.click("#token-clear")
         page.wait_for_function(
-            "() => document.querySelector('#token-state')?.textContent.includes('未設定')",
-            timeout=8000)
+            "() => document.querySelector('#token-state')?.textContent.includes('未設定')", timeout=8000
+        )
         check("清除後回到未設定", "未設定" in page.inner_text("#token-state"))
 
         print("== 第一頁 ==")
-        check("分頁列真的看得見（不是只有 hidden 屬性被拿掉）",
-              page.locator('[data-testid="roster-pager"]').is_visible())
+        check(
+            "分頁列真的看得見（不是只有 hidden 屬性被拿掉）", page.locator('[data-testid="roster-pager"]').is_visible()
+        )
         first = names(page)
-        check(f"一頁 {config.PAGE_SIZE} 筆（收到 {len(first)}）",
-              len(first) == config.PAGE_SIZE)
-        check(f"狀態寫得出總數：{status(page)}",
-              f"共{TOTAL}筆" in status(page).replace(" ", ""))
-        check("上一頁是停用的（已經在第一頁了）",
-              page.locator('[data-testid="roster-prev"]').is_disabled())
+        check(f"一頁 {config.PAGE_SIZE} 筆（收到 {len(first)}）", len(first) == config.PAGE_SIZE)
+        check(f"狀態寫得出總數：{status(page)}", f"共{TOTAL}筆" in status(page).replace(" ", ""))
+        check("上一頁是停用的（已經在第一頁了）", page.locator('[data-testid="roster-prev"]').is_disabled())
         check("下一頁可以按", page.locator('[data-testid="roster-next"]').is_enabled())
         # 🔴 動作鈕只有「重設密碼」。停用/復用/提權/降權的按鈕**整個介面都不存在**
         #    ——退場＝改掉他的密碼。哪天有人把這些鈕加回來，先在這裡現形。
         for act in ("disable", "enable", "promote", "demote"):
-            check(f"整頁沒有 data-act={act} 的按鈕",
-                  page.locator(f'button[data-act="{act}"]').count() == 0)
-        check("每一列都有「重設密碼」（含自己那列——那是改自己密碼的另一條入口）",
-              page.locator('button[data-act="reset"]').count() == len(first))
+            check(f"整頁沒有 data-act={act} 的按鈕", page.locator(f'button[data-act="{act}"]').count() == 0)
+        check(
+            "每一列都有「重設密碼」（含自己那列——那是改自己密碼的另一條入口）",
+            page.locator('button[data-act="reset"]').count() == len(first),
+        )
 
         print("== 翻到下一頁 ==")
         page.click('[data-testid="roster-next"]')
@@ -160,8 +157,7 @@ try:
         second = names(page)
         check(f"換了一批人（{second[0]} 起）", second and second[0] not in first)
         check("沒有和上一頁重複", not set(first) & set(second))
-        check(f"頁碼跟著走：{status(page)}",
-              status(page).replace(" ", "").startswith(f"{config.PAGE_SIZE + 1}–"))
+        check(f"頁碼跟著走：{status(page)}", status(page).replace(" ", "").startswith(f"{config.PAGE_SIZE + 1}–"))
         check("上一頁變成可以按", page.locator('[data-testid="roster-prev"]').is_enabled())
 
         print("== 翻到最後一頁：一個都不能漏 ==")
@@ -172,8 +168,7 @@ try:
             seen |= set(names(page))
         check(f"翻完蒐集到全部 {TOTAL} 個帳號，沒有漏人", len(seen) == TOTAL)
         check("排最遠的 zzz-off 在最後一頁", "zzz-off" in names(page))
-        check("下一頁在最後一頁是停用的",
-              page.locator('[data-testid="roster-next"]').is_disabled())
+        check("下一頁在最後一頁是停用的", page.locator('[data-testid="roster-next"]').is_disabled())
 
         print("== 回上一頁 ==")
         page.click('[data-testid="roster-prev"]')
@@ -188,8 +183,7 @@ try:
         page.click('#user-form button[type="submit"]')
         page.wait_for_timeout(1200)
         check("新帳號出現在畫面上（清單已翻到他那一頁）", "zzz-newbie" in names(page))
-        check(f"總數加一：{status(page)}",
-              f"共{TOTAL + 1}筆" in status(page).replace(" ", ""))
+        check(f"總數加一：{status(page)}", f"共{TOTAL + 1}筆" in status(page).replace(" ", ""))
 
         print("== 長名字要被截斷，不能把表格推爆 ==")
         # 後端的長度上限只管得住碼位與東亞寬字元；字形寬度是字體的事、伺服器量不到
@@ -199,14 +193,11 @@ try:
         page.fill("#new-user-pw", PW)
         page.click('#user-form button[type="submit"]')
         page.wait_for_timeout(1200)
-        cell = page.locator('.roster__name', has_text="zzzzzzzz").first
+        cell = page.locator(".roster__name", has_text="zzzzzzzz").first
         box = cell.evaluate("el => ({ scroll: el.scrollWidth, client: el.clientWidth })")
-        check(f"名字被截斷（內容 {box['scroll']}px > 格寬 {box['client']}px）",
-              box["scroll"] > box["client"])
-        check("表格沒有被撐寬",
-              page.eval_on_selector(".roster", "el => el.clientWidth") <= table_w)
-        check("完整名稱仍拿得到（放在 title，滑上去看得見）",
-              cell.get_attribute("title") == "z" * 32)
+        check(f"名字被截斷（內容 {box['scroll']}px > 格寬 {box['client']}px）", box["scroll"] > box["client"])
+        check("表格沒有被撐寬", page.eval_on_selector(".roster", "el => el.clientWidth") <= table_w)
+        check("完整名稱仍拿得到（放在 title，滑上去看得見）", cell.get_attribute("title") == "z" * 32)
 
         print("== 只有一頁時整條分頁列收起來 ==")
         # 端點每次請求才讀 config.PAGE_SIZE，所以改了之後重整就生效。
@@ -215,8 +206,7 @@ try:
         config.PAGE_SIZE = config.MAX_PAGE_SIZE
         page.reload(wait_until="domcontentloaded")
         page.wait_for_timeout(900)
-        check("一頁裝得下時分頁列不佔版面",
-              page.locator('[data-testid="roster-pager"]').is_hidden())
+        check("一頁裝得下時分頁列不佔版面", page.locator('[data-testid="roster-pager"]').is_hidden())
         # ⚠ 不要寫死人數。這一輪測試自己也會建帳號，寫死的常數會在加測試案例時變成
         #   「測試錯了」而不是「程式錯了」——那種紅燈最後總是被順手改掉數字。
         #   也不要從分頁列讀：它這時是隱藏的，inner_text 會回空字串。直接問資料庫。

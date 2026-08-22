@@ -48,14 +48,14 @@ class UtcDateTime(TypeDecorator):
     def process_bind_param(self, value, dialect):
         if value is None:
             return None
-        if value.tzinfo is None:            # 容忍呼叫端給 naive，一律當 UTC
+        if value.tzinfo is None:  # 容忍呼叫端給 naive，一律當 UTC
             return value.replace(tzinfo=_dt.UTC)
         return value.astimezone(_dt.UTC)
 
     def process_result_value(self, value, dialect):
         if value is None:
             return None
-        if value.tzinfo is None:            # SQLite 讀回為 naive → 補回 UTC
+        if value.tzinfo is None:  # SQLite 讀回為 naive → 補回 UTC
             return value.replace(tzinfo=_dt.UTC)
         return value.astimezone(_dt.UTC)
 
@@ -75,8 +75,7 @@ class User(Base):
     # 每次改密碼 +1；登入 cookie 帶當下版號，改密碼後舊 cookie 立即失效（review H4）
     # server_default 不可省：既有資料庫用 ALTER TABLE ADD COLUMN 補這欄時，NOT NULL 需要
     # 一個 DB 端的預設值才填得進去（純 Python 端的 default 對 ALTER 無效）。
-    password_version: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1, server_default="1")
+    password_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     # 貼進來的 CLI 授權 token（host 上 `claude setup-token` 的輸出），以 crypto.encrypt
     # 加密後存放；NULL＝沒設過。**這是 session 取得憑證的唯一來源**——控制平面不讀
     # host 上的任何憑證檔（那種「有的話就順便用」的後路，是一條平常不走、出事才走、
@@ -106,30 +105,29 @@ class User(Base):
     # nullable 所以既有列的 ALTER TABLE ADD COLUMN 不需要 server_default。
     # ⚠ 這個值會變成 argv[0]，讀出來一律經 config.ttyd_bin_or_default() 收斂，不可直接 exec。
     ttyd_bin: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    created_at: Mapped[_dt.datetime] = mapped_column(
-        UtcDateTime, nullable=False, default=utcnow
-    )
+    created_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
 
     # passive_deletes 讓 DB 的 ON DELETE CASCADE 生效；否則 SQLAlchemy 預設會試圖把子列的
     # user_id 設為 NULL，而該欄為 NOT NULL → 刪使用者直接失敗（review M3）。
     sessions: Mapped[list[Session]] = relationship(
-        back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
+        back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 # session.status 的合法值。DB 狀態會與 dockerd 漂移，由 reconciler 對帳（ADR 0008）。
-STATUS_CREATING = "creating"      # 已佔登錄、container 尚未就緒
+STATUS_CREATING = "creating"  # 已佔登錄、container 尚未就緒
 STATUS_RUNNING = "running"
-STATUS_EXITED = "exited"          # container 自行結束（claude /exit、crash）
+STATUS_EXITED = "exited"  # container 自行結束（claude /exit、crash）
 # ⚠ **沒有 `terminated`**：使用者按終止時登錄不會停在某個狀態，而是直接離開 `sessions`
 #   （`archive()` 搬進 session_history 再刪列，ADR 0010）。要記「是被誰終止的」請用下面的
 #   END_TERMINATED——加一個 STATUS_TERMINATED 回來只會是一個沒有任何列會用到的值。
 
 # session_history.ended_reason 的合法值（ADR 0010）。與 STATUS_* 放一起，因為它們是
 # 同一件事的兩面：這裡記的是「當初為什麼離開 sessions 表」。
-END_TERMINATED = "terminated"      # 使用者按了終止
-END_EXITED = "exited"              # container 自行結束（CLI /exit、crash）
-END_GONE = "gone"                  # container 從外部消失（docker rm、prune、host 重啟）
-END_IDLE = "idle"                  # idle 回收（預設停用）
+END_TERMINATED = "terminated"  # 使用者按了終止
+END_EXITED = "exited"  # container 自行結束（CLI /exit、crash）
+END_GONE = "gone"  # container 從外部消失（docker rm、prune、host 重啟）
+END_IDLE = "idle"  # idle 回收（預設停用）
 
 
 class Session(Base):
@@ -138,9 +136,7 @@ class Session(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     container_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     container_name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default=STATUS_CREATING)
     # 使用者自取的名字，純為辨識（12 位 hex 的 sid 記不住）。正規化後的版本會接在
     # container 名稱尾巴，讓 `docker ps` 也一眼認得出來。
@@ -158,15 +154,10 @@ class Session(Base):
     # 欄位名維持 `profile_json` 以免動到既有 DB；屬性名是 `profile`，因為那才是它的型別。
     # ⚠ JSON 欄位**偵測不到就地修改**（`row.profile["cli"] = x` 不會被寫回）。一律整份
     #   指派；真的需要就地改再引入 MutableDict。
-    profile: Mapped[dict] = mapped_column(
-        "profile_json", JSON(), nullable=False, default=dict)
-    created_at: Mapped[_dt.datetime] = mapped_column(
-        UtcDateTime, nullable=False, default=utcnow
-    )
+    profile: Mapped[dict] = mapped_column("profile_json", JSON(), nullable=False, default=dict)
+    created_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
     # idle 回收與「最後活動」顯示用；開 view / 改尺寸時更新
-    last_active_at: Mapped[_dt.datetime] = mapped_column(
-        UtcDateTime, nullable=False, default=utcnow
-    )
+    last_active_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
     # 目前的終端尺寸。不是裝飾性的：「觸發重繪」是靠改尺寸送 SIGWINCH，
     # 改完必須還原成原值——不記得原值就沒得還原
     rows: Mapped[int] = mapped_column(Integer, nullable=False, default=40, server_default="40")
@@ -209,9 +200,7 @@ class Session(Base):
     gitlab_proxy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="sessions")
-    views: Mapped[list[View]] = relationship(
-        back_populates="session", cascade="all, delete-orphan"
-    )
+    views: Mapped[list[View]] = relationship(back_populates="session", cascade="all, delete-orphan")
 
 
 class SessionHistory(Base):
@@ -236,13 +225,10 @@ class SessionHistory(Base):
     container_name: Mapped[str] = mapped_column(String(64), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # 帳號被刪也要留得住紀錄：user_id 可為 NULL，username 是當下的快照
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # 與 sessions.profile 同一套（見那裡的說明）：對上層是 dict
-    profile: Mapped[dict] = mapped_column(
-        "profile_json", JSON(), nullable=False, default=dict)
+    profile: Mapped[dict] = mapped_column("profile_json", JSON(), nullable=False, default=dict)
     workdir: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False)
     last_active_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False)
@@ -257,8 +243,7 @@ class SessionHistory(Base):
     # 已經沒有「現在能不能用」，只剩「期間曾不曾啟用」，所以歷史這一欄自己就是完整答案。
     # NULL＝欄位上線前的舊紀錄，不畫 icon——把不知道畫成暗燈是在謊稱「確定沒啟用」。
     gitlab_proxy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    ended_at: Mapped[_dt.datetime] = mapped_column(
-        UtcDateTime, nullable=False, default=utcnow, index=True)
+    ended_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow, index=True)
     # terminated（使用者明確終止）/ exited（自行結束）/ gone（container 從外部消失）
     # / idle（閒置逾時被 reconciler 回收，見 reconciler 的 END_IDLE）
     ended_reason: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -266,8 +251,7 @@ class SessionHistory(Base):
     # 「我的 session 為什麼不見了」就沒有任何線索。
     # NULL 代表不是人為終止（exited / gone / idle），或是舊紀錄。
     # 與 user_id 同一套做法：外鍵給關聯、username 給快照，帳號被刪也讀得出當時是誰。
-    ended_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    ended_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     ended_by_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
@@ -288,9 +272,7 @@ class View(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     port: Mapped[int] = mapped_column(Integer, nullable=False)
     pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 這個 view 實際是用哪一顆 ttyd 起的（config.TTYD_BINS 的 key）。
@@ -299,9 +281,7 @@ class View(Base):
     # nullable：既有列沒有這個值（輕量升級只加欄位，見 db._add_missing_columns），
     # 而「不知道」本來就是一個誠實的答案——畫面上不顯示標記即可。
     ttyd_bin: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    created_at: Mapped[_dt.datetime] = mapped_column(
-        UtcDateTime, nullable=False, default=utcnow
-    )
+    created_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
 
     session: Mapped[Session] = relationship(back_populates="views")
 

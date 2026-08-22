@@ -35,6 +35,7 @@ profile 也一樣隔離）。網路上還可能掛著兩樣東西：
 ⚠ **設定是不是最新的，問容器自己**（`/_state`），不要另外存一份狀態。存 DB 或 label 都會
   出現「記錄說是新的、實際是舊的」；而 label 建立後根本改不了，熱重載完更新不了它。
 """
+
 from __future__ import annotations
 
 import io
@@ -111,7 +112,7 @@ def _conf_tar(conf: bytes, name: str = "nginx.conf") -> bytes:
     with tarfile.open(fileobj=buf, mode="w") as tar:
         info = tarfile.TarInfo(name)
         info.size = len(conf)
-        info.mode = 0o444          # 唯讀：這顆容器裡沒有任何人需要改它
+        info.mode = 0o444  # 唯讀：這顆容器裡沒有任何人需要改它
         info.uid = info.gid = 0
         info.uname = info.gname = "root"
         tar.addfile(info, io.BytesIO(conf))
@@ -131,6 +132,7 @@ def _test_label() -> dict:
 
 # --- 網路 ---------------------------------------------------------------------
 
+
 def ensure_network(client: docker.DockerClient, user_id: int):
     """確保這個使用者的網路存在，回傳它。**無條件**，不看 GitLab 開不開、不看有沒有 PAT。
 
@@ -147,10 +149,14 @@ def ensure_network(client: docker.DockerClient, user_id: int):
         return existing
     try:
         net = client.networks.create(
-            name, driver="bridge",
-            labels={config.NETWORK_LABEL_KEY: config.NETWORK_LABEL_VALUE,
-                    config.PROXY_OWNER_LABEL: str(user_id),
-                    **_test_label()})
+            name,
+            driver="bridge",
+            labels={
+                config.NETWORK_LABEL_KEY: config.NETWORK_LABEL_VALUE,
+                config.PROXY_OWNER_LABEL: str(user_id),
+                **_test_label(),
+            },
+        )
     except docker.errors.APIError as e:
         msg = str(e)
         if "already exists" in msg:
@@ -163,7 +169,8 @@ def ensure_network(client: docker.DockerClient, user_id: int):
             raise PoolExhausted(
                 f"docker 的位址池已用完，建不出 {name}。這是**整台機器**共用的資源"
                 f"（每個 compose 專案各佔一格，而每個開著 session 的使用者佔一張），"
-                f"清掉沒在用的 network，或在 daemon.json 調 default-address-pools。") from e
+                f"清掉沒在用的 network，或在 daemon.json 調 default-address-pools。"
+            ) from e
         raise
     attach_jaeger(client, [name])
     return net
@@ -187,20 +194,19 @@ def attach_jaeger(client: docker.DockerClient, net_names) -> int:
     """
     attached = 0
     try:
-        jname = jaeger_name()          # 別再 inline 寫一次 urlparse，那份會漂（審查 F-027）
+        jname = jaeger_name()  # 別再 inline 寫一次 urlparse，那份會漂（審查 F-027）
         if not jname:
             return 0
         jg = client.containers.get(jname)
         on = set(jg.attrs["NetworkSettings"]["Networks"])
-    except Exception:      # noqa: BLE001 — jaeger 不在／問不到＝這輪沒事做，見 docstring
+    except Exception:  # noqa: BLE001 — jaeger 不在／問不到＝這輪沒事做，見 docstring
         return 0
     for name in net_names:
         if name in on:
             continue
-        with suppress(Exception):      # noqa: BLE001 — 一張接不上不影響其他張
+        with suppress(Exception):  # noqa: BLE001 — 一張接不上不影響其他張
             client.networks.get(name).connect(jg.id)
-            print(f"[claude-pty] jaeger 接上 {name}（否則該網路的 trace 靜默不送）",
-                  flush=True)
+            print(f"[claude-pty] jaeger 接上 {name}（否則該網路的 trace 靜默不送）", flush=True)
             attached += 1
     return attached
 
@@ -208,6 +214,7 @@ def attach_jaeger(client: docker.DockerClient, net_names) -> int:
 def jaeger_name() -> str | None:
     """jaeger 的容器名（＝ OTEL_ENDPOINT 的 hostname）。解不出來回 `None`。"""
     from urllib.parse import urlparse
+
     return urlparse(config.OTEL_ENDPOINT).hostname or None
 
 
@@ -220,7 +227,7 @@ def only_jaeger_left(net) -> bool:
       （2026-08-07 寫隔離測試時就是被清理階段的失敗抓到的）。
     ⚠ 必須先 `reload()`：`networks.list()` 回來的物件，`Containers` 是空的。
     """
-    with suppress(Exception):     # noqa: BLE001 — 問不到就當「還有人在」，寧可不收
+    with suppress(Exception):  # noqa: BLE001 — 問不到就當「還有人在」，寧可不收
         net.reload()
         attached = {c.get("Name") for c in (net.attrs.get("Containers") or {}).values()}
         return not (attached - {jaeger_name()})
@@ -236,7 +243,7 @@ def detach_jaeger(client: docker.DockerClient, net_name: str) -> None:
     name = jaeger_name()
     if not name:
         return
-    with suppress(Exception):     # noqa: BLE001 — jaeger 不在、早就沒接，都不是問題
+    with suppress(Exception):  # noqa: BLE001 — jaeger 不在、早就沒接，都不是問題
         client.networks.get(net_name).disconnect(name)
 
 
@@ -249,12 +256,12 @@ def jaeger_on_network(client: docker.DockerClient, net_name: str) -> bool:
       失敗更難查。
     """
     try:
-        jname = jaeger_name()          # 同 attach_jaeger：走共用的那一支
+        jname = jaeger_name()  # 同 attach_jaeger：走共用的那一支
         if not jname:
             return False
         jg = client.containers.get(jname)
         return net_name in set(jg.attrs["NetworkSettings"]["Networks"])
-    except Exception:      # noqa: BLE001 — 問不到＝當成沒接上（不送，勝過送去沒人接的地方）
+    except Exception:  # noqa: BLE001 — 問不到＝當成沒接上（不送，勝過送去沒人接的地方）
         return False
 
 
@@ -291,7 +298,7 @@ def remove_network_obj(client: docker.DockerClient, net) -> bool:
       往返，而且在 label 壞掉、認不出 uid 的網路上根本無從查起。
     """
     if not only_jaeger_left(net):
-        return False        # 還有 session 容器掛著＝這一輪還不能收，交給下一輪
+        return False  # 還有 session 容器掛著＝這一輪還不能收，交給下一輪
     detach_jaeger(client, net.name)
     try:
         net.remove()
@@ -305,6 +312,7 @@ def list_networks(client: docker.DockerClient) -> list:
 
 
 # --- 代理容器 -----------------------------------------------------------------
+
 
 def find(client: docker.DockerClient, user_id: int):
     """這個使用者的代理容器；沒有就 `None`。"""
@@ -345,8 +353,7 @@ def ca_mount_matches(container) -> bool:
     got = {}
     for m in container.attrs.get("Mounts") or []:
         if m.get("Type") == "bind" and m.get("Destination") == config.GITLAB_CA_BIND:
-            got[m.get("Source")] = {"bind": m.get("Destination"),
-                                    "mode": "ro" if not m.get("RW", True) else "rw"}
+            got[m.get("Source")] = {"bind": m.get("Destination"), "mode": "ro" if not m.get("RW", True) else "rw"}
     return got == want
 
 
@@ -356,8 +363,7 @@ def create(client: docker.DockerClient, user_id: int, pat: str) -> str:
     return cid
 
 
-def create_or_adopt(client: docker.DockerClient, user_id: int,
-                    pat: str) -> tuple[str, bool]:
+def create_or_adopt(client: docker.DockerClient, user_id: int, pat: str) -> tuple[str, bool]:
     """建一顆代理並啟動。回傳 `(container id, 是不是本次建的)`。呼叫端要先確保網路存在。
 
     ⚠ 撞到名稱衝突（另一個 worker 搶先建好）時**回傳既有那顆的 id 與 `False`**，不重建
@@ -404,10 +410,12 @@ def create_or_adopt(client: docker.DockerClient, user_id: int,
                 #   沒設就是空的，一個 volume 都不掛（維持現狀）。
                 binds=ca_binds() or None,
                 # 逃生口，預設空的——見 config.PROXY_EXTRA_HOSTS 的說明。
-                extra_hosts=config.PROXY_EXTRA_HOSTS or None),
+                extra_hosts=config.PROXY_EXTRA_HOSTS or None,
+            ),
             # session 就是靠這個名字找到它的。
-            networking_config=client.api.create_networking_config({
-                net: client.api.create_endpoint_config(aliases=[config.PROXY_ALIAS])}),
+            networking_config=client.api.create_networking_config(
+                {net: client.api.create_endpoint_config(aliases=[config.PROXY_ALIAS])}
+            ),
         )
     except docker.errors.APIError as e:
         # ⚠ **名稱衝突＝另一個 worker 搶先建好了**，與 `ensure_network` 那邊的
@@ -426,8 +434,8 @@ def create_or_adopt(client: docker.DockerClient, user_id: int,
             raise
         won = find(client, user_id)
         if won is None:
-            raise            # 撞名的對象轉眼又不見了：情況不對，別假裝成功
-        return won.id, False     # ← `False`＝這顆不是我建的，呼叫端清理時不可以碰
+            raise  # 撞名的對象轉眼又不見了：情況不對，別假裝成功
+        return won.id, False  # ← `False`＝這顆不是我建的，呼叫端清理時不可以碰
     cid = resp["Id"]
     # ⚠ **建出來之後的每一步失敗，都由這裡自己收拾。** `create_container` 成功而
     #   `put_archive`／`start` 失敗會留下一顆 `created` 狀態、設定裡可能已經有 PAT 的容器；
@@ -438,7 +446,7 @@ def create_or_adopt(client: docker.DockerClient, user_id: int,
         client.api.put_archive(cid, "/etc/nginx", _conf_tar(gitlab_proxy.render_conf(pat)))
         client.api.start(cid)
     except Exception:
-        with suppress(Exception):        # 清理盡力而為，不可以蓋掉原始例外
+        with suppress(Exception):  # 清理盡力而為，不可以蓋掉原始例外
             client.api.remove_container(cid, force=True)
         raise
     return cid, True
@@ -455,6 +463,7 @@ def remove(client: docker.DockerClient, user_id: int) -> bool:
 
 # --- 設定的新舊 ---------------------------------------------------------------
 
+
 def running_state(client: docker.DockerClient, user_id: int) -> str | None:
     """問**容器自己**現在跑的是哪一份設定；問不到回 `None`。
 
@@ -464,8 +473,7 @@ def running_state(client: docker.DockerClient, user_id: int) -> str | None:
     c = find(client, user_id)
     if c is None or c.status != "running":
         return None
-    code, out = c.exec_run(
-        ["wget", "-qO-", f"http://127.0.0.1:{config.PROXY_PORT}/_state"])
+    code, out = c.exec_run(["wget", "-qO-", f"http://127.0.0.1:{config.PROXY_PORT}/_state"])
     return out.decode(errors="replace").strip() if code == 0 else None
 
 
@@ -502,16 +510,14 @@ def reload(client: docker.DockerClient, user_id: int, pat: str) -> bool:
         # ⚠ 只取 nginx 自己的錯誤輸出並截短：設定檔內容含 PAT，不可以整段印出來。
         #   `nginx -t` 的訊息格式是 `[emerg] … in <檔名>:<行號>`，不含檔案內容。
         msg = out.decode(errors="replace").strip().replace("\n", " ")[:160]
-        print(f"[claude-pty] ⚠ 代理 {c.name} 的新設定沒通過 nginx -t，這次不換：{msg}",
-              flush=True)
+        print(f"[claude-pty] ⚠ 代理 {c.name} 的新設定沒通過 nginx -t，這次不換：{msg}", flush=True)
         return False
     # ⚠ `mv` 而不是再 `put_archive` 一次：同一份內容驗過就是驗過，重送一次等於讓「驗的」
     #   與「用的」變成兩份可能不同的東西。同檔案系統的 rename 也是原子的，nginx 不會讀到
     #   寫到一半的設定。
     code, out = c.exec_run(["mv", staged, "/etc/nginx/nginx.conf"])
     if code != 0:
-        print(f"[claude-pty] ⚠ 代理 {c.name} 的設定換不上去："
-              f"{out.decode(errors='replace').strip()[:120]}", flush=True)
+        print(f"[claude-pty] ⚠ 代理 {c.name} 的設定換不上去：{out.decode(errors='replace').strip()[:120]}", flush=True)
         return False
     # nginx 在 HUP 時是**重新開啟這個路徑**，不是沿用啟動時的 fd，所以上面的 `mv`
     # 換掉檔案不會讓它讀到舊 inode。

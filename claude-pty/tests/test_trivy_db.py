@@ -5,6 +5,7 @@
 這支守的核心命題：**它永遠不擋開場**。六種結果全部要回一個 dict，一個都不准拋——
 因為呼叫它的地方是 `sessions.create()` 的熱路徑，而 A2 沒有 DB 是可降級的，開不了場不是。
 """
+
 import datetime as _dt
 import os
 import sys
@@ -32,11 +33,12 @@ _pass = _fail = 0
 def check(label, ok):
     global _pass, _fail
     _pass += ok
-    _fail += (not ok)
+    _fail += not ok
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
 
 
 # --- 假 docker client -------------------------------------------------------------
+
 
 class _FakeContainers:
     def __init__(self, outer):
@@ -58,8 +60,8 @@ class FakeClient:
 
 def _container_error(exit_status=1):
     return docker.errors.ContainerError(
-        container=None, exit_status=exit_status, command="trivy",
-        image=config.IMAGE, stderr=b"boom")
+        container=None, exit_status=exit_status, command="trivy", image=config.IMAGE, stderr=b"boom"
+    )
 
 
 # --- 假的 cache 目錄 ---------------------------------------------------------------
@@ -116,39 +118,39 @@ check("起了一顆容器", len(c.calls) == 1)
 kw = c.calls[0] if c.calls else {}
 check("用的是 session 的 image", kw.get("image") == config.IMAGE)
 check("entrypoint 換成 bash（繞過啟動選單）", kw.get("entrypoint") == "bash")
-check("命令帶了 timeout 硬上限，且與設定一致",
-      f"timeout -k 10 {config.TRIVY_DB_TIMEOUT}" in " ".join(kw.get("command") or []))
-check("跑的是 --download-db-only",
-      "--download-db-only" in " ".join(kw.get("command") or []))
+check(
+    "命令帶了 timeout 硬上限，且與設定一致",
+    f"timeout -k 10 {config.TRIVY_DB_TIMEOUT}" in " ".join(kw.get("command") or []),
+)
+check("跑的是 --download-db-only", "--download-db-only" in " ".join(kw.get("command") or []))
 # ⚠ key 是 **volume 名**不是 host 路徑：host 路徑會把 cache 的擁有權綁回部署者的 uid，
 #   那正是 ADR 0018 要拆掉的耦合。
-check("cache 掛的是 named volume，落點固定",
-      (kw.get("volumes") or {}).get(config.TRIVY_CACHE_VOLUME, {}).get("bind")
-      == "/home/nathan/.cache/trivy")
-check("🔴 沒有任何 host 路徑出現在 volumes 裡",
-      not any(str(k).startswith("/") for k in (kw.get("volumes") or {})))
+check(
+    "cache 掛的是 named volume，落點固定",
+    (kw.get("volumes") or {}).get(config.TRIVY_CACHE_VOLUME, {}).get("bind") == "/home/nathan/.cache/trivy",
+)
+check("🔴 沒有任何 host 路徑出現在 volumes 裡", not any(str(k).startswith("/") for k in (kw.get("volumes") or {})))
 check("用完即棄（remove=True）", kw.get("remove") is True)
 # ⚠ 這條是端到端實測踩到才補的：`detach=False` 時 docker-py 會去撈容器輸出，
 #   `stdout=False, stderr=False` 兩個都關 → daemon 回 400
 #   「you must choose at least one stream」→ **容器其實跑完了、DB 也更新了**，
 #   這支卻回 error、時間戳也沒寫，下一場再更新一次。假 client 驗不到這種事
 #   （它不照真 API 的規則檢查參數），所以改成明確斷言。
-check("🔴 沒有把兩個輸出串都關掉（關掉的話 docker daemon 會回 400）",
-      not (kw.get("stdout") is False and kw.get("stderr") is False))
+check(
+    "🔴 沒有把兩個輸出串都關掉（關掉的話 docker daemon 會回 400）",
+    not (kw.get("stdout") is False and kw.get("stderr") is False),
+)
 # ⚠ 這條是真的踩得到：帶了 session label 的話，reconciler 的孤兒清理會把這顆
 #   「有 label 卻不在 DB 裡」的容器當成孤兒。--rm 很快就走，但那是在賭時序。
-check("🔴 沒有帶任何 label（不能進 reconciler 的視野）",
-      not kw.get("labels"))
+check("🔴 沒有帶任何 label（不能進 reconciler 的視野）", not kw.get("labels"))
 
 print("\n== 從來沒更新過：要去更新，不是當成新鮮 ==")
 set_stamp(None)
 clear_lease()
 c = FakeClient()
 r = trivy_db.update(c)
-check("🔴 沒有時間戳就去更新（fail-safe 的方向要對）",
-      r["status"] == "ok" and len(c.calls) == 1)
-check("🔴 更新成功要寫下時間戳（否則每一場都會重跑一次）",
-      os.path.exists(config.TRIVY_DB_STAMP))
+check("🔴 沒有時間戳就去更新（fail-safe 的方向要對）", r["status"] == "ok" and len(c.calls) == 1)
+check("🔴 更新成功要寫下時間戳（否則每一場都會重跑一次）", os.path.exists(config.TRIVY_DB_STAMP))
 c2 = FakeClient()
 check("🔴 而且下一次就會被節流掉", trivy_db.update(c2)["status"] == "fresh" and c2.calls == [])
 
@@ -171,8 +173,7 @@ trivy_db.update(FakeClient())
 set_stamp(_old)
 c2 = FakeClient()
 r2 = trivy_db.update(c2)
-check("🔴 同一個 process 連續兩次都做得成（沒有被自己的租約卡住）",
-      r2["status"] == "ok" and len(c2.calls) == 1)
+check("🔴 同一個 process 連續兩次都做得成（沒有被自己的租約卡住）", r2["status"] == "ok" and len(c2.calls) == 1)
 
 print("\n== 更新失敗：有舊 DB → stale，沒有 → missing，兩者都不拋 ==")
 set_stamp(_old)
@@ -197,7 +198,7 @@ print("\n== 失敗之後租約也要還（不能把後面的人鎖死）==")
 set_stamp(_old)
 clear_lease()
 trivy_db.update(FakeClient(raises=_container_error()))
-set_stamp(_old)          # 同上：把節流排除掉，這條測的是租約
+set_stamp(_old)  # 同上：把節流排除掉，這條測的是租約
 c = FakeClient()
 r = trivy_db.update(c)
 check("🔴 前一次失敗不會讓下一次被判成 skipped", r["status"] == "ok")
@@ -209,15 +210,13 @@ print("\n== 租約層自己拋出來，也不能讓 update() 拋 ==")
 _real_acquire, _real_release = trivy_db.acquire_lease, trivy_db.release_lease
 try:
     set_stamp(_old)
-    trivy_db.acquire_lease = lambda *a, **k: (_ for _ in ()).throw(
-        RuntimeError("database is locked"))
+    trivy_db.acquire_lease = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("database is locked"))
     r = trivy_db.update(FakeClient())
     check("🔴 取租約拋出 → 回 error，不往外拋", r["status"] == "error")
     check("訊息說得出是取租約失敗", "取租約" in r["detail"])
 
     trivy_db.acquire_lease = _real_acquire
-    trivy_db.release_lease = lambda *a, **k: (_ for _ in ()).throw(
-        RuntimeError("database is locked"))
+    trivy_db.release_lease = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("database is locked"))
     set_stamp(_old)
     clear_lease_direct = _real_release
     clear_lease_direct(trivy_db.LEASE_NAME, "someone-else")
@@ -225,8 +224,7 @@ try:
     c = FakeClient()
     r = trivy_db.update(c)
     # ⚠ 重點不只是「不拋」，是**已經算好的 ok 不可以被 finally 吃掉**。
-    check("🔴 還租約拋出 → 仍然回得到 ok（結果沒有被 finally 取代）",
-          r["status"] == "ok" and len(c.calls) == 1)
+    check("🔴 還租約拋出 → 仍然回得到 ok（結果沒有被 finally 取代）", r["status"] == "ok" and len(c.calls) == 1)
 finally:
     trivy_db.acquire_lease, trivy_db.release_lease = _real_acquire, _real_release
     clear_lease()
@@ -251,7 +249,7 @@ try:
     config.SPACE_SELF = _probe_dir
     config.MOUNTS = {
         "ncr-trivy-cache": {"bind": "/home/nathan/.cache/trivy", "mode": "rw"},
-        _probe_dir: {"bind": "/x", "mode": "rw"},                 # 存在的路徑
+        _probe_dir: {"bind": "/x", "mode": "rw"},  # 存在的路徑
         os.path.join(_probe_dir, "nope"): {"bind": "/y", "mode": "rw"},  # 不存在的路徑
     }
     msgs = [m for m in sessions.preflight() if "掛載來源不存在" in m]
@@ -261,10 +259,8 @@ finally:
     config.HOST_HOME, config._SELF_HOME = _old_host_home, _old_self_home
     config.SPACE_SELF = _old_space
 
-check("🔴 volume 名不會被誤報成『掛載來源不存在』",
-      not any("ncr-trivy-cache" in m for m in msgs))
-check("但真的不存在的 host 路徑仍然要喊（不能因此把檢查關掉）",
-      any("nope" in m for m in msgs))
+check("🔴 volume 名不會被誤報成『掛載來源不存在』", not any("ncr-trivy-cache" in m for m in msgs))
+check("但真的不存在的 host 路徑仍然要喊（不能因此把檢查關掉）", any("nope" in m for m in msgs))
 
 print("\n== 兩條路徑的耦合：改一邊沒改另一邊，會安靜地分家 ==")
 # ⚠ 這兩條是無守衛的耦合，補測試的理由是**症狀與原因完全連不起來**：
@@ -272,21 +268,26 @@ print("\n== 兩條路徑的耦合：改一邊沒改另一邊，會安靜地分�
 #   而人看到的只是「怎麼又在下載」。timeout 兩邊不一致則是「同一件事在兩條路上有兩個
 #   耐心值」，出事時你會以為是網路不穩。
 _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-with open(os.path.join(_root, "dev-container", "run-ncr-dev-container.sh"),
-          encoding="utf-8") as f:
+with open(os.path.join(_root, "dev-container", "run-ncr-dev-container.sh"), encoding="utf-8") as f:
     _runsh = f.read()
-with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                       "deploy", "docker-compose.yml"), encoding="utf-8") as f:
+with open(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "deploy", "docker-compose.yml"),
+    encoding="utf-8",
+) as f:
     _compose = f.read()
 
-check("🔴 run script 與 config 指的是同一顆 volume（改名＝分家，各抓一份 1.2 GB）",
-      f'TRIVY_CACHE_VOLUME="{config.TRIVY_CACHE_VOLUME}"' in _runsh)
-check("🔴 compose 宣告的 volume 名也是同一個（不然會吃到 project 前綴）",
-      f"name: {config.TRIVY_CACHE_VOLUME}" in _compose)
-check("兩條路徑掛到容器內的落點相同",
-      _runsh.count('"$TRIVY_CACHE_VOLUME":/home/nathan/.cache/trivy') >= 1)
-check(f"🔴 run script 的 timeout 與 config.TRIVY_DB_TIMEOUT 一致（{config.TRIVY_DB_TIMEOUT}）",
-      f"timeout -k 10 {config.TRIVY_DB_TIMEOUT} " in _runsh)
+check(
+    "🔴 run script 與 config 指的是同一顆 volume（改名＝分家，各抓一份 1.2 GB）",
+    f'TRIVY_CACHE_VOLUME="{config.TRIVY_CACHE_VOLUME}"' in _runsh,
+)
+check(
+    "🔴 compose 宣告的 volume 名也是同一個（不然會吃到 project 前綴）", f"name: {config.TRIVY_CACHE_VOLUME}" in _compose
+)
+check("兩條路徑掛到容器內的落點相同", _runsh.count('"$TRIVY_CACHE_VOLUME":/home/nathan/.cache/trivy') >= 1)
+check(
+    f"🔴 run script 的 timeout 與 config.TRIVY_DB_TIMEOUT 一致（{config.TRIVY_DB_TIMEOUT}）",
+    f"timeout -k 10 {config.TRIVY_DB_TIMEOUT} " in _runsh,
+)
 
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)

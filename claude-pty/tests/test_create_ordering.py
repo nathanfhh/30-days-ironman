@@ -30,6 +30,7 @@ collector），唯一放得下的位置仍然是 create 與 start 中間，挪�
   daemon、不花時間、不碰使用者的任何東西——因此可以放進 quick 測試組，每次都跑得到。
   真正的隔離性由 `test_network_isolation.py` 用真的容器與真的 listener 驗。
 """
+
 import os
 import sys
 import tempfile
@@ -74,6 +75,7 @@ def check(label, ok):
 
 
 # --- 假的 docker：只記錄「誰被呼叫、什麼順序」 --------------------------------------
+
 
 class _Rec:
     def __init__(self):
@@ -134,7 +136,7 @@ class FakeNetworks:
 class FakeContainers:
     def __init__(self, rec):
         self._rec = rec
-        self.create_kwargs = None      # 建立當下帶了什麼（要驗 network= 就在裡面）
+        self.create_kwargs = None  # 建立當下帶了什麼（要驗 network= 就在裡面）
 
     def create(self, image, **kw):
         # ⚠ 這是本測試的核心：`create()` 必須存在。改回 `containers.run()` 的話這裡不會被
@@ -144,7 +146,7 @@ class FakeContainers:
         return FakeContainer(self._rec)
 
     def run(self, *a, **kw):
-        self._rec.log("containers.run")      # 改回一發 run 的話會留下這個記號
+        self._rec.log("containers.run")  # 改回一發 run 的話會留下這個記號
         return FakeContainer(self._rec)
 
     def get(self, name):
@@ -204,11 +206,11 @@ class FakeClient:
 
 try:
     uid = auth.create_user("order-user", "create-order-pw-1")["id"]
-    auth.set_cli_token(uid, "sk-test-setup-token")   # create() 入口先驗憑證，這裡測的是後面的順序
+    auth.set_cli_token(uid, "sk-test-setup-token")  # create() 入口先驗憑證，這裡測的是後面的順序
 
     rec = _Rec()
     mgr = SessionManager()
-    mgr._docker = FakeClient(rec)          # noqa: SLF001 — 就是要換掉它
+    mgr._docker = FakeClient(rec)  # noqa: SLF001 — 就是要換掉它
     mgr.create(user_id=uid)
 
     print("== 呼叫序 ==")
@@ -217,16 +219,21 @@ try:
     print("== create 與 start 拆開，順序正確 ==")
     check("走的是 containers.create（不是 run）", "containers.create" in rec.calls)
     check("完全沒有呼叫 containers.run", "containers.run" not in rec.calls)
-    check("containers.create 在 container.start 之前",
-          0 <= rec.index("containers.create") < rec.index("container.start"))
+    check(
+        "containers.create 在 container.start 之前", 0 <= rec.index("containers.create") < rec.index("container.start")
+    )
 
     # 這一輪沒有 GitLab（預設關閉），但**網路照建照用**——它是 session 的家，不是 GitLab
     # 的配件。這條在下面「沒有 PAT」那段還會再驗一次。
     want_net = user_proxy.network_name(uid)
-    check("🔴 network 在 containers.create 的參數裡（不是事後 connect 上去的）",
-          (mgr._docker.containers.create_kwargs or {}).get("network") == want_net)
-    check("🔴 而且那張網在 containers.create 之前就建好了",
-          0 <= rec.index("network.create") < rec.index("containers.create"))
+    check(
+        "🔴 network 在 containers.create 的參數裡（不是事後 connect 上去的）",
+        (mgr._docker.containers.create_kwargs or {}).get("network") == want_net,
+    )
+    check(
+        "🔴 而且那張網在 containers.create 之前就建好了",
+        0 <= rec.index("network.create") < rec.index("containers.create"),
+    )
 
     # --- 網路就位的時機（ADR 0016）------------------------------------------------
     #
@@ -243,7 +250,7 @@ try:
 
     rec2 = _Rec()
     mgr2 = SessionManager()
-    mgr2._docker = FakeClient(rec2)        # noqa: SLF001 — 就是要換掉它
+    mgr2._docker = FakeClient(rec2)  # noqa: SLF001 — 就是要換掉它
     mgr2.create(user_id=uid)
     print("  " + " → ".join(rec2.calls))
 
@@ -252,17 +259,19 @@ try:
     i_start = rec2.index("container.start")
 
     check("網路先建起來（容器要以它為 network 參數，得先存在）", 0 <= i_netcreate < i_create)
-    check("代理容器也在 session 容器之前就備好",
-          0 <= rec2.index("proxy.start") < i_create)
-    check("🔴 session 容器建立當下就掛在該使用者的網路上",
-          (mgr2._docker.containers.create_kwargs or {}).get("network") == want_net)
-    check("🔴 **沒有任何 network.connect 晚於 container.start**"
-          "（挪到 start 之後就是永久且無聲的失效）",
-          all(i < i_start for i, c in enumerate(rec2.calls) if c == "network.connect"))
-    check("🔴 設定用 put_archive 送進代理，而且在它啟動之前"
-          "（bind mount 的話之後就換不掉，熱重載的前提沒了）",
-          "proxy.put_archive" in rec2.calls
-          and rec2.index("proxy.put_archive") < rec2.index("proxy.start"))
+    check("代理容器也在 session 容器之前就備好", 0 <= rec2.index("proxy.start") < i_create)
+    check(
+        "🔴 session 容器建立當下就掛在該使用者的網路上",
+        (mgr2._docker.containers.create_kwargs or {}).get("network") == want_net,
+    )
+    check(
+        "🔴 **沒有任何 network.connect 晚於 container.start**（挪到 start 之後就是永久且無聲的失效）",
+        all(i < i_start for i, c in enumerate(rec2.calls) if c == "network.connect"),
+    )
+    check(
+        "🔴 設定用 put_archive 送進代理，而且在它啟動之前（bind mount 的話之後就換不掉，熱重載的前提沒了）",
+        "proxy.put_archive" in rec2.calls and rec2.index("proxy.put_archive") < rec2.index("proxy.start"),
+    )
 
     # 沒設 PAT 的人：**不建代理，但網路照建**——他的 session 一樣需要一個住的地方，而且
     # 一樣不可以跟別人共用。
@@ -272,16 +281,16 @@ try:
     auth.set_gitlab_pat(uid, "")
     rec3 = _Rec()
     mgr3 = SessionManager()
-    mgr3._docker = FakeClient(rec3)        # noqa: SLF001
+    mgr3._docker = FakeClient(rec3)  # noqa: SLF001
     mgr3.create(user_id=uid)
     print("  " + " → ".join(rec3.calls))
-    check("🔴 session 照樣建起來並啟動（GitLab 不通是少一個功能，不是這場沒用）",
-          "containers.create" in rec3.calls and "container.start" in rec3.calls)
+    check(
+        "🔴 session 照樣建起來並啟動（GitLab 不通是少一個功能，不是這場沒用）",
+        "containers.create" in rec3.calls and "container.start" in rec3.calls,
+    )
     check("一顆代理都沒建", "proxy.create" not in rec3.calls)
-    check("🔴 但網路照建（沒 PAT 不等於可以跟別人共用一張網）",
-          "network.create" in rec3.calls)
-    check("🔴 而且 session 真的掛在上面",
-          (mgr3._docker.containers.create_kwargs or {}).get("network") == want_net)
+    check("🔴 但網路照建（沒 PAT 不等於可以跟別人共用一張網）", "network.create" in rec3.calls)
+    check("🔴 而且 session 真的掛在上面", (mgr3._docker.containers.create_kwargs or {}).get("network") == want_net)
 
     # GitLab 功能整個關掉也一樣。⚠ 這是**部署層**的開關，不是使用者的選擇——關掉之後
     # 若網路跟著消失，那個部署的每一場 session 都會落回共用網路，而它不會有任何症狀。
@@ -289,12 +298,11 @@ try:
     config.GITLAB_HOST = ""
     rec4 = _Rec()
     mgr4 = SessionManager()
-    mgr4._docker = FakeClient(rec4)        # noqa: SLF001
+    mgr4._docker = FakeClient(rec4)  # noqa: SLF001
     mgr4.create(user_id=uid)
     print("  " + " → ".join(rec4.calls))
     check("🔴 功能關閉也照建自己的網路", "network.create" in rec4.calls)
-    check("🔴 功能關閉也照掛自己的網路",
-          (mgr4._docker.containers.create_kwargs or {}).get("network") == want_net)
+    check("🔴 功能關閉也照掛自己的網路", (mgr4._docker.containers.create_kwargs or {}).get("network") == want_net)
     check("一顆代理都沒建", "proxy.create" not in rec4.calls)
 
     # --- 位址池滿：**開不了場**，不是降級 -----------------------------------------
@@ -307,25 +315,23 @@ try:
 
     class PoolFullNetworks(FakeNetworks):
         def create(self, name, **kw):
-            raise docker.errors.APIError(
-                "all predefined address pools have been fully subnetted")
+            raise docker.errors.APIError("all predefined address pools have been fully subnetted")
 
     rec5 = _Rec()
     mgr5 = SessionManager()
-    mgr5._docker = FakeClient(rec5)        # noqa: SLF001
+    mgr5._docker = FakeClient(rec5)  # noqa: SLF001
     mgr5._docker.networks = PoolFullNetworks(rec5)
     _err = None
     try:
         mgr5.create(user_id=uid)
-    except Exception as e:      # noqa: BLE001 — 就是要驗它拋
+    except Exception as e:  # noqa: BLE001 — 就是要驗它拋
         _err = e
-    check("🔴 位址池滿 → 直接失敗，不是靜靜降級開場",
-          _err is not None and type(_err).__name__ == "SessionError")
-    check("🔴 完全沒有建立容器（不可以退回任何共用網路）",
-          "containers.create" not in rec5.calls)
-    check("🔴 訊息講的是下一步，不是 docker 的原文",
-          _err is not None and "address pools" not in str(_err)
-          and "session" in str(_err) and "daemon.json" in str(_err))
+    check("🔴 位址池滿 → 直接失敗，不是靜靜降級開場", _err is not None and type(_err).__name__ == "SessionError")
+    check("🔴 完全沒有建立容器（不可以退回任何共用網路）", "containers.create" not in rec5.calls)
+    check(
+        "🔴 訊息講的是下一步，不是 docker 的原文",
+        _err is not None and "address pools" not in str(_err) and "session" in str(_err) and "daemon.json" in str(_err),
+    )
 
 finally:
     __import__("shutil").rmtree(_tmp, ignore_errors=True)

@@ -7,6 +7,7 @@ entrypoint.sh、用注入的 CLAUDE_PTY_* env 跳過選單、抵達 driver 啟�
 
 需要 docker + dev-container 的 image。（不驗 firewall/mitm/otel 的實際生效——那需完整 apparatus。）
 """
+
 import os
 import sys
 import time
@@ -20,9 +21,11 @@ STUB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stub_claude.sh"
 os.chmod(STUB, 0o755)
 
 import tempfile  # noqa: E402
+
 _tmp = tempfile.mkdtemp(prefix="claude-pty-entrypoint-")
 
 from server import config, db  # noqa: E402
+
 config.ENTRYPOINT = None  # 走 entrypoint.sh（不覆蓋）
 # 只掛 stub claude（免 token），不掛 ~/.claude；entrypoint.sh 由 build_run_kwargs bind-mount repo 版。
 config.MOUNTS = {STUB: {"bind": "/home/nathan/.local/bin/claude", "mode": "ro"}}
@@ -49,11 +52,14 @@ import docker  # noqa: E402
 from server.sessions import DRIVER_MARKER, Profile, SessionManager  # noqa: E402
 
 _pass = _fail = 0
+
+
 def check(label, ok):
     global _pass, _fail
     _pass += ok
-    _fail += (not ok)
+    _fail += not ok
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
+
 
 D = docker.from_env()
 mgr = SessionManager()
@@ -77,11 +83,15 @@ check("模型與思考深度以旗標傳給 driver", "--model opus --effort high
 #    NCR_MODEL 若排在前面就會被讀成「呼叫端自帶 session」，capture 資料夾用一個對不到
 #    任何 transcript 的 id 命名，事後撈報表會撈到空的。
 _argv = logs.split("REACHED-DRIVER-LAUNCH args=")[-1].splitlines()[0]
-check("🔴 --model 排在 --session-id 之後（session id 先定案才 append 旗標）",
-      "--session-id" in _argv and _argv.index("--session-id") < _argv.index("--model"))
+check(
+    "🔴 --model 排在 --session-id 之後（session id 先定案才 append 旗標）",
+    "--session-id" in _argv and _argv.index("--session-id") < _argv.index("--model"),
+)
 # 🔴 就緒標記是 wait_ready 的訊號：要在 capture 起完之後、driver 啟動之前
-check("🔴 就緒標記印在 driver 啟動之前",
-      DRIVER_MARKER in logs and logs.index(DRIVER_MARKER) < logs.index("REACHED-DRIVER-LAUNCH"))
+check(
+    "🔴 就緒標記印在 driver 啟動之前",
+    DRIVER_MARKER in logs and logs.index(DRIVER_MARKER) < logs.index("REACHED-DRIVER-LAUNCH"),
+)
 
 mgr.terminate(s["id"])
 
@@ -105,16 +115,23 @@ print("== 🔴 條件題成對送（capture ⇄ capture scope）==")
 from server.sessions import build_run_kwargs  # noqa: E402
 
 _env_cap = build_run_kwargs("c", "sidcap", Profile(capture=True), 1)["environment"]
-check("capture=1 時一定帶著 scope", _env_cap.get("NCR_CAPTURE") == "1"
-      and _env_cap.get("NCR_CAPTURE_SCOPE") in ("all", "model", "1", "2"))
+check(
+    "capture=1 時一定帶著 scope",
+    _env_cap.get("NCR_CAPTURE") == "1" and _env_cap.get("NCR_CAPTURE_SCOPE") in ("all", "model", "1", "2"),
+)
 
 # 反向：手動起一顆只帶 NCR_CAPTURE 的容器，它應該停在 read（讀不到就緒標記）。
 _probe = D.containers.run(
-    config.IMAGE, detach=True, tty=True, stdin_open=True, remove=False,
+    config.IMAGE,
+    detach=True,
+    tty=True,
+    stdin_open=True,
+    remove=False,
     name="claude-pty-scope-probe",
     environment={"NCR_NET": "unrestricted", "NCR_CAPTURE": "1", "NCR_MARK": "1"},
     volumes={os.path.abspath(STUB): {"bind": "/home/nathan/.local/bin/claude", "mode": "ro"}},
-    entrypoint=None)
+    entrypoint=None,
+)
 try:
     _stuck = True
     for _ in range(20):

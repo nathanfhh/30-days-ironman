@@ -14,18 +14,19 @@
 需要 docker + dev-container 的 image。用 bash entrypoint 跑（零 token）：
     uv run --with flask --with docker --with sqlalchemy python tests/test_session_lifecycle.py
 """
+
 import os
 import sys
 import tempfile
 import time
 
-for v in ("HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","http_proxy","https_proxy","all_proxy"):
+for v in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
     os.environ.pop(v, None)
 os.environ["NO_PROXY"] = os.environ["no_proxy"] = "127.0.0.1,localhost"
 os.environ["CLAUDE_PTY_IMAGE"] = os.environ.get("CLAUDE_PTY_IMAGE", "ncr-dev-container")
 os.environ["CLAUDE_PTY_ENTRYPOINT"] = "bash"
 os.environ["CLAUDE_PTY_COMMAND"] = ""
-os.environ["CLAUDE_PTY_NO_MOUNTS"] = "1"   # bash 測試不掛 ~/.claude，保持隔離
+os.environ["CLAUDE_PTY_NO_MOUNTS"] = "1"  # bash 測試不掛 ~/.claude，保持隔離
 # 打上測試標記：正式 reconciler 據此跳過這些容器。沒有它的話，測試容器帶 session label
 # 卻不在正式 DB 裡，會被正式 reconciler 當孤兒收掉（ORPHAN_GRACE 之後）。
 os.environ["CLAUDE_PTY_TEST_MARK"] = "1"
@@ -60,15 +61,19 @@ _PRE_EXISTING = {c.name for c in D.containers.list(all=True, filters=config.SESS
 
 
 def _leftovers():
-    return [c for c in D.containers.list(all=True, filters=config.SESSION_FILTERS)
-            if c.name not in _PRE_EXISTING]
+    return [c for c in D.containers.list(all=True, filters=config.SESSION_FILTERS) if c.name not in _PRE_EXISTING]
+
+
 _fails = 0
+
+
 def check(label, ok):
     global _fails
     if not ok:
         _fails += 1
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
     return ok
+
 
 mgr = SessionManager()
 
@@ -97,17 +102,19 @@ try:
     check("attach 通道可讀寫（ttyd 與就緒偵測共用的那條）", b"REGISTRY-OK" in got)
 
     print("== 持久性：換一個 manager 實例仍看得到（多 worker / 重啟韌性）==")
-    mgr2 = SessionManager()   # 模擬另一個 worker：全新實例、零 in-memory 狀態
+    mgr2 = SessionManager()  # 模擬另一個 worker：全新實例、零 in-memory 狀態
     check("新實例從 DB 讀得到同一 session", any(x["id"] == sid for x in mgr2.list()))
     check("新實例可查 status", mgr2.status(sid)["container"] == s["container"])
 
     print("== 🔴 list() 完全不碰 docker（ADR 0012）==")
+
     # 曾經是「順手校正一下」：列表自己打 containers.list，未就緒的列再各打一次
     # docker logs。代價是**整張表的可用性綁在最慢的那顆容器上**——2026-07-27 一顆容器
     # 卡在 removing，這支每 15 秒被輪詢一次的端點每次都等滿 timeout，thread 被吃光，
     # 所有人看不到任何東西。校正移到 reconciler（逐顆隔離），這裡只讀 DB。
     class _Bomb:
         """任何一次 docker 呼叫都直接炸。list() 若還有碰 docker，這裡就會紅。"""
+
         def __getattr__(self, name):
             raise AssertionError(f"list() 不該碰 docker，卻用了 client.{name}")
 
@@ -147,8 +154,10 @@ try:
     D.containers.get(s2["container"]).remove(force=True)
     # ⚠ 清登錄現在是 reconciler 的職責（列表不再自己對帳）。這裡只驗「列表不會因此壞掉」，
     #   清理本身由 test_reconciler 驗——那支有 _ScopedClient，不會誤傷正式 stack 的容器。
-    check("列表仍列得出來（狀態是最後已知值，新鮮度由 state_checked_at 表達）",
-          any(x["id"] == s2["id"] for x in mgr.list()))
+    check(
+        "列表仍列得出來（狀態是最後已知值，新鮮度由 state_checked_at 表達）",
+        any(x["id"] == s2["id"] for x in mgr.list()),
+    )
     mgr.terminate(s2["id"])
     check("terminate 之後登錄才移除", not any(x["id"] == s2["id"] for x in mgr.list()))
 
@@ -166,10 +175,8 @@ try:
     check("登錄已移除", not any(x["id"] == s3["id"] for x in mgr.list()))
     # ADR 0010：離開 sessions 不等於消失——那段歷史必須留得住
     _rows, _total = mgr.history()
-    check("終止後留下歷史紀錄",
-          any(x["id"] == s3["id"] and x["ended_reason"] == "terminated" for x in _rows))
-    check("歷史帶得出擁有者與 profile",
-          all(x["owner"] and isinstance(x["profile"], dict) for x in _rows))
+    check("終止後留下歷史紀錄", any(x["id"] == s3["id"] and x["ended_reason"] == "terminated" for x in _rows))
+    check("歷史帶得出擁有者與 profile", all(x["owner"] and isinstance(x["profile"], dict) for x in _rows))
     check(f"history 回報總數（got {_total}）", _total >= 1)
     dup_ok = False
     try:
@@ -180,13 +187,14 @@ try:
 
     print("== 🔴 交易失敗不留孤兒 container、不白佔配額（前身 C1）==")
     from server.models import Session as SessionRow
+
     with db.session_scope() as _s:
         rows_before = _s.query(SessionRow).count()
     ct_before = len(_leftovers())
     # ⚠ 這裡原本注入的是 capture 落盤目錄的 makedirs 失敗。ADR 0014 之後那個目錄變成
     #   per-user 空間的一部分，改由 provision_user_space() 建——失敗注入也跟著搬過來，
     #   順便補上 provision 的失敗路徑（它跑在 create 的關鍵路徑上，之前沒有測試蓋到）。
-    _f = tempfile.NamedTemporaryFile(delete=False)   # 空間根指向**檔案** → makedirs 必拋
+    _f = tempfile.NamedTemporaryFile(delete=False)  # 空間根指向**檔案** → makedirs 必拋
     _f.close()
     _orig = (config.MOUNTS, config.SPACE_SELF, config.SPACE_HOST)
     # provision 與 user_mounts 都吃 MOUNTS 這個開關，要非空才會真的做事
@@ -199,8 +207,7 @@ try:
         failed = True
     config.MOUNTS, config.SPACE_SELF, config.SPACE_HOST = _orig
     os.unlink(_f.name)
-    check("per-user 空間建不出來時 create 拋錯（不靜默——空間壞掉的 session 一定是壞的）",
-          failed)
+    check("per-user 空間建不出來時 create 拋錯（不靜默——空間壞掉的 session 一定是壞的）", failed)
     with db.session_scope() as _s:
         rows_after = _s.query(SessionRow).count()
     check("失敗後未殘留 creating 登錄（配額不被白佔）", rows_after == rows_before)
@@ -210,7 +217,7 @@ try:
     _orig_max = config.MAX_SESSIONS
     with db.session_scope() as _s:
         cur = _s.query(SessionRow).count()
-    config.MAX_SESSIONS = cur          # 已達上限
+    config.MAX_SESSIONS = cur  # 已達上限
     quota_blocked = False
     try:
         mgr.create()
@@ -227,21 +234,28 @@ try:
     #   500」是這個 codebase 自己立的規矩。
     from server.sessions import SessionError as _SessErr  # noqa: E402
     from server.sessions import ensure_system_user  # noqa: E402
+
     _uid = ensure_system_user()
     with db.session_scope() as _s:
-        _s.add(SessionRow(id="ghostresize1", container_name="claude-pty-ghostresize1",
-                          user_id=_uid, workdir="/tmp", status="running"))
+        _s.add(
+            SessionRow(
+                id="ghostresize1",
+                container_name="claude-pty-ghostresize1",
+                user_id=_uid,
+                workdir="/tmp",
+                status="running",
+            )
+        )
     resize_err = None
     try:
         mgr.resize("ghostresize1", 30, 100)
-    except Exception as e:      # noqa: BLE001 - 要看的就是「拋出來的是哪一種」
+    except Exception as e:  # noqa: BLE001 - 要看的就是「拋出來的是哪一種」
         resize_err = e
-    check(f"拋的是 SessionError（實際 {type(resize_err).__name__}）",
-          isinstance(resize_err, _SessErr))
-    check("不是 docker 的 NotFound 直接往外跑",
-          not isinstance(resize_err, docker.errors.NotFound))
+    check(f"拋的是 SessionError（實際 {type(resize_err).__name__}）", isinstance(resize_err, _SessErr))
+    check("不是 docker 的 NotFound 直接往外跑", not isinstance(resize_err, docker.errors.NotFound))
 
     print("== 尺寸沒變時也要 nudge，不能只信呼叫端的 redraw 旗標（review 2026-07-27）==")
+
     # ⚠ `docker resize` 只在尺寸**真的變了**時才讓核心送 SIGWINCH。而「開啟終端時尺寸剛好
     #   與上次相同」是常態（同一個視窗、同一個字級），那時 TUI 沿用舊版面——使用者看到的
     #   就是「畫面是舊的，手動縮放一下才好」。前端那條旗標要正確得先滿足一串時序
@@ -262,24 +276,29 @@ try:
     spy = _ResizeSpy()
     probe2._docker = spy
     with db.session_scope() as _s:
-        _s.add(SessionRow(id="resizespy001", container_name="claude-pty-resizespy001",
-                          user_id=_uid, workdir="/tmp", status="running",
-                          rows=40, cols=140))
+        _s.add(
+            SessionRow(
+                id="resizespy001",
+                container_name="claude-pty-resizespy001",
+                user_id=_uid,
+                workdir="/tmp",
+                status="running",
+                rows=40,
+                cols=140,
+            )
+        )
 
     spy.calls.clear()
-    probe2.resize("resizespy001", 50, 160)                 # 尺寸真的變了、沒帶旗標
-    check(f"尺寸有變＋無旗標 → 只有一次 resize，不 nudge（實際 {spy.calls}）",
-          spy.calls == [(50, 160)])
+    probe2.resize("resizespy001", 50, 160)  # 尺寸真的變了、沒帶旗標
+    check(f"尺寸有變＋無旗標 → 只有一次 resize，不 nudge（實際 {spy.calls}）", spy.calls == [(50, 160)])
 
     spy.calls.clear()
-    probe2.resize("resizespy001", 50, 160)                 # 與 DB 記的相同、沒帶旗標
-    check(f"**尺寸沒變**＋無旗標 → 仍要 nudge（實際 {spy.calls}）",
-          spy.calls == [(50, 160), (50, 159), (50, 160)])
+    probe2.resize("resizespy001", 50, 160)  # 與 DB 記的相同、沒帶旗標
+    check(f"**尺寸沒變**＋無旗標 → 仍要 nudge（實際 {spy.calls}）", spy.calls == [(50, 160), (50, 159), (50, 160)])
 
     spy.calls.clear()
-    probe2.resize("resizespy001", 60, 180, redraw=True)    # 尺寸有變但明確要求重繪
-    check(f"尺寸有變＋帶旗標 → 照樣 nudge（實際 {spy.calls}）",
-          spy.calls == [(60, 180), (60, 179), (60, 180)])
+    probe2.resize("resizespy001", 60, 180, redraw=True)  # 尺寸有變但明確要求重繪
+    check(f"尺寸有變＋帶旗標 → 照樣 nudge（實際 {spy.calls}）", spy.calls == [(60, 180), (60, 179), (60, 180)])
 
     with db.session_scope() as _s:
         _r = _s.get(SessionRow, "resizespy001")
@@ -316,26 +335,38 @@ try:
     #   user_id 查詢：list() 會把「假 docker 裡看不到的」真實 session 當成 gone 歸檔掉，
     #   於是最後的清理找不到那些容器，留下殘留（第一次寫成那樣，清理那條當場就紅了）。
     from server.auth import create_user as _create_user  # noqa: E402
+
     _probe_uid = _create_user("readyprobe", "ready-probe-password-1")["id"]
     with db.session_scope() as _s:
-        _s.add(SessionRow(id="readystamped", container_name="claude-pty-readystamped",
-                          user_id=_probe_uid, workdir="/tmp", status="running",
-                          ready_at=_utcnow()))
-        _s.add(SessionRow(id="neverreadyx0", container_name="claude-pty-neverreadyx0",
-                          user_id=_probe_uid, workdir="/tmp", status="running",
-                          ready_at=None))
+        _s.add(
+            SessionRow(
+                id="readystamped",
+                container_name="claude-pty-readystamped",
+                user_id=_probe_uid,
+                workdir="/tmp",
+                status="running",
+                ready_at=_utcnow(),
+            )
+        )
+        _s.add(
+            SessionRow(
+                id="neverreadyx0",
+                container_name="claude-pty-neverreadyx0",
+                user_id=_probe_uid,
+                workdir="/tmp",
+                status="running",
+                ready_at=None,
+            )
+        )
     stamped = _CountingContainer("claude-pty-readystamped")
     never = _CountingContainer("claude-pty-neverreadyx0")
     probe = SessionManager()
     probe._docker = _FakeDocker([stamped, never])
     rows = {r["id"]: r for r in probe.list(user_id=_probe_uid)}
     check("已就緒過的列：一次 docker logs 都沒打", stamped.calls == 0)
-    check("沒就緒過的列：**也**一次都沒打（那一發正是拖垮整張表的那個）",
-          never.calls == 0)
-    check("ready 直接來自 ready_at：記過的是 True",
-          rows["readystamped"]["ready"] is True)
-    check("沒記過的是 False（不是猜『大概好了』——補記是 reconciler 的事）",
-          rows["neverreadyx0"]["ready"] is False)
+    check("沒就緒過的列：**也**一次都沒打（那一發正是拖垮整張表的那個）", never.calls == 0)
+    check("ready 直接來自 ready_at：記過的是 True", rows["readystamped"]["ready"] is True)
+    check("沒記過的是 False（不是猜『大概好了』——補記是 reconciler 的事）", rows["neverreadyx0"]["ready"] is False)
 
 finally:
     print("== 清理 ==")

@@ -3,6 +3,7 @@
     uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
         python tests/test_web.py
 """
+
 import json
 import os
 import re
@@ -25,6 +26,8 @@ from server.app import app  # noqa: E402
 
 app.config["TESTING"] = True
 _fails = 0
+
+
 def check(label, ok):
     global _fails
     if not ok:
@@ -40,8 +43,7 @@ c = app.test_client()
 print("== 未登入：頁面導向 /login，API 回 401（同一 gate、兩種呈現）==")
 for path in ("/", "/account"):
     r = c.get(path)
-    check(f"未登入 GET {path} → 302 至 /login",
-          r.status_code == 302 and "/login" in r.headers.get("Location", ""))
+    check(f"未登入 GET {path} → 302 至 /login", r.status_code == 302 and "/login" in r.headers.get("Location", ""))
 r = c.get("/api/sessions")
 check("未登入 GET /api/sessions → 401 JSON", r.status_code == 401)
 
@@ -54,10 +56,8 @@ print("== 已登入訪問 /login → 導向 /（與未登入導向 /login 對稱
 _c2 = app.test_client()
 _c2.post("/api/auth/login", json={"username": "alice", "password": "alice-password-1"})
 _r = _c2.get("/login")
-check("已登入訪問 /login → 302 至 /",
-      _r.status_code == 302 and _r.headers.get("Location", "").rstrip("/").endswith(""))
-check("未登入訪問 /login → 200（登入頁本身公開）",
-      app.test_client().get("/login").status_code == 200)
+check("已登入訪問 /login → 302 至 /", _r.status_code == 302 and _r.headers.get("Location", "").rstrip("/").endswith(""))
+check("未登入訪問 /login → 200（登入頁本身公開）", app.test_client().get("/login").status_code == 200)
 
 print("== 登入後可讀頁面 ==")
 c.post("/api/auth/login", json={"username": "alice", "password": "alice-password-1"})
@@ -77,21 +77,20 @@ check("管理員看得到「帳號清單」", "帳號清單" in admin_html)
 print("== behind_proxy 旗標正確傳到頁面（決定終端用哪種 URL）==")
 _orig = config.BEHIND_PROXY
 config.BEHIND_PROXY = False
-check('未在 proxy 後 → data-behind-proxy="0"',
-      'data-behind-proxy="0"' in c.get("/").get_data(as_text=True))
+check('未在 proxy 後 → data-behind-proxy="0"', 'data-behind-proxy="0"' in c.get("/").get_data(as_text=True))
 config.BEHIND_PROXY = True
-check('在 proxy 後 → data-behind-proxy="1"',
-      'data-behind-proxy="1"' in c.get("/").get_data(as_text=True))
+check('在 proxy 後 → data-behind-proxy="1"', 'data-behind-proxy="1"' in c.get("/").get_data(as_text=True))
 config.BEHIND_PROXY = _orig
 
 print("== 主題 JSON：語意鍵名齊全、與 CSS 變數對得上 ==")
-static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                          "server", "static")
+static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "server", "static")
 css = open(os.path.join(static_dir, "css", "app.css")).read()
 css_vars = set(re.findall(r"--color-([a-z-]+):", css))
 check("CSS 定義了語意色變數", len(css_vars) >= 10)
-check("CSS 未用色相命名的變數（如 --color-blue-500）",
-      not any(re.match(r"(blue|red|green|purple|gray|grey)-?\d", v) for v in css_vars))
+check(
+    "CSS 未用色相命名的變數（如 --color-blue-500）",
+    not any(re.match(r"(blue|red|green|purple|gray|grey)-?\d", v) for v in css_vars),
+)
 
 theme_dir = os.path.join(static_dir, "themes")
 themes = [f for f in os.listdir(theme_dir) if f.endswith(".json")]
@@ -107,10 +106,11 @@ for name in themes:
         check(f"{name}：含必要語意鍵 {essential}", essential in keys)
     # 反向檢查：CSS 定義的每個語意色，主題都必須覆寫。少一個的症狀很隱晦——換到亮色
     # 主題時那個顏色會靜靜沿用深色的預設值，通常要等到有人回報「這裡看不清楚」才發現。
-    root_vars = set(re.findall(r"--color-([a-z-]+):",
-                               re.search(r":root\s*\{(.*?)\n\}", css, re.DOTALL).group(1)))
-    check(f"{name}：覆寫了 CSS 定義的全部 {len(root_vars)} 個語意色"
-          f"（缺 {sorted(root_vars - keys) or '無'}）", not (root_vars - keys))
+    root_vars = set(re.findall(r"--color-([a-z-]+):", re.search(r":root\s*\{(.*?)\n\}", css, re.DOTALL).group(1)))
+    check(
+        f"{name}：覆寫了 CSS 定義的全部 {len(root_vars)} 個語意色（缺 {sorted(root_vars - keys) or '無'}）",
+        not (root_vars - keys),
+    )
 
 # 顏色一律走語意變數：:root 之外出現寫死的 hex/rgb 就是繞過主題系統，那些地方換主題
 # 時不會變色。data: URI 內的（SVG 紋理）不算。
@@ -121,11 +121,14 @@ for name in themes:
 #   預設主題下幾乎同色」的註解（寫的正是「所以不要用顏色做那個區別」）把這條打紅了。
 #   同一類坑這個 repo 已經踩三次（nginx conf 的 `Authorization`、firewall 的
 #   `--uid-owner`、這一次），三次都出自「逐行猜哪裡是註解」。剝掉是精確的，猜不是。
-_body_css = css[css.index("\n}", css.index(":root")) + 2:]
+_body_css = css[css.index("\n}", css.index(":root")) + 2 :]
 _body_css = re.sub(r"/\*.*?\*/", "", _body_css, flags=re.DOTALL)
-_hard = [m.group(0) for line in _body_css.splitlines()
-         if "url(" not in line
-         for m in re.finditer(r"#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)", line)]
+_hard = [
+    m.group(0)
+    for line in _body_css.splitlines()
+    if "url(" not in line
+    for m in re.finditer(r"#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)", line)
+]
 check(f"CSS 規則內無硬編顏色（found {_hard or '無'}）", not _hard)
 
 print("== 靜態資源可讀 ==")
@@ -152,26 +155,29 @@ manager._docker = _NoContainers()
 with db.session_scope() as s:
     alice_id = s.query(UserRow).filter_by(username="alice").one().id
     for n in range(25):
-        s.add(SessionRow(id=f"page{n:04d}", container_name=f"claude-pty-page{n:04d}",
-                         user_id=alice_id, status=STATUS_CREATING, workdir="/w"))
+        s.add(
+            SessionRow(
+                id=f"page{n:04d}",
+                container_name=f"claude-pty-page{n:04d}",
+                user_id=alice_id,
+                status=STATUS_CREATING,
+                workdir="/w",
+            )
+        )
 
 r = c.get("/api/sessions")
 d = r.get_json()
-check("預設帶分頁欄位 total/limit/offset",
-      {"sessions", "total", "limit", "offset"} <= set(d))
-check(f"預設不回全部（limit={d['limit']}，回 {len(d['sessions'])} 筆）",
-      len(d["sessions"]) == d["limit"] < 25)
+check("預設帶分頁欄位 total/limit/offset", {"sessions", "total", "limit", "offset"} <= set(d))
+check(f"預設不回全部（limit={d['limit']}，回 {len(d['sessions'])} 筆）", len(d["sessions"]) == d["limit"] < 25)
 check(f"total 是全部筆數（got {d['total']}）", d["total"] == 25)
 first_page_ids = [x["id"] for x in d["sessions"]]
 
 d2 = c.get("/api/sessions?limit=5&offset=20").get_json()
 check("limit/offset 生效", len(d2["sessions"]) == 5 and d2["offset"] == 20)
-check("翻頁後不重複第一頁的內容",
-      not set(x["id"] for x in d2["sessions"]) & set(first_page_ids))
+check("翻頁後不重複第一頁的內容", not set(x["id"] for x in d2["sessions"]) & set(first_page_ids))
 
 d3 = c.get("/api/sessions?limit=5&offset=100").get_json()
-check("offset 超出範圍回空清單但 total 仍正確",
-      d3["sessions"] == [] and d3["total"] == 25)
+check("offset 超出範圍回空清單但 total 仍正確", d3["sessions"] == [] and d3["total"] == 25)
 
 for bad in ("limit=0", "limit=abc", "limit=101", "offset=-1"):
     check(f"非法分頁參數 {bad} → 400", c.get(f"/api/sessions?{bad}").status_code == 400)
@@ -183,11 +189,9 @@ check("歸檔 3 筆", archive([f"page{n:04d}" for n in range(3)], "terminated") 
 h = c.get("/api/sessions/history").get_json()
 check("/api/sessions/history 不被當成 sid（路由順序）", "sessions" in h)
 check(f"回傳已結束的 3 筆（got {h['total']}）", h["total"] == 3)
-check("帶得出結束時間與原因",
-      all(x["ended_at"] and x["ended_reason"] == "terminated" for x in h["sessions"]))
+check("帶得出結束時間與原因", all(x["ended_at"] and x["ended_reason"] == "terminated" for x in h["sessions"]))
 check("歷史支援分頁", len(c.get("/api/sessions/history?limit=2").get_json()["sessions"]) == 2)
-check("進行中的列表已不含歸檔的那幾筆",
-      c.get("/api/sessions").get_json()["total"] == 22)
+check("進行中的列表已不含歸檔的那幾筆", c.get("/api/sessions").get_json()["total"] == 22)
 
 # 收尾也走 archive：直接 s.delete(SessionRow) 會示範一個「繞過唯一出口」的寫法，
 # 而那正是這批改動要杜絕的（review N3）
@@ -197,16 +201,21 @@ print("== 退場（admin 改掉他的密碼）不動他的 session（ADR 0010）
 # 刪除會沿 FK cascade 掉 sessions 登錄——容器還在跑卻沒人追蹤，歷史也沒經過 archive
 # 就消失。退場走「改密碼」沒有這個問題：存取被切斷，工作繼續，紀錄完整。
 with db.session_scope() as s:
-    s.add(SessionRow(id="keepalive1", container_name="claude-pty-keepalive1",
-                     user_id=alice_id, status=STATUS_CREATING, workdir="/w"))
+    s.add(
+        SessionRow(
+            id="keepalive1",
+            container_name="claude-pty-keepalive1",
+            user_id=alice_id,
+            status=STATUS_CREATING,
+            workdir="/w",
+        )
+    )
 r = ca.post(f"/api/users/{alice_id}/password", json={"new_password": "alice-exited-pw-1"})
 check("退場成功（admin 代改密碼 → 204）", r.status_code == 204)
 with db.session_scope() as s:
-    check("他的 session 登錄仍在（沒被 cascade 掉）",
-          s.get(SessionRow, "keepalive1") is not None)
-check("帳號仍在名冊上（留痕）",
-      any(u["id"] == alice_id for u in ca.get("/api/users").get_json()["users"]))
-archive(["keepalive1"], "gone")   # 收尾走唯一出口
+    check("他的 session 登錄仍在（沒被 cascade 掉）", s.get(SessionRow, "keepalive1") is not None)
+check("帳號仍在名冊上（留痕）", any(u["id"] == alice_id for u in ca.get("/api/users").get_json()["users"]))
+archive(["keepalive1"], "gone")  # 收尾走唯一出口
 
 print("== XSS：使用者可控的欄位進 innerHTML 前一律逸出 ==")
 # 精準檢查「實際由使用者控制」的欄位，而非對所有插值做啟發式判斷——後者會把 relTime()、
@@ -215,8 +224,17 @@ js = open(os.path.join(static_dir, "js", "app.js")).read()
 check("app.js 提供 esc() 逸出工具", "function esc(" in js)
 # 這些值最終都源自使用者輸入或外部資料：session id/workdir/state（建立時可帶）、
 # profile 值（API 接受任意字串，非只有下拉選單那幾個）、使用者名稱、後端錯誤訊息。
-TAINTED = ["s.id", "s.workdir", "s.state", "s.owner", "s.display_name", "s.container",
-           "u.username", "ex.message", "e.message"]
+TAINTED = [
+    "s.id",
+    "s.workdir",
+    "s.state",
+    "s.owner",
+    "s.display_name",
+    "s.container",
+    "u.username",
+    "ex.message",
+    "e.message",
+]
 # ⚠ 這裡刻意**沒有** profile 的值（`p.cli` 等）。它們在 chips() 裡是先被組進一個陣列、
 #   三行後才寫進模板字串的，而這份檢查是逐行看「這一行有沒有 esc」——加進來只會對
 #   `out.push([p.cli, ...])` 那種純資料組裝誤報。profile 值的逸出改由下方針對 chips()
@@ -235,8 +253,7 @@ for tpl in ("sessions.html", "account.html"):
         for line in body.splitlines():
             if field not in line or any(sink in line for sink in TEXT_SINKS):
                 continue
-            bad += [m for m in re.findall(r"\$\{([^}]*" + re.escape(field) + r"[^}]*)\}", line)
-                    if "esc(" not in m]
+            bad += [m for m in re.findall(r"\$\{([^}]*" + re.escape(field) + r"[^}]*)\}", line) if "esc(" not in m]
         check(f"{tpl}：{field} 進 innerHTML 前全數逸出（未逸出處 {bad or '無'}）", not bad)
 # TEXT_SINKS 把 toast() 當成安全 sink——那個前提本身必須被驗證。若哪天 toast 改用
 # innerHTML 寫訊息，白名單會讓上面所有檢查對它視而不見，等於直接變成一個漏洞。
@@ -247,10 +264,11 @@ if toast_body:
     # 標題與內文都必須走 textContent。比對變數名而非固定字串：toast 的參數日後可能
     # 改名，但「使用者可控的字串只能經由 textContent 進 DOM」這條規則不會變。
     for var in ("title", "body"):
-        check(f"toast() 以 textContent 寫入 {var}（TEXT_SINKS 白名單的前提）",
-              re.search(rf"\.textContent = {var}\b", src) is not None)
-        check(f"toast() 不把 {var} 塞進 innerHTML",
-              not re.search(rf"innerHTML\s*[+]?=\s*[^;]*\b{var}\b", src))
+        check(
+            f"toast() 以 textContent 寫入 {var}（TEXT_SINKS 白名單的前提）",
+            re.search(rf"\.textContent = {var}\b", src) is not None,
+        )
+        check(f"toast() 不把 {var} 塞進 innerHTML", not re.search(rf"innerHTML\s*[+]?=\s*[^;]*\b{var}\b", src))
 
 # chips() 是唯一把 profile 值寫進 HTML 的地方，確認它內部有逸出
 sessions_tpl = open(os.path.join(os.path.dirname(static_dir), "templates", "sessions.html")).read()
@@ -260,8 +278,10 @@ check("chips() 內部對 profile 值逸出", bool(chips_body) and "esc(t)" in ch
 #   常數，後來其中一個改成 `cli-${p.cli}`（API 收進來的值）卻沒補 esc，而上面那條
 #   「內部有逸出」照樣通過，因為 esc(t) 還在（review 2026-07-25）。逐個插值點檢查。
 tone_slots = re.findall(r'data-tone="\$\{([^}]*)\}"', chips_body.group(0) if chips_body else "")
-check(f"chips() 的每個 data-tone 插值都經過 esc（{tone_slots}）",
-      bool(tone_slots) and all("esc(" in slot for slot in tone_slots))
+check(
+    f"chips() 的每個 data-tone 插值都經過 esc（{tone_slots}）",
+    bool(tone_slots) and all("esc(" in slot for slot in tone_slots),
+)
 
 # 上面那圈 TAINTED 掃的是**模板**；app.js 自己組 innerHTML 的地方不在範圍內。
 # ⚠ 這是一份**清單**，不是只釘住抽屜一個：這四個函式都把使用者可控的字串寫進樣板字串。
@@ -292,8 +312,7 @@ for fn, fields in JS_SINKS.items():
         continue
     src = body_m.group(0)
     for field in fields:
-        bad = [m for m in re.findall(r"\$\{([^}]*" + re.escape(field) + r"[^}]*)\}", src)
-               if not _JS_SAFE.search(m)]
+        bad = [m for m in re.findall(r"\$\{([^}]*" + re.escape(field) + r"[^}]*)\}", src) if not _JS_SAFE.search(m)]
         check(f"{fn}()：{field} 進 HTML 前逸出（未逸出處 {bad or '無'}）", not bad)
 
 print("== 終端抽屜只在 nginx 後面開，且只吃同源路徑 ==")
@@ -305,18 +324,19 @@ _open_branch = re.search(r'act === "open"\)\s*\{(.*?)\n      \} else if', sessio
 if check("找得到「開啟終端」那段分支", bool(_open_branch)):
     _src = _open_branch.group(1)
     check("抽屜只在 behindProxy() 時開", "behindProxy() && !wantsTab" in _src)
-    check("抽屜拿的是同源的 view.path，不是跨 origin 的 direct_url",
-          re.search(r"terminalDrawer\(\{[^}]*path:\s*view\.path", _src) is not None
-          and not re.search(r"terminalDrawer\(\{[^}]*direct_url", _src))
-    check("直連模式仍退回開新分頁（那個模式沒有同源路徑可用）",
-          "window.open(" in _src)
+    check(
+        "抽屜拿的是同源的 view.path，不是跨 origin 的 direct_url",
+        re.search(r"terminalDrawer\(\{[^}]*path:\s*view\.path", _src) is not None
+        and not re.search(r"terminalDrawer\(\{[^}]*direct_url", _src),
+    )
+    check("直連模式仍退回開新分頁（那個模式沒有同源路徑可用）", "window.open(" in _src)
 
 print("== 頁尾：線上跑的是哪一版（review 2026-07-27）==")
 from server import version as _version_mod  # noqa: E402
 
 # ⚠ **登入頁也要有。** 它不走 web._page()，所以任何「塞進 _page 參數」的做法都會讓那一頁
 #   靜靜地少一塊——頁尾正是 build_info() 做成 template global 而不是參數的唯一理由。
-_cf = app.test_client()      # 這一段自己開一個登入好的 client（`c` 在前面的 gate 測試裡被登出過）
+_cf = app.test_client()  # 這一段自己開一個登入好的 client（`c` 在前面的 gate 測試裡被登出過）
 _cf.post("/api/auth/login", json={"username": "admin", "password": "admin-password-1"})
 for path, need_login in (("/login", False), ("/", True), ("/account", True)):
     cli = _cf if need_login else app.test_client()
@@ -336,8 +356,7 @@ try:
     check("build arg 有給時，commit 顯示出來", "deadbee" in html)
     # ⚠ 這裡放的是**建置時間**不是 commit 時間：同一個 commit 可以在任何時候被重新打包，
     #   而要回答的是「線上這包是什麼時候做出來的」。格式化交給瀏覽器（伺服端時區是 UTC）。
-    check("建置時間以 datetime 屬性交給瀏覽器格式化",
-          'datetime="2026-07-27T12:00:00+08:00"' in html)
+    check("建置時間以 datetime 屬性交給瀏覽器格式化", 'datetime="2026-07-27T12:00:00+08:00"' in html)
     check("頁尾寫明那是「建置於」而不是 commit 時刻", "建置於" in html)
 
     os.environ["CLAUDE_PTY_GIT_SHA"] = ""
@@ -347,14 +366,17 @@ try:
     # 開發環境有 .git 時會退回問工作區（刻意的便利，容器裡兩個條件都不成立）。
     # 要守的是「值必須有來源」——不是 build arg 就是工作區，不可以是編出來的。
     import subprocess as _sp
+
     try:
-        _head = _sp.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
-                        text=True, timeout=5, check=True).stdout.strip()
+        _head = _sp.run(
+            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5, check=True
+        ).stdout.strip()
     except (OSError, _sp.SubprocessError):
         _head = None
-    check(f"沒有 build arg 時 commit 只能來自工作區或留空（得到 {_own['commit']!r}）",
-          _own["commit"] is None
-          or (_head is not None and _own["commit"].startswith(_head)))
+    check(
+        f"沒有 build arg 時 commit 只能來自工作區或留空（得到 {_own['commit']!r}）",
+        _own["commit"] is None or (_head is not None and _own["commit"].startswith(_head)),
+    )
 finally:
     for k, v in zip(("CLAUDE_PTY_GIT_SHA", "CLAUDE_PTY_BUILT_AT"), _saved_env):
         os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
@@ -362,8 +384,7 @@ finally:
 
 # ⚠ summary() 會跑 subprocess（每顆 ttyd 一次 `--version`）。**不可以每次 render 重算**
 #   ——那是每次換頁多開幾個行程。lru_cache 就是那道保證，改掉它要有意識。
-check("summary() 有快取（不會每次 render 重跑 subprocess）",
-      hasattr(_version_mod.summary, "cache_clear"))
+check("summary() 有快取（不會每次 render 重跑 subprocess）", hasattr(_version_mod.summary, "cache_clear"))
 _version_mod.summary()
 _hits_before = _version_mod.summary.cache_info().hits
 _version_mod.summary()

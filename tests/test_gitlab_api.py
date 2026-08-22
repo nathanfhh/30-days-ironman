@@ -55,7 +55,10 @@ class TestParseMrUrl:
             ("https://gitlab.example.com/g/r/merge_requests/1", "no /-/ separator"),
             ("https://gitlab.example.com/-/merge_requests/1", "no project path"),
             ("https://gitlab.example.com/g/r/-/merge_requests/abc", "iid not a number"),
-            ("https://gitlab.example.com:abc/g/r/-/merge_requests/1", "port not a number"),
+            (
+                "https://gitlab.example.com:abc/g/r/-/merge_requests/1",
+                "port not a number",
+            ),
             ("https://[::1/g/r/-/merge_requests/1", "urlsplit rejects the authority"),
         ],
     )
@@ -102,7 +105,9 @@ class TestUrlCredentialsAreStripped:
             gitlab_api.parse_mr_url(bad)
         assert self.SECRET not in str(excinfo.value)
 
-    def test_the_stripping_is_stated_rather_than_done_silently(self, gitlab_api, capsys):
+    def test_the_stripping_is_stated_rather_than_done_silently(
+        self, gitlab_api, capsys
+    ):
         gitlab_api.parse_mr_url(self.URL)
         stderr = capsys.readouterr().err
         assert "已剝除" in stderr
@@ -169,7 +174,9 @@ class TestExtractAttachments:
         description = "[a](/uploads/aaa/x.pdf) [b](/uploads/bbb/x.pdf)"
         assert len(gitlab_api.extract_attachments(description, target)) == 2
 
-    @pytest.mark.parametrize("description", ["", None, "沒有附件", "[連結](https://example.com)"])
+    @pytest.mark.parametrize(
+        "description", ["", None, "沒有附件", "[連結](https://example.com)"]
+    )
     def test_finds_nothing_when_there_is_nothing(self, gitlab_api, description):
         target = gitlab_api.parse_mr_url(MR_URL)
         assert gitlab_api.extract_attachments(description, target) == []
@@ -229,13 +236,19 @@ class TestRejectHtmlErrorPage:
 
     def test_blocks_on_content_type(self, gitlab_api):
         with pytest.raises(gitlab_api.ApiError):
-            gitlab_api.reject_html_error_page(b"whatever", "text/html; charset=utf-8", "spec.md")
+            gitlab_api.reject_html_error_page(
+                b"whatever", "text/html; charset=utf-8", "spec.md"
+            )
 
     def test_blocks_on_body_shape_even_when_the_content_type_lies(self, gitlab_api):
         with pytest.raises(gitlab_api.ApiError):
-            gitlab_api.reject_html_error_page(self.SIGN_IN, "application/octet-stream", "spec.md")
+            gitlab_api.reject_html_error_page(
+                self.SIGN_IN, "application/octet-stream", "spec.md"
+            )
 
-    @pytest.mark.parametrize("prefix", [b"<!doctype html>", b"<!DOCTYPE HTML>", b"<html>", b"  \n<html "])
+    @pytest.mark.parametrize(
+        "prefix", [b"<!doctype html>", b"<!DOCTYPE HTML>", b"<html>", b"  \n<html "]
+    )
     def test_detection_is_case_and_whitespace_insensitive(self, gitlab_api, prefix):
         with pytest.raises(gitlab_api.ApiError):
             gitlab_api.reject_html_error_page(prefix + b"...", "", "spec.md")
@@ -246,7 +259,13 @@ class TestRejectHtmlErrorPage:
 
     @pytest.mark.parametrize(
         "body",
-        [b"# \xe8\xa6\x8f\xe6\xa0\xbc", b"%PDF-1.7\n", b'{"a": 1}', b"", b"<p>not a document</p>"],
+        [
+            b"# \xe8\xa6\x8f\xe6\xa0\xbc",
+            b"%PDF-1.7\n",
+            b'{"a": 1}',
+            b"",
+            b"<p>not a document</p>",
+        ],
         ids=["markdown", "pdf", "json", "empty", "html-fragment"],
     )
     def test_allows_real_attachment_content(self, gitlab_api, body):
@@ -267,7 +286,9 @@ class TestRedirectTargetOf:
 
     def test_drops_the_query_string(self, gitlab_api):
         assert (
-            gitlab_api._redirect_target_of("https://gitlab.example.com/users/sign_in?token=SECRET")
+            gitlab_api._redirect_target_of(
+                "https://gitlab.example.com/users/sign_in?token=SECRET"
+            )
             == "https://gitlab.example.com/users/sign_in"
         )
         assert "SECRET" not in gitlab_api._redirect_target_of("https://h/x?t=SECRET")
@@ -288,7 +309,9 @@ class TestErrorMessages:
         assert "GitLab 對無權限資源一律回傳 404" in message
 
     def test_error_text_never_echoes_a_query_string(self, gitlab_api):
-        message = gitlab_api._describe_http_error(404, "https://h/api/v4/x?private_token=SECRET")
+        message = gitlab_api._describe_http_error(
+            404, "https://h/api/v4/x?private_token=SECRET"
+        )
         assert "SECRET" not in message
 
     def test_a_sign_in_redirect_names_the_actual_cause(self, gitlab_api):
@@ -300,7 +323,9 @@ class TestErrorMessages:
         assert "/api/v4/" in message
 
     def test_a_non_sign_in_redirect_stays_generic(self, gitlab_api):
-        message = gitlab_api._describe_redirect(301, "https://h/api/v4/x", "https://h/api/v5/x")
+        message = gitlab_api._describe_redirect(
+            301, "https://h/api/v4/x", "https://h/api/v5/x"
+        )
         assert "登入頁" not in message
         assert "https://h/api/v5/x" in message
 
@@ -342,7 +367,9 @@ class TestReadToken:
 
 
 class TestHttpRequestBasics:
-    def test_sends_the_token_as_a_header_and_never_in_the_url(self, gitlab_api, stub_server):
+    def test_sends_the_token_as_a_header_and_never_in_the_url(
+        self, gitlab_api, stub_server
+    ):
         stub_server.queue(Reply.json({"id": 1}))
         body, _ = gitlab_api.http_request(f"{stub_server.url}/api/v4/user", "s3cret")
 
@@ -358,7 +385,9 @@ class TestHttpRequestBasics:
 
     def test_returns_raw_bytes_when_json_is_not_expected(self, gitlab_api, stub_server):
         stub_server.queue(Reply(status=200, body=b"\x89PNG\r\n\x1a\n"))
-        body, _ = gitlab_api.http_request(f"{stub_server.url}/x", "t", accept_json=False)
+        body, _ = gitlab_api.http_request(
+            f"{stub_server.url}/x", "t", accept_json=False
+        )
         assert body == b"\x89PNG\r\n\x1a\n"
 
     def test_a_non_json_body_is_an_error_not_a_crash(self, gitlab_api, stub_server):
@@ -382,7 +411,11 @@ class TestHttpRequestRedirects:
 
     def test_a_redirect_raises_instead_of_being_followed(self, gitlab_api, stub_server):
         stub_server.queue(
-            Reply(status=302, body=b"", headers={"Location": f"{stub_server.url}/users/sign_in"})
+            Reply(
+                status=302,
+                body=b"",
+                headers={"Location": f"{stub_server.url}/users/sign_in"},
+            )
         )
         with pytest.raises(gitlab_api.ApiError, match="302"):
             gitlab_api.http_request(f"{stub_server.url}/grp/repo/uploads/a/x.md", "t")
@@ -397,7 +430,9 @@ class TestHttpRequestRedirects:
         assert len(stub_server.requests) == 1
 
     def test_the_sign_in_case_is_explained_end_to_end(self, gitlab_api, stub_server):
-        stub_server.queue(Reply(status=302, headers={"Location": "https://h/users/sign_in?a=b"}))
+        stub_server.queue(
+            Reply(status=302, headers={"Location": "https://h/users/sign_in?a=b"})
+        )
         with pytest.raises(gitlab_api.ApiError) as excinfo:
             gitlab_api.http_request(f"{stub_server.url}/grp/repo/uploads/a/x.md", "t")
         assert "登入頁" in str(excinfo.value)
@@ -405,20 +440,28 @@ class TestHttpRequestRedirects:
 
 class TestHttpRequestRetries:
     @pytest.mark.parametrize("status", sorted({429, 500, 502, 503, 504}))
-    def test_retries_a_get_on_a_transient_status(self, gitlab_api, stub_server, fast_retries, status):
+    def test_retries_a_get_on_a_transient_status(
+        self, gitlab_api, stub_server, fast_retries, status
+    ):
         stub_server.queue(Reply(status=status, body=b"{}"), Reply.json({"ok": True}))
         body, _ = gitlab_api.http_request(f"{stub_server.url}/api/v4/x", "t")
         assert body == {"ok": True}
         assert len(stub_server.requests) == 2
 
-    def test_gives_up_after_the_attempt_limit(self, gitlab_api, stub_server, fast_retries):
-        stub_server.queue(*[Reply(status=503, body=b"{}")] * gitlab_api.GET_MAX_ATTEMPTS)
+    def test_gives_up_after_the_attempt_limit(
+        self, gitlab_api, stub_server, fast_retries
+    ):
+        stub_server.queue(
+            *[Reply(status=503, body=b"{}")] * gitlab_api.GET_MAX_ATTEMPTS
+        )
         with pytest.raises(gitlab_api.ApiError, match="503"):
             gitlab_api.http_request(f"{stub_server.url}/api/v4/x", "t")
         assert len(stub_server.requests) == gitlab_api.GET_MAX_ATTEMPTS
 
     @pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
-    def test_does_not_retry_a_permanent_failure(self, gitlab_api, stub_server, fast_retries, status):
+    def test_does_not_retry_a_permanent_failure(
+        self, gitlab_api, stub_server, fast_retries, status
+    ):
         stub_server.queue(Reply(status=status, body=b"{}"))
         with pytest.raises(gitlab_api.ApiError):
             gitlab_api.http_request(f"{stub_server.url}/api/v4/x", "t")
@@ -429,7 +472,10 @@ class TestHttpRequestRetries:
         stub_server.queue(Reply(status=503, body=b"{}"), Reply.json({"id": 1}))
         with pytest.raises(gitlab_api.ApiError):
             gitlab_api.http_request(
-                f"{stub_server.url}/api/v4/x", "t", method="POST", payload={"body": "hi"}
+                f"{stub_server.url}/api/v4/x",
+                "t",
+                method="POST",
+                payload={"body": "hi"},
             )
         assert len(stub_server.requests) == 1
 
@@ -466,7 +512,9 @@ class TestApiBaseOverride:
         assert target["project_path_encoded"] == "platform%2Fapi%2Fapi-backend"
         assert target["iid"] == 61
 
-    def test_without_override_base_is_derived_from_the_url(self, gitlab_api, monkeypatch):
+    def test_without_override_base_is_derived_from_the_url(
+        self, gitlab_api, monkeypatch
+    ):
         monkeypatch.delenv("NCR_GITLAB_API_BASE", raising=False)
         target = gitlab_api.parse_mr_url(self.MR)
         assert target["api_base"] == "https://gitlab.example.com/api/v4"
@@ -499,17 +547,25 @@ class TestApiBaseOverride:
 
     @pytest.mark.parametrize(
         "override",
-        ["http://gitlab-proxy:5678", "http://gitlab-proxy:5678/", "http://gitlab-proxy:5678///"],
+        [
+            "http://gitlab-proxy:5678",
+            "http://gitlab-proxy:5678/",
+            "http://gitlab-proxy:5678///",
+        ],
         ids=["bare", "one-slash", "many-slashes"],
     )
-    def test_trailing_slashes_never_reach_the_url(self, gitlab_api, monkeypatch, override):
+    def test_trailing_slashes_never_reach_the_url(
+        self, gitlab_api, monkeypatch, override
+    ):
         """`.../api/v4` with a doubled slash 404s on GitLab rather than failing loudly."""
         monkeypatch.setenv("NCR_GITLAB_API_BASE", override)
         assert gitlab_api.api_base_for("h") == "http://gitlab-proxy:5678/api/v4"
 
     def test_a_blank_override_is_treated_as_absent(self, gitlab_api, monkeypatch):
         monkeypatch.setenv("NCR_GITLAB_API_BASE", "   ")
-        assert gitlab_api.api_base_for("gitlab.example.com").startswith("https://gitlab")
+        assert gitlab_api.api_base_for("gitlab.example.com").startswith(
+            "https://gitlab"
+        )
 
 
 # --------------------------------------------------------------------------
@@ -541,7 +597,8 @@ class TestParseTimestamp:
         assert gitlab_api.parse_timestamp("2026-08-01T09:30:00").tzinfo is UTC
 
     @pytest.mark.parametrize(
-        "value", [None, "", "   ", "not-a-date", "2026-13-45T99:99:99Z"],
+        "value",
+        [None, "", "   ", "not-a-date", "2026-13-45T99:99:99Z"],
         ids=["none", "empty", "blank", "prose", "out-of-range"],
     )
     def test_returns_none_for_anything_unparseable(self, gitlab_api, value):
@@ -586,7 +643,9 @@ class TestFilterDiscussionsSince:
         discussions = [self._discussion("d1", (1, self.CUTOFF))]
         assert gitlab_api.filter_discussions_since(discussions, cutoff) == []
 
-    def test_a_discussion_left_with_no_notes_is_dropped_entirely(self, gitlab_api, cutoff):
+    def test_a_discussion_left_with_no_notes_is_dropped_entirely(
+        self, gitlab_api, cutoff
+    ):
         discussions = [
             self._discussion("d1", (1, "2026-08-01T09:00:00Z")),
             self._discussion("d2", (2, "2026-08-01T15:00:00Z")),
@@ -597,12 +656,16 @@ class TestFilterDiscussionsSince:
     def test_the_original_discussion_is_not_mutated(self, gitlab_api, cutoff):
         """The caller writes the untrimmed list to --out; trimming in place would lose it."""
         discussions = [
-            self._discussion("d1", (1, "2026-08-01T09:00:00Z"), (2, "2026-08-01T15:00:00Z"))
+            self._discussion(
+                "d1", (1, "2026-08-01T09:00:00Z"), (2, "2026-08-01T15:00:00Z")
+            )
         ]
         gitlab_api.filter_discussions_since(discussions, cutoff)
         assert len(discussions[0]["notes"]) == 2
 
-    def test_a_timezone_offset_is_compared_correctly_not_lexically(self, gitlab_api, cutoff):
+    def test_a_timezone_offset_is_compared_correctly_not_lexically(
+        self, gitlab_api, cutoff
+    ):
         """11:00+08:00 is 03:00Z — before the cutoff, despite sorting after it."""
         discussions = [self._discussion("d1", (1, "2026-08-01T11:00:00+08:00"))]
         assert gitlab_api.filter_discussions_since(discussions, cutoff) == []
@@ -625,6 +688,11 @@ class TestFilterDiscussionsSince:
             gitlab_api.filter_discussions_since(discussions, cutoff)
         assert "created_at" in str(excinfo.value)
 
-    def test_a_discussion_with_no_notes_at_all_is_not_an_error(self, gitlab_api, cutoff):
-        assert gitlab_api.filter_discussions_since([{"id": "d1", "notes": []}], cutoff) == []
+    def test_a_discussion_with_no_notes_at_all_is_not_an_error(
+        self, gitlab_api, cutoff
+    ):
+        assert (
+            gitlab_api.filter_discussions_since([{"id": "d1", "notes": []}], cutoff)
+            == []
+        )
         assert gitlab_api.filter_discussions_since([{"id": "d2"}], cutoff) == []

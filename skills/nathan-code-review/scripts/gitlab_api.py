@@ -233,9 +233,7 @@ def parse_mr_url(mr_url: str) -> dict[str, Any]:
         ) from None
 
     if not host:
-        raise UsageError(
-            f"無法解析 merge request URL：{shown}\n網址中缺少主機名稱。"
-        )
+        raise UsageError(f"無法解析 merge request URL：{shown}\n網址中缺少主機名稱。")
     if has_userinfo(parts):
         warn(
             "注意：URL 中夾帶了帳密（user:password@），已剝除且未被記錄——"
@@ -414,7 +412,9 @@ def http_request(
     last_error: Exception | None = None
 
     for attempt in range(1, attempts + 1):
-        request = urllib.request.Request(url, data=data, headers=headers, method=method.upper())
+        request = urllib.request.Request(
+            url, data=data, headers=headers, method=method.upper()
+        )
         try:
             with _OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                 raw = response.read()
@@ -516,7 +516,9 @@ def fetch_mr(target: dict[str, Any], token: str) -> dict[str, Any]:
     return payload
 
 
-def extract_attachments(description: str | None, target: dict[str, Any]) -> list[dict[str, str]]:
+def extract_attachments(
+    description: str | None, target: dict[str, Any]
+) -> list[dict[str, str]]:
     """Find [name](/uploads/{secret}/{filename}) links in an MR description.
 
     The URL built here is the **API** one:
@@ -674,7 +676,9 @@ def read_body_file(path_value: str) -> str:
     try:
         body = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise UsageError(f"無法讀取檔案 {path.as_posix()}：{exc.strerror or exc}") from exc
+        raise UsageError(
+            f"無法讀取檔案 {path.as_posix()}：{exc.strerror or exc}"
+        ) from exc
     if not body.strip():
         raise UsageError(f"--body-file 內容為空：{path.as_posix()}")
     return body
@@ -707,13 +711,21 @@ def cmd_whoami(args: argparse.Namespace) -> int:
             raise UsageError("--host 的通訊埠必須是數字。") from None
     host = host.strip("/")
     if not host:
-        raise UsageError("--host 不可為空，請提供 GitLab 主機名稱，例如 gitlab.example.com。")
+        raise UsageError(
+            "--host 不可為空，請提供 GitLab 主機名稱，例如 gitlab.example.com。"
+        )
 
     token = read_token()
     user = get_json(f"{api_base_for(host)}/user", token)
     if not isinstance(user, dict):
         raise ApiError("GET /user 回傳的資料格式不符預期。")
-    emit({"id": user.get("id"), "username": user.get("username"), "name": user.get("name")})
+    emit(
+        {
+            "id": user.get("id"),
+            "username": user.get("username"),
+            "name": user.get("name"),
+        }
+    )
     return EXIT_OK
 
 
@@ -747,7 +759,9 @@ def cmd_attachments(args: argparse.Namespace) -> int:
     try:
         dest.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise UsageError(f"無法建立下載目錄 {dest.as_posix()}：{exc.strerror or exc}") from exc
+        raise UsageError(
+            f"無法建立下載目錄 {dest.as_posix()}：{exc.strerror or exc}"
+        ) from exc
 
     results: list[dict[str, Any]] = []
     any_failed = False
@@ -763,8 +777,12 @@ def cmd_attachments(args: argparse.Namespace) -> int:
         }
         try:
             # accept_json=False: uploads are arbitrary binary (images, PDFs, md).
-            raw, response_headers = http_request(url, token, method="GET", accept_json=False)
-            reject_html_error_page(raw, response_headers.get("content-type", ""), filename)
+            raw, response_headers = http_request(
+                url, token, method="GET", accept_json=False
+            )
+            reject_html_error_page(
+                raw, response_headers.get("content-type", ""), filename
+            )
             local_path.write_bytes(raw)
         except (ApiError, OSError) as exc:
             # One failed attachment must not abort the review; record and continue.
@@ -853,7 +871,9 @@ def cmd_reply(args: argparse.Namespace) -> int:
     discussion_id = urllib.parse.quote(args.id, safe="")
 
     payload = post_json(
-        f"{mr_base_url(target)}/discussions/{discussion_id}/notes", token, {"body": body}
+        f"{mr_base_url(target)}/discussions/{discussion_id}/notes",
+        token,
+        {"body": body},
     )
     if not isinstance(payload, dict):
         raise ApiError("POST notes 回傳的資料格式不符預期。")
@@ -882,15 +902,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    p_parse = subparsers.add_parser("parse", help="Split an MR URL into host / project / iid.")
+    p_parse = subparsers.add_parser(
+        "parse", help="Split an MR URL into host / project / iid."
+    )
     p_parse.add_argument("mr_url", metavar="mr-url")
     p_parse.set_defaults(func=cmd_parse)
 
-    p_whoami = subparsers.add_parser("whoami", help="GET /user to confirm the token works.")
+    p_whoami = subparsers.add_parser(
+        "whoami", help="GET /user to confirm the token works."
+    )
     p_whoami.add_argument("--host", required=True)
     p_whoami.set_defaults(func=cmd_whoami)
 
-    p_mr = subparsers.add_parser("mr", help="Fetch merge request metadata and attachment links.")
+    p_mr = subparsers.add_parser(
+        "mr", help="Fetch merge request metadata and attachment links."
+    )
     p_mr.add_argument("mr_url", metavar="mr-url")
     p_mr.set_defaults(func=cmd_mr)
 
@@ -914,7 +940,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_discussions.set_defaults(func=cmd_discussions)
 
-    p_discussion = subparsers.add_parser("discussion", help="Fetch a single discussion thread.")
+    p_discussion = subparsers.add_parser(
+        "discussion", help="Fetch a single discussion thread."
+    )
     p_discussion.add_argument("mr_url", metavar="mr-url")
     p_discussion.add_argument("--id", required=True, help="discussion_id")
     p_discussion.set_defaults(func=cmd_discussion)

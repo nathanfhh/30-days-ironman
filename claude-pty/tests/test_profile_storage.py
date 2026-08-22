@@ -18,6 +18,7 @@
   🔴 **歸檔要保留 profile**。history 的欄位是另一個，搬過去時型別與內容都要一致。
   🟡 profile 缺鍵／空的列不會讓讀取炸掉（舊 schema 留下的列）。
 """
+
 import json
 import os
 import sqlite3
@@ -35,7 +36,13 @@ from server.db import init_db, reset_engine, session_scope  # noqa: E402
 from server.models import Session as SessionRow  # noqa: E402
 from server.models import SessionHistory, User  # noqa: E402
 from server.sessions import (  # noqa: E402
-    Filters, Profile, SessionManager, _to_dict, archive, utcnow)
+    Filters,
+    Profile,
+    SessionManager,
+    _to_dict,
+    archive,
+    utcnow,
+)
 
 reset_engine()
 init_db()
@@ -56,8 +63,14 @@ with session_scope() as s:
 
 NOW = utcnow()
 # 這一份刻意四種型別都有：字串、布林 True、布林 False、以及模型/深度那兩個字串。
-FULL = {"cli": "claude", "network": "unrestricted", "capture": True,
-        "telemetry": False, "model": "sonnet", "effort": "xhigh"}
+FULL = {
+    "cli": "claude",
+    "network": "unrestricted",
+    "capture": True,
+    "telemetry": False,
+    "model": "sonnet",
+    "effort": "xhigh",
+}
 
 
 def add_legacy_row(sid, prof: dict):
@@ -71,8 +84,8 @@ def add_legacy_row(sid, prof: dict):
         "INSERT INTO sessions (id, container_name, user_id, status, workdir,"
         " profile_json, created_at, last_active_at)"
         " VALUES (?,?,?,?,?,?,?,?)",
-        (sid, f"c-{sid}", 1, "running", "/w", json.dumps(prof),
-         NOW.isoformat(sep=" "), NOW.isoformat(sep=" ")))
+        (sid, f"c-{sid}", 1, "running", "/w", json.dumps(prof), NOW.isoformat(sep=" "), NOW.isoformat(sep=" ")),
+    )
     c.commit()
     c.close()
 
@@ -83,8 +96,7 @@ with session_scope() as s:
     row = s.get(SessionRow, "legacy1")
     got = _to_dict(row)["profile"]
 check("🔴 讀出來就是原本那個 dict（不是字串）", got == FULL)
-check("🔴 布林還是布林，沒有變成 'true' 或 1",
-      got["capture"] is True and got["telemetry"] is False)
+check("🔴 布林還是布林，沒有變成 'true' 或 1", got["capture"] is True and got["telemetry"] is False)
 check("模型與深度原樣", (got["model"], got["effort"]) == ("sonnet", "xhigh"))
 
 print("== 舊列照樣篩得到（篩選是拿 JSON 的值去比的）==")
@@ -98,18 +110,25 @@ def live(f=None):
 check("cli=claude → 1 筆", live(Filters(cli="claude")) == 1)
 check("network=unrestricted → 1 筆", live(Filters(network="unrestricted")) == 1)
 check("🔴 capture=True → 1 筆（布林比對）", live(Filters(capture=True)) == 1)
-check("🔴 telemetry=False → 1 筆（False 不等於「沒有這個鍵」）",
-      live(Filters(telemetry=False)) == 1)
+check("🔴 telemetry=False → 1 筆（False 不等於「沒有這個鍵」）", live(Filters(telemetry=False)) == 1)
 check("telemetry=True → 0 筆", live(Filters(telemetry=True)) == 0)
 
 print("== 經由邏輯層寫進去的列，讀回來要一模一樣 ==")
 # 邏輯層給的是 Profile 這個 dataclass；它 as_dict() 出來就是 dict，
 # **不該由呼叫端自己 json.dumps**——序列化是 DB 邊界的事。
-prof = Profile(cli="claude", network="restricted", capture=False,
-               telemetry=True, model="sonnet", effort="low")
+prof = Profile(cli="claude", network="restricted", capture=False, telemetry=True, model="sonnet", effort="low")
 with session_scope() as s:
-    s.add(SessionRow(id="new1", container_name="c-new1", user_id=1, workdir="/w",
-                     profile=prof.as_dict(), created_at=NOW, last_active_at=NOW))
+    s.add(
+        SessionRow(
+            id="new1",
+            container_name="c-new1",
+            user_id=1,
+            workdir="/w",
+            profile=prof.as_dict(),
+            created_at=NOW,
+            last_active_at=NOW,
+        )
+    )
 with session_scope() as s:
     got2 = _to_dict(s.get(SessionRow, "new1"))["profile"]
 check("🔴 來回不走樣", got2 == prof.as_dict())
@@ -119,28 +138,43 @@ check("新列也篩得到", live(Filters(cli="claude", telemetry=True)) == 1)
 print("== 存進 DB 的與送進容器的是同一份 ==")
 from server.sessions import _stored_profile  # noqa: E402
 
-check("記下來的就是 as_dict()（模型照實記）",
-      _stored_profile(Profile(model="opus", effort="high")).get("model") == "opus")
+check(
+    "記下來的就是 as_dict()（模型照實記）", _stored_profile(Profile(model="opus", effort="high")).get("model") == "opus"
+)
 
 print("== 歸檔：搬進 history 之後 profile 還是同一份 ==")
 n = archive(["legacy1"], "terminated")
 check("歸檔了 1 筆", n == 1)
 rows, total = SessionManager.history()
 check("history 有這一筆", total == 1)
-check("🔴 history 的 profile 與原本相同（型別也一樣）",
-      rows[0]["profile"] == FULL and rows[0]["profile"]["capture"] is True)
+check(
+    "🔴 history 的 profile 與原本相同（型別也一樣）",
+    rows[0]["profile"] == FULL and rows[0]["profile"]["capture"] is True,
+)
 
 print("== 缺鍵／空 profile 不會炸 ==")
 add_legacy_row("legacy2", {})
 with session_scope() as s:
-    s.add(SessionHistory(session_id="h-empty", container_name="hc", user_id=1,
-                         username="alice", profile={}, workdir="/w",
-                         created_at=NOW, last_active_at=NOW,
-                         ended_at=NOW, ended_reason="exited"))
+    s.add(
+        SessionHistory(
+            session_id="h-empty",
+            container_name="hc",
+            user_id=1,
+            username="alice",
+            profile={},
+            workdir="/w",
+            created_at=NOW,
+            last_active_at=NOW,
+            ended_at=NOW,
+            ended_reason="exited",
+        )
+    )
 with session_scope() as s:
     check("空 profile 讀得出空 dict", _to_dict(s.get(SessionRow, "legacy2"))["profile"] == {})
-check("🟡 缺鍵的列在「是」與「否」兩邊都查不到（只有不限看得見）",
-      live(Filters(capture=True)) == 0 and live(Filters(capture=False)) == 1)
+check(
+    "🟡 缺鍵的列在「是」與「否」兩邊都查不到（只有不限看得見）",
+    live(Filters(capture=True)) == 0 and live(Filters(capture=False)) == 1,
+)
 check("不限時看得到全部（含缺鍵那筆）", live() == 2)
 
 print("== 清理 ==")

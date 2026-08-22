@@ -29,13 +29,13 @@ docker 的行為理解錯了（例如以為同名前綴的網路是分開的、�
 **是網路邊界，不是容器內的防火牆。** 所以這支刻意用最陽春的容器（沒有 iptables、沒有
 entrypoint、`unrestricted` 等價）——連那一層都沒有還隔離得了，才證明邊界是真的。
 """
+
 import os
 import sys
 import tempfile
 import time
 
-for v in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-          "http_proxy", "https_proxy", "all_proxy"):
+for v in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
     os.environ.pop(v, None)
 os.environ["NO_PROXY"] = os.environ["no_proxy"] = "127.0.0.1,localhost"
 os.environ["CLAUDE_PTY_NO_MOUNTS"] = "1"
@@ -89,13 +89,17 @@ def _spawn(name: str, net_name: str):
     ⚠ 用 `sh -c` 包起來並在最後 `sleep`，容器才不會在 nc 退出時整顆結束。
     """
     c = D.containers.run(
-        PROBE_IMAGE, name=name, network=net_name, detach=True,
+        PROBE_IMAGE,
+        name=name,
+        network=net_name,
+        detach=True,
         # ⚠ 覆蓋 entrypoint：nginx 那顆 image 的預設會去跑 nginx，不是我們要的。
         entrypoint=["/bin/sh", "-c"],
         command=[f"while true; do echo {BANNER} | nc -l -p {PORT}; done"],
-        labels={config.SESSION_LABEL_KEY: "netiso-probe",
-                config.TEST_LABEL_DEFAULT_KEY: "1"},
-        mem_limit="64m", pids_limit=32)
+        labels={config.SESSION_LABEL_KEY: "netiso-probe", config.TEST_LABEL_DEFAULT_KEY: "1"},
+        mem_limit="64m",
+        pids_limit=32,
+    )
     made_containers.append(c)
     return c
 
@@ -124,8 +128,10 @@ try:
     made_networks += [net_a, net_b]
     name_a, name_b = user_proxy.network_name(UID_A), user_proxy.network_name(UID_B)
     check("兩張網路名字不同（前綴 + uid）", name_a != name_b)
-    check("都帶著擁有者標記（reconciler 靠它認人）",
-          user_proxy.owner_of(net_a) == UID_A and user_proxy.owner_of(net_b) == UID_B)
+    check(
+        "都帶著擁有者標記（reconciler 靠它認人）",
+        user_proxy.owner_of(net_a) == UID_A and user_proxy.owner_of(net_b) == UID_B,
+    )
 
     print("\n== 起三顆容器：A 的兩顆、B 的一顆 ==")
     a1 = _spawn("claude-pty-netiso-a1", name_a)
@@ -142,8 +148,10 @@ try:
     ok_same = check("🔴 a1 → a2 收得到 banner", _can_reach(a1, ip_a2))
     ok_same &= check("🔴 a2 → a1 收得到 banner（雙向）", _can_reach(a2, ip_a1))
     if not ok_same:
-        print("  ⚠ 正例不通＝**測試裝置壞了**（listener 沒起來／nc 參數不對／等太短），"
-              "下面的反例不具意義，不要當成隔離成立。")
+        print(
+            "  ⚠ 正例不通＝**測試裝置壞了**（listener 沒起來／nc 參數不對／等太短），"
+            "下面的反例不具意義，不要當成隔離成立。"
+        )
 
     print("\n== 反例：跨使用者連不到，兩個方向都測 ==")
     check("🔴 a1 → b1 連不到（跨使用者）", not _can_reach(a1, ip_b1))
@@ -186,34 +194,40 @@ try:
     _attached = {c.get("Name") for c in (net_a.attrs.get("Containers") or {}).values()}
     _jname = user_proxy.jaeger_name()
     if _jname and _jname not in _attached:
-        made_containers.append(D.containers.run(
-            PROBE_IMAGE, name=_jname, network=name_a, detach=True,
-            entrypoint=["/bin/sh", "-c"], command=["sleep 120"],
-            labels={config.SESSION_LABEL_KEY: "netiso-jaeger-standin",
-                    config.TEST_LABEL_DEFAULT_KEY: "1"},
-            mem_limit="64m", pids_limit=32))
+        made_containers.append(
+            D.containers.run(
+                PROBE_IMAGE,
+                name=_jname,
+                network=name_a,
+                detach=True,
+                entrypoint=["/bin/sh", "-c"],
+                command=["sleep 120"],
+                labels={config.SESSION_LABEL_KEY: "netiso-jaeger-standin", config.TEST_LABEL_DEFAULT_KEY: "1"},
+                mem_limit="64m",
+                pids_limit=32,
+            )
+        )
         print(f"  ⓘ 環境裡沒有 jaeger，頂一顆同名容器（{_jname}）上去驗「掛著就收不掉」")
 
-    check("網路上還有 session 容器時 → 不是「只剩 jaeger」（這一輪不可以收）",
-          not user_proxy.only_jaeger_left(net_a))
+    check("網路上還有 session 容器時 → 不是「只剩 jaeger」（這一輪不可以收）", not user_proxy.only_jaeger_left(net_a))
     for c in (a1, a2):
         c.remove(force=True)
-    check("🔴 容器都收掉之後 → 判定成「只剩 jaeger」（可以收了）",
-          user_proxy.only_jaeger_left(net_a))
+    check("🔴 容器都收掉之後 → 判定成「只剩 jaeger」（可以收了）", user_proxy.only_jaeger_left(net_a))
     # 不拔 jaeger 就直接收，會失敗——這條證明 detach 那一步不是裝飾。
     _refused = False
     try:
         net_a.remove()
-    except Exception:      # noqa: BLE001 — 就是要驗它拒絕
+    except Exception:  # noqa: BLE001 — 就是要驗它拒絕
         _refused = True
-    check("🔴 jaeger 還掛著時 remove 會被拒絕（所以 detach 是必要的一步，不是保險）",
-          _refused)
+    check("🔴 jaeger 還掛著時 remove 會被拒絕（所以 detach 是必要的一步，不是保險）", _refused)
     user_proxy.detach_jaeger(D, name_a)
     net_a.remove()
     made_networks.remove(net_a)
     made_containers = [c for c in made_containers if c not in (a1, a2)]
-    check("🔴 拔掉 jaeger 之後收得掉（位址池真的還得回去）",
-          not any(x.name == name_a for x in D.networks.list(names=[name_a])))
+    check(
+        "🔴 拔掉 jaeger 之後收得掉（位址池真的還得回去）",
+        not any(x.name == name_a for x in D.networks.list(names=[name_a])),
+    )
 
 finally:
     print("\n== 清理 ==")
@@ -230,8 +244,11 @@ finally:
             user_proxy.detach_jaeger(D, n.name)
         with __import__("contextlib").suppress(Exception):
             n.remove()
-    left = [n for n in (user_proxy.network_name(UID_A), user_proxy.network_name(UID_B))
-            if any(x.name == n for x in D.networks.list(names=[n]))]
+    left = [
+        n
+        for n in (user_proxy.network_name(UID_A), user_proxy.network_name(UID_B))
+        if any(x.name == n for x in D.networks.list(names=[n]))
+    ]
     check("測試結束無殘留 network（位址池是全機器共用的，不可以漏收）", not left)
     db.reset_engine()
     __import__("shutil").rmtree(_tmp, ignore_errors=True)

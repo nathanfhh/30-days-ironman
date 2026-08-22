@@ -38,11 +38,12 @@ class ViewError(RuntimeError):
 # 但不會讓整個模組 import 失敗。
 try:
     import psutil
-except ImportError:      # pragma: no cover - 取決於環境
+except ImportError:  # pragma: no cover - 取決於環境
     psutil = None
 
 
 # --- 對外 API --------------------------------------------------------------------
+
 
 def open_view(session_id: str, container_name: str, ttyd_bin: str | None = None) -> dict:
     """為 session 開一個 on-demand 終端 view；已有存活的就沿用（點兩次不會多起一個）。"""
@@ -63,18 +64,17 @@ def open_view(session_id: str, container_name: str, ttyd_bin: str | None = None)
             # VIEW_CLAIM_GRACE 後被 list_views 回收，此時直接告訴呼叫端稍後再試。
             raise ViewError("另一個 worker 正在為此 session 建立終端，請稍後再試")
         if view_id is None:
-            continue                       # 這個 port 被別的 session 佔走 → 換下一個
+            continue  # 這個 port 被別的 session 佔走 → 換下一個
         pid = None
         # ⚠ 先收斂再用：argv[0] 與記進 DB 的必須是**同一個**字串，否則標記說的是一回事、
         #   實際跑的是另一回事——那比不標更糟。
         binary = config.ttyd_bin_or_default(ttyd_bin)
         try:
-            pid = _spawn_detached(
-                _ttyd_argv(port, container_name, session_id, binary))
+            pid = _spawn_detached(_ttyd_argv(port, container_name, session_id, binary))
             if _wait_ready(port, pid, session_id):
                 with session_scope(immediate=True) as s:
                     row = s.get(View, view_id)
-                    if row is None:          # 宣告被別人清掉了（不該發生）→ 當作失敗處理
+                    if row is None:  # 宣告被別人清掉了（不該發生）→ 當作失敗處理
                         raise ViewError("view 宣告已消失")
                     row.pid = pid
                     row.ttyd_bin = binary
@@ -129,13 +129,13 @@ def close_user_views(user_id: int) -> int:
       admin 的密碼」收不掉他正開著的、屬於別人的終端。要補得先讓 view 記錄開啟者，那是
       schema 變更；在那之前這是已知的缺口，不要以為改密碼等於全斷。
     """
-    from .models import Session as SessionRow      # 區域 import：避免與 auth 的載入順序打架
+    from .models import Session as SessionRow  # 區域 import：避免與 auth 的載入順序打架
+
     with session_scope() as s:
-        sids = [r.id for r in s.query(SessionRow.id).filter(
-            SessionRow.user_id == user_id).all()]
+        sids = [r.id for r in s.query(SessionRow.id).filter(SessionRow.user_id == user_id).all()]
     closed = 0
     for sid in sids:
-        with suppress(Exception):      # noqa: BLE001 — 一場收不掉不可以讓其餘的不收
+        with suppress(Exception):  # noqa: BLE001 — 一場收不掉不可以讓其餘的不收
             closed += close_views(sid)
     return closed
 
@@ -161,12 +161,11 @@ def list_views(session_id: str) -> list[dict]:
     with session_scope() as s:
         for row in s.query(View).filter(View.session_id == session_id).all():
             if row.pid is None:
-                if row.created_at < cutoff:   # 逾期未就緒＝宣告者已死，可回收
+                if row.created_at < cutoff:  # 逾期未就緒＝宣告者已死，可回收
                     dead.append(row.id)
-                continue                       # 寬限期內：尊重別的 worker 的 in-flight 宣告
+                continue  # 寬限期內：尊重別的 worker 的 in-flight 宣告
             if _process_alive(row.pid):
-                out.append(_view_dict(row.id, row.session_id, row.port, row.pid,
-                                      row.ttyd_bin))
+                out.append(_view_dict(row.id, row.session_id, row.port, row.pid, row.ttyd_bin))
             else:
                 dead.append(row.id)
     for vid in dead:
@@ -176,7 +175,7 @@ def list_views(session_id: str) -> list[dict]:
 
 # --- port 分配（DB UNIQUE 為跨 worker 仲裁）-------------------------------------
 
-_PEER = object()   # _claim_port 的哨兵：撞的是 session_id，不是 port
+_PEER = object()  # _claim_port 的哨兵：撞的是 session_id，不是 port
 
 
 def _claim_port(session_id: str, port: int):
@@ -216,14 +215,13 @@ def _await_peer_view(session_id: str, timeout: float | None = None) -> dict | No
         with session_scope() as s:
             row = s.query(View).filter(View.session_id == session_id).one_or_none()
             if row is None:
-                return None                     # 不存在 → 純粹是 port 撞號
+                return None  # 不存在 → 純粹是 port 撞號
             ready = row.pid is not None and _process_alive(row.pid)
             # ⚠ `row.ttyd_bin` 一定要傳：漏了的話 ttyd_flavor 變 None，抽屜的 C/Rust
             #   標籤在**跨 worker 沿用**這條路上靜靜消失，而 _view_dict 的註解正是在
             #   保證「回的是當初起它的那一顆」（審查 F-025）。值一定拿得到——這裡只在
             #   row.pid 有值時才回，而 open_view 在同一筆交易裡寫 pid 與 ttyd_bin。
-            snapshot = (_view_dict(row.id, row.session_id, row.port, row.pid,
-                                   row.ttyd_bin) if ready else None)
+            snapshot = _view_dict(row.id, row.session_id, row.port, row.pid, row.ttyd_bin) if ready else None
         if snapshot and _port_open(snapshot["port"]):
             return snapshot
         time.sleep(0.2)
@@ -245,6 +243,7 @@ def _alive_view(session_id: str) -> dict | None:
 
 
 # --- ttyd 進程 --------------------------------------------------------------------
+
 
 def _c_extras(session_id: str) -> list[str]:
     """C 版特有參數：**沒有**。共用模板（見 _ttyd_argv）就是 C 版的全部能力——
@@ -272,7 +271,8 @@ def _rust_extras(session_id: str) -> list[str]:
       一次（取捨見 config.TTYD_AUTH_CACHE_TTL）。0＝不帶＝每請求都問。
     """
     extras = [
-        "--title", f"claude-pty · {session_id}",
+        "--title",
+        f"claude-pty · {session_id}",
         # ttyd 與控制平面在同一個容器（views 由 control 自己 spawn），loopback 即達；
         # 非容器化執行時 Flask 同樣聽 CONTROL_PORT。
         "--auth-url",
@@ -289,8 +289,7 @@ def _rust_extras(session_id: str) -> list[str]:
 _TTYD_EXTRAS = {"ttyd": _c_extras, "ttyd-rust": _rust_extras}
 
 
-def _ttyd_argv(port: int, container_name: str, session_id: str,
-               ttyd_bin: str | None = None) -> list[str]:
+def _ttyd_argv(port: int, container_name: str, session_id: str, ttyd_bin: str | None = None) -> list[str]:
     # C 版或 Rust 版，由**開這個終端的人**的偏好決定（users.ttyd_bin，管理畫面的
     # 「設定」可切）。一律經 ttyd_bin_or_default() 收斂：這個值會變成 argv[0]，
     # 不認得的字串（白名單改過、DB 留著舊值）必須退回預設，不可以直接拿去 exec。
@@ -298,11 +297,14 @@ def _ttyd_argv(port: int, container_name: str, session_id: str,
     return [
         binary,
         *_TTYD_EXTRAS[binary](session_id),
-        "-p", str(port),
-        "-i", config.TTYD_BIND,        # 非容器化＝loopback；容器化＝0.0.0.0（僅內部網路，ADR 0009）
-        "-b", f"/session/{session_id}",  # base-path，配合 nginx 子路徑路由
-        "-W",                          # 可寫（互動需要）
-        "-q",                          # 全部 client 斷線即自行退出＝關網頁自動回收（ADR 0008）
+        "-p",
+        str(port),
+        "-i",
+        config.TTYD_BIND,  # 非容器化＝loopback；容器化＝0.0.0.0（僅內部網路，ADR 0009）
+        "-b",
+        f"/session/{session_id}",  # base-path，配合 nginx 子路徑路由
+        "-W",  # 可寫（互動需要）
+        "-q",  # 全部 client 斷線即自行退出＝關網頁自動回收（ADR 0008）
         # ttyd 預設把「完整命令 + 容器 hostname」當網頁標題。
         #
         # ⚠ **`titleFixed` 沒有解決那件事，它只是把畫面蓋掉。** 這是 client 選項：
@@ -314,17 +316,22 @@ def _ttyd_argv(port: int, container_name: str, session_id: str,
         # ⚠ 真正的修法是**伺服器端**的 `--title`（Rust 版已接上，見 _rust_extras）。
         #   這一行仍然無條件留著：C 版只有它可靠（遮畫面聊勝於無）；Rust 版帶著也
         #   無妨——兩個值是同一個字串，client 端不會蓋出不一樣的東西。
-        "-t", f"titleFixed=claude-pty · {session_id}",
+        "-t",
+        f"titleFixed=claude-pty · {session_id}",
         # 讓使用者選得到文字。Claude Code 的 TUI 會開啟滑鼠追蹤（實測 ?1000/?1002/?1003/
         # ?1006 全開），一開啟，拖曳就被當成應用程式的滑鼠事件送進 TUI，終端不再拿它來
         # 選取——畫面上的文字變成完全無法複製。這兩個選項讓修飾鍵可以繞過追蹤：
         #   macOS：按住 Option 拖曳
         #   其他：按住 Alt 拖曳（xterm.js 的 altClickMovesCursor 關掉才不會誤觸發移游標）
-        "-t", "macOptionClickForcesSelection=true",
-        "-t", "altClickMovesCursor=false",
+        "-t",
+        "macOptionClickForcesSelection=true",
+        "-t",
+        "altClickMovesCursor=false",
         # 選取後自動複製到剪貼簿，省掉「選了還要再按 Cmd+C」這一步（選取本身已經很費事）
-        "-t", "copyOnSelect=true",
-        "docker", "attach",
+        "-t",
+        "copyOnSelect=true",
+        "docker",
+        "attach",
         f"--detach-keys={config.DETACH_KEYS}",  # ADR 0002 的 Ctrl+P 陷阱
         container_name,
     ]
@@ -346,9 +353,11 @@ def _spawn_detached(argv: list[str]) -> int:
         # $0 佔位給 "sh"，$@ 才會是真正的 argv；ttyd 的 stdio 導向 /dev/null，
         # 否則它會繼承下面這條 PIPE，寫爆時會卡住。
         ["/bin/sh", "-c", '"$@" </dev/null >/dev/null 2>&1 & echo "$!"', "sh", *argv],
-        capture_output=True, text=True, timeout=10,
-        start_new_session=True,          # 脫離控制終端與 process group
-        check=False,                     # sh 的退出碼不重要，下面直接驗 pid 輸出
+        capture_output=True,
+        text=True,
+        timeout=10,
+        start_new_session=True,  # 脫離控制終端與 process group
+        check=False,  # sh 的退出碼不重要，下面直接驗 pid 輸出
     ).stdout.strip()
     if not pid_line.isdigit():
         raise ViewError("ttyd 啟動失敗（無法取得 pid）")
@@ -389,13 +398,13 @@ def _is_our_ttyd(pid: int | None) -> bool:
     if not pid:
         return False
     if psutil is None:
-        return True           # 沒裝 psutil：無從佐證，沿用「僅憑 pid 存在」的舊行為
+        return True  # 沒裝 psutil：無從佐證，沿用「僅憑 pid 存在」的舊行為
     try:
         argv = psutil.Process(pid).cmdline()
     except psutil.NoSuchProcess:
-        return False          # 程序已不存在
+        return False  # 程序已不存在
     except (psutil.AccessDenied, OSError):
-        return True           # 問不到（權限等）：無法佐證，不因此誤判為死
+        return True  # 問不到（權限等）：無法佐證，不因此誤判為死
     return bool(argv) and os.path.basename(argv[0]) in _OUR_TTYD_NAMES
 
 
@@ -409,7 +418,7 @@ def _process_alive(pid: int | None) -> bool:
     if not pid:
         return False
     try:
-        os.kill(pid, 0)      # 只探測存在性，不送信號
+        os.kill(pid, 0)  # 只探測存在性，不送信號
     except (ProcessLookupError, OSError):
         return False
     return _is_our_ttyd(pid)  # 存在還不夠：得確認是我們的 ttyd 而非被回收的號碼（review H8）
@@ -443,8 +452,7 @@ def _is_ttyd_serving(port: int, session_id: str) -> bool:
     """
     try:
         with socket.create_connection((_probe_host(), port), timeout=1.0) as sock:
-            sock.sendall(
-                f"GET /session/{session_id}/ HTTP/1.0\r\nHost: localhost\r\n\r\n".encode())
+            sock.sendall(f"GET /session/{session_id}/ HTTP/1.0\r\nHost: localhost\r\n\r\n".encode())
             head = sock.recv(4096)
     except OSError:
         return False
@@ -467,8 +475,7 @@ def _wait_ready(port: int, pid: int, session_id: str, timeout: float = 5.0) -> b
     return False
 
 
-def _view_dict(view_id: int, session_id: str, port: int, pid: int | None,
-               ttyd_bin: str | None = None) -> dict:
+def _view_dict(view_id: int, session_id: str, port: int, pid: int | None, ttyd_bin: str | None = None) -> dict:
     return {
         "view_id": view_id,
         "session_id": session_id,
@@ -488,6 +495,7 @@ def _view_dict(view_id: int, session_id: str, port: int, pid: int | None,
 
 
 # --- ttyd 觀測（唯讀）-------------------------------------------------------------
+
 
 def inspect_ttyd(current_bin: str | None = None) -> dict:
     """此刻所有 ttyd 的實況（管理用，唯讀）。
@@ -513,20 +521,28 @@ def inspect_ttyd(current_bin: str | None = None) -> dict:
         # v.session 是既有的 relationship（models.View.session），不必自己再查一次。
         for v in s.query(View).order_by(View.created_at.desc()).all():
             sess = v.session
-            rows.append({
-                "view_id": v.id, "session_id": v.session_id, "port": v.port,
-                "pid": v.pid, "created_at": v.created_at.isoformat(),
-                "ttyd_bin": v.ttyd_bin,
-                "owner": sess.user.username if sess and sess.user else None,
-                "session_name": sess.display_name if sess else None,
-            })
+            rows.append(
+                {
+                    "view_id": v.id,
+                    "session_id": v.session_id,
+                    "port": v.port,
+                    "pid": v.pid,
+                    "created_at": v.created_at.isoformat(),
+                    "ttyd_bin": v.ttyd_bin,
+                    "owner": sess.user.username if sess and sess.user else None,
+                    "session_name": sess.display_name if sess else None,
+                }
+            )
 
     if psutil is None:
         # ⚠ 沒有 psutil 就只能回 DB 那一半，而且要**明講**。不講的話畫面上那個空的
         #   `orphans` 看起來就像「掃過了，很乾淨」——那正是這一頁要抓的那種假綠燈。
-        return {"views": [{**r, "alive": None, "proc": None} for r in rows],
-                "orphans": [], "psutil": False,
-                "bin": config.ttyd_bin_or_default(current_bin)}
+        return {
+            "views": [{**r, "alive": None, "proc": None} for r in rows],
+            "orphans": [],
+            "psutil": False,
+            "bin": config.ttyd_bin_or_default(current_bin),
+        }
 
     procs = {}
     for p in psutil.process_iter(["pid", "cmdline"]):
@@ -537,7 +553,7 @@ def inspect_ttyd(current_bin: str | None = None) -> dict:
     # cpu_percent 第一次呼叫一律回 0.0（要兩個取樣點才算得出來）。與其每個程序各等一次
     # interval，不如先替所有程序建立基準，共用一次短暫的等待：N 個程序也只等一次。
     for p in procs.values():
-        with suppress(Exception):    # noqa: BLE001 — 建基準失敗只是少一個數字
+        with suppress(Exception):  # noqa: BLE001 — 建基準失敗只是少一個數字
             p.cpu_percent(None)
 
     known = {r["pid"] for r in rows if r["pid"]}
@@ -564,11 +580,10 @@ def inspect_ttyd(current_bin: str | None = None) -> dict:
             with suppress(ValueError):
                 listening.add(int(addr.rsplit(":", 1)[-1]))
         if listening & claimed_ports:
-            continue          # 有列宣告了它的 port＝正在被領養，不是孤兒
+            continue  # 有列宣告了它的 port＝正在被領養，不是孤兒
         orphans.append({"pid": pid, "proc": facts})
 
-    return {"views": rows, "orphans": orphans, "psutil": True,
-            "bin": config.ttyd_bin_or_default(current_bin)}
+    return {"views": rows, "orphans": orphans, "psutil": True, "bin": config.ttyd_bin_or_default(current_bin)}
 
 
 def _proc_facts(p) -> dict | None:
@@ -586,30 +601,33 @@ def _proc_facts(p) -> dict | None:
     #   不對而 `net_connections` 不存在時，畫面上只是少了兩列、log 裡一片安靜，而那正是
     #   那種版本 bug 能靜靜存在好幾個月的機制。
     with suppress(psutil.Error, OSError):
-        with p.oneshot():       # 一次系統呼叫餵飽下面所有查詢
+        with p.oneshot():  # 一次系統呼叫餵飽下面所有查詢
             cpu, mem = p.cpu_times(), p.memory_info()
-            out.update({
-                "status": p.status(),
-                "started_at": _dt.datetime.fromtimestamp(
-                    p.create_time(), _dt.UTC).isoformat(),
-                "cpu_user": round(cpu.user, 3),
-                "cpu_system": round(cpu.system, 3),
-                "rss": mem.rss,
-                "vms": mem.vms,
-                "mem_percent": round(p.memory_percent(), 2),
-                "threads": p.num_threads(),
-                "fds": p.num_fds(),
-            })
+            out.update(
+                {
+                    "status": p.status(),
+                    "started_at": _dt.datetime.fromtimestamp(p.create_time(), _dt.UTC).isoformat(),
+                    "cpu_user": round(cpu.user, 3),
+                    "cpu_system": round(cpu.system, 3),
+                    "rss": mem.rss,
+                    "vms": mem.vms,
+                    "mem_percent": round(p.memory_percent(), 2),
+                    "threads": p.num_threads(),
+                    "fds": p.num_fds(),
+                }
+            )
     with suppress(psutil.Error, OSError):
-        out["cpu_percent"] = round(p.cpu_percent(None), 1)   # 基準已在上面建立
+        out["cpu_percent"] = round(p.cpu_percent(None), 1)  # 基準已在上面建立
     with suppress(psutil.Error, OSError):
         conns = p.net_connections(kind="tcp")
         listen = [c for c in conns if c.status == psutil.CONN_LISTEN]
-        out.update({
-            # 實際在聽的位址：拿它跟 DB 記的 port 對照，不必自己 TCP 連過去試
-            "listening": [f"{c.laddr.ip}:{c.laddr.port}" for c in listen],
-            # 已建立的連線數＝現在有幾個人正開著這個終端。ttyd 帶 `-q`（最後一個 client
-            # 斷線就自退），所以這個數字同時解釋了它為什麼還活著。
-            "clients": sum(1 for c in conns if c.status == psutil.CONN_ESTABLISHED),
-        })
+        out.update(
+            {
+                # 實際在聽的位址：拿它跟 DB 記的 port 對照，不必自己 TCP 連過去試
+                "listening": [f"{c.laddr.ip}:{c.laddr.port}" for c in listen],
+                # 已建立的連線數＝現在有幾個人正開著這個終端。ttyd 帶 `-q`（最後一個 client
+                # 斷線就自退），所以這個數字同時解釋了它為什麼還活著。
+                "clients": sum(1 for c in conns if c.status == psutil.CONN_ESTABLISHED),
+            }
+        )
     return out or None

@@ -29,6 +29,7 @@ class AuthError(RuntimeError):
 
 # --- 密碼 -------------------------------------------------------------------------
 
+
 def hash_password(password: str) -> str:
     _validate_password(password)
     return _ph.hash(password)
@@ -50,15 +51,26 @@ def _validate_password(password: str) -> None:
 #   七個穿得過去的（2026-07-26）：**黑名單一定漏**，因為它列的是實例不是規則。
 #   stdlib 的 unicodedata 沒有暴露這個屬性，只能把區間寫出來（Unicode 15.1）。
 _DEFAULT_IGNORABLE = (
-    (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C),
-    (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180F),
-    (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F),
-    (0x3164, 0x3164), (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF),
-    (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8),
-    (0x1BCA0, 0x1BCA3), (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF),
+    (0x00AD, 0x00AD),
+    (0x034F, 0x034F),
+    (0x061C, 0x061C),
+    (0x115F, 0x1160),
+    (0x17B4, 0x17B5),
+    (0x180B, 0x180F),
+    (0x200B, 0x200F),
+    (0x202A, 0x202E),
+    (0x2060, 0x206F),
+    (0x3164, 0x3164),
+    (0xFE00, 0xFE0F),
+    (0xFEFF, 0xFEFF),
+    (0xFFA0, 0xFFA0),
+    (0xFFF0, 0xFFF8),
+    (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0FFF),
 )
 # 不屬於 Default_Ignorable、卻整格畫成空白的漏網之魚
-_BLANK_GLYPHS = {"⠀"}   # U+2800 BRAILLE PATTERN BLANK（So）
+_BLANK_GLYPHS = {"⠀"}  # U+2800 BRAILLE PATTERN BLANK（So）
 
 
 def _is_invisible(ch: str) -> bool:
@@ -122,9 +134,7 @@ def _clean_username(raw) -> str:
         raise AuthError("使用者名稱不可為空")
     width = _display_width(name)
     if width > config.USERNAME_MAX:
-        raise AuthError(
-            f"使用者名稱最長 {config.USERNAME_MAX} 欄寬（給了 {width}；"
-            f"中文與全形字元各算兩欄）")
+        raise AuthError(f"使用者名稱最長 {config.USERNAME_MAX} 欄寬（給了 {width}；中文與全形字元各算兩欄）")
     if any(ch.isspace() or not ch.isprintable() for ch in name):
         raise AuthError("使用者名稱不可含空白、換行或其他不可列印字元")
     # ⚠ 正規化**前後都要看**。U+FFA0 的 NFKC 就是 U+1160，而 U+1160 本來就在名單裡
@@ -139,7 +149,8 @@ def _clean_username(raw) -> str:
         raise AuthError(
             "使用者名稱含有看不見的字元（"
             + "、".join(f"U+{ord(ch):04X}" for ch in sorted(bad, key=ord))
-            + "），在清單上會與沒有它的名字完全一樣")
+            + "），在清單上會與沒有它的名字完全一樣"
+        )
     return name
 
 
@@ -205,7 +216,7 @@ def authenticate(username: str, password: str) -> dict:
         except (VerifyMismatchError, VerificationError, InvalidHashError):
             # 帳號不存在、密碼錯、或 hash 不可用（如 system 帳號的 "!"）都走這裡
             raise AuthError("帳號或密碼錯誤") from None
-        if user is None:                       # 假驗證竟通過也不可能放行
+        if user is None:  # 假驗證竟通過也不可能放行
             raise AuthError("帳號或密碼錯誤")
         needs_rehash = _ph.check_needs_rehash(user.password_hash)
         old_hash = user.password_hash
@@ -226,8 +237,7 @@ def authenticate(username: str, password: str) -> dict:
     return info
 
 
-def change_password(user_id: int, new_password: str, old_password: str | None = None,
-                    require_old: bool = True) -> dict:
+def change_password(user_id: int, new_password: str, old_password: str | None = None, require_old: bool = True) -> dict:
     """改密碼。require_old=True（使用者自行修改）時必須驗舊密碼；admin 代改可略過。
 
     回傳改完之後的 user（含遞增過的 password_version）。
@@ -247,7 +257,7 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
       裡面呼叫就是 SQLite 上的巢狀交易——這個 codebase 已經為那件事付過一次
       `database is locked` 的代價。
     """
-    from . import views       # 區域 import：views 不 import auth，但擺模組層會綁死載入順序
+    from . import views  # 區域 import：views 不 import auth，但擺模組層會綁死載入順序
 
     new_hash = hash_password(new_password)
     # ⚠ 這一筆的交易體裡有一次 argon2 verify（驗舊密碼）與一次 hash，兩者都是上百 ms 而且
@@ -274,11 +284,11 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
             except (VerifyMismatchError, VerificationError, InvalidHashError):
                 raise AuthError("原密碼錯誤") from None
         user.password_hash = new_hash
-        user.password_version += 1   # 使既有簽章 cookie 全部失效（review H4）
+        user.password_version += 1  # 使既有簽章 cookie 全部失效（review H4）
         result = _to_dict(user)
     # ⚠ 交易關掉之後才做——見 docstring：close_user_views 自己會開交易。
     #   而且**一定要做**：cookie 全滅擋不到一條已經升級完成的 WebSocket。
-    with suppress(Exception):        # noqa: BLE001 — 收不掉終端不可以讓改密碼本身失敗
+    with suppress(Exception):  # noqa: BLE001 — 收不掉終端不可以讓改密碼本身失敗
         views.close_user_views(user_id)
     return result
 
@@ -324,8 +334,7 @@ def page_users(limit: int, offset: int = 0) -> tuple[list[dict], int]:
     """
     with session_scope() as s:
         total = s.query(User).count()
-        rows = (s.query(User).order_by(User.username)
-                .limit(limit).offset(offset).all())
+        rows = s.query(User).order_by(User.username).limit(limit).offset(offset).all()
         return [_to_dict(u) for u in rows], total
 
 
@@ -376,6 +385,7 @@ def cli_token(user_id: int) -> str | None:
 
 # --- GitLab PAT（ADR 0016）---------------------------------------------------------
 
+
 def set_gitlab_pat(user_id: int, value) -> None:
     """設定／清除這個人的 GitLab PAT。**空字串（或只有空白）＝清除。**
 
@@ -404,8 +414,7 @@ def set_gitlab_pat(user_id: int, value) -> None:
         user = s.get(User, user_id)
         if user is None:
             raise AuthError("使用者不存在")
-        user.gitlab_pat_enc = (
-            crypto.encrypt(value, purpose=crypto.Purpose.GITLAB_PAT) if value else None)
+        user.gitlab_pat_enc = crypto.encrypt(value, purpose=crypto.Purpose.GITLAB_PAT) if value else None
 
 
 def gitlab_pat(user_id: int) -> str | None:
@@ -448,9 +457,7 @@ def gitlab_pat_state(user_id: int) -> str:
         user = s.get(User, user_id)
         if user is None or user.gitlab_pat_enc is None:
             return "none"
-        return ("ok" if crypto.is_readable(user.gitlab_pat_enc,
-                                           purpose=crypto.Purpose.GITLAB_PAT)
-                else "unreadable")
+        return "ok" if crypto.is_readable(user.gitlab_pat_enc, purpose=crypto.Purpose.GITLAB_PAT) else "unreadable"
 
 
 def gitlab_proxy_error(user_id: int) -> str | None:
@@ -498,7 +505,6 @@ def _to_dict(user: User) -> dict:
         # ⚠ 用 `is_readable` 而不是 `bool(user.gitlab_pat_enc)`：換過 SECRET_KEY 之後欄位
         #   仍然有值但已經解不開，那時的事實是「不能用」。顯示成「已設定」會讓人以為好好
         #   的，然後去 GitLab 查一把完全正常的 token。
-        "gitlab_pat_configured": crypto.is_readable(
-            user.gitlab_pat_enc, purpose=crypto.Purpose.GITLAB_PAT),
+        "gitlab_pat_configured": crypto.is_readable(user.gitlab_pat_enc, purpose=crypto.Purpose.GITLAB_PAT),
         "created_at": user.created_at.isoformat(),
     }

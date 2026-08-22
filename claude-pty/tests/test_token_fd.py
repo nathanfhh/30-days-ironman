@@ -17,13 +17,13 @@ pipe 沒有這個性質：被讀一次就 drain。
 的檔案，`/proc/<pid>/fd/N` 會讀不到——那是 Docker Desktop virtiofs 的假象，不是防護
 生效，實測被騙過一次。所以下面一律把 token 建在容器內。
 """
+
 import os
 import subprocess
 import sys
 
 IMAGE = os.environ.get("CLAUDE_PTY_IMAGE", "ncr-dev-container")
-ENTRYPOINT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          "..", "..", "dev-container", "entrypoint.sh")
+ENTRYPOINT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "dev-container", "entrypoint.sh")
 CANARY = "CANARY_TOKEN_FD_REGRESSION"
 
 _pass = _fail = 0
@@ -32,7 +32,7 @@ _pass = _fail = 0
 def check(label, ok):
     global _pass, _fail
     _pass += ok
-    _fail += (not ok)
+    _fail += not ok
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
 
 
@@ -42,8 +42,7 @@ def run(*args, **kw):
 
 def in_container(script, user=None):
     """跑一段 bash，掛 repo 版 entrypoint.sh（＝模擬 rebuild 之後的行為）。"""
-    argv = ["docker", "run", "--rm",
-            "-v", f"{os.path.abspath(ENTRYPOINT)}:/usr/local/bin/entrypoint.sh:ro"]
+    argv = ["docker", "run", "--rm", "-v", f"{os.path.abspath(ENTRYPOINT)}:/usr/local/bin/entrypoint.sh:ro"]
     if user:
         argv += ["--user", user]
     argv += ["--entrypoint", "bash", IMAGE, "-c", script]
@@ -74,7 +73,9 @@ awk '/^prepare_token_fd\(\) \{/,/^\}$/' "$src" > /tmp/fn.sh
 print(f"== image {IMAGE} ==")
 
 print("\n== 正常路徑：憑證檔在、父目錄可寫 ==")
-r = in_container(_EXTRACT + r"""
+r = in_container(
+    _EXTRACT
+    + r"""
 mkdir -p ~/cpty && chmod 700 ~/cpty
 printf '%s\n' "$CANARY" > ~/cpty/token && chmod 600 ~/cpty/token
 NCR_TOKEN_FILE=~/cpty/token
@@ -84,12 +85,11 @@ echo "ENV=${CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR:-unset}"
 echo "READ1=$(cat /proc/self/fd/4)"
 echo "READ2=$(timeout 1 cat <&4)"
 echo "FILE=$(ls ~/cpty/token 2>&1 | tail -1)"
-""".replace("$CANARY", CANARY))
+""".replace("$CANARY", CANARY)
+)
 out = r.stdout
-check("🔴 fd 4 是 anonymous pipe，不是 regular file",
-      "LINK=pipe:[" in out)
-check("🔴 不是 `(deleted)` 的 regular file（＝舊做法的特徵）",
-      "(deleted)" not in out)
+check("🔴 fd 4 是 anonymous pipe，不是 regular file", "LINK=pipe:[" in out)
+check("🔴 不是 `(deleted)` 的 regular file（＝舊做法的特徵）", "(deleted)" not in out)
 check("環境變數指到 4", "ENV=4" in out)
 check("CLI 那一側讀得到憑證", f"READ1={CANARY}" in out)
 check("🔴 讀過一次之後就沒了（pipe 被 drain）", "READ2=" in out and f"READ2={CANARY}" not in out)
@@ -100,7 +100,8 @@ print("\n== rm 失敗（父目錄不可寫）＝ 2026-08-07 那個情境 ==")
 # unlink 要父目錄的寫權限（沒有），truncate 只要檔案本身的（有）。
 # ⚠ 內層腳本寫成檔案再 su，不要塞進 `su -c '…'`：抽函式那行 awk 自己就帶單引號，
 #   巢狀之後會被外層的引號吃掉，症狀是整個分支莫名其妙全紅。
-r = in_container(r"""
+r = in_container(
+    r"""
 mkdir -p /td && chmod 755 /td
 printf '%s\n' "$CANARY" > /td/tok && chown nathan:nathan /td/tok && chmod 600 /td/tok
 cat > /tmp/inner.sh <<'INNER'
@@ -120,11 +121,12 @@ su nathan -c 'bash /tmp/inner.sh'
 echo "SU_RC=$?"
 echo "SIZE=$(stat -c %s /td/tok)"
 echo "LEFT=[$(cat /td/tok)]"
-""".replace("$CANARY", CANARY), user="root")
+""".replace("$CANARY", CANARY),
+    user="root",
+)
 out = r.stdout
 # 🔴 兩個都要：marker 證明函式沒把 set -e 觸發掉，su 的結束碼證明整段沒有非 0 收場。
-check("🔴 沒有把整場弄死（rm 失敗不等於 exit 1）",
-      "SURVIVED=1" in out and "SU_RC=0" in out)
+check("🔴 沒有把整場弄死（rm 失敗不等於 exit 1）", "SURVIVED=1" in out and "SU_RC=0" in out)
 check("CLI 仍然拿得到憑證", f"READ1={CANARY}" in out)
 check("fd 4 一樣是 pipe", "LINK=pipe:[" in out)
 # 🔴 這一條是這個分支的重點：檔案刪不掉，但**內容不准留著**。
@@ -134,18 +136,20 @@ check("🔴 檔案還在，但內容已經清空", "SIZE=0" in out and "LEFT=[]"
 check("🔴 而且有吵（不是無聲降級）", "憑證檔刪不掉" in (out + r.stderr))
 
 print("\n== 沒有憑證：什麼都不該發生 ==")
-r = in_container(_EXTRACT + r"""
+r = in_container(
+    _EXTRACT
+    + r"""
 prepare_token_fd
 # 🔴 同上：marker 而不是 RC=$?。set -e 下函式回非 0 → shell 當場死 → 這行印不出來。
 echo "SURVIVED=1"
 echo "ENV=${CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR:-unset}"
 echo "LINK=$(readlink /proc/self/fd/4 2>/dev/null || echo none)"
-""")
+"""
+)
 out = r.stdout
 check("環境變數沒被設起來", "ENV=unset" in out)
 check("fd 4 沒有被開", "LINK=none" in out)
-check("🔴 沒有憑證不是錯誤（不能讓沒貼 token 的人開不了場）",
-      "SURVIVED=1" in out and r.returncode == 0)
+check("🔴 沒有憑證不是錯誤（不能讓沒貼 token 的人開不了場）", "SURVIVED=1" in out and r.returncode == 0)
 
 print("\n== run_cli：錄製模式下 PID 1 不准留著憑證 fd ==")
 # 錄製那條路不 exec（bash 要留下來收尾 mitmproxy），所以 PID 1 會活整場。

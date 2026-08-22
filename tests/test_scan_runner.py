@@ -24,7 +24,9 @@ def fake_tool(tmp_path, monkeypatch):
     bin_dir.mkdir(exist_ok=True)
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
 
-    def install(name: str, *, stdout: str = "", stderr: str = "", exit_code: int = 0) -> Path:
+    def install(
+        name: str, *, stdout: str = "", stderr: str = "", exit_code: int = 0
+    ) -> Path:
         script = bin_dir / name
         script.write_text(
             "#!/usr/bin/env python3\n"
@@ -107,7 +109,9 @@ class TestTyEnvironment:
         assert mode == "resolved"
         assert ".venv" in note
 
-    def test_a_directory_named_venv_without_the_marker_does_not_count(self, scan_runner, repo):
+    def test_a_directory_named_venv_without_the_marker_does_not_count(
+        self, scan_runner, repo
+    ):
         (repo / ".venv").mkdir()  # no pyvenv.cfg
         assert scan_runner.ty_environment(repo)[0] == "bare"
 
@@ -133,7 +137,9 @@ class TestTyBareMode:
         fake_tool("ty", stdout=TY_OUTPUT, exit_code=1)
         return scan_runner._run_ty(repo)
 
-    def test_unresolved_imports_are_set_aside_not_reported(self, scan_runner, repo, fake_tool):
+    def test_unresolved_imports_are_set_aside_not_reported(
+        self, scan_runner, repo, fake_tool
+    ):
         status, entries, _ = self._run(scan_runner, repo, fake_tool)
         assert status["mode"] == "bare"
         assert [e["rule"] for e in entries] == ["invalid-argument-type"]
@@ -178,7 +184,9 @@ class TestOxlintNothingToLint:
     MARKER = "No files found to lint"
 
     @pytest.mark.parametrize("stream", ["stdout", "stderr"])
-    def test_no_javascript_is_skipped_not_an_error(self, scan_runner, repo, fake_tool, stream):
+    def test_no_javascript_is_skipped_not_an_error(
+        self, scan_runner, repo, fake_tool, stream
+    ):
         """It prints a bare line that is not JSON; parsing it used to say error."""
         fake_tool("oxlint", exit_code=1, **{stream: self.MARKER + "\n"})
         status, entries, _ = scan_runner._run_oxlint(repo)
@@ -207,7 +215,9 @@ class TestOxlintNothingToLint:
         assert status["status"] == "ok"
         assert [e["rule"] for e in entries] == ["no-unused-vars"]
 
-    def test_genuinely_broken_output_is_still_an_error(self, scan_runner, repo, fake_tool):
+    def test_genuinely_broken_output_is_still_an_error(
+        self, scan_runner, repo, fake_tool
+    ):
         """The fix must not turn every parse failure into a quiet skip."""
         fake_tool("oxlint", stdout="not json at all", exit_code=1)
         status, _, _ = scan_runner._run_oxlint(repo)
@@ -221,7 +231,8 @@ class TestOxlintNothingToLint:
 
 class TestMissingToolsAreDisclosed:
     @pytest.mark.parametrize(
-        ("tool", "runner"), [("ruff", "_run_ruff"), ("ty", "_run_ty"), ("oxlint", "_run_oxlint")]
+        ("tool", "runner"),
+        [("ruff", "_run_ruff"), ("ty", "_run_ty"), ("oxlint", "_run_oxlint")],
     )
     def test_an_absent_tool_is_skipped_with_a_reason(
         self, scan_runner, repo, tmp_path, monkeypatch, tool, runner
@@ -281,7 +292,9 @@ class TestLintEnvelope:
         assert "ruff" in digest["skipped_reason"]
         assert "oxlint" in digest["skipped_reason"]
 
-    def test_every_tool_working_is_still_ok(self, scan_runner, repo, tmp_path, fake_tool):
+    def test_every_tool_working_is_still_ok(
+        self, scan_runner, repo, tmp_path, fake_tool
+    ):
         """Worst-first must not turn every ordinary run into a failure."""
         self._all_tools(fake_tool)
         digest = scan_runner.run_lint(repo, tmp_path / "out" / "mr1", None)
@@ -381,7 +394,9 @@ class TestTrivyVacuityGate:
         (tmp_path / "app" / "main.py").write_text("x = 1\n")
         assert scan_runner.find_dependency_manifests(tmp_path) == []
 
-    def test_manifestless_tree_gets_the_vacuity_note(self, scan_runner, tmp_path, monkeypatch):
+    def test_manifestless_tree_gets_the_vacuity_note(
+        self, scan_runner, tmp_path, monkeypatch
+    ):
         """整條 run_trivy 的接線：空報告 + 無 manifest → notes 揭露無標的。"""
         from types import SimpleNamespace
 
@@ -405,7 +420,9 @@ class TestTrivyVacuityGate:
         assert any("沒有標的" in n for n in digest["notes"])
         assert any("零發現不代表依賴乾淨" in n for n in digest["notes"])
 
-    def test_tree_with_manifest_gets_no_vacuity_note(self, scan_runner, tmp_path, monkeypatch):
+    def test_tree_with_manifest_gets_no_vacuity_note(
+        self, scan_runner, tmp_path, monkeypatch
+    ):
         from types import SimpleNamespace
 
         (tmp_path / "pyproject.toml").write_text("[project]\n")

@@ -28,6 +28,7 @@
   docker 的內嵌 DNS，事後 connect 也不會改寫它——用名字打會因為 DNS 解不開而失敗，
   那條斷言就會為了錯的理由變綠（它要量的是 iptables，不是 DNS）。
 """
+
 import os
 import subprocess
 import sys
@@ -56,6 +57,8 @@ PAT = "glpat-RestrictedProbe0123"
 UID = 1
 
 _fails = 0
+
+
 def check(label, ok, detail=""):
     global _fails
     if not ok:
@@ -75,7 +78,7 @@ def cleanup():
     with suppress(Exception):
         net = cli.networks.get(NET)
         net.reload()
-        for cid in (net.attrs.get("Containers") or {}):
+        for cid in net.attrs.get("Containers") or {}:
             with suppress(Exception):
                 net.disconnect(cid, force=True)
         net.remove()
@@ -101,9 +104,20 @@ try:
     subnet = (net.attrs.get("IPAM", {}).get("Config") or [{}])[0].get("Subnet", "")
     ready = False
     for _ in range(40):
-        rc, out = run(["docker", "run", "--rm", "--network", NET, "--entrypoint", "sh",
-                       "nginx:alpine", "-lc",
-                       f"wget -qO- -T 2 http://{config.PROXY_ALIAS}:{config.PROXY_PORT}/ping"])
+        rc, out = run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                NET,
+                "--entrypoint",
+                "sh",
+                "nginx:alpine",
+                "-lc",
+                f"wget -qO- -T 2 http://{config.PROXY_ALIAS}:{config.PROXY_PORT}/ping",
+            ]
+        )
         if rc == 0 and "result" in out:
             ready = True
             break
@@ -120,7 +134,7 @@ try:
         "set +e\n"
         f"curl -s -m 4 -o /dev/null -w 'BEFORE=%{{http_code}}\\n' "
         f"http://{config.PROXY_ALIAS}:{config.PROXY_PORT}/ping\n"
-        "sudo /usr/local/bin/init-firewall.sh >/tmp/fw.log 2>&1; echo \"FWRC=$?\"\n"
+        'sudo /usr/local/bin/init-firewall.sh >/tmp/fw.log 2>&1; echo "FWRC=$?"\n'
         "grep -a '直連網段' /tmp/fw.log | sed 's/^/FWNET=/'\n"
         f"curl -s -m 8 -o /dev/null -w 'AFTER_ALIAS=%{{http_code}}\\n' "
         f"http://{config.PROXY_ALIAS}:{config.PROXY_PORT}/ping\n"
@@ -128,19 +142,34 @@ try:
         f"http://{PIP}:{config.PROXY_PORT}/ping\n"
         "curl -s -m 8 -o /dev/null -w 'OUTSIDE=%{http_code}\\n' https://example.com/\n"
     )
-    rc, out = run(["docker", "run", "--rm", "--cap-add=NET_ADMIN", "--network", NET,
-                   "-v", f"{FW}:/usr/local/bin/init-firewall.sh:ro",
-                   "--entrypoint", "bash", config.IMAGE, "-lc", script])
+    rc, out = run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--cap-add=NET_ADMIN",
+            "--network",
+            NET,
+            "-v",
+            f"{FW}:/usr/local/bin/init-firewall.sh:ro",
+            "--entrypoint",
+            "bash",
+            config.IMAGE,
+            "-lc",
+            script,
+        ]
+    )
     kv = dict(ln.split("=", 1) for ln in out.splitlines() if "=" in ln and ln[0].isupper())
     check("防火牆套用成功（rc=0）", kv.get("FWRC") == "0", out[-500:])
     check("套之前代理本來就通（不然後面量的不是防火牆）", kv.get("BEFORE") == "200", out[-300:])
     check("🔴 套完之後代理仍然通（用 alias）", kv.get("AFTER_ALIAS") == "200", out[-500:])
     check("🔴 套完之後代理仍然通（用 IP，把 DNS 排除在外）", kv.get("AFTER_IP") == "200", out[-500:])
-    check("🔴 而外面被擋死（負向控制：少了它，防火牆沒套上也會全綠）",
-          kv.get("OUTSIDE") == "000", out[-300:])
-    check("🔴 放行清單裡出現的就是這張 per-user 網路的網段",
-          subnet and kv.get("FWNET", "").endswith(subnet),
-          f"網段={subnet} 放行={kv.get('FWNET')}")
+    check("🔴 而外面被擋死（負向控制：少了它，防火牆沒套上也會全綠）", kv.get("OUTSIDE") == "000", out[-300:])
+    check(
+        "🔴 放行清單裡出現的就是這張 per-user 網路的網段",
+        subnet and kv.get("FWNET", "").endswith(subnet),
+        f"網段={subnet} 放行={kv.get('FWNET')}",
+    )
 
     print("\n== 快照陷阱：先套防火牆、之後才接上網路 ==")
     # ⚠ 這一段證明 `init-firewall.sh` 註解裡那句話是真的：放行的是**起跑那一刻**的直連
@@ -148,30 +177,42 @@ try:
     #   補不了 iptables——所以那個容器**永遠**連不到代理。`user_proxy` 那句「網路必須在
     #   start 之前就位」就是為了這件事。
     late = cli.api.create_container(
-        config.IMAGE, entrypoint=["sleep", "300"],
+        config.IMAGE,
+        entrypoint=["sleep", "300"],
         labels={config.TEST_LABEL_DEFAULT_KEY: config.TEST_MARK},
-        host_config=cli.api.create_host_config(cap_add=["NET_ADMIN"],
-                                               binds={FW: {"bind": "/usr/local/bin/init-firewall.sh",
-                                                           "mode": "ro"}}))
+        host_config=cli.api.create_host_config(
+            cap_add=["NET_ADMIN"], binds={FW: {"bind": "/usr/local/bin/init-firewall.sh", "mode": "ro"}}
+        ),
+    )
     lid = late["Id"]
     try:
-        cli.api.start(lid)                      # 只在預設 bridge 上，還沒接使用者那張網
-        rc, out = run(["docker", "exec", lid, "bash", "-lc",
-                       "sudo /usr/local/bin/init-firewall.sh >/tmp/fw.log 2>&1; echo rc=$?"])
+        cli.api.start(lid)  # 只在預設 bridge 上，還沒接使用者那張網
+        rc, out = run(
+            ["docker", "exec", lid, "bash", "-lc", "sudo /usr/local/bin/init-firewall.sh >/tmp/fw.log 2>&1; echo rc=$?"]
+        )
         check("防火牆先套起來了", "rc=0" in out, out[-400:])
-        cli.api.connect_container_to_network(lid, NET)   # 事後才接
-        rc, out = run(["docker", "exec", lid, "bash", "-lc",
-                       "echo ADDRS=$(ip -o -4 addr show | awk '{print $4}' | tr '\\n' ',');"
-                       f"curl -s -m 8 -o /dev/null -w 'LATE=%{{http_code}}\\n' "
-                       f"http://{PIP}:{config.PROXY_PORT}/ping"])
+        cli.api.connect_container_to_network(lid, NET)  # 事後才接
+        rc, out = run(
+            [
+                "docker",
+                "exec",
+                lid,
+                "bash",
+                "-lc",
+                "echo ADDRS=$(ip -o -4 addr show | awk '{print $4}' | tr '\\n' ',');"
+                f"curl -s -m 8 -o /dev/null -w 'LATE=%{{http_code}}\\n' "
+                f"http://{PIP}:{config.PROXY_PORT}/ping",
+            ]
+        )
         # ⚠ 這條不是裝飾。介面沒接上的話，下一條會因為「根本沒有路由」而變綠，
         #   而那不是它要量的東西（它要量的是 iptables 擋掉了一條走得通的路）。
-        octets = ".".join(PIP.split(".")[:2])          # 例：172.22
-        check("介面真的接上了（同網段的位址出現在容器裡）",
-              "ADDRS=" in out and octets in out.split("ADDRS=")[1].split("\n")[0],
-              out[-300:])
-        check("🔴 連不到代理：放行的是起跑那一刻的快照，事後接的網路不在清單裡",
-              "LATE=000" in out, out[-400:])
+        octets = ".".join(PIP.split(".")[:2])  # 例：172.22
+        check(
+            "介面真的接上了（同網段的位址出現在容器裡）",
+            "ADDRS=" in out and octets in out.split("ADDRS=")[1].split("\n")[0],
+            out[-300:],
+        )
+        check("🔴 連不到代理：放行的是起跑那一刻的快照，事後接的網路不在清單裡", "LATE=000" in out, out[-400:])
     finally:
         with suppress(Exception):
             cli.api.remove_container(lid, force=True)

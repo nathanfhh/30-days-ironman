@@ -49,7 +49,7 @@ from .models import Base
 
 _engine = None
 _SessionFactory = None
-_tls = threading.local()   # 標記本執行緒接下來的交易是否需要 BEGIN IMMEDIATE
+_tls = threading.local()  # 標記本執行緒接下來的交易是否需要 BEGIN IMMEDIATE
 
 
 def _make_engine(url: str):
@@ -60,7 +60,9 @@ def _make_engine(url: str):
         if parent:
             os.makedirs(parent, exist_ok=True)
     engine = create_engine(
-        url, future=True, echo=False,
+        url,
+        future=True,
+        echo=False,
         # check_same_thread=False：Flask threaded=True 下同一 connection 可能跨 thread 取用；
         # 交易邊界由 session_scope 控管。timeout＝忙碌時等鎖的秒數（配合 WAL 降低 SQLITE_BUSY）。
         connect_args={"check_same_thread": False, "timeout": 15},
@@ -69,9 +71,9 @@ def _make_engine(url: str):
     @event.listens_for(engine, "connect")
     def _sqlite_pragmas(dbapi_conn, _record):  # pragma: no cover - 由連線觸發
         cur = dbapi_conn.cursor()
-        cur.execute("PRAGMA journal_mode=WAL")   # 多 reader + 單 writer 併行（多 worker 前提）
+        cur.execute("PRAGMA journal_mode=WAL")  # 多 reader + 單 writer 併行（多 worker 前提）
         cur.execute("PRAGMA busy_timeout=15000")  # 撞鎖時等待而非立刻拋 SQLITE_BUSY
-        cur.execute("PRAGMA foreign_keys=ON")     # SQLite 預設不強制 FK，須顯式開啟
+        cur.execute("PRAGMA foreign_keys=ON")  # SQLite 預設不強制 FK，須顯式開啟
         cur.close()
         # 關掉 pysqlite 的隱式 BEGIN，交易改由下面的 begin 事件明確發出——
         # 否則無法指定 BEGIN IMMEDIATE（review B2）。
@@ -83,8 +85,7 @@ def _make_engine(url: str):
         # lock——所以「SELECT COUNT 再 INSERT」不可序列化，兩個執行緒可同時通過配額
         # 檢查（review B2 指出：不只多 worker，單一 threaded process 內就會發生）。
         # IMMEDIATE 在交易一開始就取寫鎖，讓整段「檢查＋寫入」真正互斥。
-        conn.exec_driver_sql(
-            "BEGIN IMMEDIATE" if getattr(_tls, "immediate", False) else "BEGIN")
+        conn.exec_driver_sql("BEGIN IMMEDIATE" if getattr(_tls, "immediate", False) else "BEGIN")
 
     return engine
 
@@ -99,9 +100,7 @@ def get_engine():
 def get_session_factory():
     global _SessionFactory
     if _SessionFactory is None:
-        _SessionFactory = sessionmaker(
-            bind=get_engine(), class_=OrmSession, expire_on_commit=False, future=True
-        )
+        _SessionFactory = sessionmaker(bind=get_engine(), class_=OrmSession, expire_on_commit=False, future=True)
     return _SessionFactory
 
 
@@ -158,7 +157,7 @@ def init_db() -> None:
     with suppress(OperationalError):
         Base.metadata.create_all(engine)
     _add_missing_columns(engine)
-    with suppress(Exception):      # noqa: BLE001 — 這只是診斷，不可以擋住啟動
+    with suppress(Exception):  # noqa: BLE001 — 這只是診斷，不可以擋住啟動
         _warn_missing_constraints(engine)
 
 
@@ -166,6 +165,7 @@ def _add_missing_columns(engine) -> None:
     from sqlalchemy import inspect
     from sqlalchemy import text as _text
     from sqlalchemy.schema import CreateColumn
+
     insp = inspect(engine)
     for table in Base.metadata.sorted_tables:
         if not insp.has_table(table.name):
@@ -196,9 +196,12 @@ def _add_missing_columns(engine) -> None:
                 # 錯誤——講出來，否則下一個人會以為約束生效了（review S8）。
                 # ⚠ foreign_keys 尤其容易漏：CreateColumn 只 render 欄位規格，實測
                 #   `ended_by_user_id INTEGER`，REFERENCES 與 ON DELETE 全掉了。
-                print(f"[claude-pty] ⚠ {table.name}.{col.name} 宣告了 "
-                      f"index/unique/foreign key，但既有表的索引與約束無法由輕量升級"
-                      f"補上，需要 alembic", flush=True)
+                print(
+                    f"[claude-pty] ⚠ {table.name}.{col.name} 宣告了 "
+                    f"index/unique/foreign key，但既有表的索引與約束無法由輕量升級"
+                    f"補上，需要 alembic",
+                    flush=True,
+                )
 
 
 def _warn_missing_constraints(engine) -> None:
@@ -216,24 +219,26 @@ def _warn_missing_constraints(engine) -> None:
     """
     from sqlalchemy import inspect as _inspect
     from sqlalchemy import text as _text
+
     insp = _inspect(engine)
     with engine.connect() as conn:
         for table in Base.metadata.sorted_tables:
-            want = {c.name for c in table.constraints
-                    if isinstance(c, UniqueConstraint) and c.name}
+            want = {c.name for c in table.constraints if isinstance(c, UniqueConstraint) and c.name}
             if not want or not insp.has_table(table.name):
                 continue
             with suppress(OperationalError):
-                have = {r[1] for r in conn.execute(
-                    _text(f"PRAGMA index_list('{table.name}')")).fetchall() if r[2]}
+                have = {r[1] for r in conn.execute(_text(f"PRAGMA index_list('{table.name}')")).fetchall() if r[2]}
             # SQLite 對 `UNIQUE` 生的是 sqlite_autoindex_*，名字對不上宣告的 name，
             # 所以比**數量**而不是比名字——少了幾條就是少了幾條。
             if len(have) < len(want):
-                print(f"[claude-pty] ⚠ {table.name} 少了 table-level 的 UNIQUE 約束"
-                      f"（宣告 {len(want)} 條、實際 {len(have)} 條）。輕量升級補不上它"
-                      f"（ALTER TABLE 加不了 UNIQUE），需要 alembic 重建表。"
-                      f"views 少了它的症狀是兩個 worker 為同一 session 各起一顆 ttyd，"
-                      f"而且沒有任何錯誤訊息。", flush=True)
+                print(
+                    f"[claude-pty] ⚠ {table.name} 少了 table-level 的 UNIQUE 約束"
+                    f"（宣告 {len(want)} 條、實際 {len(have)} 條）。輕量升級補不上它"
+                    f"（ALTER TABLE 加不了 UNIQUE），需要 alembic 重建表。"
+                    f"views 少了它的症狀是兩個 worker 為同一 session 各起一顆 ttyd，"
+                    f"而且沒有任何錯誤訊息。",
+                    flush=True,
+                )
 
 
 def reset_engine() -> None:

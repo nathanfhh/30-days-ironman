@@ -29,8 +29,8 @@ COMMAND = os.environ.get("CLAUDE_PTY_COMMAND", "").split()
 # 容器化後程式碼被 COPY 到 /app，由 __file__ 推導會得到 "/"，找不到 dev-container/。
 # 故允許以 env 指定「控制平面內看得到 repo 的位置」（compose 會把 repo 掛在該路徑）。
 _SELF_REPO_ROOT = os.environ.get(
-    "CLAUDE_PTY_SELF_REPO_ROOT",
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    "CLAUDE_PTY_SELF_REPO_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 _SELF_HOME = os.path.expanduser("~")
 
 HOST_REPO_ROOT = os.environ.get("CLAUDE_PTY_HOST_REPO_ROOT", _SELF_REPO_ROOT)
@@ -64,6 +64,7 @@ def host_is_linux() -> bool:
     """
     return (HOST_PLATFORM or sys.platform).lower().startswith("linux")
 
+
 # 走 entrypoint.sh 時 bind-mount repo 的 entrypoint.sh，保證 ADR 0006 的 env-skip 邏輯一定在
 # （免每次 rebuild image；比照 run script mount skills/addon 的 freshness 哲學）。
 # SELF 版供存在性檢查、HOST 版供實際掛載。
@@ -76,7 +77,7 @@ ENTRYPOINT_SH = os.path.join(HOST_REPO_ROOT, "dev-container", "entrypoint.sh")
 # 多花的時間中，套 iptables 只有約 0.5 秒，trivy DB 命中快取（見 MOUNTS）時也是 0 秒——
 # 未命中才要重抓約 1GB 的 DB，實測多花 36 秒。不錄流量 / 不送 telemetry 維持關閉，
 # 那兩者需要額外 apparatus（mitm addon / jaeger）且非每場都想要。
-DEFAULT_NET = os.environ.get("CLAUDE_PTY_DEFAULT_NET", "restricted")        # restricted | unrestricted
+DEFAULT_NET = os.environ.get("CLAUDE_PTY_DEFAULT_NET", "restricted")  # restricted | unrestricted
 DEFAULT_CAPTURE = os.environ.get("CLAUDE_PTY_DEFAULT_CAPTURE", "0") == "1"
 DEFAULT_TELEMETRY = os.environ.get("CLAUDE_PTY_DEFAULT_TELEMETRY", "0") == "1"
 # 模型與思考深度（只對 cli=claude 生效）。值就是 `claude --model` / `--effort` 的合法別名
@@ -140,10 +141,8 @@ OTEL_ENDPOINT = os.environ.get("CLAUDE_PTY_OTEL_ENDPOINT", "http://jaeger:4317")
 # ⚠ **來源與落點都要與 entrypoint 對齊**：它寫死了 addon 在容器內的位置
 #   （`/home/nathan/ncr-mitm/capture_addon.py`），找不到就 **fail-closed 不錄**——
 #   而那是安靜的：session 照樣起得來，只是一個 flow 都沒有。落點見 MITM_ADDON_BIND。
-CLAUDE_MITM_HOST = os.environ.get(
-    "CLAUDE_PTY_MITM_ADDON", os.path.join(HOST_REPO_ROOT, "mitm")
-)
-CLAUDE_MITM_SELF = os.path.join(_SELF_REPO_ROOT, "mitm")   # 存在性檢查用
+CLAUDE_MITM_HOST = os.environ.get("CLAUDE_PTY_MITM_ADDON", os.path.join(HOST_REPO_ROOT, "mitm"))
+CLAUDE_MITM_SELF = os.path.join(_SELF_REPO_ROOT, "mitm")  # 存在性檢查用
 # 容器內的落點。⚠ 與 dev-container/entrypoint.sh 的 CAPTURE_ADDON 同一個路徑——
 # 對不上就是「錄了個寂寞」，而且沒有任何錯誤訊息。
 MITM_ADDON_BIND = "/home/nathan/ncr-mitm"
@@ -194,11 +193,11 @@ SSH_AUTH_SOCK_BIND = "/ssh/ssh_sock"
 #   `$HOME/semgrep-rules`。兩邊指到不同地方的話，人的路徑掃得到規則、網頁開的 session
 #   掃不到，而症狀是「A4 軌道自動跳過」這種安靜的缺席。
 SEMGREP_RULES_HOST = os.environ.get(
-    "CLAUDE_PTY_SEMGREP_RULES",
-    os.environ.get("NCR_OPENGREP_RULES", os.path.join(HOST_HOME, "semgrep-rules")))
+    "CLAUDE_PTY_SEMGREP_RULES", os.environ.get("NCR_OPENGREP_RULES", os.path.join(HOST_HOME, "semgrep-rules"))
+)
 SEMGREP_RULES_SELF = os.environ.get(
-    "CLAUDE_PTY_SEMGREP_RULES_SELF",
-    os.environ.get("NCR_OPENGREP_RULES", os.path.join(_SELF_HOME, "semgrep-rules")))
+    "CLAUDE_PTY_SEMGREP_RULES_SELF", os.environ.get("NCR_OPENGREP_RULES", os.path.join(_SELF_HOME, "semgrep-rules"))
+)
 SEMGREP_RULES_BIND = "/home/nathan/semgrep-rules"
 
 # trivy DB 的更新（見 server/trivy_db.py）。
@@ -206,8 +205,7 @@ SEMGREP_RULES_BIND = "/home/nathan/semgrep-rules"
 #   網頁開的 session 從來沒更新過 DB，全靠「這台機器上曾經有人跑過 run script」。
 # 關掉它的意思是「我自己負責維護那份 cache」——不是「不需要 DB」。關了之後 A2 用的是
 # 那份 cache 當下的內容，可能很舊，而且沒有任何人會提醒你。
-TRIVY_DB_UPDATE = os.environ.get("CLAUDE_PTY_TRIVY_DB_UPDATE", "1").strip() not in (
-    "", "0", "false", "no", "off")
+TRIVY_DB_UPDATE = os.environ.get("CLAUDE_PTY_TRIVY_DB_UPDATE", "1").strip() not in ("", "0", "false", "no", "off")
 # 那顆一次性更新容器的硬上限（秒）。**與 run script 的 `timeout -k 10 180` 對齊**：
 # 兩條路徑對「等多久算太久」講的應該是同一件事。網路半死不活時，不讓「更新 DB」變成
 # 「卡住開場」。
@@ -215,7 +213,7 @@ TRIVY_DB_TIMEOUT = int(os.environ.get("CLAUDE_PTY_TRIVY_DB_TIMEOUT", "180"))
 
 # cache 改用 **named volume**（ADR 0018）：volume 首次掛載且為空時，docker 用 image 裡
 # 該路徑的內容與擁有者初始化它，host 的 uid 完全不進場——trivy 因此離開 uid 對齊那條鏈
-#（ADR 0017）。名字固定、不吃 compose 的 project 前綴，人的路徑（run script）才掛得到
+# （ADR 0017）。名字固定、不吃 compose 的 project 前綴，人的路徑（run script）才掛得到
 # 同一份，兩條路徑繼續共用那 ~1.2 GB。
 TRIVY_CACHE_VOLUME = os.environ.get("CLAUDE_PTY_TRIVY_CACHE_VOLUME", "ncr-trivy-cache")
 
@@ -256,6 +254,7 @@ TTYD_BIN_DEFAULT = "ttyd"
 # WebSocket 本來就不受任何 TTL 影響（授權只發生在連線交出去之前）。
 TTYD_AUTH_CACHE_TTL = int(os.environ.get("CLAUDE_PTY_TTYD_AUTH_CACHE_TTL", "2"))
 
+
 def ttyd_bin_or_default(value: str | None) -> str:
     """把存下來的偏好收斂成一個合法的 binary 名稱。
 
@@ -263,6 +262,7 @@ def ttyd_bin_or_default(value: str | None) -> str:
     拿 DB 裡的字串去 exec。
     """
     return value if value in TTYD_BINS else TTYD_BIN_DEFAULT
+
 
 TTYD_BIND = os.environ.get("CLAUDE_PTY_TTYD_BIND", "127.0.0.1")
 # 供 nginx / 管理畫面組 URL 用；容器化時設為控制平面的容器名。
@@ -331,9 +331,10 @@ SESSION_TOKEN_FILE = SESSION_TOKEN_DIR + "/token"
 #   選 env 的時機只有一個：fd 那條壞了。畫面上的文案要這樣寫，不要寫成「兩種風格」。
 TOKEN_DELIVERIES = ("fd", "env")
 DEFAULT_TOKEN_DELIVERY = os.environ.get("CLAUDE_PTY_TOKEN_DELIVERY", "fd")
-if DEFAULT_TOKEN_DELIVERY not in TOKEN_DELIVERIES:      # 打錯字不可以靜靜落到危險的那邊
-    raise SystemExit(f"CLAUDE_PTY_TOKEN_DELIVERY 只能是 {' / '.join(TOKEN_DELIVERIES)}"
-                     f"（拿到 {DEFAULT_TOKEN_DELIVERY!r}）")
+if DEFAULT_TOKEN_DELIVERY not in TOKEN_DELIVERIES:  # 打錯字不可以靜靜落到危險的那邊
+    raise SystemExit(
+        f"CLAUDE_PTY_TOKEN_DELIVERY 只能是 {' / '.join(TOKEN_DELIVERIES)}（拿到 {DEFAULT_TOKEN_DELIVERY!r}）"
+    )
 
 CLAUDE_CONFIG_BIND = "/home/nathan/.claude"
 # 容器內那個「寫了要留著」的根目錄。**dev-container 的兩條路徑都落在它底下**：
@@ -376,27 +377,31 @@ CLAUDE_JSON_SEED = {
     "bypassPermissionsModeAccepted": True,
 }
 
-MOUNTS = {} if os.environ.get("CLAUDE_PTY_NO_MOUNTS") else {
-    # 這裡只留**所有使用者共用**的掛載。per-user 的那些由 user_mounts() 依 user_id 組出來
-    # ——它們吃同一個 CLAUDE_PTY_NO_MOUNTS 開關（見該函式），測試才隔離得掉。
-    #
-    # trivy 漏洞 DB 的持久化快取（與 run script 掛**同一顆 named volume**，共用同一份）。
-    # ⚠ 這不是效能微調：沒有這個掛載，每開一個 session 都是全新的空 cache，得重新抓、
-    #   解開約 1GB 的 DB——實測整整 36 秒。而 restricted profile 更慘：firewall 的白名單
-    #   沒有 ghcr.io，牆內根本抓不到，A2 軌道會整場空轉。
-    # ⚠ **更新不是在 entrypoint 做的。** 這段註解一度寫著「entrypoint.sh 在套 iptables
-    #   之前必須等 DB 更新跑完」——那個機制從來不存在（`entrypoint.sh` 裡 trivy 出現
-    #   0 次）。實際負責更新的是 `server/trivy_db.py`，由控制平面在建 session **之前**
-    #   於一顆一次性容器裡跑，牆外、有租約串行化。放那裡而不是 entrypoint 的理由，
-    #   見那支模組的說明（併發不會壞，但會重複下載）。
-    # ⚠ key 是 **volume 名稱**，不是 host 路徑（ADR 0018）。docker-py 的 volumes 參數
-    #   兩者同格式；下游任何「把 key 當路徑用」的程式碼都要能分辨（見 preflight）。
-    TRIVY_CACHE_VOLUME: {"bind": "/home/nathan/.cache/trivy", "mode": "rw"},
-}
+MOUNTS = (
+    {}
+    if os.environ.get("CLAUDE_PTY_NO_MOUNTS")
+    else {
+        # 這裡只留**所有使用者共用**的掛載。per-user 的那些由 user_mounts() 依 user_id 組出來
+        # ——它們吃同一個 CLAUDE_PTY_NO_MOUNTS 開關（見該函式），測試才隔離得掉。
+        #
+        # trivy 漏洞 DB 的持久化快取（與 run script 掛**同一顆 named volume**，共用同一份）。
+        # ⚠ 這不是效能微調：沒有這個掛載，每開一個 session 都是全新的空 cache，得重新抓、
+        #   解開約 1GB 的 DB——實測整整 36 秒。而 restricted profile 更慘：firewall 的白名單
+        #   沒有 ghcr.io，牆內根本抓不到，A2 軌道會整場空轉。
+        # ⚠ **更新不是在 entrypoint 做的。** 這段註解一度寫著「entrypoint.sh 在套 iptables
+        #   之前必須等 DB 更新跑完」——那個機制從來不存在（`entrypoint.sh` 裡 trivy 出現
+        #   0 次）。實際負責更新的是 `server/trivy_db.py`，由控制平面在建 session **之前**
+        #   於一顆一次性容器裡跑，牆外、有租約串行化。放那裡而不是 entrypoint 的理由，
+        #   見那支模組的說明（併發不會壞，但會重複下載）。
+        # ⚠ key 是 **volume 名稱**，不是 host 路徑（ADR 0018）。docker-py 的 volumes 參數
+        #   兩者同格式；下游任何「把 key 當路徑用」的程式碼都要能分辨（見 preflight）。
+        TRIVY_CACHE_VOLUME: {"bind": "/home/nathan/.cache/trivy", "mode": "rw"},
+    }
+)
 
 # 「這一輪是測試」的標記。用途：打在容器 label 上讓正式 reconciler 跳過測試建的容器，
 # 見 TEST_LABEL_DEFAULT_KEY 那段。
-TEST_MARK = os.environ.get("CLAUDE_PTY_TEST_MARK")   # 測試設為 "1"，正式部署不設
+TEST_MARK = os.environ.get("CLAUDE_PTY_TEST_MARK")  # 測試設為 "1"，正式部署不設
 
 # --- per-user 網路與 GitLab 代理（ADR 0016）-----------------------------------------
 #
@@ -447,8 +452,7 @@ PROXY_BASE_URL = f"http://{PROXY_ALIAS}:{PROXY_PORT}"
 #   的，不是邊角情境。
 # ⚠ 要**可重現**的部署請在 `.env` 釘 digest（`nginx@sha256:…`）。這裡不預設釘一個，
 #   是因為釘死的 digest 會隨時間變成「沒有人知道為什麼是這一顆」的常數。
-PROXY_IMAGE = (os.environ.get("CLAUDE_PTY_GITLAB_PROXY_IMAGE", "").strip()
-               or "nginx:alpine")
+PROXY_IMAGE = os.environ.get("CLAUDE_PTY_GITLAB_PROXY_IMAGE", "").strip() or "nginx:alpine"
 # 一顆只轉發 HTTP 的 nginx，資源給得比 session 小得多。**要給**：沒有上限的話一個失控的
 # clone 就能把 host 的記憶體吃光，而它不是使用者看得到的東西。
 # ⚠ 不可以太小：git clone 大 repo 時 nginx 仍有 socket buffer 與 TLS 狀態。
@@ -476,7 +480,7 @@ if TEST_MARK:
 # 刪掉，中途還會被狀態刷新迴圈寫進別人的 docker_state。
 PROXY_LABEL_KEY = "claude-pty.gitlab-proxy"
 PROXY_LABEL_VALUE = "1"
-PROXY_OWNER_LABEL = "claude-pty.owner"          # 值是 user_id，收斂時用來對應使用者
+PROXY_OWNER_LABEL = "claude-pty.owner"  # 值是 user_id，收斂時用來對應使用者
 PROXY_FILTERS = {"label": f"{PROXY_LABEL_KEY}={PROXY_LABEL_VALUE}"}
 # per-user 網路也標起來，才掃得到「該回收的空網路」（不然要靠名字前綴猜）。
 NETWORK_LABEL_KEY = "claude-pty.user-network"
@@ -519,8 +523,7 @@ GITLAB_PAT_MAX = int(os.environ.get("CLAUDE_PTY_GITLAB_PAT_MAX", "512"))
 # 填 **host 上** CA 檔（PEM）的絕對路徑，由 daemon 解讀（ADR 0009）。不填＝維持現狀，
 # 用系統 CA。SELF 版供控制平面自己做存在性檢查。
 GITLAB_CA_FILE = os.environ.get("CLAUDE_PTY_GITLAB_CA_FILE", "").strip()
-GITLAB_CA_FILE_SELF = os.environ.get(
-    "CLAUDE_PTY_GITLAB_CA_FILE_SELF", "").strip() or GITLAB_CA_FILE
+GITLAB_CA_FILE_SELF = os.environ.get("CLAUDE_PTY_GITLAB_CA_FILE_SELF", "").strip() or GITLAB_CA_FILE
 # 容器內的落點。⚠ 放 `/etc/nginx/` **之外**：那個目錄是 `put_archive` 在寫的
 #   （nginx.conf 與熱重載的暫存檔），把一個 bind mount 的檔案混進去只會讓兩種寫入機制
 #   在同一個目錄上打架。
@@ -589,6 +592,7 @@ def user_mounts(user_id: int) -> dict:
         os.path.join(root, "ncr"): {"bind": NCR_HOME_BIND, "mode": "rw"},
     }
 
+
 # --- 檔案上傳（貼圖）----------------------------------------------------------------
 #
 # 這是**唯一一條使用者能往伺服器寫東西的路**（PTY 是字元流，二進位資料過不去，所以
@@ -599,9 +603,9 @@ def user_mounts(user_id: int) -> dict:
 # 回放——伺服器永遠不會把這些檔案再 serve 出去，所以風險面在「寫」不在「讀」。
 UPLOAD_EXTS = frozenset(
     e.strip().lower().lstrip(".")
-    for e in os.environ.get("CLAUDE_PTY_UPLOAD_EXTS",
-                            "png,jpg,jpeg,gif,webp,pdf,txt,md").split(",")
-    if e.strip())
+    for e in os.environ.get("CLAUDE_PTY_UPLOAD_EXTS", "png,jpg,jpeg,gif,webp,pdf,txt,md").split(",")
+    if e.strip()
+)
 # 單檔上限。⚠ 三個地方要同向：這裡（逐檔驗）、MAX_CONTENT_LENGTH（Flask 整包上限，
 # app.py 設為此值加 multipart 開銷）、deploy/nginx.conf 的 client_max_body_size
 # （upload 那條 location）。nginx 那道要**略大於**這裡，否則使用者撞到的是 nginx 的
@@ -746,14 +750,13 @@ VIEW_PROBE_TIMEOUT = float(os.environ.get("CLAUDE_PTY_VIEW_PROBE_TIMEOUT", "3"))
 #   CLAUDE_PTY_DB_PATH=/path/to/claude-pty.db
 # 互斥語意（配額、port、租約）由 db.session_scope(immediate=True) 的 BEGIN IMMEDIATE
 # 保證，見 server/db.py 的模組說明。
-DB_PATH = os.environ.get(
-    "CLAUDE_PTY_DB_PATH", os.path.join(_SELF_HOME, ".claude-pty", "claude-pty.db"))
+DB_PATH = os.environ.get("CLAUDE_PTY_DB_PATH", os.path.join(_SELF_HOME, ".claude-pty", "claude-pty.db"))
 if "://" in DB_PATH:
     # 這裡曾經收整條 SQLAlchemy URL。現在只有一種方言，收 URL 只是留一個「看起來可以
     # 換資料庫」的假把手——啟動就擋下來，並講清楚該給什麼。
     raise RuntimeError(
-        f"CLAUDE_PTY_DB_PATH 收的是 SQLite 檔案路徑，不是連線字串（拿到：{DB_PATH}）。"
-        "這套東西的資料庫就是 SQLite。")
+        f"CLAUDE_PTY_DB_PATH 收的是 SQLite 檔案路徑，不是連線字串（拿到：{DB_PATH}）。這套東西的資料庫就是 SQLite。"
+    )
 DB_URL = f"sqlite:///{DB_PATH}"
 
 # trivy DB「上次更新成功」的時間戳。放在 DB 旁邊是因為那個目錄本來就是**掛出來的、
@@ -799,6 +802,7 @@ def _load_or_create_secret() -> str:
         except FileNotFoundError:
             pass
         import secrets
+
         tmp = f"{path}.{os.getpid()}.tmp"
         fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         try:
@@ -807,9 +811,9 @@ def _load_or_create_secret() -> str:
                 f.flush()
                 os.fsync(f.fileno())
             with suppress(FileExistsError):
-                os.link(tmp, path)   # 原子且互斥；已經有人放好了就走上面的讀取分支
+                os.link(tmp, path)  # 原子且互斥；已經有人放好了就走上面的讀取分支
         finally:
-            os.unlink(tmp)           # link 成功與否都要收，硬連結已經讓 path 指向同一顆 inode
+            os.unlink(tmp)  # link 成功與否都要收，硬連結已經讓 path 指向同一顆 inode
     raise RuntimeError(f"無法建立或讀取 SECRET_KEY：{path}")
 
 

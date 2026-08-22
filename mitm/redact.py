@@ -70,12 +70,20 @@ _NORMALISED_KEYS = {k.replace("-", "").replace("_", "") for k in SENSITIVE_JSON_
 # （api_key=sk-…、api_key: sk-…）都吃得到。12 字元下限是為了不要把
 # `token: 3` 這種計數欄位誤當成憑證。
 SECRET_TEXT_PATTERNS = [
-    re.compile(r"(?i)(['\"]?authorization['\"]?\s*[:=]\s*['\"]?)(bearer\s+)?[A-Za-z0-9._~+/=-]{12,}"),
+    re.compile(
+        r"(?i)(['\"]?authorization['\"]?\s*[:=]\s*['\"]?)(bearer\s+)?[A-Za-z0-9._~+/=-]{12,}"
+    ),
     re.compile(r"(?i)(['\"]?x-api-key['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)(['\"]?api[_-]?key['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
-    re.compile(r"(?i)(['\"]?(?:access|refresh|id)[_-]?token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
-    re.compile(r"(?i)(['\"]?access_token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
-    re.compile(r"(?i)(['\"]?refresh_token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"),
+    re.compile(
+        r"(?i)(['\"]?(?:access|refresh|id)[_-]?token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"
+    ),
+    re.compile(
+        r"(?i)(['\"]?access_token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"
+    ),
+    re.compile(
+        r"(?i)(['\"]?refresh_token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._~+/=-]{12,}"
+    ),
 ]
 
 
@@ -121,7 +129,8 @@ def _parse_json(text: str) -> Any | None:
 
 
 QUERY_SECRET = re.compile(
-    r"(?i)([?&][^=&]*(?:key|token|secret|password|code|state|signature)[^=&]*=)[^&#]+")
+    r"(?i)([?&][^=&]*(?:key|token|secret|password|code|state|signature)[^=&]*=)[^&#]+"
+)
 
 
 def redact_query(path: str) -> str:
@@ -168,8 +177,9 @@ def _redact_message(msg: Any) -> None:
         # 多一個空白，client 送的是無空白的 JSON——重新序列化就等於把 body 撐大，
         # 而下游是拿這顆檔案的 byte 數當「線上實際傳了多少」。tools 定義那種 key
         # 密集的區段膨脹得最兇，headline 數字會系統性偏高。
-        msg.text = json.dumps(redact_json_value(parsed),
-                              ensure_ascii=False, separators=(",", ":"))
+        msg.text = json.dumps(
+            redact_json_value(parsed), ensure_ascii=False, separators=(",", ":")
+        )
     else:
         msg.text = redact_text(text)
 

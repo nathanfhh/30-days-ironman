@@ -19,6 +19,7 @@
      「沒有」，沒說「它結束了、對話還在、可以 /resume 接回來」。
   🟡 其他錯誤（例如 400）**不該**觸發重拉：那不是「這一列過時了」，重拉只是白打一次 API。
 """
+
 import datetime as _dt
 import logging
 import os
@@ -62,10 +63,17 @@ admin = auth.create_user("e2e-admin", "e2e-password-1", is_admin=True)
 
 now = utcnow()
 with session_scope() as s:
-    s.add(SessionRow(id="e1", container_name="ec1", user_id=admin["id"], workdir="/w",
-                     profile={"cli": "claude", "network": "restricted",
-                              "capture": False, "telemetry": False},
-                     created_at=now - _dt.timedelta(minutes=1), last_active_at=now))
+    s.add(
+        SessionRow(
+            id="e1",
+            container_name="ec1",
+            user_id=admin["id"],
+            workdir="/w",
+            profile={"cli": "claude", "network": "restricted", "capture": False, "telemetry": False},
+            created_at=now - _dt.timedelta(minutes=1),
+            last_active_at=now,
+        )
+    )
 
 
 class _FakeContainer:
@@ -130,6 +138,7 @@ def count_list(route):
 def fail_with(status, payload):
     def handler(route):
         route.fulfill(status=status, content_type="application/json", body=payload)
+
     return handler
 
 
@@ -148,15 +157,15 @@ try:
         page.wait_for_timeout(400)
 
         print("== 409（container 已經不在）→ 列表要自己重拉 ==")
-        page.route("**/api/sessions/*/view",
-                   fail_with(409, '{"error":"這個 session 的 container 已經結束了",'
-                                  '"docker_state":"exited"}'))
+        page.route(
+            "**/api/sessions/*/view",
+            fail_with(409, '{"error":"這個 session 的 container 已經結束了","docker_state":"exited"}'),
+        )
         before = len(lists)
         page.click('[data-testid="row-open-e1"]')
         page.wait_for_timeout(1200)
         check("🔴 按下開啟之後有重新拉列表（不必等對帳器那 30 秒）", len(lists) > before)
-        check("錯誤有講給使用者聽（toast 出現）",
-              page.locator(".toast").count() >= 1)
+        check("錯誤有講給使用者聽（toast 出現）", page.locator(".toast").count() >= 1)
 
         print("== 404（那場已經被歸檔）→ 同樣要重拉，而且訊息要說得出原因 ==")
         # ⚠ 刻意按**另一顆**按鈕（終止）：重拉如果是寫在「開啟」那一支裡，這裡就會漏掉。

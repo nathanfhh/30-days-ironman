@@ -79,7 +79,8 @@ class TestConclusionIsMechanical:
     )
     def test_the_matching_conclusion_is_accepted(self, build, severities, conclusion):
         findings = [
-            _finding(id=f"F-{i:03d}", severity=s) for i, s in enumerate(severities, start=1)
+            _finding(id=f"F-{i:03d}", severity=s)
+            for i, s in enumerate(severities, start=1)
         ]
         build(_report(findings=findings, conclusion=conclusion))
 
@@ -94,9 +95,12 @@ class TestConclusionIsMechanical:
             (["Nit"], "Approved with Comments"),
         ],
     )
-    def test_a_mismatched_conclusion_is_rejected(self, build, severities, wrong_conclusion):
+    def test_a_mismatched_conclusion_is_rejected(
+        self, build, severities, wrong_conclusion
+    ):
         findings = [
-            _finding(id=f"F-{i:03d}", severity=s) for i, s in enumerate(severities, start=1)
+            _finding(id=f"F-{i:03d}", severity=s)
+            for i, s in enumerate(severities, start=1)
         ]
         with pytest.raises(ValidationError):
             build(_report(findings=findings, conclusion=wrong_conclusion))
@@ -180,7 +184,8 @@ class TestFindingsMustBeActionable:
         with pytest.raises(ValidationError):
             build(
                 _report(
-                    findings=[_finding(evidence=[])], conclusion="Approved with Comments"
+                    findings=[_finding(evidence=[])],
+                    conclusion="Approved with Comments",
                 )
             )
 
@@ -398,7 +403,10 @@ class TestIntentDoubtNeedsNote:
 
     def test_doubt_with_a_note_is_accepted(self, build):
         intent = _report()["intent_check"] | {
-            "should_do": {"verdict": "doubt", "note": "退款邏輯是否該進這個 MR 待作者說明"}
+            "should_do": {
+                "verdict": "doubt",
+                "note": "退款邏輯是否該進這個 MR 待作者說明",
+            }
         }
         build(_report(intent_check=intent))
 

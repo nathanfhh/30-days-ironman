@@ -12,6 +12,7 @@
 ⚠ 舊版此檔測的是「讀 host 憑證檔」的整套判定（days_left 預警、快照 stale、雙來源
   優先序、ro/rw 掛載模式）。那套機制整組退場，逐條處置記在檔尾的對照表。
 """
+
 import json
 import os
 import shutil
@@ -47,10 +48,12 @@ db.reset_engine()
 db.init_db()
 
 _pass = _fail = 0
+
+
 def check(label, ok):
     global _pass, _fail
     _pass += ok
-    _fail += (not ok)
+    _fail += not ok
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
 
 
@@ -61,23 +64,24 @@ print("== 沒設 token：狀態說得夠白，create() 入口就擋 ==")
 st = claude_credentials_state(uid)
 check("ok=False / state=bad", st["ok"] is False and st["state"] == "bad")
 check("label 講明是哪個 agent、什麼問題", st["label"] == "Claude 未設定憑證")
-check("detail 講得出下一步（setup-token → 帳號頁）",
-      "setup-token" in st["detail"] and "帳號管理" in st["detail"])
-check("detail 講得出後果（未登入啟動、停在登入提示）",
-      "未登入" in st["detail"] and "登入提示" in st["detail"])
+check("detail 講得出下一步（setup-token → 帳號頁）", "setup-token" in st["detail"] and "帳號管理" in st["detail"])
+check("detail 講得出後果（未登入啟動、停在登入提示）", "未登入" in st["detail"] and "登入提示" in st["detail"])
 try:
     _guard_credentials(uid)
     check("_guard_credentials 沒 token 要 raise", False)
 except SessionError as e:
     check("_guard_credentials 沒 token raise SessionError", True)
-    check("錯誤訊息指向 setup-token 與帳號頁",
-          "setup-token" in str(e) and "帳號管理" in str(e))
+    check("錯誤訊息指向 setup-token 與帳號頁", "setup-token" in str(e) and "帳號管理" in str(e))
 
 print("== 守門接在 create() 的入口上（不是只有函式自己對）==")
+
+
 # 不打 docker：守門在任何容器動作**之前**就要擋下，所以 _docker 沒被碰到才是對的。
 class _Boom:
     def __getattr__(self, name):
         raise AssertionError("guard 之前不該碰 docker")
+
+
 mgr = SessionManager.__new__(SessionManager)
 mgr._docker = _Boom()
 try:
@@ -87,34 +91,35 @@ except SessionError:
     check("create() 沒 token 在入口就 raise（沒碰到 docker）", True)
 
 print("== 設 token：加密入庫、狀態翻綠、env 注入 ==")
-auth.set_cli_token(uid, "  " + TOKEN + "\n")   # 前後空白要被剝掉（終端複製常帶）
+auth.set_cli_token(uid, "  " + TOKEN + "\n")  # 前後空白要被剝掉（終端複製常帶）
 with session_scope() as s:
     enc = s.get(User, uid).cli_token_enc
 check("DB 裡存的是密文，讀不出明文", enc is not None and TOKEN not in enc)
-check("解密回原值（空白已剝）",
-      crypto.decrypt(enc, purpose=crypto.Purpose.CLI_TOKEN) == TOKEN)
+check("解密回原值（空白已剝）", crypto.decrypt(enc, purpose=crypto.Purpose.CLI_TOKEN) == TOKEN)
 # 🔴 跨用途解不開：CLI token 與 GitLab PAT 用不同的導出金鑰（crypto.Purpose）。共用一把
 # 的話，其中一種用途的密文可以拿去解另一種——而兩者的爆炸半徑與撤銷方式並不相同。
-check("🔴 拿 GITLAB_PAT 的金鑰解 CLI token 的密文＝解不開",
-      crypto.decrypt(enc, purpose=crypto.Purpose.GITLAB_PAT) is None)
+check(
+    "🔴 拿 GITLAB_PAT 的金鑰解 CLI token 的密文＝解不開", crypto.decrypt(enc, purpose=crypto.Purpose.GITLAB_PAT) is None
+)
 check("auth.cli_token 回明文", auth.cli_token(uid) == TOKEN)
 st = claude_credentials_state(uid)
 check("ok=True / state=ok", st["ok"] is True and st["state"] == "ok")
-check("label＝已設定（沒有天數——token 的到期不可知，沒得預警）",
-      st["label"] == "Claude 憑證已設定")
-check("detail 預告失效的症狀（開場失敗）與處置（重跑 setup-token 再貼）",
-      "開場失敗" in st["detail"] and "setup-token" in st["detail"])
-_guard_credentials(uid)     # 不該 raise；raise 的話這支測試直接掛掉
+check("label＝已設定（沒有天數——token 的到期不可知，沒得預警）", st["label"] == "Claude 憑證已設定")
+check(
+    "detail 預告失效的症狀（開場失敗）與處置（重跑 setup-token 再貼）",
+    "開場失敗" in st["detail"] and "setup-token" in st["detail"],
+)
+_guard_credentials(uid)  # 不該 raise；raise 的話這支測試直接掛掉
 check("_guard_credentials 放行", True)
 
 env = build_run_kwargs("c", "sid1", Profile(), uid).get("environment", {})
-check("🔴 env 只放路徑，不放值（憑證由 put_archive 送進容器）",
-      env.get("NCR_TOKEN_FILE") == config.SESSION_TOKEN_FILE)
+check("🔴 env 只放路徑，不放值（憑證由 put_archive 送進容器）", env.get("NCR_TOKEN_FILE") == config.SESSION_TOKEN_FILE)
 # 🔴 這一條是整組的重點：**token 的值不准出現在 environment 的任何地方**。
 #    掃全部的 key 與 value，不是只看那個已知的鍵——改壞的方式通常是「換個名字塞進去」，
 #    只斷言舊鍵不在的話那種改法會全綠。env 會進 `docker inspect` 與每個子行程。
-check("🔴 token 的值不在 env 的任何一個欄位裡",
-      all(TOKEN not in str(k) and TOKEN not in str(v) for k, v in env.items()))
+check(
+    "🔴 token 的值不在 env 的任何一個欄位裡", all(TOKEN not in str(k) and TOKEN not in str(v) for k, v in env.items())
+)
 
 print("== 🔴 沒有讀 host 憑證檔的後路 ==")
 # 在 HOST_HOME 放一份「看起來完全有效」的舊式憑證檔：狀態、守門、掛載**全部**不理它。
@@ -134,27 +139,35 @@ _saved_mounts = config.MOUNTS
 try:
     config.MOUNTS = {"/shared": {"bind": "/shared", "mode": "rw"}}
     kw = build_run_kwargs("c", "sid2", Profile(), uid)
-    check("🔴 volumes 沒有任何 .credentials 掛載",
-          all(".credentials" not in v.get("bind", "")
-              for v in kw["volumes"].values()) and live not in kw["volumes"])
-    check("🔴 env 也沒有半個憑證（沒設就是沒設，不是空字串）",
-          "NCR_TOKEN_FILE" not in kw.get("environment", {})
-          and "CLAUDE_CODE_OAUTH_TOKEN" not in kw.get("environment", {}))
+    check(
+        "🔴 volumes 沒有任何 .credentials 掛載",
+        all(".credentials" not in v.get("bind", "") for v in kw["volumes"].values()) and live not in kw["volumes"],
+    )
+    check(
+        "🔴 env 也沒有半個憑證（沒設就是沒設，不是空字串）",
+        "NCR_TOKEN_FILE" not in kw.get("environment", {})
+        and "CLAUDE_CODE_OAUTH_TOKEN" not in kw.get("environment", {}),
+    )
 finally:
     config.MOUNTS = _saved_mounts
 
 print("== token 的輸入驗證：擋的是「貼錯東西」，不是猜格式 ==")
-for bad, why in [(123, "非字串"), (None, "None"), ("", "空字串"), ("   \n", "只有空白"),
-                 ("a b", "帶空白（多半整段輸出都貼進來了）"),
-                 ("line1\nline2", "多行"), ("tok\ten", "控制字元"),
-                 ("x" * 4097, "長度爆表")]:
+for bad, why in [
+    (123, "非字串"),
+    (None, "None"),
+    ("", "空字串"),
+    ("   \n", "只有空白"),
+    ("a b", "帶空白（多半整段輸出都貼進來了）"),
+    ("line1\nline2", "多行"),
+    ("tok\ten", "控制字元"),
+    ("x" * 4097, "長度爆表"),
+]:
     try:
         auth.set_cli_token(uid, bad)
         check(f"{why} → AuthError", False)
     except auth.AuthError:
         check(f"{why} → AuthError", True)
-check("被擋下之後狀態仍是未設定（不會寫進去一半）",
-      claude_credentials_state(uid)["ok"] is False)
+check("被擋下之後狀態仍是未設定（不會寫進去一半）", claude_credentials_state(uid)["ok"] is False)
 # 不驗前綴：token 格式是上游的事，隨版本會變。單行可見字元就收。
 auth.set_cli_token(uid, "some-future-token-format")
 check("不寫死前綴（格式是上游的事）", auth.cli_token(uid) == "some-future-token-format")
@@ -166,8 +179,10 @@ auth.set_cli_token(uid, TOKEN)
 _saved_key = config.SECRET_KEY
 try:
     config.SECRET_KEY = "rotated-secret"
-    check("換 SECRET_KEY → 解不開一律當「沒設」（畫面引導重貼，不是 500）",
-          auth.cli_token(uid) is None and claude_credentials_state(uid)["ok"] is False)
+    check(
+        "換 SECRET_KEY → 解不開一律當「沒設」（畫面引導重貼，不是 500）",
+        auth.cli_token(uid) is None and claude_credentials_state(uid)["ok"] is False,
+    )
 finally:
     config.SECRET_KEY = _saved_key
 check("金鑰換回來，舊密文又解得開（沒被覆寫）", auth.cli_token(uid) == TOKEN)

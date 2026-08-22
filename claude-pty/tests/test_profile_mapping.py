@@ -1,7 +1,8 @@
 """ADR 0006 第二層 regression：profile → containers.run 參數的映射（純函式，不碰 docker）。
 
-    uv run --with flask --with docker python tests/test_profile_mapping.py
+uv run --with flask --with docker python tests/test_profile_mapping.py
 """
+
 import os
 import re
 import sys
@@ -19,13 +20,15 @@ config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
 db.reset_engine()
 db.init_db()
 config.MOUNTS = {}  # 隔離：不讓共用掛載干擾 volumes 斷言（per-user 的那組也吃這個開關）
-_UID = 7            # per-user 空間用的假 user id（ADR 0014）
+_UID = 7  # per-user 空間用的假 user id（ADR 0014）
 
 _pass = _fail = 0
+
+
 def check(label, ok):
     global _pass, _fail
     _pass += ok
-    _fail += (not ok)
+    _fail += not ok
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
 
 
@@ -37,37 +40,49 @@ env = kw.get("environment", {})
 #   分岔了：dataclass 是 unrestricted、config 是 restricted，於是 server 端任何一個
 #   `Profile()` 都會拿到可任意連外的容器，無聲無息（review 2026-07-25）。
 #   這條斷言就是要讓「有人又在 dataclass 裡寫死一個字面值」立刻現形。
-check("Profile() 的預設 == config.DEFAULT_*（不是另一份字面值）",
-      (Profile().cli, Profile().network, Profile().capture,
-       Profile().telemetry, Profile().model, Profile().effort)
-      == ("claude", config.DEFAULT_NET, config.DEFAULT_CAPTURE,
-          config.DEFAULT_TELEMETRY, config.DEFAULT_MODEL, config.DEFAULT_EFFORT))
-check("預設是**限制出網**（安全預設，要放行必須是明確的選擇）",
-      Profile().network == "restricted")
+check(
+    "Profile() 的預設 == config.DEFAULT_*（不是另一份字面值）",
+    (Profile().cli, Profile().network, Profile().capture, Profile().telemetry, Profile().model, Profile().effort)
+    == (
+        "claude",
+        config.DEFAULT_NET,
+        config.DEFAULT_CAPTURE,
+        config.DEFAULT_TELEMETRY,
+        config.DEFAULT_MODEL,
+        config.DEFAULT_EFFORT,
+    ),
+)
+check("預設是**限制出網**（安全預設，要放行必須是明確的選擇）", Profile().network == "restricted")
 check("不覆蓋 entrypoint（走 image entrypoint.sh）", "entrypoint" not in kw)
 # 精確比對整份 env（不是子集）：多送一個變數給 entrypoint.sh 就等於多開一條它會反應的
 # 分支，那必須是有意識的決定而不是順手加的。新增變數時請一起更新這裡。
 # 🔴 精確比對整份 env（不是子集）：多送一個變數給 entrypoint 就等於多開一條它會反應的
 #    分支，那必須是有意識的決定。**subagent 深度上限刻意不在裡面**——人自己開容器時
 #    沒有它，送了就是製造差異（見 build_run_kwargs 的說明）。
-check("env 帶 NET/CAPTURE/SCOPE/MARK + 模型設定", env == {
-    "NCR_NET": "restricted", "NCR_CAPTURE": "0", "NCR_CAPTURE_SCOPE": "all",
-    # 只有 MARK 有值時 entrypoint 才印就緒標記——人自己開容器不會設它
-    "NCR_MARK": "1",
-    # mitmweb UI 收回容器 loopback：網頁 session 在共用網段上，兄弟容器不該連得到
-    # 那個顯示未脫敏流量的畫面（人自己開容器時不設，run script 的 -p 才轉得進去）
-    "NCR_MITM_WEB_BIND": "127.0.0.1",
-    # per-user 狀態空間（ADR 0014）。這個**不是**給 entrypoint.sh 的，是給 CLI 本身的，
-    # 所以不隨 profile 變、每一場都在。
-    # 少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器 writable layer，換一顆容器就沒了。
-    # （憑證不在這份裡：這個 user 沒設 setup-token，而沒設就**不注入**——見下方憑證段。）
-    "CLAUDE_CONFIG_DIR": "/home/nathan/.claude",
-    "NCR_MODEL": "opus", "NCR_EFFORT": "high"})
+check(
+    "env 帶 NET/CAPTURE/SCOPE/MARK + 模型設定",
+    env
+    == {
+        "NCR_NET": "restricted",
+        "NCR_CAPTURE": "0",
+        "NCR_CAPTURE_SCOPE": "all",
+        # 只有 MARK 有值時 entrypoint 才印就緒標記——人自己開容器不會設它
+        "NCR_MARK": "1",
+        # mitmweb UI 收回容器 loopback：網頁 session 在共用網段上，兄弟容器不該連得到
+        # 那個顯示未脫敏流量的畫面（人自己開容器時不設，run script 的 -p 才轉得進去）
+        "NCR_MITM_WEB_BIND": "127.0.0.1",
+        # per-user 狀態空間（ADR 0014）。這個**不是**給 entrypoint.sh 的，是給 CLI 本身的，
+        # 所以不隨 profile 變、每一場都在。
+        # 少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器 writable layer，換一顆容器就沒了。
+        # （憑證不在這份裡：這個 user 沒設 setup-token，而沒設就**不注入**——見下方憑證段。）
+        "CLAUDE_CONFIG_DIR": "/home/nathan/.claude",
+        "NCR_MODEL": "opus",
+        "NCR_EFFORT": "high",
+    },
+)
 # restricted 是預設，所以這裡要有 firewall 需要的能力（下面 restricted 段落再驗一次細節）
-check("預設帶 cap_add=[NET_ADMIN]（restricted 套 iptables 需要）",
-      kw.get("cap_add") == ["NET_ADMIN"])
-check("預設接上**這個使用者自己**那張網（ADR 0016）",
-      kw.get("network") == user_proxy.network_name(_UID))
+check("預設帶 cap_add=[NET_ADMIN]（restricted 套 iptables 需要）", kw.get("cap_add") == ["NET_ADMIN"])
+check("預設接上**這個使用者自己**那張網（ADR 0016）", kw.get("network") == user_proxy.network_name(_UID))
 check("無 ports", "ports" not in kw)
 check("bind-mount repo entrypoint.sh（freshness）", config.ENTRYPOINT_SH in kw["volumes"])
 
@@ -75,16 +90,18 @@ print("== semgrep-rules（A4）：判準是 .git，不是 isdir ==")
 # compose/daemon 在來源缺席時會以 root 建出**空目錄**頂替——只驗 isdir 會把那個空殼
 # 掛進去，看起來像掛了其實沒有規則。所以空殼要不掛，真的 clone（有 .git）才掛。
 import tempfile as _tf_sg  # noqa: E402
+
 _sg = _tf_sg.mkdtemp(prefix="claude-pty-semgrep-")
 _saved_sg = (config.SEMGREP_RULES_SELF, config.SEMGREP_RULES_HOST)
 try:
     config.SEMGREP_RULES_SELF = config.SEMGREP_RULES_HOST = _sg
-    check("空目錄（root 頂替出來的殼）不掛",
-          _sg not in build_run_kwargs("c", "sidSG", Profile(), _UID)["volumes"])
+    check("空目錄（root 頂替出來的殼）不掛", _sg not in build_run_kwargs("c", "sidSG", Profile(), _UID)["volumes"])
     os.makedirs(os.path.join(_sg, ".git"))
-    check("真的 clone（有 .git）→ :ro 掛到 ~/semgrep-rules（與 run script 同落點）",
-          build_run_kwargs("c", "sidSG", Profile(), _UID)["volumes"].get(_sg)
-          == {"bind": "/home/nathan/semgrep-rules", "mode": "ro"})
+    check(
+        "真的 clone（有 .git）→ :ro 掛到 ~/semgrep-rules（與 run script 同落點）",
+        build_run_kwargs("c", "sidSG", Profile(), _UID)["volumes"].get(_sg)
+        == {"bind": "/home/nathan/semgrep-rules", "mode": "ro"},
+    )
 finally:
     config.SEMGREP_RULES_SELF, config.SEMGREP_RULES_HOST = _saved_sg
     __import__("shutil").rmtree(_sg, ignore_errors=True)
@@ -106,17 +123,20 @@ print("== 🔴 網路：四種 profile 組合**一律**指定，沒有例外（A
 _want_net = user_proxy.network_name(_UID)
 for _net_mode in ("restricted", "unrestricted"):
     for _tel in (False, True):
-        _kw = build_run_kwargs("c", f"sidN-{_net_mode}-{_tel}",
-                               Profile(network=_net_mode, telemetry=_tel), _UID)
-        check(f"🔴 network={_net_mode} telemetry={_tel} → 掛在 {_want_net}",
-              _kw.get("network") == _want_net)
+        _kw = build_run_kwargs("c", f"sidN-{_net_mode}-{_tel}", Profile(network=_net_mode, telemetry=_tel), _UID)
+        check(f"🔴 network={_net_mode} telemetry={_tel} → 掛在 {_want_net}", _kw.get("network") == _want_net)
 # 反向：換一個 uid 就該換一張網。寫死或算錯的話上面四條照樣全過。
-check("🔴 換一個使用者就是換一張網（網路名真的由 uid 決定）",
-      build_run_kwargs("c", "sidN-other", Profile(), _UID + 1).get("network")
-      == user_proxy.network_name(_UID + 1) != _want_net)
+check(
+    "🔴 換一個使用者就是換一張網（網路名真的由 uid 決定）",
+    build_run_kwargs("c", "sidN-other", Profile(), _UID + 1).get("network")
+    == user_proxy.network_name(_UID + 1)
+    != _want_net,
+)
 # NET_ADMIN 仍然只有 restricted 要：它是套 iptables 的能力，不是上網的前提。
-check("unrestricted 不給 NET_ADMIN（網路歸屬與防火牆能力是兩件事）",
-      "cap_add" not in build_run_kwargs("c", "sidN-u", Profile(network="unrestricted"), _UID))
+check(
+    "unrestricted 不給 NET_ADMIN（網路歸屬與防火牆能力是兩件事）",
+    "cap_add" not in build_run_kwargs("c", "sidN-u", Profile(network="unrestricted"), _UID),
+)
 
 print("== telemetry：OTEL env + NCR_OTEL + network 到 jaeger ==")
 kw = build_run_kwargs("c", "sidT", Profile(telemetry=True), _UID)
@@ -130,8 +150,7 @@ check("resource attr 帶 session.id", "session.id=sidT" in env.get("OTEL_RESOURC
 #   要由控制平面接過去（user_proxy.attach_jaeger）。這支是純函式，只負責掛對網路；
 #   「jaeger 真的在那張網上嗎」由 create() 在開場前問，問不到就不設 OTEL env（見
 #   test_telemetry）。這裡只驗網路歸屬，不要在這裡假裝驗到了可達性。
-check("network 仍是該使用者的網路（jaeger 由控制平面接過去）",
-      kw.get("network") == user_proxy.network_name(_UID))
+check("network 仍是該使用者的網路（jaeger 由控制平面接過去）", kw.get("network") == user_proxy.network_name(_UID))
 
 print("== capture：mount addon + host 落盤（ADR 0008 後不再由 create 發布 mitm port）==")
 kw = build_run_kwargs("c", "sidC", Profile(capture=True), _UID)
@@ -139,8 +158,10 @@ env = kw["environment"]
 check("env NCR_CAPTURE=1", env["NCR_CAPTURE"] == "1")
 # 🔴 條件題要成對送：capture=1 時 entrypoint 會接著問錄製範圍，沒帶 scope 就停在那道
 #    read——容器卡在啟動，而畫面上只看得到「一直在建立中」。
-check("🔴 capture 開著時一定帶 NCR_CAPTURE_SCOPE（否則容器卡在 read）",
-      env.get("NCR_CAPTURE_SCOPE") in ("all", "model", "1", "2"))
+check(
+    "🔴 capture 開著時一定帶 NCR_CAPTURE_SCOPE（否則容器卡在 read）",
+    env.get("NCR_CAPTURE_SCOPE") in ("all", "model", "1", "2"),
+)
 # ADR 0007 的落盤要求還在，但落點改成 per-user（ADR 0014）——見下方「per-user 狀態空間」
 # 段落。這裡 MOUNTS 是空的（測試隔離），所以連 addon 都不會掛，只驗 env 與 port。
 # ADR 0008：port 屬 on-demand view 範疇，create 不再發布 host port
@@ -148,6 +169,7 @@ check("create 不再發布 host port", "ports" not in kw)
 
 print("== 穩健布林解析（字串 'false' 不該變 True）==")
 from server.sessions import Profile as _P  # noqa: E402
+
 check("profile capture='false' → False", _P.from_dict({"capture": "false"}).capture is False)
 check("profile capture='true'  → True", _P.from_dict({"capture": "true"}).capture is True)
 check("profile telemetry=0（int）→ False", _P.from_dict({"telemetry": 0}).telemetry is False)
@@ -161,30 +183,30 @@ kw = build_run_kwargs("c", "sidM", Profile(model="sonnet", effort="xhigh"), _UID
 check("帶入 NCR_MODEL", kw["environment"].get("NCR_MODEL") == "sonnet")
 check("帶入 NCR_EFFORT", kw["environment"].get("NCR_EFFORT") == "xhigh")
 
-check("預設為 opus / high",
-      (_P.from_dict(None).model, _P.from_dict(None).effort) == ("opus", "high"))
-check("as_dict 往返保留 model/effort",
-      _P.from_dict({"model": "sonnet", "effort": "max"}).as_dict()["effort"] == "max")
+check("預設為 opus / high", (_P.from_dict(None).model, _P.from_dict(None).effort) == ("opus", "high"))
+check("as_dict 往返保留 model/effort", _P.from_dict({"model": "sonnet", "effort": "max"}).as_dict()["effort"] == "max")
 
 print("== SSH agent 轉發：預設關，設了才掛（opt-in，ADR 0011）==")
 # 預設關這件事要有斷言守著：它掛的是「能以你的身分認證任何主機」的東西，
 # 哪天有人手滑給 SSH_AUTH_SOCK_HOST 一個預設值，這裡要立刻紅。
-check("預設不掛（連 mounts 這個 key 都不出現）",
-      not config.SSH_AUTH_SOCK_HOST and "mounts" not in build_run_kwargs("c", "sidS0", Profile(), _UID))
+check(
+    "預設不掛（連 mounts 這個 key 都不出現）",
+    not config.SSH_AUTH_SOCK_HOST and "mounts" not in build_run_kwargs("c", "sidS0", Profile(), _UID),
+)
 
 config.SSH_AUTH_SOCK_HOST = "/run/user/1234/keyring/ssh"
 try:
     kw = build_run_kwargs("c", "sidS1", Profile(), _UID)
     m = (kw.get("mounts") or [{}])[0]
-    check("掛到 /ssh/ssh_sock（image 的 SSH_AUTH_SOCK 指向這裡，與 run script 對齊）",
-          m.get("Target") == config.SSH_AUTH_SOCK_BIND == "/ssh/ssh_sock")
-    check("來源是 host 路徑（由 daemon 解讀，ADR 0009）",
-          m.get("Source") == "/run/user/1234/keyring/ssh")
+    check(
+        "掛到 /ssh/ssh_sock（image 的 SSH_AUTH_SOCK 指向這裡，與 run script 對齊）",
+        m.get("Target") == config.SSH_AUTH_SOCK_BIND == "/ssh/ssh_sock",
+    )
+    check("來源是 host 路徑（由 daemon 解讀，ADR 0009）", m.get("Source") == "/run/user/1234/keyring/ssh")
     # ⚠ 這兩條是這個功能的實質內容，不是形式：
     #   type=bind 走 Mounts → 來源不存在時 dockerd 報錯；若退回 volumes(Binds)，dockerd 會
     #   在 host 上建一個 root:root 目錄頂替，把 host 自己的 agent socket 位置佔掉。
-    check("type=bind（來源不存在要報錯，不可以讓 dockerd 在 host 上建目錄頂替）",
-          m.get("Type") == "bind")
+    check("type=bind（來源不存在要報錯，不可以讓 dockerd 在 host 上建目錄頂替）", m.get("Type") == "bind")
     #   ⚠ **唯讀**（2026-08-22 起）。舊註解寫「唯讀掛會 EACCES、掛了等於沒掛」，
     #   那是錯的：connect 走 path_permission(MAY_WRITE)，是 inode 檢查，不經過
     #   mnt_want_write，所以 :ro 的 MNT_READONLY 從來沒被諮詢，socket 照樣連得上
@@ -192,18 +214,19 @@ try:
     #   :ro 擋的是「弄壞 host 那顆 socket」——bind mount 共用同一個 inode，原生 Linux 上
     #   容器對它 chmod 會改到 host 那一顆，症狀是使用者其他終端機的 ssh 全失效。
     #   ⚠ 這條斷言釘的是那個保護，不是 agent 的能力邊界（:ro 擋不住簽章與轉送）。
-    check("🔴 socket 唯讀掛載（擋容器 chmod 壞 host 那顆；不影響 connect）",
-          m.get("ReadOnly") is True)
+    check("🔴 socket 唯讀掛載（擋容器 chmod 壞 host 那顆；不影響 connect）", m.get("ReadOnly") is True)
 
     # 部署層能力：不隨 profile 或 entrypoint 變。escape hatch 也要有，否則
     # 「bash 進去手動 git push」這條路徑會跟正常 session 行為不一致。
     config.ENTRYPOINT = "bash"
     check("escape hatch（bash）也照掛", "mounts" in build_run_kwargs("c", "sidS2", Profile(), _UID))
     config.ENTRYPOINT = None
-    check("escape hatch 還原後照掛（與 profile 其他欄位無關）",
-          "mounts" in build_run_kwargs("c", "sidS3", Profile(capture=True), _UID))
+    check(
+        "escape hatch 還原後照掛（與 profile 其他欄位無關）",
+        "mounts" in build_run_kwargs("c", "sidS3", Profile(capture=True), _UID),
+    )
 finally:
-    config.SSH_AUTH_SOCK_HOST = ""     # 還原，後面的段落不該看到它
+    config.SSH_AUTH_SOCK_HOST = ""  # 還原，後面的段落不該看到它
 
 check("還原後又回到不掛", "mounts" not in build_run_kwargs("c", "sidS4", Profile(), _UID))
 
@@ -221,8 +244,10 @@ check("無 cap_add（不套 profile 的能力）", "cap_add" not in kw)
 #    而這一段本來就在測 escape hatch，只是斷言的清單裡少了它。
 #    ⚠ 上面那三條驗的是「profile 的東西**不該**出現」，這一條相反：驗一個**必須**出現的。
 #      兩種斷言混在同一段時特別容易漏掉後者。
-check("🔴 escape hatch 也要有 network（隔離層不隨 entrypoint 變，ADR 0016）",
-      kw.get("network") == user_proxy.network_name(_UID))
+check(
+    "🔴 escape hatch 也要有 network（隔離層不隨 entrypoint 變，ADR 0016）",
+    kw.get("network") == user_proxy.network_name(_UID),
+)
 config.ENTRYPOINT = None  # 還原
 
 print("\n== docker 時間戳只有一份解析（review 2026-07-26）==")
@@ -237,23 +262,22 @@ from server.sessions import parse_docker_time  # noqa: E402
 
 UTC = _dt3.timezone.utc
 for label, raw, want in [
-    ("奈秒精度 + Z", "2026-07-26T02:57:51.828567844Z",
-     _dt3.datetime(2026, 7, 26, 2, 57, 51, 828567, tzinfo=UTC)),
-    ("正偏移", "2026-07-26T02:57:51.828567844+08:00",
-     _dt3.datetime(2026, 7, 26, 2, 57, 51, 828567,
-                   tzinfo=_dt3.timezone(_dt3.timedelta(hours=8)))),
-    ("**負偏移**（舊實作會靜靜當成 UTC，整整差掉時差）",
-     "2026-07-26T02:57:51.828567844-05:00",
-     _dt3.datetime(2026, 7, 26, 2, 57, 51, 828567,
-                   tzinfo=_dt3.timezone(_dt3.timedelta(hours=-5)))),
-    ("沒有小數位", "2026-07-26T02:57:51Z",
-     _dt3.datetime(2026, 7, 26, 2, 57, 51, tzinfo=UTC)),
-    ("完全沒有時區＝當 UTC", "2026-07-26T02:57:51",
-     _dt3.datetime(2026, 7, 26, 2, 57, 51, tzinfo=UTC)),
+    ("奈秒精度 + Z", "2026-07-26T02:57:51.828567844Z", _dt3.datetime(2026, 7, 26, 2, 57, 51, 828567, tzinfo=UTC)),
+    (
+        "正偏移",
+        "2026-07-26T02:57:51.828567844+08:00",
+        _dt3.datetime(2026, 7, 26, 2, 57, 51, 828567, tzinfo=_dt3.timezone(_dt3.timedelta(hours=8))),
+    ),
+    (
+        "**負偏移**（舊實作會靜靜當成 UTC，整整差掉時差）",
+        "2026-07-26T02:57:51.828567844-05:00",
+        _dt3.datetime(2026, 7, 26, 2, 57, 51, 828567, tzinfo=_dt3.timezone(_dt3.timedelta(hours=-5))),
+    ),
+    ("沒有小數位", "2026-07-26T02:57:51Z", _dt3.datetime(2026, 7, 26, 2, 57, 51, tzinfo=UTC)),
+    ("完全沒有時區＝當 UTC", "2026-07-26T02:57:51", _dt3.datetime(2026, 7, 26, 2, 57, 51, tzinfo=UTC)),
 ]:
     got = parse_docker_time(raw)
-    check(f"{label}：{raw}",
-          got is not None and got == want and got.utcoffset() == want.utcoffset())
+    check(f"{label}：{raw}", got is not None and got == want and got.utcoffset() == want.utcoffset())
 for bad in (None, "", "not-a-time", "2026-13-45T99:99:99Z"):
     check(f"解不出來回 None：{bad!r}", parse_docker_time(bad) is None)
 
@@ -268,19 +292,19 @@ from server.sessions import provision_user_space  # noqa: E402
 _space = tempfile.mkdtemp(prefix="claude-pty-space-")
 _saved = (config.MOUNTS, config.SPACE_HOST, config.SPACE_SELF)
 try:
-    config.MOUNTS = {"/shared": {"bind": "/shared", "mode": "rw"}}   # 非空才會有 per-user 掛載
+    config.MOUNTS = {"/shared": {"bind": "/shared", "mode": "rw"}}  # 非空才會有 per-user 掛載
     config.SPACE_HOST = config.SPACE_SELF = _space
     kw = build_run_kwargs("c", "sidU", Profile(), _UID)
     vols, env = kw["volumes"], kw["environment"]
     root = os.path.join(_space, "user-7")
 
-    check("狀態目錄掛成容器的 ~/.claude（rw）",
-          vols.get(os.path.join(root, "claude"))
-          == {"bind": "/home/nathan/.claude", "mode": "rw"})
+    check(
+        "狀態目錄掛成容器的 ~/.claude（rw）",
+        vols.get(os.path.join(root, "claude")) == {"bind": "/home/nathan/.claude", "mode": "rw"},
+    )
     # 這個 env 是整個機制的關鍵：少了 CLAUDE_CONFIG_DIR，.claude.json 會落在容器
     # writable layer，換一顆容器就沒了（而且完全無聲）。
-    check("env 指定 CLAUDE_CONFIG_DIR 指向那個目錄",
-          env.get("CLAUDE_CONFIG_DIR") == "/home/nathan/.claude")
+    check("env 指定 CLAUDE_CONFIG_DIR 指向那個目錄", env.get("CLAUDE_CONFIG_DIR") == "/home/nathan/.claude")
 
     print("== 憑證＝這個人的 setup-token，env 只帶路徑、值走 put_archive ==")
     # 有設 → env 帶 NCR_TOKEN_FILE（路徑）；沒設 → 這個鍵**不存在**（不是空字串——
@@ -289,11 +313,11 @@ try:
     _tok_uid = auth.create_user("pm-token-user", "pm-token-password-1")["id"]
     auth.set_cli_token(_tok_uid, "sk-test-oauth-token")
     env_tok = build_run_kwargs("c", "sid-tok", Profile(), _tok_uid).get("environment", {})
-    check("🔴 有 token → env 帶的是路徑",
-          env_tok.get("NCR_TOKEN_FILE") == config.SESSION_TOKEN_FILE)
-    check("🔴 token 的值不在 env 的任何一個欄位裡",
-          all("sk-test-oauth-token" not in str(x)
-              for kv in env_tok.items() for x in kv))
+    check("🔴 有 token → env 帶的是路徑", env_tok.get("NCR_TOKEN_FILE") == config.SESSION_TOKEN_FILE)
+    check(
+        "🔴 token 的值不在 env 的任何一個欄位裡",
+        all("sk-test-oauth-token" not in str(x) for kv in env_tok.items() for x in kv),
+    )
     auth.clear_cli_token(_tok_uid)
     env_none = build_run_kwargs("c", "sid-tok2", Profile(), _tok_uid).get("environment", {})
     check("🔴 沒 token → 這個鍵不存在", "NCR_TOKEN_FILE" not in env_none)
@@ -302,61 +326,74 @@ try:
     #    它必須真的把值放進環境——這條測的正是「退路本身是通的」。退路壞掉而沒人發現，
     #    等於沒有退路。
     auth.set_cli_token(_tok_uid, "sk-test-oauth-token")
-    env_env = build_run_kwargs("c", "sid-tok3", Profile(token_delivery="env"),
-                               _tok_uid).get("environment", {})
-    check("🔴 選 env → 值真的進環境變數（退路要是通的）",
-          env_env.get("CLAUDE_CODE_OAUTH_TOKEN") == "sk-test-oauth-token")
-    check("🔴 選 env → 就不再送路徑（同一個秘密不要躺兩個地方）",
-          "NCR_TOKEN_FILE" not in env_env)
+    env_env = build_run_kwargs("c", "sid-tok3", Profile(token_delivery="env"), _tok_uid).get("environment", {})
+    check(
+        "🔴 選 env → 值真的進環境變數（退路要是通的）", env_env.get("CLAUDE_CODE_OAUTH_TOKEN") == "sk-test-oauth-token"
+    )
+    check("🔴 選 env → 就不再送路徑（同一個秘密不要躺兩個地方）", "NCR_TOKEN_FILE" not in env_env)
     # 🔴 兩條路互斥：fd 那條不可以順手也把值放進環境。
-    env_fd = build_run_kwargs("c", "sid-tok4", Profile(token_delivery="fd"),
-                              _tok_uid).get("environment", {})
-    check("🔴 選 fd → 值不在 env 的任何一個欄位裡",
-          all("sk-test-oauth-token" not in str(x) for kv in env_fd.items() for x in kv))
+    env_fd = build_run_kwargs("c", "sid-tok4", Profile(token_delivery="fd"), _tok_uid).get("environment", {})
+    check(
+        "🔴 選 fd → 值不在 env 的任何一個欄位裡",
+        all("sk-test-oauth-token" not in str(x) for kv in env_fd.items() for x in kv),
+    )
     auth.clear_cli_token(_tok_uid)
-    check("🔴 憑證不再以檔案掛載（volumes 裡沒有 .credentials）",
-          all(".credentials" not in str(v) for kwv in (env_tok, env_none) for v in kwv)
-          and all(".credentials" not in b.get("bind", "")
-                  for b in build_run_kwargs("c", "sid-tok3", Profile(), _tok_uid)
-                                          .get("volumes", {}).values()))
-    check("持久化空間掛在 ~/persistent-data",
-          vols.get(os.path.join(root, "persistent-data"))
-          == {"bind": "/home/nathan/persistent-data", "mode": "rw"})
+    check(
+        "🔴 憑證不再以檔案掛載（volumes 裡沒有 .credentials）",
+        all(".credentials" not in str(v) for kwv in (env_tok, env_none) for v in kwv)
+        and all(
+            ".credentials" not in b.get("bind", "")
+            for b in build_run_kwargs("c", "sid-tok3", Profile(), _tok_uid).get("volumes", {}).values()
+        ),
+    )
+    check(
+        "持久化空間掛在 ~/persistent-data",
+        vols.get(os.path.join(root, "persistent-data")) == {"bind": "/home/nathan/persistent-data", "mode": "rw"},
+    )
     # ⚠ 這條守的是一個具體的坑，不是風格：落點若在 cwd 底下，cwd 就永遠不是空的，
     #   而 `git clone <url> .` 對非空目錄是直接失敗（在真 image 裡驗過），錯誤訊息
     #   還完全指不到原因。2026-07-29 討論過這個位置，結論是留在 cwd 外面。
-    check("🔴 而且**不在 cwd 底下**（cwd 要維持空的，否則 git clone . 會壞）",
-          not config.DATA_BIND.startswith(config.WORKDIR.rstrip("/") + "/"))
+    check(
+        "🔴 而且**不在 cwd 底下**（cwd 要維持空的，否則 git clone . 會壞）",
+        not config.DATA_BIND.startswith(config.WORKDIR.rstrip("/") + "/"),
+    )
     # capture 的 .mitm 裡是**完整的 API 請求本文**（prompt 全文），比 transcript 更敏感；
     # 審查報告則是個人的歷史。兩者都住在同一個根底下，掛**一次**就好——
     # 另外再掛 mitm 會變成巢狀 bind mount（落點要先存在，少一個子目錄就啟動失敗）。
-    check("capture 與報告的根 per-user（裡面是 prompt 全文與個人的審查紀錄）",
-          vols.get(os.path.join(root, "ncr")) == {"bind": config.NCR_HOME_BIND, "mode": "rw"})
-    check("🔴 沒有把 mitm 另外掛一次（那會是巢狀掛載）",
-          not any(v["bind"].startswith(config.NCR_HOME_BIND + "/") for v in vols.values()))
+    check(
+        "capture 與報告的根 per-user（裡面是 prompt 全文與個人的審查紀錄）",
+        vols.get(os.path.join(root, "ncr")) == {"bind": config.NCR_HOME_BIND, "mode": "rw"},
+    )
+    check(
+        "🔴 沒有把 mitm 另外掛一次（那會是巢狀掛載）",
+        not any(v["bind"].startswith(config.NCR_HOME_BIND + "/") for v in vols.values()),
+    )
     # capture 的落點必須與 entrypoint 的 CAPTURE_DIR 一致——那條斷言在下面「零偏差」那段，
     # 因為它要**真的去讀那份檔案**。這裡曾經寫成 `config.MITM_BIND == NCR_HOME_BIND + "/mitm"`，
     # 而那正是 MITM_BIND 的定義，恆真、什麼都沒守到。
-    check("host 的 ~/.claude 完全不在掛載裡（狀態層已隔離）",
-          not any(v["bind"] == "/home/nathan/.claude" and k != os.path.join(root, "claude")
-                  for k, v in vols.items()))
-    check("共用掛載仍然在（trivy 那類不該被 per-user 化）",
-          vols.get("/shared") == {"bind": "/shared", "mode": "rw"})
+    check(
+        "host 的 ~/.claude 完全不在掛載裡（狀態層已隔離）",
+        not any(v["bind"] == "/home/nathan/.claude" and k != os.path.join(root, "claude") for k, v in vols.items()),
+    )
+    check("共用掛載仍然在（trivy 那類不該被 per-user 化）", vols.get("/shared") == {"bind": "/shared", "mode": "rw"})
 
     print("\n-- provision_user_space：種子與落點 --")
     provision_user_space(_UID, "seeder")
     import json as _json
+
     seed = _json.load(open(os.path.join(root, "claude", ".claude.json"), encoding="utf-8"))
     # 三道對話各對應一個 key。最惡劣的是 bypass 那道：預設停在「No, exit」，driver 送出的
     # 第一個 Enter 就是把容器結束掉——所以少一個 key 不是「多按一次」，是 session 直接死。
     check("種子關掉 onboarding 精靈", seed.get("hasCompletedOnboarding") is True)
-    check("種子關掉 Bypass Permissions 對話（預設停在 No, exit）",
-          seed.get("bypassPermissionsModeAccepted") is True)
-    check("種子關掉信任對話，而且 key 是 config.WORKDIR 不是寫死字面值",
-          seed.get("projects", {}).get(config.WORKDIR, {}).get("hasTrustDialogAccepted") is True)
-    check("要掛的目錄都建出來了（不能讓 dockerd 隱式建成 root:root）",
-          all(os.path.isdir(os.path.join(root, d))
-              for d in ("claude", "persistent-data", "ncr")))
+    check("種子關掉 Bypass Permissions 對話（預設停在 No, exit）", seed.get("bypassPermissionsModeAccepted") is True)
+    check(
+        "種子關掉信任對話，而且 key 是 config.WORKDIR 不是寫死字面值",
+        seed.get("projects", {}).get(config.WORKDIR, {}).get("hasTrustDialogAccepted") is True,
+    )
+    check(
+        "要掛的目錄都建出來了（不能讓 dockerd 隱式建成 root:root）",
+        all(os.path.isdir(os.path.join(root, d)) for d in ("claude", "persistent-data", "ncr")),
+    )
 
     # 使用者跑過之後那個檔就是他的狀態（projects、numStartups、快取…），再次呼叫不可以蓋掉
     _seed_file = os.path.join(root, "claude", ".claude.json")
@@ -364,23 +401,28 @@ try:
     with open(_seed_file, "w", encoding="utf-8") as f:
         _json.dump(_mine, f)
     provision_user_space(_UID, "seeder")
-    check("第二次呼叫不覆蓋既有的 .claude.json（那是使用者的狀態）",
-          _json.load(open(_seed_file, encoding="utf-8")) == _mine)
+    check(
+        "第二次呼叫不覆蓋既有的 .claude.json（那是使用者的狀態）",
+        _json.load(open(_seed_file, encoding="utf-8")) == _mine,
+    )
 
     # ⚠ 半截檔**不是**「使用者的狀態」，是上一次寫到一半被 kill 的殘骸。當成狀態跳過的話
     #   那個使用者從此每一場都撞 onboarding，而且永遠修不好——最後那道對話預設停在
     #   「No, exit」，driver 送出的第一個 Enter 就把容器收掉。
     with open(_seed_file, "w", encoding="utf-8") as f:
-        f.write('{"hasCompletedOnboarding": tr')      # 寫到一半
+        f.write('{"hasCompletedOnboarding": tr')  # 寫到一半
     provision_user_space(_UID, "seeder")
-    check("壞掉的 .claude.json 會被重寫（不是「存在就跳過」）",
-          _json.load(open(_seed_file, encoding="utf-8")).get("hasCompletedOnboarding") is True)
+    check(
+        "壞掉的 .claude.json 會被重寫（不是「存在就跳過」）",
+        _json.load(open(_seed_file, encoding="utf-8")).get("hasCompletedOnboarding") is True,
+    )
     with open(_seed_file, "w", encoding="utf-8"):
-        pass                                           # 0 byte
+        pass  # 0 byte
     provision_user_space(_UID, "seeder")
-    check("空的 .claude.json 也會被重寫",
-          _json.load(open(_seed_file, encoding="utf-8")).get("bypassPermissionsModeAccepted")
-          is True)
+    check(
+        "空的 .claude.json 也會被重寫",
+        _json.load(open(_seed_file, encoding="utf-8")).get("bypassPermissionsModeAccepted") is True,
+    )
 
     # WORKDIR 改掉時，**既有使用者**的檔案裡不會有新 cwd 的信任 key ——下一場全部撞信任
     # 對話。所以要補寫，而且只補缺的那一個 key，不動其他狀態。
@@ -391,10 +433,14 @@ try:
         config.WORKDIR = "/home/nathan/new-cwd"
         provision_user_space(_UID, "seeder")
         after = _json.load(open(_seed_file, encoding="utf-8"))
-        check("WORKDIR 改了會補上新 cwd 的信任 key（不只影響第一場）",
-              after["projects"]["/home/nathan/new-cwd"]["hasTrustDialogAccepted"] is True)
-        check("補寫只加不改：既有狀態與舊 cwd 都留著",
-              after["numStartups"] == 42 and after["projects"]["/old/cwd"] == {"x": 1})
+        check(
+            "WORKDIR 改了會補上新 cwd 的信任 key（不只影響第一場）",
+            after["projects"]["/home/nathan/new-cwd"]["hasTrustDialogAccepted"] is True,
+        )
+        check(
+            "補寫只加不改：既有狀態與舊 cwd 都留著",
+            after["numStartups"] == 42 and after["projects"]["/old/cwd"] == {"x": 1},
+        )
     finally:
         config.WORKDIR = _saved_wd
 
@@ -405,15 +451,16 @@ try:
     #   「有資料卻沒有標記」——下面第三段就在驗它會被擋。兩件事不能混在同一個目錄上測。
     _OWNED, root2 = 8, os.path.join(_space, "user-8")
     provision_user_space(_OWNED, "alice")
-    check("第一次帶 username 會寫下擁有者",
-          _json.load(open(os.path.join(root2, "owner.json"), encoding="utf-8"))["username"]
-          == "alice")
+    check(
+        "第一次帶 username 會寫下擁有者",
+        _json.load(open(os.path.join(root2, "owner.json"), encoding="utf-8"))["username"] == "alice",
+    )
     provision_user_space(_OWNED, "alice")
     check("同一個人再開照常放行", True)
     _denied = False
     try:
         provision_user_space(_OWNED, "bob")
-    except Exception as e:      # noqa: BLE001 —— 這裡就是要驗它拒絕
+    except Exception as e:  # noqa: BLE001 —— 這裡就是要驗它拒絕
         _denied = "alice" in str(e)
     check("換人就拒絕，而且訊息說得出是誰的空間", _denied)
     # 「有資料、沒標記」也不可以認領——那是升級前留下的空間，或有人手動動過。
@@ -422,35 +469,36 @@ try:
     _u3 = os.path.join(_space, "user-11")
     os.makedirs(os.path.join(_u3, "claude"), exist_ok=True)
     with open(os.path.join(_u3, "claude", ".claude.json"), "w", encoding="utf-8") as f:
-        f.write("{}")                            # 有資料，但沒有 owner.json（升級前的空間）
+        f.write("{}")  # 有資料，但沒有 owner.json（升級前的空間）
     try:
         provision_user_space(11, "carol")
-    except Exception as e:      # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         _refused_unmarked = "owner.json" in str(e)
     check("有資料卻沒有標記→也要停下來問人（升級前的空間走這條）", _refused_unmarked)
     # ⚠ 壞掉的標記**不等於**沒有標記。當成「還沒有人認領」就會直接重新蓋章，把上一個人的
     #   transcript 與 mitm 全文靜默交出去——那正是這個標記存在的理由。
     with open(os.path.join(root2, "owner.json"), "w", encoding="utf-8") as f:
-        f.write('{"username": "ali')          # 寫到一半
+        f.write('{"username": "ali')  # 寫到一半
     _refused = False
     try:
         provision_user_space(_OWNED, "bob")
-    except Exception as e:      # noqa: BLE001 —— 就是要驗它不放行
+    except Exception as e:  # noqa: BLE001 —— 就是要驗它不放行
         _refused = "owner.json" in str(e)
     check("壞掉的擁有者標記→停下來問人，不可以重新蓋章", _refused)
-    check("而且沒有被偷偷覆寫成新的擁有者",
-          open(os.path.join(root2, "owner.json"), encoding="utf-8").read() == '{"username": "ali')
-    check("目錄是 0700（ncr/mitm 裡是 prompt 全文，不可以世界可讀）",
-          (os.stat(root).st_mode & 0o777) == 0o700
-          and (os.stat(os.path.join(root, "ncr")).st_mode & 0o777) == 0o700)
+    check(
+        "而且沒有被偷偷覆寫成新的擁有者",
+        open(os.path.join(root2, "owner.json"), encoding="utf-8").read() == '{"username": "ali',
+    )
+    check(
+        "目錄是 0700（ncr/mitm 裡是 prompt 全文，不可以世界可讀）",
+        (os.stat(root).st_mode & 0o777) == 0o700 and (os.stat(os.path.join(root, "ncr")).st_mode & 0o777) == 0o700,
+    )
 
     config.MOUNTS = {}
-    check("MOUNTS 清空時 per-user 掛載也一起消失（測試隔離）",
-          config.user_mounts(_UID) == {})
+    check("MOUNTS 清空時 per-user 掛載也一起消失（測試隔離）", config.user_mounts(_UID) == {})
     _u2 = os.path.join(_space, "user-99")
     provision_user_space(99, "seeder")
-    check("MOUNTS 清空時 provision 完全不做事（不在 host 上長目錄）",
-          not os.path.exists(_u2))
+    check("MOUNTS 清空時 provision 完全不做事（不在 host 上長目錄）", not os.path.exists(_u2))
 finally:
     config.MOUNTS, config.SPACE_HOST, config.SPACE_SELF = _saved
     __import__("shutil").rmtree(_space, ignore_errors=True)
@@ -467,12 +515,10 @@ if os.path.isfile(_ep) and os.path.isfile(_run):
     _run_src = open(_run, encoding="utf-8").read()
     # 兩個新 env 由控制平面直接 `-e` 給容器，**不經過 entrypoint**。它一旦開始讀這兩個
     # 變數，人類路徑就會跟著改變行為——那就是「有偏差」了。
-    check("entrypoint.sh 完全不碰 CLAUDE_CONFIG_DIR（否則人類路徑會被牽連）",
-          "CLAUDE_CONFIG_DIR" not in _ep_src)
+    check("entrypoint.sh 完全不碰 CLAUDE_CONFIG_DIR（否則人類路徑會被牽連）", "CLAUDE_CONFIG_DIR" not in _ep_src)
     # entrypoint 可以**讀**它（沒憑證時的友善警告本來就在人類路徑上），但不可以改寫——
     # 賦值等於在控制平面看不到的地方換憑證。
-    check("entrypoint.sh 不改寫 CLAUDE_CODE_OAUTH_TOKEN（讀可以，賦值不行）",
-          "CLAUDE_CODE_OAUTH_TOKEN=" not in _ep_src)
+    check("entrypoint.sh 不改寫 CLAUDE_CODE_OAUTH_TOKEN（讀可以，賦值不行）", "CLAUDE_CODE_OAUTH_TOKEN=" not in _ep_src)
 
     # --- 🔴 capture 的落點：兩份檔案講的必須是同一個路徑 ---------------------------
     #
@@ -485,12 +531,13 @@ if os.path.isfile(_ep) and os.path.isfile(_run):
     # ⚠ `$HOME` 展開成 `NCR_HOME_BIND` 的上一層：那不是取巧，run script 也是把 host 的
     #   `$HOME/ncr` 掛到那個位置，「容器裡的家目錄」本來就是這兩者共同的錨。
     _m = re.search(r'^CAPTURE_DIR="([^"]+)"', _ep_src, re.M)
-    check("🔴 entrypoint.sh 找得到 CAPTURE_DIR 的定義（找不到＝這條測試失效了）",
-          _m is not None)
+    check("🔴 entrypoint.sh 找得到 CAPTURE_DIR 的定義（找不到＝這條測試失效了）", _m is not None)
     if _m:
-        _home = os.path.dirname(config.NCR_HOME_BIND)          # /home/<session 使用者>
-        check("🔴 capture 落點與 entrypoint 的 CAPTURE_DIR 逐字一致（對不上＝錄了個寂寞）",
-              _m.group(1).replace("$HOME", _home) == config.MITM_BIND)
+        _home = os.path.dirname(config.NCR_HOME_BIND)  # /home/<session 使用者>
+        check(
+            "🔴 capture 落點與 entrypoint 的 CAPTURE_DIR 逐字一致（對不上＝錄了個寂寞）",
+            _m.group(1).replace("$HOME", _home) == config.MITM_BIND,
+        )
     # run script 掛的仍然是 host 上**正式的那一份**，不是 per-user 空間。
     check("run script 仍掛 host 正式的 ~/.claude", "-v ~/.claude:" in _run_src)
     check("run script 仍掛 host 正式的 ~/.claude.json", "-v ~/.claude.json:" in _run_src)
@@ -507,15 +554,14 @@ if os.path.isfile(_ep) and os.path.isfile(_run):
     _fw = os.path.join(_repo, "dev-container", "init-firewall.sh")
     _fw_src = open(_fw, encoding="utf-8").read()
     _fw_code = "\n".join(ln.split("#")[0] for ln in _fw_src.splitlines())
-    check("🔴 22 的放行以 agent socket 在場為前提（不是路徑旗標）",
-          "-S \"$SSH_AGENT_SOCK\"" in _fw_code and "--dport 22" in _fw_code)
-    check("🔴 socket 路徑與 image 的 ENV 一致（對不上就永遠看不到 agent）",
-          config.SSH_AUTH_SOCK_BIND in _fw_src)
+    check(
+        "🔴 22 的放行以 agent socket 在場為前提（不是路徑旗標）",
+        '-S "$SSH_AGENT_SOCK"' in _fw_code and "--dport 22" in _fw_code,
+    )
+    check("🔴 socket 路徑與 image 的 ENV 一致（對不上就永遠看不到 agent）", config.SSH_AUTH_SOCK_BIND in _fw_src)
     # 反向：沒有那條判斷的話，這條測試就沒有守住任何東西
-    check("🔴 沒有 socket 時不開任何 SSH outbound（訊號缺席＝不放行）",
-          "不開放任何 SSH outbound" in _fw_src)
-    check("run script 不需要知道 firewall profile 這種東西（它靠 agent 在不在）",
-          "firewall-profile" not in _run_src)
+    check("🔴 沒有 socket 時不開任何 SSH outbound（訊號缺席＝不放行）", "不開放任何 SSH outbound" in _fw_src)
+    check("run script 不需要知道 firewall profile 這種東西（它靠 agent 在不在）", "firewall-profile" not in _run_src)
 else:
     print("  SKIP  找不到 dev-container/（只有 claude-pty 被單獨 checkout 時會這樣）")
 

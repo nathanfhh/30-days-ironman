@@ -43,6 +43,7 @@ def wr() -> ModuleType:
 
 # ----------------------------------------------------------------------------- redact
 
+
 class FakeHeaders(dict):
     def items(self, multi: bool = False):
         return list(super().items())
@@ -76,12 +77,17 @@ class FakeFlow:
 
 
 def test_sensitive_headers_are_replaced_wholesale(rd):
-    assert rd.redact_header_value("Authorization", "Bearer sk-ant-verysecret") == rd.REDACTED
+    assert (
+        rd.redact_header_value("Authorization", "Bearer sk-ant-verysecret")
+        == rd.REDACTED
+    )
     assert rd.redact_header_value("x-api-key", "sk-ant-123") == rd.REDACTED
 
 
 def test_ordinary_headers_survive(rd):
-    assert rd.redact_header_value("content-type", "application/json") == "application/json"
+    assert (
+        rd.redact_header_value("content-type", "application/json") == "application/json"
+    )
 
 
 def test_sensitive_json_keys_are_replaced_at_any_depth(rd):
@@ -104,23 +110,31 @@ def test_short_values_are_not_mistaken_for_secrets(rd):
 
 
 def test_content_is_kept_only_secrets_go(rd):
-    payload = {"messages": [{"role": "user", "content": "審一下這段 code"}], "token": "abc"}
+    payload = {
+        "messages": [{"role": "user", "content": "審一下這段 code"}],
+        "token": "abc",
+    }
     out = rd.redact_json_value(payload)
     assert out["messages"][0]["content"] == "審一下這段 code"
     assert out["token"] == rd.REDACTED
 
 
 def test_undecodable_body_is_blanked_not_passed_through(rd):
-    msg = FakeMessage(headers={"content-type": "application/octet-stream"},
-                      raise_on_text=True, content=b"\xff\xfe binary")
+    msg = FakeMessage(
+        headers={"content-type": "application/octet-stream"},
+        raise_on_text=True,
+        content=b"\xff\xfe binary",
+    )
     rd._redact_message(msg)
     assert msg.content == b"<redacted: undecodable body>"
 
 
 def test_redact_flow_touches_both_directions(rd):
     flow = FakeFlow(
-        request=FakeMessage(headers={"authorization": "Bearer sk-ant-xyz1234567890"},
-                            text=json.dumps({"api_key": "sk-ant-1234567890ab"})),
+        request=FakeMessage(
+            headers={"authorization": "Bearer sk-ant-xyz1234567890"},
+            text=json.dumps({"api_key": "sk-ant-1234567890ab"}),
+        ),
         response=FakeMessage(headers={"set-cookie": "s=1"}, text='{"ok": true}'),
     )
     rd.redact_flow(flow)
@@ -132,6 +146,7 @@ def test_redact_flow_touches_both_directions(rd):
 
 # ------------------------------------------------------------------------- wire_report
 
+
 def test_common_prefix_length_is_exact(wr):
     assert wr._common_prefix_len(b"abcdef", b"abcXYZ") == 3
     assert wr._common_prefix_len(b"", b"abc") == 0
@@ -140,7 +155,9 @@ def test_common_prefix_length_is_exact(wr):
 
 def test_breakpoints_counted_at_any_depth(wr):
     request = {
-        "system": [{"type": "text", "text": "s", "cache_control": {"type": "ephemeral"}}],
+        "system": [
+            {"type": "text", "text": "s", "cache_control": {"type": "ephemeral"}}
+        ],
         "tools": [{"name": "t"}, {"name": "u", "cache_control": {"type": "ephemeral"}}],
         "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
     }
@@ -149,12 +166,22 @@ def test_breakpoints_counted_at_any_depth(wr):
 
 def test_breakpoint_sites_report_where_not_just_how_many(wr):
     request = {
-        "system": [{"type": "text", "text": "s", "cache_control": {"type": "ephemeral"}}],
+        "system": [
+            {"type": "text", "text": "s", "cache_control": {"type": "ephemeral"}}
+        ],
         "tools": [{"name": "t"}, {"name": "u", "cache_control": {"type": "ephemeral"}}],
         "messages": [
             {"role": "user", "content": [{"type": "text", "text": "hi"}]},
-            {"role": "user", "content": [
-                {"type": "text", "text": "x", "cache_control": {"type": "ephemeral"}}]},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "x",
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+            },
         ],
     }
     # system 只有一項＝最後一項，tools 掛在最後一個工具上，messages 標到「第幾則」。
@@ -168,7 +195,12 @@ def test_breakpoint_in_an_unknown_section_is_still_disclosed(wr):
 
 
 def test_lane_key_follows_the_first_message(wr):
-    a = {"messages": [{"role": "user", "content": "第一句"}, {"role": "assistant", "content": "x"}]}
+    a = {
+        "messages": [
+            {"role": "user", "content": "第一句"},
+            {"role": "assistant", "content": "x"},
+        ]
+    }
     b = {"messages": [{"role": "user", "content": "第一句"}]}
     c = {"messages": [{"role": "user", "content": "另一條對話"}]}
     assert wr._lane_key(a) == wr._lane_key(b)
@@ -177,12 +209,12 @@ def test_lane_key_follows_the_first_message(wr):
 
 def test_sse_usage_merges_start_and_delta(wr):
     stream = (
-        'event: message_start\n'
+        "event: message_start\n"
         'data: {"type":"message_start","message":{"usage":'
         '{"input_tokens":10,"cache_read_input_tokens":900,"output_tokens":1}}}\n\n'
-        'event: message_delta\n'
+        "event: message_delta\n"
         'data: {"type":"message_delta","usage":{"output_tokens":42}}\n\n'
-        'data: [DONE]\n'
+        "data: [DONE]\n"
     )
     usage = wr._sse_usage(stream)
     assert usage["input_tokens"] == 10
@@ -195,26 +227,53 @@ def test_repeat_compares_within_a_lane_not_across_time(wr):
     """subagent 交錯進來時，拿時間相鄰的兩發去比會得到沒有意義的數字。"""
     rows = [
         {"ts": 1, "lane": "main", "_raw_up": b"PREFIX-aaa", "up": 10},
-        {"ts": 2, "lane": "sub",  "_raw_up": b"OTHER-zzz",  "up": 9},
+        {"ts": 2, "lane": "sub", "_raw_up": b"OTHER-zzz", "up": 9},
         {"ts": 3, "lane": "main", "_raw_up": b"PREFIX-bbb", "up": 10},
     ]
     wr.annotate_repeat(rows)
-    assert rows[0]["repeat"] == 0        # 這條對話的第一發，沒有前一發可比
-    assert rows[1]["repeat"] == 0        # 另一條對話的第一發
-    assert rows[2]["repeat"] == len(b"PREFIX-")   # 跟同一條的前一發比，不是跟 sub 比
+    assert rows[0]["repeat"] == 0  # 這條對話的第一發，沒有前一發可比
+    assert rows[1]["repeat"] == 0  # 另一條對話的第一發
+    assert rows[2]["repeat"] == len(b"PREFIX-")  # 跟同一條的前一發比，不是跟 sub 比
 
 
 def test_summary_totals_and_ratio(wr):
     rows = [
-        {"ts": 1, "host": "api.anthropic.com", "path": "/v1/messages", "method": "POST",
-         "status": 200, "up": 100, "down": 40, "req_encoding": "", "resp_encoding": "",
-         "model": "claude-sonnet-5", "lane": "main", "breakpoints": 2,
-         "usage": {"input_tokens": 5, "cache_read_input_tokens": 90, "output_tokens": 7},
-         "repeat": 60},
-        {"ts": 2, "host": "api.anthropic.com", "path": "/v1/messages/count_tokens",
-         "method": "POST", "status": 200, "up": 20, "down": 10, "req_encoding": "",
-         "resp_encoding": "", "model": None, "lane": None, "breakpoints": 0,
-         "usage": {}, "repeat": 0},
+        {
+            "ts": 1,
+            "host": "api.anthropic.com",
+            "path": "/v1/messages",
+            "method": "POST",
+            "status": 200,
+            "up": 100,
+            "down": 40,
+            "req_encoding": "",
+            "resp_encoding": "",
+            "model": "claude-sonnet-5",
+            "lane": "main",
+            "breakpoints": 2,
+            "usage": {
+                "input_tokens": 5,
+                "cache_read_input_tokens": 90,
+                "output_tokens": 7,
+            },
+            "repeat": 60,
+        },
+        {
+            "ts": 2,
+            "host": "api.anthropic.com",
+            "path": "/v1/messages/count_tokens",
+            "method": "POST",
+            "status": 200,
+            "up": 20,
+            "down": 10,
+            "req_encoding": "",
+            "resp_encoding": "",
+            "model": None,
+            "lane": None,
+            "breakpoints": 0,
+            "usage": {},
+            "repeat": 0,
+        },
     ]
     summary = wr.summarize(rows)
     cap = summary["capture"]
@@ -226,24 +285,57 @@ def test_summary_totals_and_ratio(wr):
     assert cap["requests_compressed"] == 0
     # 端點依上行量排序，非模型端點也要列出來——「還有誰在講話」是這份報表的重點之一。
     assert [e["path"] for e in summary["endpoints"]] == [
-        "/v1/messages", "/v1/messages/count_tokens"]
+        "/v1/messages",
+        "/v1/messages/count_tokens",
+    ]
 
 
 def test_unpriced_model_is_flagged_not_guessed(wr):
-    rows = [{"ts": 1, "host": "h", "path": "/v1/messages", "method": "POST", "status": 200,
-             "up": 1, "down": 1, "req_encoding": "", "resp_encoding": "",
-             "model": "claude-model-that-does-not-exist", "lane": "m", "breakpoints": 0,
-             "usage": {"input_tokens": 1, "output_tokens": 1}, "repeat": 0}]
+    rows = [
+        {
+            "ts": 1,
+            "host": "h",
+            "path": "/v1/messages",
+            "method": "POST",
+            "status": 200,
+            "up": 1,
+            "down": 1,
+            "req_encoding": "",
+            "resp_encoding": "",
+            "model": "claude-model-that-does-not-exist",
+            "lane": "m",
+            "breakpoints": 0,
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+            "repeat": 0,
+        }
+    ]
     summary = wr.summarize(rows)
     assert summary["models"][0]["priced"] is False
 
 
 def test_page_renders_without_external_assets(wr):
-    rows = [{"ts": 1.0, "host": "api.anthropic.com", "path": "/v1/messages", "method": "POST",
-             "status": 200, "up": 100, "down": 40, "req_encoding": "", "resp_encoding": "",
-             "model": "claude-sonnet-5", "lane": "main", "breakpoints": 1,
-             "usage": {"input_tokens": 5, "cache_read_input_tokens": 90, "output_tokens": 7},
-             "repeat": 60}]
+    rows = [
+        {
+            "ts": 1.0,
+            "host": "api.anthropic.com",
+            "path": "/v1/messages",
+            "method": "POST",
+            "status": 200,
+            "up": 100,
+            "down": 40,
+            "req_encoding": "",
+            "resp_encoding": "",
+            "model": "claude-sonnet-5",
+            "lane": "main",
+            "breakpoints": 1,
+            "usage": {
+                "input_tokens": 5,
+                "cache_read_input_tokens": 90,
+                "output_tokens": 7,
+            },
+            "repeat": 60,
+        }
+    ]
     page = wr.build_page("flows-test.mitm", wr.summarize(rows), rows)
     assert "<svg" in page
     # 這頁要能離線開、能寄給別人：不可以有任何外連。
@@ -275,7 +367,9 @@ def test_missing_firewall_file_is_disclosed_not_treated_as_clean(wr):
 
 
 def test_unrestricted_session_says_why_there_are_no_counters(wr):
-    card = wr.build_firewall_card({"firewall": None, "meta": {"network": "unrestricted"}})
+    card = wr.build_firewall_card(
+        {"firewall": None, "meta": {"network": "unrestricted"}}
+    )
     assert "完全開放" in card
 
 
@@ -301,7 +395,8 @@ def test_sidecars_found_in_the_session_directory(wr, tmp_path):
     (session / "meta.json").write_text('{"session_id": "abc", "network": "restricted"}')
     (session / "firewall.txt").write_text(
         "Chain OUTPUT (policy DROP 0 packets, 0 bytes)\n"
-        " 5 300 REJECT 0 -- * * 0.0.0.0/0 0.0.0.0/0 reject-with icmp-admin-prohibited\n")
+        " 5 300 REJECT 0 -- * * 0.0.0.0/0 0.0.0.0/0 reject-with icmp-admin-prohibited\n"
+    )
     got = wr.load_sidecars(capture)
     assert got["meta"]["session_id"] == "abc"
     assert got["firewall"]["blocked"] == 5
@@ -318,17 +413,31 @@ def test_script_embedded_json_cannot_close_the_script_tag(wr):
 def test_hostile_path_from_capture_does_not_reach_the_page_as_markup(wr):
     """path 是容器裡的東西影響得到的資料，不可以在 host 的瀏覽器變成標記。"""
     hostile = "/v1/messages</script><img src=x onerror=alert(1)>"
-    rows = [{"ts": 1.0, "host": "api.anthropic.com", "path": hostile, "method": "POST",
-             "status": 200, "up": 100, "down": 40, "req_encoding": "", "resp_encoding": "",
-             "model": "claude-sonnet-5", "lane": "main", "breakpoints": 1,
-             "breakpoint_sites": ["messages[-1]"],
-             "usage": {"input_tokens": 1, "output_tokens": 1}, "repeat": 0}]
+    rows = [
+        {
+            "ts": 1.0,
+            "host": "api.anthropic.com",
+            "path": hostile,
+            "method": "POST",
+            "status": 200,
+            "up": 100,
+            "down": 40,
+            "req_encoding": "",
+            "resp_encoding": "",
+            "model": "claude-sonnet-5",
+            "lane": "main",
+            "breakpoints": 1,
+            "breakpoint_sites": ["messages[-1]"],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+            "repeat": 0,
+        }
+    ]
     page = wr.build_page("flows.mitm", wr.summarize(rows), rows)
     # 守的是「不會形成標記」，不是「這串字不准出現」。逸出之後字還在、但已經是文字。
     assert "</script><img" not in page
     assert "<img src=x" not in page
-    assert "&lt;/script&gt;&lt;img" in page      # 表格：HTML 逸出
-    assert "\\u003c/script\\u003e" in page      # <script> 裡：JSON 逸出
+    assert "&lt;/script&gt;&lt;img" in page  # 表格：HTML 逸出
+    assert "\\u003c/script\\u003e" in page  # <script> 裡：JSON 逸出
 
 
 def test_iptables_counter_survives_the_k_m_g_shorthand(wr):
@@ -337,10 +446,12 @@ def test_iptables_counter_survives_the_k_m_g_shorthand(wr):
     assert wr._counter("13K") == 13_000
     assert wr._counter("4.8M") == 4_800_000
     assert wr._counter("target") is None
-    dump = ("Chain OUTPUT (policy DROP 0 packets, 0 bytes)\n"
-            " 3489K  13M ACCEPT 0 -- * lo 0.0.0.0/0 0.0.0.0/0\n"
-            "   60 3600 REJECT 0 -- * * 0.0.0.0/0 0.0.0.0/0 reject-with icmp-admin-prohibited\n")
-    fw = wr.parse_firewall(dump)          # 先前這行會 ValueError，整份報表產不出來
+    dump = (
+        "Chain OUTPUT (policy DROP 0 packets, 0 bytes)\n"
+        " 3489K  13M ACCEPT 0 -- * lo 0.0.0.0/0 0.0.0.0/0\n"
+        "   60 3600 REJECT 0 -- * * 0.0.0.0/0 0.0.0.0/0 reject-with icmp-admin-prohibited\n"
+    )
+    fw = wr.parse_firewall(dump)  # 先前這行會 ValueError，整份報表產不出來
     assert fw["blocked"] == 60
     assert fw["allowed"] == 3_489_000
 
@@ -366,6 +477,7 @@ def test_lane_key_does_not_collide_on_a_long_shared_prefix(wr):
 # addon 本身 import mitmproxy，測試環境沒有它，所以用最小替身把它需要的介面補上。
 # 守的是這支腳本存在的兩個理由：出錯就丟、以及絕不動到活的 flow。
 
+
 class _FakeWriter:
     def __init__(self):
         self.records = []
@@ -384,7 +496,7 @@ class _FakeFlowForAddon:
 
     def copy(self):
         clone = _FakeFlowForAddon(self.request.pretty_host)
-        clone.id = "a-different-id"      # mitmproxy 的 copy() 會發新 id
+        clone.id = "a-different-id"  # mitmproxy 的 copy() 會發新 id
         clone.is_copy = True
         self.copied = True
         return clone
@@ -394,11 +506,16 @@ def _addon(monkeypatch, redact_impl):
     """載入 capture_addon，把它的 mitmproxy 相依換成替身。"""
     import sys
     import types
+
     mitm = types.ModuleType("mitmproxy")
     ctx = types.SimpleNamespace(
-        options=types.SimpleNamespace(capture_out="", capture_hosts="api.anthropic.com"),
-        log=types.SimpleNamespace(info=lambda *a: None, warn=lambda *a: None,
-                                  error=lambda *a: None))
+        options=types.SimpleNamespace(
+            capture_out="", capture_hosts="api.anthropic.com"
+        ),
+        log=types.SimpleNamespace(
+            info=lambda *a: None, warn=lambda *a: None, error=lambda *a: None
+        ),
+    )
     mitm.ctx = ctx
     mitm.io = types.SimpleNamespace(FlowWriter=lambda fh: _FakeWriter())
     monkeypatch.setitem(sys.modules, "mitmproxy", mitm)
@@ -421,11 +538,12 @@ def test_addon_writes_a_copy_and_never_touches_the_live_flow(monkeypatch):
     assert live.copied is True
     assert scrubbed and getattr(scrubbed[0], "is_copy", False) is True
     assert scrubbed[0] is not live
-    assert inst._writer.records[0].id == live.id     # 紀錄沿用活 flow 的 id
+    assert inst._writer.records[0].id == live.id  # 紀錄沿用活 flow 的 id
 
 
 def test_addon_drops_the_flow_when_redaction_raises(monkeypatch):
     """fail-closed：脫敏出錯就整條丟掉，絕不改寫成未脫敏版落地。"""
+
     def boom(_flow):
         raise RuntimeError("脫敏爆了")
 
@@ -440,14 +558,21 @@ def test_addon_skips_hosts_outside_the_list(monkeypatch):
     inst, _ctx = _addon(monkeypatch, lambda f: None)
     inst.response(_FakeFlowForAddon(host="example.com"))
     assert inst._writer.records == []
-    assert inst.dropped == 0      # 不是錯誤，是不收
+    assert inst.dropped == 0  # 不是錯誤，是不收
 
 
 def test_redacted_copy_keeps_the_body_compact(rd):
     """重新序列化不可以把 body 撐大——下游拿這顆檔案的 byte 數當「線上傳了多少」。"""
     import json as _json
-    original = _json.dumps({"model": "m", "tools": [{"name": "a"}, {"name": "b"}],
-                            "token": "sk-ant-1234567890"}, separators=(",", ":"))
+
+    original = _json.dumps(
+        {
+            "model": "m",
+            "tools": [{"name": "a"}, {"name": "b"}],
+            "token": "sk-ant-1234567890",
+        },
+        separators=(",", ":"),
+    )
     msg = FakeMessage(headers={"content-type": "application/json"}, text=original)
     rd._redact_message(msg)
     assert ", " not in msg.text and '": ' not in msg.text
@@ -457,23 +582,41 @@ def test_redacted_copy_keeps_the_body_compact(rd):
 
 def test_cache_boundary_picks_the_deepest_marker_on_a_tie(wr):
     """同一段裡有兩個標記時，決定省下多少的是比較深的那一個。"""
-    assert wr.cache_boundary(["system[0]", "messages[3]", "messages[-1]"]).startswith("最後一則")
+    assert wr.cache_boundary(["system[0]", "messages[3]", "messages[-1]"]).startswith(
+        "最後一則"
+    )
 
 
 def test_requests_without_messages_do_not_share_a_lane(wr):
-    rows = [{"ts": 1, "lane": wr._lane_key({}), "_raw_up": b"AAAA-1", "up": 6},
-            {"ts": 2, "lane": wr._lane_key({}), "_raw_up": b"AAAA-2", "up": 6}]
+    rows = [
+        {"ts": 1, "lane": wr._lane_key({}), "_raw_up": b"AAAA-1", "up": 6},
+        {"ts": 2, "lane": wr._lane_key({}), "_raw_up": b"AAAA-2", "up": 6},
+    ]
     wr.annotate_repeat(rows)
-    assert rows[1]["repeat"] == 0     # 兩者不該互比
+    assert rows[1]["repeat"] == 0  # 兩者不該互比
 
 
 def test_null_usage_values_do_not_crash_the_report(wr):
-    rows = [{"ts": 1, "host": "h", "path": "/v1/messages", "method": "POST", "status": 200,
-             "up": 1, "down": 1, "req_encoding": "", "resp_encoding": "",
-             "model": "claude-sonnet-5", "lane": "m", "breakpoints": 0,
-             "breakpoint_sites": [],
-             "usage": {"input_tokens": None, "output_tokens": 5}, "repeat": 0}]
-    summary = wr.summarize(rows)      # 先前這行 TypeError，整份報表掛掉
+    rows = [
+        {
+            "ts": 1,
+            "host": "h",
+            "path": "/v1/messages",
+            "method": "POST",
+            "status": 200,
+            "up": 1,
+            "down": 1,
+            "req_encoding": "",
+            "resp_encoding": "",
+            "model": "claude-sonnet-5",
+            "lane": "m",
+            "breakpoints": 0,
+            "breakpoint_sites": [],
+            "usage": {"input_tokens": None, "output_tokens": 5},
+            "repeat": 0,
+        }
+    ]
+    summary = wr.summarize(rows)  # 先前這行 TypeError，整份報表掛掉
     assert summary["models"][0]["priced"] is True
 
 
@@ -483,6 +626,7 @@ def test_null_usage_values_do_not_crash_the_report(wr):
 # 那條路徑上 stdin 很容易被吃掉：非互動 shell 沒有 job control，背景命令的 stdin
 # 依 POSIX 被指到 /dev/null。症狀是「開錄的 session 鍵盤沒反應」，而且用 -p 測不出來。
 
+
 def _run_cli_source() -> str:
     """只抽 run_cli 這個函式。
 
@@ -490,7 +634,9 @@ def _run_cli_source() -> str:
     `read` 先吃掉餵給它的 stdin，再把那行字原樣印進「無效輸入」訊息裡，斷言就命中了。
     測試兩邊都綠，卻跟它要守的東西無關。切函式就要切到函式的結尾。
     """
-    entrypoint = Path(__file__).resolve().parent.parent / "dev-container" / "entrypoint.sh"
+    entrypoint = (
+        Path(__file__).resolve().parent.parent / "dev-container" / "entrypoint.sh"
+    )
     src = entrypoint.read_text()
     start = src.index("run_cli() {")
     end = src.index("\n}\n", start) + len("\n}\n")
@@ -499,19 +645,25 @@ def _run_cli_source() -> str:
 
 def test_run_cli_passes_stdin_through_on_the_capture_path():
     import subprocess
+
     script = (
         "NCR_INJECT_SESSION=0\n"
-        "CAPTURE_PID=1\n"          # 非空 ＝ 走背景那條路徑
+        "CAPTURE_PID=1\n"  # 非空 ＝ 走背景那條路徑
         "stop_capture() { :; }\n"
         "write_capture_sidecar() { :; }\n"
         # run_cli 啟動 CLI 前會呼叫它（見 entrypoint 的 prepare_token_fd）。這支守的是
         # stdin、不是憑證，所以 stub 掉。不 stub 的話斷言其實照樣過（實測），只是 stderr
         # 會多一行 command not found——真的壞掉那天，噪音會蓋掉訊號。
-        "prepare_token_fd() { :; }\n"
-        + _run_cli_source()
-        + "\nrun_cli cat\n"
+        "prepare_token_fd() { :; }\n" + _run_cli_source() + "\nrun_cli cat\n"
     )
-    out = subprocess.run(["bash", "-c", script], input="鍵盤打進去的字\n",
-                         capture_output=True, text=True, timeout=20, check=False)
+    out = subprocess.run(
+        ["bash", "-c", script],
+        input="鍵盤打進去的字\n",
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
     assert "鍵盤打進去的字" in out.stdout, (
-        f"stdin 沒有傳進去（背景執行吃掉了）：{out.stdout!r} {out.stderr!r}")
+        f"stdin 沒有傳進去（背景執行吃掉了）：{out.stdout!r} {out.stderr!r}"
+    )

@@ -45,7 +45,7 @@ class TestLocalPathDetection:
             "見 config.yaml.sample:45",
             "test/test_anesthesia.py",
             "套件註冊表路徑含有 /packages/ 片段",
-            "覆蓋 \"1\"/2/None/\"9\" 四個案例",
+            '覆蓋 "1"/2/None/"9" 四個案例',
         ],
         ids=[
             "repo-relative",
@@ -85,7 +85,10 @@ class TestLocalPathDetection:
 
     def test_reports_each_distinct_path_once(self, find_local_paths):
         markdown = "/tmp/a/b 出現兩次：/tmp/a/b，另外還有 /tmp/c/d"
-        assert sorted(v.path for v in find_local_paths(markdown, {})) == ["/tmp/a/b", "/tmp/c/d"]
+        assert sorted(v.path for v in find_local_paths(markdown, {})) == [
+            "/tmp/a/b",
+            "/tmp/c/d",
+        ]
 
     def test_names_the_report_field_a_path_came_from(self, find_local_paths):
         report = {"findings": [{"id": "F-001", "fix": "改成 /tmp/ncr/x/y 底下的檔案"}]}
@@ -156,7 +159,9 @@ class TestRendering:
     def markdown(self, render_report, report):
         from conftest import SCRIPTS
 
-        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(
+            encoding="utf-8"
+        )
         return render_report.render(report, template)
 
     def test_the_conclusion_leads(self, markdown):
@@ -187,14 +192,18 @@ class TestRendering:
     def test_the_skill_version_is_recorded(self, markdown):
         assert "2026.08.02.02" in markdown
 
-    def test_a_poc_citing_an_api_route_survives_the_path_gate(self, render_report, report):
+    def test_a_poc_citing_an_api_route_survives_the_path_gate(
+        self, render_report, report
+    ):
         """End to end: the C-1 report that could not be published at all."""
         from conftest import SCRIPTS
 
         report["findings"][0]["security"]["poc"] = (
             "curl -X POST 'https://host/api/v1/patients/1/export'"
         )
-        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(
+            encoding="utf-8"
+        )
         markdown = render_report.render(report, template)
 
         assert render_report.find_local_paths(markdown, report) == []
@@ -206,7 +215,9 @@ class TestRendering:
         from conftest import SCRIPTS
 
         report["findings"][0]["fix"] = "見 /Users/dev/ncr/scan.json 的完整輸出"
-        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(
+            encoding="utf-8"
+        )
         markdown = render_report.render(report, template)
 
         violations = render_report.find_local_paths(markdown, report)
@@ -220,7 +231,9 @@ class TestSummary:
     def render(self, render_report):
         from conftest import SCRIPTS
 
-        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(
+            encoding="utf-8"
+        )
         return lambda report: render_report.render(report, template)
 
     @pytest.fixture
@@ -268,7 +281,9 @@ class TestHistorySections:
     def render(self, render_report):
         from conftest import SCRIPTS
 
-        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(encoding="utf-8")
+        template = (SCRIPTS.parent / "assets" / "report_template.md").read_text(
+            encoding="utf-8"
+        )
         return lambda report: render_report.render(report, template)
 
     @pytest.fixture
@@ -319,7 +334,9 @@ class TestHistorySections:
         """The bug: both folded into 已解決, so every retraction read as a fix."""
         markdown = render(report)
         assert "<summary>已解決（2）</summary>" not in markdown
-        resolved = markdown.split("<summary>已解決（1）</summary>")[1].split("</details>")[0]
+        resolved = markdown.split("<summary>已解決（1）</summary>")[1].split(
+            "</details>"
+        )[0]
         assert "F-001" in resolved
         assert "F-002" not in resolved
 

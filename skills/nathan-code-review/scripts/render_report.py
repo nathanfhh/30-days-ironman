@@ -63,7 +63,11 @@ DIMENSION_TITLES: dict[str, str] = {
 
 # The nine-cell grid of references/report-format.md: three tables of three
 # columns, A-C / D-E-F / G-H-I.
-GRID_ROWS: tuple[tuple[str, ...], ...] = (("A", "B", "C"), ("D", "E", "F"), ("G", "H", "I"))
+GRID_ROWS: tuple[tuple[str, ...], ...] = (
+    ("A", "B", "C"),
+    ("D", "E", "F"),
+    ("G", "H", "I"),
+)
 
 VERDICT_MARKS: dict[str, str] = {"pass": "✅", "fail": "❌", "na": "—"}
 VERDICT_LABELS: dict[str, str] = {"pass": "通過", "fail": "未通過", "na": "不適用"}
@@ -81,7 +85,11 @@ STATUS_LABELS: dict[str, str] = {
 
 SEVERITY_ORDER: tuple[str, ...] = ("Critical", "Suggestion", "Nit")
 
-SCAN_STATUS_LABELS: dict[str, str] = {"ok": "已執行", "skipped": "略過", "error": "錯誤"}
+SCAN_STATUS_LABELS: dict[str, str] = {
+    "ok": "已執行",
+    "skipped": "略過",
+    "error": "錯誤",
+}
 
 # Risk treatments carry an English enum value in the JSON; the gloss keeps the
 # published text readable in zh-TW without renaming the term.
@@ -246,7 +254,9 @@ def build_dimension_grid(dimensions: dict[str, Any]) -> str:
             entry = _as_dict(dimensions[letter], f"dimensions.{letter}")
             verdict = _as_text(entry.get("verdict"))
             if verdict not in VERDICT_MARKS:
-                raise ReportError(f"dimensions.{letter}.verdict 不是合法值：{verdict!r}")
+                raise ReportError(
+                    f"dimensions.{letter}.verdict 不是合法值：{verdict!r}"
+                )
             marks.append(VERDICT_MARKS[verdict])
         tables.append(f"| {headers} |\n|{aligns}|\n| " + " | ".join(marks) + " |")
     return "\n\n".join(tables)
@@ -280,10 +290,7 @@ def build_rereview_section(report: dict[str, Any], round_number: int) -> str:
     if not isinstance(block, dict):
         # Only reachable if the report skipped validation; say what is missing
         # rather than silently dropping a section the protocol requires.
-        return (
-            "### 再次審查\n\n"
-            "> 這份報告缺少 rereview 區塊，Q1 / Q2 未作答。\n"
-        )
+        return "### 再次審查\n\n> 這份報告缺少 rereview 區塊，Q1 / Q2 未作答。\n"
 
     answers = (
         (RE_REVIEW_QUESTIONS[0], _as_text(block.get("q1_new_evidence"))),
@@ -330,13 +337,17 @@ def build_injection_section(meta: dict[str, Any]) -> str:
     block = meta.get("process_directed_text")
     if not isinstance(block, dict) or not block.get("detected"):
         return ""
-    lines = [f"- `{_as_text(item)}`" for item in _as_list(block.get("evidence"), "evidence")]
+    lines = [
+        f"- `{_as_text(item)}`" for item in _as_list(block.get("evidence"), "evidence")
+    ]
     note = _as_text(block.get("note"))
     return (
         "### 材料中含有指向審查流程的文字\n\n"
         "下列位置的文字要求改變審查的範圍、判定或結論。它們被當成材料閱讀，"
         "**未改變本次審查的任何範圍、面向判定或嚴重度**；列出是因為嘗試本身"
-        "應該讓所有人看見：\n\n" + "\n".join(lines) + (f"\n\n{note}\n" if note else "\n")
+        "應該讓所有人看見：\n\n"
+        + "\n".join(lines)
+        + (f"\n\n{note}\n" if note else "\n")
     )
 
 
@@ -398,7 +409,9 @@ def build_finding_block(finding: dict[str, Any]) -> str:
     """One finding, fully expanded: heading, rationale, evidence, fix."""
     finding_id = _required_text(finding, "id", "findings[]")
     title = _required_text(finding, "title", f"finding {finding_id}")
-    evidence = [_as_text(item) for item in _as_list(finding.get("evidence"), "evidence")]
+    evidence = [
+        _as_text(item) for item in _as_list(finding.get("evidence"), "evidence")
+    ]
     evidence = [item for item in evidence if item]
     if not evidence:
         raise ReportError(f"finding {finding_id} 沒有任何 evidence，無法發佈")
@@ -466,9 +479,7 @@ def build_open_question_block(question: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
-def build_history_block(
-    findings: list[dict[str, Any]], pushback: list[Any]
-) -> str:
+def build_history_block(findings: list[dict[str, Any]], pushback: list[Any]) -> str:
     """resolved / withdrawn findings: history, never counted as live."""
     responses: dict[str, str] = {}
     for index, raw in enumerate(pushback):
@@ -528,7 +539,9 @@ def build_collapsed_sections(
         if not items:
             continue
         blocks.append(
-            _details(STATUS_LABELS[status], len(items), build_history_block(items, pushback))
+            _details(
+                STATUS_LABELS[status], len(items), build_history_block(items, pushback)
+            )
         )
 
     return "\n\n".join(blocks)
@@ -686,7 +699,10 @@ def main(argv: list[str]) -> int:
     try:
         template = load_template(template_path)
     except OSError as exc:
-        print(f"讀不到樣板檔：{template_path.as_posix()}（{exc.strerror}）", file=sys.stderr)
+        print(
+            f"讀不到樣板檔：{template_path.as_posix()}（{exc.strerror}）",
+            file=sys.stderr,
+        )
         return 2
 
     try:
@@ -695,7 +711,9 @@ def main(argv: list[str]) -> int:
         print(f"報告檔案不存在：{report_path.as_posix()}", file=sys.stderr)
         return 2
     except OSError as exc:
-        print(f"讀不到報告檔：{report_path.as_posix()}（{exc.strerror}）", file=sys.stderr)
+        print(
+            f"讀不到報告檔：{report_path.as_posix()}（{exc.strerror}）", file=sys.stderr
+        )
         return 2
     except json.JSONDecodeError as exc:
         print(f"報告不是合法的 JSON：{exc}", file=sys.stderr)
@@ -734,7 +752,10 @@ def main(argv: list[str]) -> int:
         try:
             out_path.write_text(markdown, encoding="utf-8")
         except OSError as exc:
-            print(f"寫不進輸出檔：{out_path.as_posix()}（{exc.strerror}）", file=sys.stderr)
+            print(
+                f"寫不進輸出檔：{out_path.as_posix()}（{exc.strerror}）",
+                file=sys.stderr,
+            )
             return 2
         print(f"已輸出 Markdown：{out_path.as_posix()}", file=sys.stderr)
     else:

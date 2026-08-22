@@ -48,10 +48,12 @@ from collections import defaultdict
 from contextlib import suppress
 
 # 上游費率表：ccusage 也是抓這一份，兩邊對帳才有意義。
-LITELLM_URL = ("https://raw.githubusercontent.com/BerriAI/litellm/main/"
-               "model_prices_and_context_window.json")
+LITELLM_URL = (
+    "https://raw.githubusercontent.com/BerriAI/litellm/main/"
+    "model_prices_and_context_window.json"
+)
 LITELLM_CACHE = os.path.expanduser("~/.cache/ncr-litellm-prices.json")
-LITELLM_TTL = 24 * 3600          # 快取多久算新鮮；過期就重抓，抓不到照樣用舊的
+LITELLM_TTL = 24 * 3600  # 快取多久算新鮮；過期就重抓，抓不到照樣用舊的
 
 # {模型字串前綴: (input, output) per MTok}。**這是 fallback，不是真相**——連不到上游
 # （離線、GitHub 掛掉、公司網路擋住）時才會用到，報表會標明。cache 費率由 input 派生。
@@ -70,14 +72,16 @@ RATES: list[tuple[str, tuple[float, float]]] = list(SNAPSHOT)
 RATES_SOURCE = "快照"
 
 
-def _load_litellm(url: str = LITELLM_URL, cache: str = LITELLM_CACHE,
-                  ttl: int = LITELLM_TTL) -> dict | None:
+def _load_litellm(
+    url: str = LITELLM_URL, cache: str = LITELLM_CACHE, ttl: int = LITELLM_TTL
+) -> dict | None:
     """把上游費率表讀進來（有快取）。任何失敗都回 None，讓呼叫端退回快照。
 
     ⚠ **不可以讓這一步弄死報表。** 它是價格來源的升級，不是必要條件；離線的人照樣要
       算得出東西，只是標成用了快照。
     ⚠ 抓不到時**先用過期的快取**再退快照：上游的舊資料仍然比檔案裡手寫的那份新。
     """
+
     def _read(path: str) -> dict | None:
         with suppress(Exception), open(path, encoding="utf-8") as f:
             return json.load(f)
@@ -92,7 +96,7 @@ def _load_litellm(url: str = LITELLM_URL, cache: str = LITELLM_CACHE,
         with urllib.request.urlopen(url, timeout=10) as r:
             raw = r.read().decode("utf-8")
         data = json.loads(raw)
-    except Exception:                                                # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return _read(cache)
     with suppress(Exception):
         os.makedirs(os.path.dirname(cache), exist_ok=True)
@@ -197,7 +201,10 @@ def tally(paths: list[str]) -> dict:
                 u = m.get("usage")
                 if not u or not m.get("model"):
                     continue
-                seen[(e.get("requestId"), m.get("id"))] = (m["model"], normalize_usage(u))
+                seen[(e.get("requestId"), m.get("id"))] = (
+                    m["model"],
+                    normalize_usage(u),
+                )
 
     agg: dict[str, dict] = defaultdict(
         lambda: {"in": 0, "out": 0, "cr": 0, "cw5m": 0, "cw1h": 0, "n": 0}
@@ -223,10 +230,14 @@ def find_session(arg: str | None) -> tuple[str, str]:
                 return sib, arg.rstrip("/")
             jsonls = glob.glob(os.path.join(arg, "*.jsonl"))
             if not jsonls:
-                sys.exit(f"{arg} 裡沒有 .jsonl（給 session 目錄或含 session 的專案目錄）")
+                sys.exit(
+                    f"{arg} 裡沒有 .jsonl（給 session 目錄或含 session 的專案目錄）"
+                )
             main = max(jsonls, key=os.path.getmtime)
             if len(jsonls) > 1:
-                print(f"（目錄含 {len(jsonls)} 場，取 mtime 最新：{os.path.basename(main)}）")
+                print(
+                    f"（目錄含 {len(jsonls)} 場，取 mtime 最新：{os.path.basename(main)}）"
+                )
             base = os.path.splitext(main)[0]
             return main, base if os.path.isdir(base) else ""
         base = os.path.splitext(arg)[0]
@@ -253,10 +264,15 @@ def rpad(s: str, width: int) -> str:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("session", nargs="?", help="session 的 .jsonl 或其目錄；不給就拿最新的")
-    ap.add_argument("--offline", action="store_true",
-                    help="不連上游費率表，直接用檔案裡的快照")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "session", nargs="?", help="session 的 .jsonl 或其目錄；不給就拿最新的"
+    )
+    ap.add_argument(
+        "--offline", action="store_true", help="不連上游費率表，直接用檔案裡的快照"
+    )
     args = ap.parse_args()
 
     # 費率先就位再算錢。連不到上游不會中斷，只是報表標成用了快照。
@@ -281,8 +297,15 @@ def main() -> None:
         print("（沒有 subagents/ 目錄：舊格式或無派遣，只有 session 總額可算）")
 
     widths = (30, 24, 10, 10, 12, 12, 11)
-    hdr = lpad("角色", widths[0]) + lpad("model", widths[1]) + "".join(
-        rpad(h, w) for h, w in zip(("輸入", "輸出", "cache 讀", "cache 寫", "成本"), widths[2:])
+    hdr = (
+        lpad("角色", widths[0])
+        + lpad("model", widths[1])
+        + "".join(
+            rpad(h, w)
+            for h, w in zip(
+                ("輸入", "輸出", "cache 讀", "cache 寫", "成本"), widths[2:]
+            )
+        )
     )
     print("\n" + hdr)
     print("-" * sum(widths))
@@ -322,8 +345,10 @@ def main() -> None:
     )
     # ⚠ 來源要印出來。價目表會變，而「這份報表用的是哪一版費率」是事後對帳唯一的線索
     #   ——不印的話，離線那次算出來的舊價數字看起來跟線上那次一模一樣。
-    print(f"（金額 = token × 費率，來源：{source}；與 ccusage 對帳一致。"
-          "企業合約或特殊費率另計。）")
+    print(
+        f"（金額 = token × 費率，來源：{source}；與 ccusage 對帳一致。"
+        "企業合約或特殊費率另計。）"
+    )
 
 
 if __name__ == "__main__":

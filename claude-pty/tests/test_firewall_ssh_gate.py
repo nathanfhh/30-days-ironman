@@ -19,6 +19,7 @@ opt-in，白名單卻沒跟著動——**規則活得比它的理由久**，於�
   · 有 agent → 22 通。少了這半邊，「全部擋掉」也會綠，而那會讓人的路徑壞掉。
   · 沒 agent → 22 不通。少了這半邊，這支測試就只是在描述現況。
 """
+
 import os
 import subprocess
 import sys
@@ -59,26 +60,37 @@ def rules_with_agent(agent: bool) -> str:
     host_file = os.path.join(tmp, "gitlab-ssh-host")
     with open(host_file, "w", encoding="utf-8") as f:
         f.write(PROBE_HOST + "\n")
-    argv = ["docker", "run", "--rm", "--cap-add=NET_ADMIN",
-            "-v", f"{FW}:/usr/local/bin/init-firewall.sh:ro",
-            "-v", f"{host_file}:/etc/ncr/gitlab-ssh-host:ro"]
+    argv = [
+        "docker",
+        "run",
+        "--rm",
+        "--cap-add=NET_ADMIN",
+        "-v",
+        f"{FW}:/usr/local/bin/init-firewall.sh:ro",
+        "-v",
+        f"{host_file}:/etc/ncr/gitlab-ssh-host:ro",
+    ]
     if agent:
         # 造一個**真的** unix socket 當 agent：`[ -S ]` 只認 socket，一般檔案不算。
         sock = os.path.join(tmp, "agent.sock")
         subprocess.run(
-            [sys.executable, "-c",
-             f"import socket;s=socket.socket(socket.AF_UNIX);s.bind({sock!r})"],
-            check=True)
+            [sys.executable, "-c", f"import socket;s=socket.socket(socket.AF_UNIX);s.bind({sock!r})"], check=True
+        )
         argv += ["-v", f"{sock}:{SOCK_BIND}"]
-    argv += ["--entrypoint", "bash", IMAGE, "-c",
-             # ⚠ **無參數地跑**：sudoers 把它鎖成 `init-firewall.sh ""`，多帶一個
-             #   空字串就不匹配，會變成「a password is required」而不是權限錯誤。
-             "sudo /usr/local/bin/init-firewall.sh >/tmp/fw.log 2>&1; "
-             "cat /tmp/fw.log; "
-             # ⚠ 讀規則走 **firewall-counters.sh**，不是 `sudo iptables -S`：sudoers
-             #   只白名單那幾支固定的腳本，直接 sudo iptables 會變成「a password is
-             #   required」，而那個失敗看起來會像「規則沒套上」——完全誤導。
-             "echo '--- RULES ---'; sudo /usr/local/bin/firewall-counters.sh"]
+    argv += [
+        "--entrypoint",
+        "bash",
+        IMAGE,
+        "-c",
+        # ⚠ **無參數地跑**：sudoers 把它鎖成 `init-firewall.sh ""`，多帶一個
+        #   空字串就不匹配，會變成「a password is required」而不是權限錯誤。
+        "sudo /usr/local/bin/init-firewall.sh >/tmp/fw.log 2>&1; "
+        "cat /tmp/fw.log; "
+        # ⚠ 讀規則走 **firewall-counters.sh**，不是 `sudo iptables -S`：sudoers
+        #   只白名單那幾支固定的腳本，直接 sudo iptables 會變成「a password is
+        #   required」，而那個失敗看起來會像「規則沒套上」——完全誤導。
+        "echo '--- RULES ---'; sudo /usr/local/bin/firewall-counters.sh",
+    ]
     out = subprocess.run(argv, capture_output=True, text=True, timeout=300)
     return out.stdout + out.stderr
 
@@ -108,10 +120,8 @@ else:
     # 只通解析出來的那一台，不是 blanket。`iptables -L -v -n -x` 的欄位順序是
     # pkts bytes target prot opt in out **source destination** …，所以 destination
     # 是 dpt:22 那一行的倒數第二欄；blanket 的話它會是 0.0.0.0/0。
-    _out22 = [ln.split() for ln in _rules_yes.splitlines()
-              if "dpt:22" in ln and "ACCEPT" in ln and "spt:" not in ln]
-    check("而且只通解析出來的那個位址（不是 blanket 的 22）",
-          bool(_out22) and _out22[0][-2] != "0.0.0.0/0")
+    _out22 = [ln.split() for ln in _rules_yes.splitlines() if "dpt:22" in ln and "ACCEPT" in ln and "spt:" not in ln]
+    check("而且只通解析出來的那個位址（不是 blanket 的 22）", bool(_out22) and _out22[0][-2] != "0.0.0.0/0")
 
 print(f"\n{'done' if _fails == 0 else f'{_fails} FAILED'}")
 sys.exit(1 if _fails else 0)

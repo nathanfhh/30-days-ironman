@@ -37,7 +37,8 @@ GAP_MIN = 120  # 全域空窗超過這秒數 → 斷軸
 
 # 重用 cost-report 的 tally / 牌價（同資料夾的兄弟腳本；檔名帶連字號，走路徑載入）
 _spec = importlib.util.spec_from_file_location(
-    "_ncr_costmod", Path(__file__).resolve().parent / "cost-report.py")
+    "_ncr_costmod", Path(__file__).resolve().parent / "cost-report.py"
+)
 costmod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(costmod)
 
@@ -49,7 +50,9 @@ DISPATCH_TOOLS = {"Task", "Agent"}
 # --------------------------------------------------------------------------
 
 
-def split_by_session(data: list[dict], sid_prefix: str) -> tuple[dict[str, dict], set[str]]:
+def split_by_session(
+    data: list[dict], sid_prefix: str
+) -> tuple[dict[str, dict], set[str]]:
     """純函式：query API 的 data → {命中前綴的 sid: 該場 spans}，外加這批資料的全部 sid。
 
     一個 sid 一組——命中多場時讓呼叫端明確處理，不靜默合併
@@ -67,7 +70,11 @@ def split_by_session(data: list[dict], sid_prefix: str) -> tuple[dict[str, dict]
                 continue
             t["_start"], t["_dur"] = s["startTime"], s["duration"]
             t["_parent"] = next(
-                (ref["spanID"] for ref in s.get("references", []) if ref["refType"] == "CHILD_OF"),
+                (
+                    ref["spanID"]
+                    for ref in s.get("references", [])
+                    if ref["refType"] == "CHILD_OF"
+                ),
                 None,
             )
             by_sid[sid][s["spanID"]] = t
@@ -167,7 +174,9 @@ def collect_transcript(sid: str) -> dict:
             meta = json.load(f)
         jl = mp.replace(".meta.json", ".jsonl")
         if os.path.exists(jl):
-            role_files.setdefault(meta.get("agentType") or "（未標名的 subagent）", []).append(jl)
+            role_files.setdefault(
+                meta.get("agentType") or "（未標名的 subagent）", []
+            ).append(jl)
     out: dict[str, dict] = {}
     for role, files in role_files.items():
         per_model = costmod.tally(files)
@@ -194,7 +203,9 @@ def find_report_json(t0_us: int, t1_us: int, root: str = "~/ncr") -> dict | None
     lo = t0_us / 1e6 - 3600
     hi = t1_us / 1e6 + 6 * 3600
     best: tuple[float, dict] | None = None
-    for p in glob.glob(os.path.expanduser(f"{root.rstrip('/')}/**/*.json"), recursive=True):
+    for p in glob.glob(
+        os.path.expanduser(f"{root.rstrip('/')}/**/*.json"), recursive=True
+    ):
         mt = os.path.getmtime(p)
         if not (lo <= mt <= hi):
             continue
@@ -335,14 +346,31 @@ render();
 </body></html>"""
 
 
-def build_page(sid: str, agg: dict, chart: list[dict], gaps: list, tokens: dict, report: dict | None) -> str:
+def build_page(
+    sid: str,
+    agg: dict,
+    chart: list[dict],
+    gaps: list,
+    tokens: dict,
+    report: dict | None,
+) -> str:
     t0 = min(a["first"] for a in agg.values())
     t1 = max(a["last"] for a in agg.values())
     active_s = (t1 - t0 - sum(g1 - g0 for g0, g1 in gaps)) / 1e6
     gap_total_min = sum(g1 - g0 for g0, g1 in gaps) / 60e6
 
-    order = sorted(agg, key=lambda r: (r != "主線程", -(agg[r]["last"] - agg[r]["first"])))
-    palette_pool = ["#0f766e", "#b45309", "#1d4ed8", "#9333ea", "#be123c", "#4d7c0f", "#0369a1"]
+    order = sorted(
+        agg, key=lambda r: (r != "主線程", -(agg[r]["last"] - agg[r]["first"]))
+    )
+    palette_pool = [
+        "#0f766e",
+        "#b45309",
+        "#1d4ed8",
+        "#9333ea",
+        "#be123c",
+        "#4d7c0f",
+        "#0369a1",
+    ]
     colors = {r: palette_pool[i % len(palette_pool)] for i, r in enumerate(order)}
 
     rows = []
@@ -355,11 +383,11 @@ def build_page(sid: str, agg: dict, chart: list[dict], gaps: list, tokens: dict,
             total_cost += tk["cost"]
             cost_known = True
         rows.append(
-            f"<tr><td class=role>{html.escape(r)}</td><td class=role>{html.escape(tk.get('model','—'))}</td>"
-            f"<td class=n>{(a['last']-a['first'])/1e6:,.0f}s</td><td class=n>{a['llm_us']/1e6:,.0f}s</td>"
-            f"<td class=n>{tk.get('in',0):,}</td><td class=n>{tk.get('out',0):,}</td>"
-            f"<td class=n>{tk.get('cr',0):,}</td><td class=n>{tk.get('cw',0):,}</td>"
-            f"<td class=n>{f'{hr*100:.1f}%' if hr is not None else '—'}</td>"
+            f"<tr><td class=role>{html.escape(r)}</td><td class=role>{html.escape(tk.get('model', '—'))}</td>"
+            f"<td class=n>{(a['last'] - a['first']) / 1e6:,.0f}s</td><td class=n>{a['llm_us'] / 1e6:,.0f}s</td>"
+            f"<td class=n>{tk.get('in', 0):,}</td><td class=n>{tk.get('out', 0):,}</td>"
+            f"<td class=n>{tk.get('cr', 0):,}</td><td class=n>{tk.get('cw', 0):,}</td>"
+            f"<td class=n>{f'{hr * 100:.1f}%' if hr is not None else '—'}</td>"
             f"<td class=n>{cost_s}</td></tr>"
         )
 
@@ -373,11 +401,11 @@ def build_page(sid: str, agg: dict, chart: list[dict], gaps: list, tokens: dict,
         cost_known = True
         rows.append(
             f"<tr><td class=role>{html.escape(r)}（trace 未拍到）</td>"
-            f"<td class=role>{html.escape(tk.get('model','—'))}</td>"
+            f"<td class=role>{html.escape(tk.get('model', '—'))}</td>"
             f"<td class=n>—</td><td class=n>—</td>"
-            f"<td class=n>{tk.get('in',0):,}</td><td class=n>{tk.get('out',0):,}</td>"
-            f"<td class=n>{tk.get('cr',0):,}</td><td class=n>{tk.get('cw',0):,}</td>"
-            f"<td class=n>{f'{hr*100:.1f}%' if hr is not None else '—'}</td>"
+            f"<td class=n>{tk.get('in', 0):,}</td><td class=n>{tk.get('out', 0):,}</td>"
+            f"<td class=n>{tk.get('cr', 0):,}</td><td class=n>{tk.get('cw', 0):,}</td>"
+            f"<td class=n>{f'{hr * 100:.1f}%' if hr is not None else '—'}</td>"
             f"<td class=n>${tk['cost']:.3f}</td></tr>"
         )
 
@@ -387,61 +415,86 @@ def build_page(sid: str, agg: dict, chart: list[dict], gaps: list, tokens: dict,
             cnt[(f_.get("severity") or "?")[:1].upper()] += 1
         v_card = (
             f'<div class="fact"><span>審查結論</span><b>{html.escape(report.get("conclusion") or "—")}</b>'
-            f'<span>Critical {cnt.get("C",0)} · Suggestion {cnt.get("S",0)} · Nit {cnt.get("N",0)}'
-            f' · 提問 {len(report.get("open_questions", []))}</span></div>'
+            f"<span>Critical {cnt.get('C', 0)} · Suggestion {cnt.get('S', 0)} · Nit {cnt.get('N', 0)}"
+            f" · 提問 {len(report.get('open_questions', []))}</span></div>"
         )
         # local_branch 模式的報告 "mr" 是 null——合法形狀，不是缺欄
         mr = report.get("mr") or {}
         title_bits = (
-            f'MR !{html.escape(str(mr.get("iid")))}「{html.escape(mr.get("title") or "")}」 · '
-            if mr.get("title") else ""
+            f"MR !{html.escape(str(mr.get('iid')))}「{html.escape(mr.get('title') or '')}」 · "
+            if mr.get("title")
+            else ""
         )
         skill_ver = (report.get("meta") or {}).get("skill_version", "—")
     else:
-        v_card = ('<div class="fact"><span>審查結論</span><b>—</b>'
-                  '<span>report.json 未封存（審查未完成或 archive 未掛載）</span></div>')
+        v_card = (
+            '<div class="fact"><span>審查結論</span><b>—</b>'
+            "<span>report.json 未封存（審查未完成或 archive 未掛載）</span></div>"
+        )
         title_bits, skill_ver = "", "—"
 
-    extra_note = f'（另 {len(extra_roles)} 個角色僅見於 transcript）' if extra_roles else ''
+    extra_note = (
+        f"（另 {len(extra_roles)} 個角色僅見於 transcript）" if extra_roles else ""
+    )
     facts = v_card + (
         f'<div class="fact"><span>活動時間（trace，扣除 {gap_total_min:.0f} 分空窗）</span>'
-        f'<b>{int(active_s//60)} 分 {int(active_s%60):02d} 秒</b>'
-        f'<span>主線程與 {len(order)-1} 個 subagent{extra_note}</span></div>'
+        f"<b>{int(active_s // 60)} 分 {int(active_s % 60):02d} 秒</b>"
+        f"<span>主線程與 {len(order) - 1} 個 subagent{extra_note}</span></div>"
         f'<div class="fact"><span>總成本（transcript）</span>'
-        f'<b>{f"${total_cost:.2f}" if cost_known else "—"}</b><span>usage × 產表當下牌價</span></div>'
+        f"<b>{f'${total_cost:.2f}' if cost_known else '—'}</b><span>usage × 產表當下牌價</span></div>"
     )
-    meta = (f'{title_bits}session <code>{sid[:8]}</code> · skill <code>{html.escape(str(skill_ver))}</code>'
-            f' · 限制模式（iptables 白名單）')
+    meta = (
+        f"{title_bits}session <code>{sid[:8]}</code> · skill <code>{html.escape(str(skill_ver))}</code>"
+        f" · 限制模式（iptables 白名單）"
+    )
 
     data = {
-        "t0": t0, "t1": t1, "roles": order, "colors": colors,
+        "t0": t0,
+        "t1": t1,
+        "roles": order,
+        "colors": colors,
         "gaps": [list(g) for g in gaps],
         "spans": sorted(chart, key=lambda c: c["s"]),
     }
     px0 = max(0.4, min(2.0, 1000 / max(active_s, 1)))
-    return (PAGE
-            .replace("__SID8__", sid[:8])
-            .replace("__META__", meta)
-            .replace("__FACTS__", facts)
-            .replace("__ROWS__", "".join(rows))
-            # </ 逸出：role 名或 label 含 "</script>" 時不得讓 JSON 提前關閉 script 標籤
-            .replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
-            .replace("__PX0__", f"{px0:.3f}"))
+    return (
+        PAGE.replace("__SID8__", sid[:8])
+        .replace("__META__", meta)
+        .replace("__FACTS__", facts)
+        .replace("__ROWS__", "".join(rows))
+        # </ 逸出：role 名或 label 含 "</script>" 時不得讓 JSON 提前關閉 script 標籤
+        .replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
+        .replace("__PX0__", f"{px0:.3f}")
+    )
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("session", help="session id 前綴（如 17c7d838）")
     ap.add_argument("--out", help="輸出檔路徑，預設 ./session-<id>.html")
     ap.add_argument("--jaeger", default="http://localhost:16686")
-    ap.add_argument("--lookback", default="168h", help="往回撈多久（Jaeger 語法，預設 168h；badger 保存 720h）")
-    ap.add_argument("--limit", type=int, default=500, help="最多撈幾筆 trace（預設 500）")
-    ap.add_argument("--open", action="store_true", help="產完直接用瀏覽器開啟（macOS open）")
+    ap.add_argument(
+        "--lookback",
+        default="168h",
+        help="往回撈多久（Jaeger 語法，預設 168h；badger 保存 720h）",
+    )
+    ap.add_argument(
+        "--limit", type=int, default=500, help="最多撈幾筆 trace（預設 500）"
+    )
+    ap.add_argument(
+        "--open", action="store_true", help="產完直接用瀏覽器開啟（macOS open）"
+    )
     args = ap.parse_args()
 
-    by_sid, all_sids, truncated = fetch_spans(args.jaeger, args.session, args.lookback, args.limit)
+    by_sid, all_sids, truncated = fetch_spans(
+        args.jaeger, args.session, args.lookback, args.limit
+    )
     if truncated:
-        print(f"⚠️  撈到 --limit={args.limit} 上限，較舊的 trace 可能被截掉（必要時提高 --limit）")
+        print(
+            f"⚠️  撈到 --limit={args.limit} 上限，較舊的 trace 可能被截掉（必要時提高 --limit）"
+        )
     if not by_sid:
         have = "、".join(sorted(s[:8] for s in all_sids)) or "（一場都沒有）"
         sys.exit(
@@ -450,7 +503,9 @@ def main() -> None:
         )
     if len(by_sid) > 1:
         hits = "、".join(sorted(by_sid))
-        sys.exit(f"前綴 {args.session} 命中 {len(by_sid)} 場：{hits}\n請給更長的前綴，一場一報，不合併。")
+        sys.exit(
+            f"前綴 {args.session} 命中 {len(by_sid)} 場：{hits}\n請給更長的前綴，一場一報，不合併。"
+        )
     sid, spans = next(iter(by_sid.items()))
     agg, chart = collect_roles(spans)
     gaps = find_gaps(chart)
@@ -460,7 +515,9 @@ def main() -> None:
     report = find_report_json(t0, t1)
 
     out = args.out or f"session-{sid[:8]}.html"
-    Path(out).write_text(build_page(sid, agg, chart, gaps, tokens, report), encoding="utf-8")
+    Path(out).write_text(
+        build_page(sid, agg, chart, gaps, tokens, report), encoding="utf-8"
+    )
     print(f"已輸出 {out}（{len(chart)} spans，壓縮空窗 {len(gaps)} 段）")
     if args.open:
         subprocess.run(["open", out], check=False)

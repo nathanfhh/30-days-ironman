@@ -58,9 +58,11 @@ STUCK = object()
 # 在這裡 re-export，既有的 `reconciler.acquire_lease(...)` 呼叫端與測試都不必改。
 
 
-def reconcile_once(client: docker.DockerClient | None = None,
-                   owner: str | None = None,
-                   lease_ttl: int = config.RECONCILE_INTERVAL * 2 + 10) -> dict:
+def reconcile_once(
+    client: docker.DockerClient | None = None,
+    owner: str | None = None,
+    lease_ttl: int = config.RECONCILE_INTERVAL * 2 + 10,
+) -> dict:
     """跑一輪對帳，回傳各項處理計數。
 
     `owner` 有值時，每個破壞性操作前確認租約仍屬於自己——**並順便續約**（見 `_leading`）。
@@ -84,21 +86,29 @@ def reconcile_once(client: docker.DockerClient | None = None,
             return True
         if acquire_lease("reconciler", owner, lease_ttl):
             return True
-        print("[reconciler] ⚠ 租約已被別的實例接手，本輪提前結束（後半段的孤兒清理／"
-              "idle 回收／代理收斂這一輪不會執行）", flush=True)
+        print(
+            "[reconciler] ⚠ 租約已被別的實例接手，本輪提前結束（後半段的孤兒清理／idle 回收／代理收斂這一輪不會執行）",
+            flush=True,
+        )
         return False
 
-    stats = {"gone": 0, "exited_removed": 0, "views_cleaned": 0,
-             "orphan_containers": 0, "idle_reclaimed": 0,
-             "states_refreshed": 0, "ready_stamped": 0,
-             "containers_stuck": 0,
-             "proxies_removed": 0, "proxies_converged": 0}
+    stats = {
+        "gone": 0,
+        "exited_removed": 0,
+        "views_cleaned": 0,
+        "orphan_containers": 0,
+        "idle_reclaimed": 0,
+        "states_refreshed": 0,
+        "ready_stamped": 0,
+        "containers_stuck": 0,
+        "proxies_removed": 0,
+        "proxies_converged": 0,
+    }
 
     # ⚠ 這一發是**整輪唯一不可失敗**的 docker 呼叫：它一次拿回所有容器的狀態，不是
     #   per-container，所以它掛掉代表 daemon 整體有問題（那時本來也做不了任何事）。
     #   逐顆容器的呼叫全部包在 _isolated() 裡，見下。
-    live = {c.name: c for c in client.containers.list(
-        all=True, filters=config.SESSION_FILTERS)}
+    live = {c.name: c for c in client.containers.list(all=True, filters=config.SESSION_FILTERS)}
 
     def _isolated(label: str, fn, *a, **kw):
         """跑一個可能卡住的 docker 呼叫；壞掉只影響這一顆容器，不讓整輪陣亡（ADR 0012）。
@@ -116,11 +126,10 @@ def reconcile_once(client: docker.DockerClient | None = None,
         try:
             return fn(*a, **kw)
         except docker.errors.NotFound:
-            raise                       # 「不在了」是有意義的答案，交給呼叫端判斷
-        except Exception as e:          # noqa: BLE001 — 逾時/APIError/連線中斷都算「這顆問不到」
+            raise  # 「不在了」是有意義的答案，交給呼叫端判斷
+        except Exception as e:  # noqa: BLE001 — 逾時/APIError/連線中斷都算「這顆問不到」
             stats["containers_stuck"] += 1
-            print(f"[reconciler] ⚠ {label} 失敗，這輪跳過這一顆（下輪再試）：{e!r}",
-                  flush=True)
+            print(f"[reconciler] ⚠ {label} 失敗，這輪跳過這一顆（下輪再試）：{e!r}", flush=True)
             return STUCK
 
     # --- 0) 把「最後一次問到 dockerd 的狀態」寫進 DB（ADR 0012）-----------------------
@@ -131,7 +140,7 @@ def reconcile_once(client: docker.DockerClient | None = None,
         for row in s.query(SessionRow).all():
             c = live.get(row.container_name)
             if c is None and _is_creating_within_grace(row):
-                continue                # 還在建立中：不是「不見了」，也還沒有狀態可記
+                continue  # 還在建立中：不是「不見了」，也還沒有狀態可記
             state = c.status if c is not None else "gone"
             if row.docker_state != state or row.state_checked_at is None:
                 stats["states_refreshed"] += 1
@@ -139,30 +148,31 @@ def reconcile_once(client: docker.DockerClient | None = None,
             row.state_checked_at = now
 
     # --- 1) registry → dockerd：登錄有、container 不在或已結束 -----------------------
-    to_remove: list[tuple[str, str | None]] = []   # (session_id, container_id)
+    to_remove: list[tuple[str, str | None]] = []  # (session_id, container_id)
     with session_scope() as s:
-        for row in s.query(SessionRow).all():   # sessions 只存進行中的（結束的已歸檔）
+        for row in s.query(SessionRow).all():  # sessions 只存進行中的（結束的已歸檔）
             c = live.get(row.container_name)
             if c is None:
                 if _is_creating_within_grace(row):
-                    continue    # 正在建立中，container 尚未出現是正常的（review B1）
-                to_remove.append((row.id, None))          # container 已不存在
+                    continue  # 正在建立中，container 尚未出現是正常的（review B1）
+                to_remove.append((row.id, None))  # container 已不存在
             elif c.status not in ALIVE_STATES:
                 row.status = STATUS_EXITED
-                to_remove.append((row.id, c.id))          # 已結束 → 連 stopped container 一起收
+                to_remove.append((row.id, c.id))  # 已結束 → 連 stopped container 一起收
     for sid, container_id in to_remove:
         if not _leading():
-            break                                         # 租約在這輪中途被接手，停手
+            break  # 租約在這輪中途被接手，停手
         with suppress(Exception):
-            views.close_views(sid)                        # 先收該 session 的 ttyd
+            views.close_views(sid)  # 先收該 session 的 ttyd
         if container_id:
             # exited-but-present 的 container 不刪會累積 writable layer，且刪了登錄後
             # 就再也沒人記得它（前一輪 review 的教訓）——故先刪 container 再刪登錄。
             try:
-                if _isolated(f"刪除容器 {container_id[:12]}",
-                             client.api.remove_container, container_id,
-                             force=True) is STUCK:
-                    continue                              # 這輪刪不掉就留著，下輪再試
+                if (
+                    _isolated(f"刪除容器 {container_id[:12]}", client.api.remove_container, container_id, force=True)
+                    is STUCK
+                ):
+                    continue  # 這輪刪不掉就留著，下輪再試
                 stats["exited_removed"] += 1
             except docker.errors.NotFound:
                 pass
@@ -212,8 +222,7 @@ def _has_live_session(user_id: int) -> bool:
     return False
 
 
-def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
-                      leading=None) -> tuple[int, int]:
+def _converge_proxies(client: docker.DockerClient, live: dict, isolated, leading=None) -> tuple[int, int]:
     """把 per-user 網路與 GitLab 代理收斂到期望狀態（ADR 0016）。回傳 (收掉幾顆, 修好幾顆)。
 
     **期望狀態有兩個，不是一個**，而且條件不同：
@@ -253,14 +262,13 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
     with session_scope() as s:
         for row in s.query(SessionRow).all():
             c = live.get(row.container_name)
-            if ((c is not None and c.status in ALIVE_STATES)
-                    or _is_creating_within_grace(row)):
+            if (c is not None and c.status in ALIVE_STATES) or _is_creating_within_grace(row):
                 active_sessions.add(row.user_id)
     # **代理**的期望狀態：再加上「功能開著」這個前提。關掉時是空集合，於是下面每一顆
     # 代理都落進「沒人用」而被收掉，補建迴圈（`active_gitlab - seen`）什麼都不做。
     # 關閉＝收乾淨，不是「停止管理」——停止管理會讓帶著 PAT 的容器孤兒化。
     active_gitlab = active_sessions if config.gitlab_enabled() else set()
-    active = active_gitlab           # 以下的代理迴圈一律讀這個
+    active = active_gitlab  # 以下的代理迴圈一律讀這個
 
     removed = converged = 0
     seen: set[int] = set()
@@ -280,8 +288,10 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
         if uid is None:
             # label 壞掉／不是數字：認不出主人就沒有人管得了它，**而它握著一把 PAT**。
             with suppress(docker.errors.NotFound):
-                if isolated(f"收掉認不出主人的代理 {c.name}",
-                            client.api.remove_container, c.id, force=True) is not STUCK:
+                if (
+                    isolated(f"收掉認不出主人的代理 {c.name}", client.api.remove_container, c.id, force=True)
+                    is not STUCK
+                ):
                     removed += 1
             continue
         seen.add(uid)
@@ -300,19 +310,17 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
                 #   對帳週期——那一欄刻意不可變，不會回頭改。成本只是一筆小查詢。
                 if _has_live_session(uid):
                     continue
-                if isolated(f"收掉沒人用的代理 {c.name}",
-                            user_proxy.remove, client, uid) is not STUCK:
+                if isolated(f"收掉沒人用的代理 {c.name}", user_proxy.remove, client, uid) is not STUCK:
                     removed += 1
-                _note_proxy_ok(uid)      # 見下方 _note_proxy_ok：離開清單也要清
+                _note_proxy_ok(uid)  # 見下方 _note_proxy_ok：離開清單也要清
                 continue
 
             state = auth.gitlab_pat_state(uid)
             if state == "none":
                 # 使用者明確清除了 PAT → 立刻失效（這是安全需求，見 docstring）
-                if isolated(f"使用者 {uid} 已清除 PAT，收掉代理",
-                            user_proxy.remove, client, uid) is not STUCK:
+                if isolated(f"使用者 {uid} 已清除 PAT，收掉代理", user_proxy.remove, client, uid) is not STUCK:
                     removed += 1
-                _note_proxy_ok(uid)      # 他不再需要代理了，畫面上那句錯誤也該消失
+                _note_proxy_ok(uid)  # 他不再需要代理了，畫面上那句錯誤也該消失
                 continue
             if state != "ok":
                 # unreadable（換過 SECRET_KEY）：什麼都不做。⚠ 但也要清掉那句錯誤——
@@ -333,8 +341,7 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
                 #   判斷依據），要嘛得把移除與補建耦合起來，兩者都比等一輪糟。
                 if not is_stale_half_built(c):
                     continue
-                if isolated(f"收掉半成品代理 {c.name}",
-                            user_proxy.remove, client, uid) is not STUCK:
+                if isolated(f"收掉半成品代理 {c.name}", user_proxy.remove, client, uid) is not STUCK:
                     removed += 1
                 continue
             if c.status in ("dead", "removing"):
@@ -342,8 +349,7 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
                 #   容器必定失敗 → 每輪 `containers_stuck` +1 → 而它永遠不會被收掉重建，
                 #   於是這個人的 GitLab **永久失效直到有人手動 rm**。罕見，但這一整段存在
                 #   的理由就是堵「永久且無聲的失效」，自己留一條就沒有意義了。
-                if isolated(f"收掉 {c.status} 的代理 {c.name}",
-                            user_proxy.remove, client, uid) is not STUCK:
+                if isolated(f"收掉 {c.status} 的代理 {c.name}", user_proxy.remove, client, uid) is not STUCK:
                     removed += 1
                 continue
             if c.status not in ALIVE_STATES:
@@ -359,14 +365,14 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
                     converged += 1
                 continue
             if c.status != "running":
-                continue                  # restarting／paused：這輪先放著
+                continue  # restarting／paused：這輪先放著
 
             # 走到這裡代理是 running＝這一輪它是好的。把連續失敗計數與畫面上那句錯誤清掉。
             _note_proxy_ok(uid)
 
             pat = auth.gitlab_pat(uid)
             if not pat:
-                continue                  # 與 state 之間的競態，下輪再看
+                continue  # 與 state 之間的競態，下輪再看
 
             # --- 自訂 CA 的掛載變了 → **重建**，熱重載救不了 -------------------------
             #
@@ -378,27 +384,23 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
             # ⚠ 只比來源與落點，不比檔案內容。內容變（CA 續簽）由指紋那條走熱重載處理
             #   ——那條不必重建，見 gitlab_proxy.ca_digest。
             if not user_proxy.ca_mount_matches(c):
-                print(f"[reconciler] 代理 {c.name} 掛的 CA 與設定不符，重建它"
-                      f"（掛載換不掉，只能重來一顆）", flush=True)
-                if isolated(f"重建代理 {c.name}（CA 掛載變了）",
-                            user_proxy.remove, client, uid) is not STUCK:
+                print(f"[reconciler] 代理 {c.name} 掛的 CA 與設定不符，重建它（掛載換不掉，只能重來一顆）", flush=True)
+                if isolated(f"重建代理 {c.name}（CA 掛載變了）", user_proxy.remove, client, uid) is not STUCK:
                     removed += 1
                 continue
             want = gitlab_proxy.fingerprint(pat)
-            got = isolated(f"問代理 {c.name} 在跑什麼",
-                           user_proxy.running_state, client, uid)
+            got = isolated(f"問代理 {c.name} 在跑什麼", user_proxy.running_state, client, uid)
             if got is STUCK or got is None:
-                continue                  # 問不到就別亂動
+                continue  # 問不到就別亂動
             # ⚠ 判 `is True`，不是 `is not STUCK`。`reload()` 有三種結局：成功回 `True`、
             #   **失敗回 `False`**（`nginx -t` 沒過／`mv` 失敗）、被 `_isolated` 攔下回
             #   `STUCK`。只排除 STUCK 的話 `False` 也會被算成「重載了」——而那正是最需要
             #   被看見的情況：設定換不上去，指紋永遠不收斂，每輪重跑一次，而唯一的觀測
             #   訊號在說「有重載」。假捷報比沒有訊號更糟。
-            if got != want and isolated(f"熱重載代理 {c.name}",
-                                        user_proxy.reload, client, uid, pat) is True:
+            if got != want and isolated(f"熱重載代理 {c.name}", user_proxy.reload, client, uid, pat) is True:
                 converged += 1
         except docker.errors.NotFound:
-            continue                      # 目標剛好在這幾行之間被收掉了，下輪再看
+            continue  # 目標剛好在這幾行之間被收掉了，下輪再看
 
     # 該有代理卻一顆都沒有的使用者：補建。
     # ⚠ 這一輪不可省——上面只走「已經存在的代理」，任何讓容器整個消失的路徑（手動 rm、
@@ -417,14 +419,16 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
         # ⚠ `PoolExhausted` 不必在這裡接：`_isolated` 的 `except Exception` 會先吃掉它
         #   並印出訊息（那個訊息本身就講了該去清 network）。
         try:
-            if isolated(f"補建使用者 {uid} 的代理",
-                        _create_proxy, client, uid, pat) is not STUCK:
+            if isolated(f"補建使用者 {uid} 的代理", _create_proxy, client, uid, pat) is not STUCK:
                 converged += 1
         except docker.errors.ImageNotFound:
-            print(f"[reconciler] ⚠ 代理 image 不在本機（{config.PROXY_IMAGE[:60]}），"
-                  f"使用者 {uid} 的 GitLab 功能無法恢復——先 docker pull 它", flush=True)
+            print(
+                f"[reconciler] ⚠ 代理 image 不在本機（{config.PROXY_IMAGE[:60]}），"
+                f"使用者 {uid} 的 GitLab 功能無法恢復——先 docker pull 它",
+                flush=True,
+            )
         except docker.errors.NotFound:
-            continue                      # session 剛好在這幾行之間沒了，下輪再看
+            continue  # session 剛好在這幾行之間沒了，下輪再看
 
     # ⚠ 網路吃的是 `active_sessions`（無條件），**不是** `active`／`active_gitlab`。
     #   餵錯的話 GitLab 關掉的部署會每輪去刪活著 session 底下的網路，見 docstring。
@@ -435,9 +439,8 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated,
     # **OTLP fail-open，沒有任何錯誤訊息**。這裡每輪一次差集，成本是一次 inspect。
     # ⚠ best-effort，不計入 converged：它不是「修好一顆」，接不上也不該讓這輪看起來失敗。
     if lead():
-        with suppress(Exception):   # noqa: BLE001 — jaeger 是選配設施，見 attach_jaeger
-            user_proxy.attach_jaeger(
-                client, [n.name for n in user_proxy.list_networks(client)])
+        with suppress(Exception):  # noqa: BLE001 — jaeger 是選配設施，見 attach_jaeger
+            user_proxy.attach_jaeger(client, [n.name for n in user_proxy.list_networks(client)])
     return removed, converged
 
 
@@ -464,11 +467,9 @@ def _note_proxy_down(c, uid: int, isolated) -> None:
     """
     n = _proxy_fails[uid] = _proxy_fails.get(uid, 0) + 1
     logs = isolated(f"讀代理 {c.name} 的 log", c.logs, tail=5)
-    lines = ([] if logs is STUCK or not logs
-             else logs.decode(errors="replace").strip().splitlines())
+    lines = [] if logs is STUCK or not logs else logs.decode(errors="replace").strip().splitlines()
     said = lines[-1][:200] if lines else ""
-    print(f"[reconciler] ⚠ 代理 {c.name} 沒活著（連續第 {n} 輪）"
-          f"{'：' + said if said else ''}", flush=True)
+    print(f"[reconciler] ⚠ 代理 {c.name} 沒活著（連續第 {n} 輪）{'：' + said if said else ''}", flush=True)
     if n < config.PROXY_FAIL_THRESHOLD:
         return
     # 跨過門檻：把原因寫到使用者看得到的地方。沒有這一步，他看到的只有「GitLab 連不到」，
@@ -505,8 +506,7 @@ def _create_proxy(client: docker.DockerClient, user_id: int, pat: str) -> str:
     return user_proxy.create(client, user_id, pat)
 
 
-def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated,
-                        leading=None) -> int:
+def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated, leading=None) -> int:
     """收掉沒人用的 per-user 網路（釋放位址池）。
 
     ⚠ **`active` 必須是「有活著 session 的人」（`active_sessions`），不是「該有代理的人」。**
@@ -521,7 +521,7 @@ def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated,
     lead = leading or (lambda: True)
     for net in user_proxy.list_networks(client):
         if not lead():
-            break                     # 租約中途被接手就停手（同 _converge_proxies）
+            break  # 租約中途被接手就停手（同 _converge_proxies）
         # ⚠ 跳過帶測試標記的——與 `_converge_proxies`、`_remove_orphans` 那兩道檢查對稱。
         #   少了這道就是**正式的 reconciler 會去收測試建的網路**：測試那側的隔離只擋得住
         #   測試自己呼叫的那一輪，擋不住背景常駐的那一份。多半被 ORPHAN_GRACE 擋著，
@@ -549,8 +549,7 @@ def _reap_user_networks(client: docker.DockerClient, active: set[int], isolated,
         # ⚠ 吃物件的版本（不是 by-uid 那支）：這裡手上已經有 net，而且 label 壞掉、
         #   認不出 uid 的網路也只有這條路走得通。
         with suppress(docker.errors.NotFound, docker.errors.APIError):
-            if isolated(f"收掉沒人用的網路 {net.name}",
-                        user_proxy.remove_network_obj, client, net) is True:
+            if isolated(f"收掉沒人用的網路 {net.name}", user_proxy.remove_network_obj, client, net) is True:
                 reaped += 1
     return reaped
 
@@ -565,13 +564,12 @@ def _stamp_ready_backstop(live: dict, isolated) -> int:
     只問「還沒記過的」那幾列，而且每顆都包在 isolated 裡：一顆卡住的容器不影響其他顆。
     """
     with session_scope() as s:
-        pending = [(r.id, r.container_name)
-                   for r in s.query(SessionRow).filter(SessionRow.ready_at.is_(None)).all()]
+        pending = [(r.id, r.container_name) for r in s.query(SessionRow).filter(SessionRow.ready_at.is_(None)).all()]
     stamped = 0
     for sid, name in pending:
         c = live.get(name)
         if c is None or c.status not in ALIVE_STATES:
-            continue                     # 不在／已結束的不必問，上面的階段會處理它
+            continue  # 不在／已結束的不必問，上面的階段會處理它
         logs = isolated(f"讀容器 log {name}", c.logs, tail=200)
         # ⚠ 比 STUCK 不比 falsy：空 log（b""）是合法答案「還沒就緒」，不是失敗
         if logs is STUCK or not _is_ready(logs):
@@ -628,11 +626,10 @@ def _remove_orphans(client: docker.DockerClient, live: dict, isolated) -> int:
             continue
         created = c.attrs.get("Created", "")
         if age_seconds(created) < config.ORPHAN_GRACE:
-            continue                                     # 可能正在建立中，下輪再看
+            continue  # 可能正在建立中，下輪再看
         with suppress(docker.errors.NotFound):
             # isolated：一顆刪不掉（逾時、卡在 removing）不可以讓剩下的孤兒都不處理
-            if isolated(f"刪除孤兒容器 {c.id[:12]}",
-                        client.api.remove_container, c.id, force=True) is not STUCK:
+            if isolated(f"刪除孤兒容器 {c.id[:12]}", client.api.remove_container, c.id, force=True) is not STUCK:
                 removed += 1
     return removed
 
@@ -658,17 +655,17 @@ def _reclaim_idle(client: docker.DockerClient, isolated) -> int:
             #   計數也多報。上面那條主對帳路徑早就寫對了（`except APIError: continue`），
             #   這條 idle 路徑漏了（交叉審查 2026-07-26 指出）。
             try:
-                if isolated(f"idle 回收刪容器 sid={sid}",
-                            client.api.remove_container, container_id,
-                            force=True) is STUCK:
-                    continue        # 刪不掉就保留登錄下輪重試（絕不可以照樣歸檔，見上）
+                if (
+                    isolated(f"idle 回收刪容器 sid={sid}", client.api.remove_container, container_id, force=True)
+                    is STUCK
+                ):
+                    continue  # 刪不掉就保留登錄下輪重試（絕不可以照樣歸檔，見上）
             except docker.errors.NotFound:
                 pass
         with suppress(Exception):
             archive([sid], END_IDLE)
         reclaimed += 1
     return reclaimed
-
 
 
 _stopping = threading.Event()
@@ -681,19 +678,19 @@ def _install_signal_handlers() -> None:
     可服務），而是：可靠的重啟策略、單一執行者的強制（見 acquire_lease），以及這裡的
     優雅停機——讓 `docker stop` 不會在 force-remove 做到一半時把程序砍掉。
     """
+
     def _handler(signum, _frame):
         print(f"[reconciler] 收到訊號 {signum}，完成本輪後結束", flush=True)
         _stopping.set()
+
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, _handler)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="claude-pty-reconciler", description="claude-pty registry 對帳器")
+    parser = argparse.ArgumentParser(prog="claude-pty-reconciler", description="claude-pty registry 對帳器")
     parser.add_argument("--once", action="store_true", help="跑一輪就結束")
-    parser.add_argument("--interval", type=int, default=config.RECONCILE_INTERVAL,
-                        help="常駐模式的輪詢秒數")
+    parser.add_argument("--interval", type=int, default=config.RECONCILE_INTERVAL, help="常駐模式的輪詢秒數")
     args = parser.parse_args(argv)
 
     init_db()
@@ -710,7 +707,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.once:
                     print("[reconciler] 另一個實例持有租約，本輪跳過", flush=True)
                     return 0
-                _stopping.wait(args.interval)   # 可被訊號立即喚醒
+                _stopping.wait(args.interval)  # 可被訊號立即喚醒
                 continue
             stats = reconcile_once(client, owner=owner, lease_ttl=_ttl)
             if any(stats.values()):
@@ -719,7 +716,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[reconciler] 本輪失敗：{e!r}", flush=True)
         if args.once:
             return 0
-        _stopping.wait(args.interval)   # 用 Event 而非 sleep：停機訊號能立刻中斷等待
+        _stopping.wait(args.interval)  # 用 Event 而非 sleep：停機訊號能立刻中斷等待
     return 0
 
 

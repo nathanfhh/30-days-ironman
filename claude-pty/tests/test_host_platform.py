@@ -22,6 +22,7 @@ Docker Desktop（macOS／Windows）都做 uid 對映，uid 不同是正常的。
      會靜靜失效，而症狀跟修之前一模一樣
   🔴 `sessions.py` 不可以再出現 `sys.platform`（有人改回去就當場紅）
 """
+
 import os
 import sys
 import tempfile
@@ -39,6 +40,8 @@ config.MOUNTS = {TMP: {"bind": "/x", "mode": "ro"}}
 from server import sessions  # noqa: E402
 
 _fails = 0
+
+
 def check(label, ok):
     global _fails
     if not ok:
@@ -63,15 +66,15 @@ def with_platform(value):
 print("== 判準吃的是 host 的作業系統，不是容器裡的 ==")
 # ⚠ 這一條是那個假警報**本身**：容器內 sys.platform 是 linux（正式部署一定是），
 #   而 host 是 Darwin。舊的寫法會回 True（於是喊），新的必須回 False。
-check("🔴 host=Darwin → 不檢查（即使這支測試跑在 Linux 上）",
-      with_platform("Darwin") is False)
+check("🔴 host=Darwin → 不檢查（即使這支測試跑在 Linux 上）", with_platform("Darwin") is False)
 check("host=Linux → 要檢查", with_platform("Linux") is True)
-check("大小寫不敏感（uname 給的是 `Linux`，不是 `linux`）",
-      with_platform("linux") is True)
+check("大小寫不敏感（uname 給的是 `Linux`，不是 `linux`）", with_platform("linux") is True)
 # ⚠ 白名單的價值就在這一條：沒有人寫過 Windows，但它自己就落在對的一側。
 #   黑名單（「不是 darwin 就檢查」）會在這裡回 True 而喊一句同樣的假警報。
-check("🔴 host=Windows（MINGW64_NT-…）→ 不檢查，而且沒有人為它寫過任何一行",
-      with_platform("MINGW64_NT-10.0-19045") is False)
+check(
+    "🔴 host=Windows（MINGW64_NT-…）→ 不檢查，而且沒有人為它寫過任何一行",
+    with_platform("MINGW64_NT-10.0-19045") is False,
+)
 
 print("== preflight 真的照它決定要不要喊 ==")
 # ⚠ **保證 uid 一定對不上**，不要靠「跑這支測試的人剛好不是 1001」。真的相等的話下面
@@ -81,6 +84,7 @@ config.SESSION_UID = os.getuid() + 1
 # ⚠ preflight 會呼叫 `user_proxy.attach_jaeger`，那會**真的去接你正式環境的網路**。
 #   整段包在 suppress 裡，所以讓 from_env 直接拋就安靜跳過了（同 test_jaeger_wiring 的手法）。
 import docker  # noqa: E402
+
 _old_from_env = docker.from_env
 docker.from_env = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("測試不連 docker"))
 try:
@@ -118,21 +122,27 @@ try:
     check("🔴 host=Linux 且 image 真值對不上：有喊", len(linux_real) == 1)
     # ⚠ 這條是這次改版的核心：舊版比的是 APP_UID 與 SESSION_UID **兩個旋鈕**，
     #   兩個一起設成同一個錯的數字就完全靜音。現在要以 image 裡的真值為準。
-    check("🔴 喊的那句把三個數字都報出來（image／APP_UID／設定值）",
-          bool(linux_real) and all(str(n) in linux_real[0] for n in
-                                   (os.getuid() + 1, os.getuid(), config.SESSION_UID)))
+    check(
+        "🔴 喊的那句把三個數字都報出來（image／APP_UID／設定值）",
+        bool(linux_real) and all(str(n) in linux_real[0] for n in (os.getuid() + 1, os.getuid(), config.SESSION_UID)),
+    )
     check("🔴 三者一致時不喊（不能變成狼來了）", linux_aligned == [])
-    check("image 沒 stamp：仍然退回舊比對，而且說得出驗不到真值",
-          len(linux_unstamped) >= 1 and any("驗不到" in p for p in linux_unstamped))
-    check("🔴 image 問不到：明講『沒有驗過』，不可以當成通過",
-          len(linux_unavail) == 1 and "沒有驗過" in linux_unavail[0])
+    check(
+        "image 沒 stamp：仍然退回舊比對，而且說得出驗不到真值",
+        len(linux_unstamped) >= 1 and any("驗不到" in p for p in linux_unstamped),
+    )
+    check(
+        "🔴 image 問不到：明講『沒有驗過』，不可以當成通過", len(linux_unavail) == 1 and "沒有驗過" in linux_unavail[0]
+    )
     # 喊的時候要講得出「我憑什麼這樣判斷」，不然誤報的人無從查起——這正是修之前的處境。
-    check("每一個分支都說得出 host 判定的來源",
-          all("host 判定為 Linux" in p
-              for p in (linux_real + linux_unstamped + linux_unavail)))
-    check("而且告訴人這可能是誤報、以及誰會帶對這個值",
-          all("誤報" in p and "redeploy.sh" in p
-              for p in (linux_real + linux_unstamped + linux_unavail)))
+    check(
+        "每一個分支都說得出 host 判定的來源",
+        all("host 判定為 Linux" in p for p in (linux_real + linux_unstamped + linux_unavail)),
+    )
+    check(
+        "而且告訴人這可能是誤報、以及誰會帶對這個值",
+        all("誤報" in p and "redeploy.sh" in p for p in (linux_real + linux_unstamped + linux_unavail)),
+    )
 finally:
     docker.from_env = _old_from_env
     config.SESSION_UID = _old_uid
@@ -142,29 +152,30 @@ with open(os.path.join(REPO, "deploy", "redeploy.sh"), encoding="utf-8") as f:
     redeploy = f.read()
 with open(os.path.join(REPO, "deploy", "docker-compose.yml"), encoding="utf-8") as f:
     compose = f.read()
-check("🔴 redeploy.sh 用 `uname -s` 算出 host 的作業系統",
-      "CLAUDE_PTY_HOST_PLATFORM=\"$(uname -s)\"" in redeploy)
-check("🔴 而且真的 export 出去（算了不送等於沒算）",
-      "export" in redeploy and "CLAUDE_PTY_HOST_PLATFORM" in redeploy.split("export", 1)[1])
+check("🔴 redeploy.sh 用 `uname -s` 算出 host 的作業系統", 'CLAUDE_PTY_HOST_PLATFORM="$(uname -s)"' in redeploy)
+check(
+    "🔴 而且真的 export 出去（算了不送等於沒算）",
+    "export" in redeploy and "CLAUDE_PTY_HOST_PLATFORM" in redeploy.split("export", 1)[1],
+)
 check("🔴 compose 把它注進容器", "CLAUDE_PTY_HOST_PLATFORM: ${CLAUDE_PTY_HOST_PLATFORM:-}" in compose)
 # ⚠ 只有 control 需要（preflight 只在它裡面跑）。這兩條同時擋住「順手也加給 reconciler」
 #   與「貼到錯的服務底下」——後者不會有任何錯誤訊息，只是那個值永遠到不了要用它的人。
 # ⚠ **不可以用 `compose.count("CLAUDE_PTY_HOST_PLATFORM:")`**：那個子字串在同一行裡出現
 #   兩次（一次是 key，一次在 `${CLAUDE_PTY_HOST_PLATFORM:-}` 的插值裡），數出來是 2。
 #   要數的是「有幾行在定義它」，不是「這幾個字出現幾次」。
-_defs = [ln for ln in compose.splitlines()
-         if ln.strip().startswith("CLAUDE_PTY_HOST_PLATFORM:")]
+_defs = [ln for ln in compose.splitlines() if ln.strip().startswith("CLAUDE_PTY_HOST_PLATFORM:")]
 check("只定義一份（reconciler 不跑 preflight，不必給）", len(_defs) == 1)
-check("🔴 而且是掛在 control 底下（貼錯服務不會報錯，只是永遠到不了要用它的人）",
-      compose.index("CLAUDE_PTY_HOST_PLATFORM:") < compose.index("\n  reconciler:"))
+check(
+    "🔴 而且是掛在 control 底下（貼錯服務不會報錯，只是永遠到不了要用它的人）",
+    compose.index("CLAUDE_PTY_HOST_PLATFORM:") < compose.index("\n  reconciler:"),
+)
 
 print("== 回歸守衛：不可以改回問容器自己 ==")
 with open(os.path.join(REPO, "server", "sessions.py"), encoding="utf-8") as f:
     src = f.read()
 # ⚠ 註解裡會提到這個字串（在講為什麼不能用它），所以只看**程式碼行**。
 code = [ln for ln in src.splitlines() if not ln.lstrip().startswith("#")]
-check("🔴 sessions.py 的程式碼不再用 sys.platform 判斷 host",
-      not any("sys.platform" in ln for ln in code))
+check("🔴 sessions.py 的程式碼不再用 sys.platform 判斷 host", not any("sys.platform" in ln for ln in code))
 check("preflight 走的是 config.host_is_linux()", "config.host_is_linux()" in src)
 
 __import__("shutil").rmtree(TMP, ignore_errors=True)

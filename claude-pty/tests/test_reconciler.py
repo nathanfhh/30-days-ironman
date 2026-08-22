@@ -11,12 +11,13 @@
     uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
         python tests/test_reconciler.py
 """
+
 import os
 import sys
 import tempfile
 import time
 
-for v in ("HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","http_proxy","https_proxy","all_proxy"):
+for v in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
     os.environ.pop(v, None)
 os.environ["NO_PROXY"] = os.environ["no_proxy"] = "127.0.0.1,localhost"
 os.environ["CLAUDE_PTY_IMAGE"] = os.environ.get("CLAUDE_PTY_IMAGE", "ncr-dev-container")
@@ -59,8 +60,7 @@ _PRE_EXISTING = {c.name for c in D.containers.list(all=True, filters=config.SESS
 
 
 def _leftovers():
-    return [c for c in D.containers.list(all=True, filters=config.SESSION_FILTERS)
-            if c.name not in _PRE_EXISTING]
+    return [c for c in D.containers.list(all=True, filters=config.SESSION_FILTERS) if c.name not in _PRE_EXISTING]
 
 
 class _ScopedContainers:
@@ -93,12 +93,15 @@ class _ScopedClient:
 
 
 _fails = 0
+
+
 def check(label, ok):
     global _fails
     if not ok:
         _fails += 1
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
     return ok
+
 
 def exists(name):
     try:
@@ -107,7 +110,8 @@ def exists(name):
     except docker.errors.NotFound:
         return False
 
-SAFE = _ScopedClient(D)   # 只有本測試建立的容器對 reconciler 可見
+
+SAFE = _ScopedClient(D)  # 只有本測試建立的容器對 reconciler 可見
 mgr = SessionManager()
 keep = orphan = None
 
@@ -124,6 +128,7 @@ def _passthrough_isolated(label, fn, *a, **kw):
         raise
     except Exception:
         return reconciler.STUCK
+
 
 try:
     print("== 正常 running session 不被誤傷 ==")
@@ -146,7 +151,7 @@ try:
     s3 = mgr.create()
     time.sleep(1.0)
     name3 = s3["container"]
-    D.containers.get(name3).kill()          # 殺 PID 1 → exited 但仍存在
+    D.containers.get(name3).kill()  # 殺 PID 1 → exited 但仍存在
     time.sleep(0.5)
     check("前置條件：container 為 exited 且仍在", D.containers.get(name3).status == "exited")
     stats = reconciler.reconcile_once(SAFE)
@@ -158,15 +163,21 @@ try:
     print("== 沒人認領的 container：寬限期內不動、逾期才收 ==")
     # 必須帶 session label：reconciler 只認 label 不認名稱前綴（否則會把基礎設施容器
     # 一起刪掉，2026-07-25 實測踩到）。沒 label 的容器本就不該被它碰。
-    orphan = D.containers.run(config.IMAGE, entrypoint="bash", name="claude-pty-orphantest",
-                              detach=True, tty=True, stdin_open=True,
-                              labels={config.SESSION_LABEL_KEY: config.SESSION_LABEL_VALUE})
+    orphan = D.containers.run(
+        config.IMAGE,
+        entrypoint="bash",
+        name="claude-pty-orphantest",
+        detach=True,
+        tty=True,
+        stdin_open=True,
+        labels={config.SESSION_LABEL_KEY: config.SESSION_LABEL_VALUE},
+    )
     time.sleep(1.0)
     _orig_grace = config.ORPHAN_GRACE
-    config.ORPHAN_GRACE = 3600              # 很長 → 應視為「可能正在建立中」
+    config.ORPHAN_GRACE = 3600  # 很長 → 應視為「可能正在建立中」
     stats = reconciler.reconcile_once(SAFE)
     check("寬限期內的孤兒不被誤殺", exists("claude-pty-orphantest"))
-    config.ORPHAN_GRACE = 0                 # 立即視為孤兒
+    config.ORPHAN_GRACE = 0  # 立即視為孤兒
     stats = reconciler.reconcile_once(SAFE)
     check("逾寬限期的孤兒被收掉", not exists("claude-pty-orphantest"))
     check("計入 orphan_containers", stats["orphan_containers"] >= 1)
@@ -180,14 +191,12 @@ try:
     keep2 = mgr.create()
     time.sleep(1.0)
     with db.session_scope() as s:
-        s.add(View(session_id=keep["id"], port=45999, pid=999999))    # pid 幾乎不可能存在
-        s.add(View(session_id=keep2["id"], port=45998, pid=None))     # in-flight 宣告
+        s.add(View(session_id=keep["id"], port=45999, pid=999999))  # pid 幾乎不可能存在
+        s.add(View(session_id=keep2["id"], port=45998, pid=None))  # in-flight 宣告
     stats = reconciler.reconcile_once(SAFE)
     with db.session_scope() as s:
-        check("死掉的 view 記錄已清（port 釋放）",
-              s.query(View).filter_by(port=45999).count() == 0)
-        check("in-flight 宣告（寬限期內）未被誤刪",
-              s.query(View).filter_by(port=45998).count() == 1)
+        check("死掉的 view 記錄已清（port 釋放）", s.query(View).filter_by(port=45999).count() == 0)
+        check("in-flight 宣告（寬限期內）未被誤刪", s.query(View).filter_by(port=45998).count() == 1)
 
     print("== idle 回收預設停用（headless 長跑不該被誤殺）==")
     check("IDLE_TIMEOUT_HOURS 預設為 0＝停用", config.IDLE_TIMEOUT_HOURS == 0)
@@ -198,6 +207,7 @@ try:
     import datetime as _dt2  # noqa: E402
 
     from server.models import utcnow  # noqa: E402
+
     _sysuid = __import__("server.sessions", fromlist=["x"]).ensure_system_user()
 
     print("== 🔴 一顆卡住的容器不可以讓整輪陣亡（2026-07-27 實際停擺 40 分鐘）==")
@@ -209,6 +219,7 @@ try:
 
     class _OneContainerWedged:
         """指定的那顆容器怎麼問都不回應（逾時）；其餘一切正常。"""
+
         def __init__(self, real, wedged_id):
             self._real, self._wedged = real, wedged_id
             self.containers = real.containers
@@ -223,28 +234,30 @@ try:
             return self._real.api.remove_container(cid, **kw)
 
     stuck = mgr.create()
-    victim = mgr.create()       # 與卡住那顆毫無關係的一場，它必須照樣被收拾
+    victim = mgr.create()  # 與卡住那顆毫無關係的一場，它必須照樣被收拾
     time.sleep(1.2)
     stuck_cid = D.containers.get(stuck["container"]).id
-    D.containers.get(stuck["container"]).kill()          # → exited，會走到 remove 那條
-    D.containers.get(victim["container"]).remove(force=True)   # → gone，該被歸檔
+    D.containers.get(stuck["container"]).kill()  # → exited，會走到 remove 那條
+    D.containers.get(victim["container"]).remove(force=True)  # → gone，該被歸檔
     time.sleep(0.5)
     wedged_client = _OneContainerWedged(SAFE, stuck_cid)
     blew_up = False
     try:
         stats = reconciler.reconcile_once(wedged_client)
-    except Exception as e:      # noqa: BLE001 — 就是要證明它不會炸出來
+    except Exception as e:  # noqa: BLE001 — 就是要證明它不會炸出來
         blew_up = True
         print(f"     （拋出 {e!r}）")
     check("整輪沒有被那顆卡住的容器炸掉", not blew_up)
     if not blew_up:
-        check(f"有把它記成卡住的一顆（stats {stats.get('containers_stuck')}）",
-              stats.get("containers_stuck", 0) >= 1)
+        check(f"有把它記成卡住的一顆（stats {stats.get('containers_stuck')}）", stats.get("containers_stuck", 0) >= 1)
         with db.session_scope() as s:
-            check("🔴 與它無關的那一場照樣被歸檔（這才是那 40 分鐘真正的損失）",
-                  s.get(SessionRow, victim["id"]) is None)
-            check("卡住的那一場留在登錄裡，下輪再試（不可以宣告一個沒發生的結束）",
-                  s.get(SessionRow, stuck["id"]) is not None)
+            check(
+                "🔴 與它無關的那一場照樣被歸檔（這才是那 40 分鐘真正的損失）", s.get(SessionRow, victim["id"]) is None
+            )
+            check(
+                "卡住的那一場留在登錄裡，下輪再試（不可以宣告一個沒發生的結束）",
+                s.get(SessionRow, stuck["id"]) is not None,
+            )
     # 收拾：這次用正常 client，它就刪得掉了
     with __import__("contextlib").suppress(Exception):
         mgr.terminate(stuck["id"])
@@ -253,7 +266,7 @@ try:
     fresh = mgr.create()
     time.sleep(1.2)
     with db.session_scope() as s:
-        s.get(SessionRow, fresh["id"]).state_checked_at = None      # 假裝從沒問到過
+        s.get(SessionRow, fresh["id"]).state_checked_at = None  # 假裝從沒問到過
         s.get(SessionRow, fresh["id"]).docker_state = None
     reconciler.reconcile_once(SAFE)
     with db.session_scope() as s:
@@ -270,6 +283,7 @@ try:
     # 列表改成純讀 DB 之後，沒有人補 ready_at 的話這些 session 會**永遠**顯示未就緒，
     # 而它們其實好好地跑著。bash entrypoint 不會自己印 marker，這裡讓它印出來。
     from server.sessions import DRIVER_MARKER  # noqa: E402
+
     with db.session_scope() as s:
         s.get(SessionRow, fresh["id"]).ready_at = None
     # 沒有注入 API 了，直接對 PTY 寫一行（attached 是就緒偵測本來就在用的讀寫通道）
@@ -290,30 +304,43 @@ try:
             break
         time.sleep(0.5)
     with db.session_scope() as s:
-        check(f"補記了 ready_at（stats {stats.get('ready_stamped')}）",
-              s.get(SessionRow, fresh["id"]).ready_at is not None)
-    check("list() 因此顯示就緒",
-          next((x["ready"] for x in mgr.list() if x["id"] == fresh["id"]), False))
+        check(
+            f"補記了 ready_at（stats {stats.get('ready_stamped')}）",
+            s.get(SessionRow, fresh["id"]).ready_at is not None,
+        )
+    check("list() 因此顯示就緒", next((x["ready"] for x in mgr.list() if x["id"] == fresh["id"]), False))
 
     print("== idle 回收：docker 刪不掉就不可以歸檔（review 2026-07-26）==")
+
     # ⚠ 原本 APIError 被 suppress 掉之後照樣歸檔＋計數，結果是歷史宣告「這場因閒置結束」
     #   而容器還在跑——權威狀態與實際資源分裂，而且原始失敗完全不可觀測。
     #   上面那條主對帳路徑早就寫對了（`except APIError: continue`），idle 這條漏了。
     class _RemoveFails:
         """一個「刪不掉」的 docker daemon：只有 remove_container 會失敗，其餘照常。"""
+
         def __init__(self, real):
             self._real = real
             self.api = self
+
         def __getattr__(self, name):
             return getattr(self._real, name)
+
         def remove_container(self, *a, **kw):
             raise docker.errors.APIError("daemon 暫時不可用（測試注入）")
 
     from server.models import SessionHistory  # noqa: E402
+
     with db.session_scope() as s:
-        s.add(SessionRow(id="idlefailone1", container_name="claude-pty-idlefailone1",
-                         user_id=_sysuid, workdir="/tmp", container_id="deadbeef",
-                         last_active_at=utcnow() - _dt2.timedelta(hours=48)))
+        s.add(
+            SessionRow(
+                id="idlefailone1",
+                container_name="claude-pty-idlefailone1",
+                user_id=_sysuid,
+                workdir="/tmp",
+                container_id="deadbeef",
+                last_active_at=utcnow() - _dt2.timedelta(hours=48),
+            )
+        )
     _saved_idle = config.IDLE_TIMEOUT_HOURS
     config.IDLE_TIMEOUT_HOURS = 1
     try:
@@ -324,8 +351,7 @@ try:
     check(f"刪不掉就不計入回收數（實際 {n}）", n == 0)
     with db.session_scope() as s:
         still_live = s.get(SessionRow, "idlefailone1") is not None
-        archived = any(h.session_id == "idlefailone1"
-                       for h in s.query(SessionHistory).all())
+        archived = any(h.session_id == "idlefailone1" for h in s.query(SessionHistory).all())
     check("登錄保留下來，下一輪可以重試", still_live)
     check("**沒有**寫進歷史（不可以宣告一個沒發生的結束）", not archived)
 
@@ -344,14 +370,15 @@ try:
     class _FakeNet:
         def __init__(self, name, uid, attached=()):
             self.name, self.removed = name, False
-            self.attrs = {"Labels": {config.PROXY_OWNER_LABEL: str(uid)},
-                          # 夠舊：不讓 ORPHAN_GRACE 變成「沒被刪」的真正原因，否則這條
-                          # 測試會在錯誤的理由下變綠。
-                          "Created": "2020-01-01T00:00:00Z",
-                          # 誰還掛在這張網上。回收前會問這個（`only_jaeger_left`）：
-                          # jaeger 不算數（它是我們自己接上去的），別人算。
-                          "Containers": {f"c{i}": {"Name": n}
-                                         for i, n in enumerate(attached)}}
+            self.attrs = {
+                "Labels": {config.PROXY_OWNER_LABEL: str(uid)},
+                # 夠舊：不讓 ORPHAN_GRACE 變成「沒被刪」的真正原因，否則這條
+                # 測試會在錯誤的理由下變綠。
+                "Created": "2020-01-01T00:00:00Z",
+                # 誰還掛在這張網上。回收前會問這個（`only_jaeger_left`）：
+                # jaeger 不算數（它是我們自己接上去的），別人算。
+                "Containers": {f"c{i}": {"Name": n} for i, n in enumerate(attached)},
+            }
 
         def reload(self):
             pass
@@ -397,8 +424,7 @@ try:
         saved = config.GITLAB_HOST
         config.GITLAB_HOST = "gitlab.example.com" if gitlab_on else ""
         try:
-            reconciler._converge_proxies(_NetOnlyClient([net]), live,
-                                         _passthrough_isolated, lambda: True)
+            reconciler._converge_proxies(_NetOnlyClient([net]), live, _passthrough_isolated, lambda: True)
         finally:
             config.GITLAB_HOST = saved
         return net.removed
@@ -416,27 +442,30 @@ try:
                 s.add(r)
 
     def _netkeep_row():
-        return SessionRow(id="netkeep0001", container_name="claude-pty-netkeep",
-                          user_id=_NET_UID, status="running", workdir="/tmp")
+        return SessionRow(
+            id="netkeep0001", container_name="claude-pty-netkeep", user_id=_NET_UID, status="running", workdir="/tmp"
+        )
 
     _reset_rows(_netkeep_row())
     _live = {"claude-pty-netkeep": _LiveC()}
-    check("🔴 GitLab 關閉 + 有活著的 session → 網路留著",
-          not _converge_with(gitlab_on=False, live=_live))
-    check("GitLab 開啟 + 有活著的 session → 網路一樣留著",
-          not _converge_with(gitlab_on=True, live=_live))
+    check("🔴 GitLab 關閉 + 有活著的 session → 網路留著", not _converge_with(gitlab_on=False, live=_live))
+    check("GitLab 開啟 + 有活著的 session → 網路一樣留著", not _converge_with(gitlab_on=True, live=_live))
     # 反向：沒有任何活著的 session，網路就該收（不然位址池會慢慢被吃光）。這條同時證明
     # 上面兩條不是因為「_reap 根本沒在動」才綠的。
     _reset_rows()
-    check("🔴 沒有 session 了 → 網路被收掉（證明上面不是因為 reap 沒作用才綠）",
-          _converge_with(gitlab_on=False, live={}))
+    check(
+        "🔴 沒有 session 了 → 網路被收掉（證明上面不是因為 reap 沒作用才綠）", _converge_with(gitlab_on=False, live={})
+    )
     # jaeger 掛在每一張使用者網路上，它**不算**「還有人在用」——不然每一張網都永遠收不掉，
     # 位址池只出不進。反過來，真的還有容器掛著就不可以收。
-    check("🔴 只剩 jaeger 掛著 → 照收（否則位址池只出不進）",
-          _converge_with(gitlab_on=False, live={}, attached=("jaeger",)))
-    check("🔴 還有別的容器掛著 → 不收，交給下一輪",
-          not _converge_with(gitlab_on=False, live={},
-                             attached=("jaeger", "claude-pty-someone")))
+    check(
+        "🔴 只剩 jaeger 掛著 → 照收（否則位址池只出不進）",
+        _converge_with(gitlab_on=False, live={}, attached=("jaeger",)),
+    )
+    check(
+        "🔴 還有別的容器掛著 → 不收，交給下一輪",
+        not _converge_with(gitlab_on=False, live={}, attached=("jaeger", "claude-pty-someone")),
+    )
 
 finally:
     print("== 清理 ==")

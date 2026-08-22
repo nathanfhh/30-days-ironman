@@ -34,6 +34,7 @@ network 上、network alias 叫 `gitlab-proxy`，聽 5678。該使用者的所�
 ⚠ 已知**不支援 git-lfs**：LFS 的 batch API 會回外部 href（可能直指物件儲存），nginx 改不掉。
   有用 LFS 的 repo 會靜默壞掉，所以文件裡要講明，不要讓人以為它會通。
 """
+
 from __future__ import annotations
 
 import base64
@@ -65,8 +66,7 @@ def validate_pat(pat: str) -> str:
     if not pat:
         raise PatRejected("PAT 是空的")
     if len(pat) > config.GITLAB_PAT_MAX:
-        raise PatRejected(
-            f"PAT 超過 {config.GITLAB_PAT_MAX} 字元——請確認貼的是 token 本身")
+        raise PatRejected(f"PAT 超過 {config.GITLAB_PAT_MAX} 字元——請確認貼的是 token 本身")
     if not PAT_CHARSET.match(pat):
         raise PatRejected("PAT 含有不允許的字元（只收英數與 . _ ~ + / = -）")
     return pat
@@ -100,10 +100,8 @@ _API_LOCATIONS: tuple[tuple[str, str, int], ...] = (
     # ⚠ 這三條 discussions 的順序不可以動：nginx 依序比對，`…/discussions$` 排到最前面
     #   會把另外兩條**整個吃掉**（它們是它的延伸路徑），而症狀是那兩條的方法白名單靜靜
     #   失效——回覆與單串查詢都落到第一條的 `GET POST` 上。
-    ("location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+/discussions/[0-9a-f]+/notes$",
-     "POST", 5),
-    ("location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+/discussions/[0-9a-f]+$",
-     "GET", 3),
+    ("location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+/discussions/[0-9a-f]+/notes$", "POST", 5),
+    ("location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+/discussions/[0-9a-f]+$", "GET", 3),
     ("location ~ ^/api/v4/projects/.+/merge_requests/[0-9]+/discussions$", "GET POST", 5),
 )
 
@@ -152,8 +150,7 @@ def fingerprint(pat: str) -> str:
     #   SECRET_KEY 底下，不同用途要導出不同的金鑰」。這裡查不到可達的攻擊（訊息形狀與
     #   cookie 不相容），純粹是不要在同一個 codebase 裡立了規矩又自己破例——下一個用途
     #   未必這麼幸運。
-    key = hmac.new(config.SECRET_KEY.encode(), b"gitlab-proxy-state-v1",
-                   hashlib.sha256).digest()
+    key = hmac.new(config.SECRET_KEY.encode(), b"gitlab-proxy-state-v1", hashlib.sha256).digest()
     return hmac.new(key, body, hashlib.sha256).hexdigest()[:32]
 
 
@@ -170,8 +167,7 @@ def _render(pat: str, state: str) -> bytes:
     pat = validate_pat(pat)
     host = config.GITLAB_HOST
     # 信任錨：有掛自訂 CA 就指過去，否則沿用容器內的系統 CA（維持現狀）。
-    ca_path = config.GITLAB_CA_BIND if config.GITLAB_CA_FILE else \
-        "/etc/ssl/certs/ca-certificates.crt"
+    ca_path = config.GITLAB_CA_BIND if config.GITLAB_CA_FILE else "/etc/ssl/certs/ca-certificates.crt"
     # CA 的內容摘要寫成註解，只為了讓它進到指紋裡（見 ca_digest）。它是 CA 的**公開**
     # 憑證的雜湊，不是秘密；而 `/_state` 回的是整份 conf 的 HMAC，不是這一行。
     ca_note = f"# gitlab-ca: {ca_digest() or 'system'}\n"
@@ -179,8 +175,7 @@ def _render(pat: str, state: str) -> bytes:
         # 到不了這裡才對——呼叫端一律先問 `config.gitlab_enabled()`。真的走到了就明講，
         # 不要渲染出一份 upstream 是空字串的設定（那會變成 nginx 啟動失敗，而錯誤訊息
         # 指的是語法，指不到「沒設主機名」這個真正的原因）。
-        raise PatRejected(
-            "沒有設定 GitLab 主機（CLAUDE_PTY_GITLAB_HOST），無法產生代理設定")
+        raise PatRejected("沒有設定 GitLab 主機（CLAUDE_PTY_GITLAB_HOST），無法產生代理設定")
     api_auth = f'proxy_set_header PRIVATE-TOKEN "{pat}";'
     git_auth = f'proxy_set_header Authorization "Basic {_basic(pat)}";'
     # ⚠ **每一個會 proxy_pass 的 location 都要自己再設一次這三行。**
@@ -204,7 +199,8 @@ def _render(pat: str, state: str) -> bytes:
             {api_auth}
             proxy_pass https://gitlab;
         }}"""
-        for loc, methods, burst in _API_LOCATIONS)
+        for loc, methods, burst in _API_LOCATIONS
+    )
 
     return f"""# 由 claude-pty 自動產生（server/gitlab_proxy.py，ADR 0016）。不要手改。
 {ca_note}worker_processes 1;

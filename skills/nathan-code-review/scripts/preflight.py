@@ -304,7 +304,9 @@ def build_summary(
             "review 流程無法進行，請停止並回報使用者。"
         )
     if missing_optional:
-        parts.append(f"缺少：{'、'.join(missing_optional)}，對應步驟將略過並於報告揭露。")
+        parts.append(
+            f"缺少：{'、'.join(missing_optional)}，對應步驟將略過並於報告揭露。"
+        )
     if not missing:
         parts.append("所有預期工具皆可用。")
 

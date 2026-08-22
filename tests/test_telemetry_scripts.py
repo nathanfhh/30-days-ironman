@@ -88,23 +88,56 @@ def sample_trace():
     return make_trace(
         [
             # 主線程自己的一次 LLM 請求
-            span("s-main", 0, 1_000_000, **common, **{
-                "span.type": "llm_request", "output_tokens": 50,
-                "cache_read_tokens": 500, "cache_creation_tokens": 5,
-            }),
+            span(
+                "s-main",
+                0,
+                1_000_000,
+                **common,
+                **{
+                    "span.type": "llm_request",
+                    "output_tokens": 50,
+                    "cache_read_tokens": 500,
+                    "cache_creation_tokens": 5,
+                },
+            ),
             # 派遣 span：故意帶一個「指錯人」的 agent_id，歸因不准用它
-            span("s-dispatch", 500_000, 17_000, **common, **{
-                "span.type": "tool", "tool_name": "Task",
-                "subagent_type": "ncr-scan-lint", "agent_id": "WRONG",
-            }),
+            span(
+                "s-dispatch",
+                500_000,
+                17_000,
+                **common,
+                **{
+                    "span.type": "tool",
+                    "tool_name": "Task",
+                    "subagent_type": "ncr-scan-lint",
+                    "agent_id": "WRONG",
+                },
+            ),
             # 子代理的 LLM 請求，父子鏈掛在派遣 span 下（隔一層 tool span）
-            span("s-child-tool", 1_000_000, 3_000_000, parent="s-dispatch", **common, **{
-                "span.type": "tool", "tool_name": "Bash",
-            }),
-            span("s-child-llm", 1_500_000, 2_000_000, parent="s-child-tool", **common, **{
-                "span.type": "llm_request", "output_tokens": 100,
-                "cache_read_tokens": 1_000, "cache_creation_tokens": 10,
-            }),
+            span(
+                "s-child-tool",
+                1_000_000,
+                3_000_000,
+                parent="s-dispatch",
+                **common,
+                **{
+                    "span.type": "tool",
+                    "tool_name": "Bash",
+                },
+            ),
+            span(
+                "s-child-llm",
+                1_500_000,
+                2_000_000,
+                parent="s-child-tool",
+                **common,
+                **{
+                    "span.type": "llm_request",
+                    "output_tokens": 100,
+                    "cache_read_tokens": 1_000,
+                    "cache_creation_tokens": 10,
+                },
+            ),
         ]
     )
 
@@ -164,8 +197,11 @@ def test_load_files_accepts_both_shapes_and_fails_loudly(tr, tmp_path):
 
 
 def usage_line(req, msg, model, out, cw=None, **extra):
-    u = {"input_tokens": extra.get("inp", 10), "output_tokens": out,
-         "cache_read_input_tokens": extra.get("cr", 0)}
+    u = {
+        "input_tokens": extra.get("inp", 10),
+        "output_tokens": out,
+        "cache_read_input_tokens": extra.get("cr", 0),
+    }
     if cw is not None:
         u["cache_creation"] = cw
     if "cw_flat" in extra:
@@ -195,8 +231,13 @@ def test_tally_dedupes_by_taking_final_value(cost, tmp_path):
 
 def test_cost_prices_cache_ttl_tiers_separately(cost):
     # haiku：in $1、out $5、cache 讀 0.1×、寫 5m 1.25×、寫 1h 2×（per MTok）
-    u = {"in": 1_000_000, "out": 1_000_000, "cr": 1_000_000,
-         "cw5m": 1_000_000, "cw1h": 1_000_000}
+    u = {
+        "in": 1_000_000,
+        "out": 1_000_000,
+        "cr": 1_000_000,
+        "cw5m": 1_000_000,
+        "cw1h": 1_000_000,
+    }
     assert cost.cost_usd("claude-haiku-4-5-20251001", u) == pytest.approx(
         1 + 5 + 0.1 + 1.25 + 2
     )
@@ -217,16 +258,22 @@ def test_main_attributes_roles_from_subagent_meta(cost, tmp_path, monkeypatch, c
     sub = session / "subagents"
     sub.mkdir(parents=True)
     (tmp_path / "abc123.jsonl").write_text(
-        usage_line("r1", "m1", "claude-haiku-4-5", 100,
-                   cw={"ephemeral_5m_input_tokens": 10, "ephemeral_1h_input_tokens": 20})
+        usage_line(
+            "r1",
+            "m1",
+            "claude-haiku-4-5",
+            100,
+            cw={"ephemeral_5m_input_tokens": 10, "ephemeral_1h_input_tokens": 20},
+        )
     )
     (sub / "agent-x.jsonl").write_text(usage_line("r2", "m2", "claude-haiku-4-5", 200))
     (sub / "agent-x.meta.json").write_text(json.dumps({"agentType": "ncr-scan-lint"}))
 
     # 🔴 **測試不得連外。** main() 會去抓上游費率表，這裡用 --offline 讓它直接用快照。
     #    忘了這一行的話，這支測試會在沒網路的機器上變慢又不穩，而且是靜默的。
-    monkeypatch.setattr(sys, "argv",
-                        ["cost-report.py", "--offline", str(tmp_path / "abc123.jsonl")])
+    monkeypatch.setattr(
+        sys, "argv", ["cost-report.py", "--offline", str(tmp_path / "abc123.jsonl")]
+    )
     cost.main()
     out = capsys.readouterr().out
     assert "ncr-scan-lint" in out and "主線程" in out
@@ -243,15 +290,28 @@ def test_rate_for_picks_longest_matching_prefix(cost):
         cost.RATES.pop()
 
 
-def test_main_skips_zero_usage_synthetic_without_disclaimer(cost, tmp_path, monkeypatch, capsys):
+def test_main_skips_zero_usage_synthetic_without_disclaimer(
+    cost, tmp_path, monkeypatch, capsys
+):
     # <synthetic> usage 全 0：不進表、不觸發「不含無牌價的模型」免責
     p = tmp_path / "s.jsonl"
     p.write_text(
-        usage_line("r1", "m1", "claude-haiku-4-5", 100) + "\n"
-        + json.dumps({"requestId": "r2",
-                      "message": {"id": "m2", "model": "<synthetic>",
-                                  "usage": {"input_tokens": 0, "output_tokens": 0,
-                                            "cache_read_input_tokens": 0}}})
+        usage_line("r1", "m1", "claude-haiku-4-5", 100)
+        + "\n"
+        + json.dumps(
+            {
+                "requestId": "r2",
+                "message": {
+                    "id": "m2",
+                    "model": "<synthetic>",
+                    "usage": {
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "cache_read_input_tokens": 0,
+                    },
+                },
+            }
+        )
     )
     monkeypatch.setattr(sys, "argv", ["cost-report.py", str(p)])
     cost.main()
@@ -260,9 +320,12 @@ def test_main_skips_zero_usage_synthetic_without_disclaimer(cost, tmp_path, monk
     assert "無牌價" not in out
 
 
-def test_find_session_accepts_session_dir_and_picks_latest_in_project_dir(cost, tmp_path, capsys):
+def test_find_session_accepts_session_dir_and_picks_latest_in_project_dir(
+    cost, tmp_path, capsys
+):
     import os
     import time
+
     # session 目錄本身（旁邊有同名 .jsonl）→ 用那份
     (tmp_path / "abc.jsonl").write_text("")
     (tmp_path / "abc").mkdir()
@@ -315,13 +378,32 @@ def test_split_by_session_keeps_sessions_apart(sr):
 
 def test_collect_roles_attributes_by_parent_chain_and_charts_input_tokens(sr):
     spans = {
-        "d1": {"span.type": "tool", "tool_name": "Task", "subagent_type": "ncr-scan-lint",
-               "_start": 0, "_dur": 5, "_parent": None},
-        "c1": {"span.type": "llm_request", "model": "claude-sonnet-5",
-               "input_tokens": 7, "output_tokens": 3, "cache_read_tokens": 100,
-               "cache_creation_tokens": 20, "_start": 10, "_dur": 30, "_parent": "d1"},
-        "m1": {"span.type": "llm_request", "model": "claude-fable-5",
-               "_start": 0, "_dur": 8, "_parent": None},
+        "d1": {
+            "span.type": "tool",
+            "tool_name": "Task",
+            "subagent_type": "ncr-scan-lint",
+            "_start": 0,
+            "_dur": 5,
+            "_parent": None,
+        },
+        "c1": {
+            "span.type": "llm_request",
+            "model": "claude-sonnet-5",
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "cache_read_tokens": 100,
+            "cache_creation_tokens": 20,
+            "_start": 10,
+            "_dur": 30,
+            "_parent": "d1",
+        },
+        "m1": {
+            "span.type": "llm_request",
+            "model": "claude-fable-5",
+            "_start": 0,
+            "_dur": 8,
+            "_parent": None,
+        },
     }
     agg, chart = sr.collect_roles(spans)
     assert set(agg) == {"主線程", "ncr-scan-lint"}
@@ -344,6 +426,7 @@ def test_hit_rate_zero_denominator_is_none(sr):
 
 def _report(tmp_path, name, mtime, mr):
     import os
+
     p = tmp_path / name
     p.write_text(json.dumps({"conclusion": "Approved", "mr": mr, "findings": []}))
     os.utime(p, (mtime, mtime))
@@ -353,7 +436,12 @@ def _report(tmp_path, name, mtime, mr):
 def test_find_report_json_matches_by_session_window_not_just_latest(sr, tmp_path):
     t0, t1 = 1_000_000_000 * 1_000_000, 1_000_003_600 * 1_000_000  # µs
     _report(tmp_path, "in_window.json", 1_000_003_700, {"iid": 1, "title": "對的"})
-    _report(tmp_path, "newer_but_far.json", 1_000_003_600 + 7 * 3600, {"iid": 2, "title": "錯的"})
+    _report(
+        tmp_path,
+        "newer_but_far.json",
+        1_000_003_600 + 7 * 3600,
+        {"iid": 2, "title": "錯的"},
+    )
     got = sr.find_report_json(t0, t1, root=str(tmp_path))
     assert got and got["mr"]["iid"] == 1  # 視窗內取最近，不是全域最新
     # 視窗內一份都沒有 → None（寧可未封存，不亂配）
@@ -362,6 +450,7 @@ def test_find_report_json_matches_by_session_window_not_just_latest(sr, tmp_path
 
 def test_find_report_json_accepts_null_mr_and_skips_broken_files(sr, tmp_path):
     import os
+
     t0, t1 = 2_000_000_000 * 1_000_000, 2_000_000_100 * 1_000_000
     broken = tmp_path / "broken.json"
     broken.write_text("{not json")
@@ -372,23 +461,61 @@ def test_find_report_json_accepts_null_mr_and_skips_broken_files(sr, tmp_path):
 
 
 def test_build_page_survives_null_mr_and_escapes_script_close(sr):
-    agg = {"主線程": {"first": 0, "last": 60_000_000, "llm_us": 1_000_000},
-           "x</script>y": {"first": 0, "last": 30_000_000, "llm_us": 0}}
-    chart = [{"role": "x</script>y", "s": 0, "e": 1_000_000, "kind": "llm_request",
-              "label": "m", "in": 1, "out": 1, "cr": 0, "cw": 0}]
-    page = sr.build_page("sid12345", agg, chart, [], {},
-                         {"conclusion": "Approved", "mr": None, "findings": []})
-    assert "MR !" not in page          # mr null → 標題略過，不炸
-    assert "</script>y" not in page.split("const DATA")[1].split(";")[0]  # DATA 內已逸出
+    agg = {
+        "主線程": {"first": 0, "last": 60_000_000, "llm_us": 1_000_000},
+        "x</script>y": {"first": 0, "last": 30_000_000, "llm_us": 0},
+    }
+    chart = [
+        {
+            "role": "x</script>y",
+            "s": 0,
+            "e": 1_000_000,
+            "kind": "llm_request",
+            "label": "m",
+            "in": 1,
+            "out": 1,
+            "cr": 0,
+            "cw": 0,
+        }
+    ]
+    page = sr.build_page(
+        "sid12345",
+        agg,
+        chart,
+        [],
+        {},
+        {"conclusion": "Approved", "mr": None, "findings": []},
+    )
+    assert "MR !" not in page  # mr null → 標題略過，不炸
+    assert (
+        "</script>y" not in page.split("const DATA")[1].split(";")[0]
+    )  # DATA 內已逸出
 
 
 def test_build_page_lists_transcript_only_roles_and_counts_their_cost(sr):
     agg = {"主線程": {"first": 0, "last": 60_000_000, "llm_us": 0}}
-    tokens = {"主線程": {"in": 1, "out": 1, "cr": 0, "cw": 0, "cost": 1.0, "model": "fable-5"},
-              "ncr-scan-lint": {"in": 9, "out": 9, "cr": 0, "cw": 0, "cost": 99.0, "model": "sonnet-5"}}
+    tokens = {
+        "主線程": {
+            "in": 1,
+            "out": 1,
+            "cr": 0,
+            "cw": 0,
+            "cost": 1.0,
+            "model": "fable-5",
+        },
+        "ncr-scan-lint": {
+            "in": 9,
+            "out": 9,
+            "cr": 0,
+            "cw": 0,
+            "cost": 99.0,
+            "model": "sonnet-5",
+        },
+    }
     page = sr.build_page("sid12345", agg, [], [], tokens, None)
     assert "trace 未拍到" in page and "ncr-scan-lint" in page
     assert "$100.00" in page  # 總成本卡含 transcript-only 角色，不靜默少算
+
 
 # ------------------------------------------------- 費率來源（LiteLLM 上游 vs 快照）
 #
@@ -401,10 +528,14 @@ FAKE_LITELLM = {
     "claude-sonnet-5": {"input_cost_per_token": 2e-6, "output_cost_per_token": 1e-5},
     "claude-opus-5": {"input_cost_per_token": 5e-6, "output_cost_per_token": 2.5e-5},
     # 雲端的區域價：貴 10%，而且鍵名帶 provider 前綴。**不可以被收進來**
-    "us.anthropic.claude-sonnet-5": {"input_cost_per_token": 2.2e-6,
-                                     "output_cost_per_token": 1.1e-5},
-    "vertex_ai/claude-sonnet-5": {"input_cost_per_token": 2e-6,
-                                  "output_cost_per_token": 1e-5},
+    "us.anthropic.claude-sonnet-5": {
+        "input_cost_per_token": 2.2e-6,
+        "output_cost_per_token": 1.1e-5,
+    },
+    "vertex_ai/claude-sonnet-5": {
+        "input_cost_per_token": 2e-6,
+        "output_cost_per_token": 1e-5,
+    },
     # 非 Claude、以及沒有價格欄位的髒資料
     "gpt-4o": {"input_cost_per_token": 1e-6, "output_cost_per_token": 1e-6},
     "claude-broken": {"input_cost_per_token": None, "output_cost_per_token": None},
@@ -417,8 +548,8 @@ def test_litellm_rates_take_first_party_keys_only(cost):
     assert got["claude-sonnet-5"] == (2.0, 10.0)
     # 🔴 區域價混進來的話，最長前綴比對會挑到貴 10% 的那個，而金額看起來很合理
     assert not [k for k in got if "/" in k or k.startswith(("us.", "eu.", "vertex"))]
-    assert "gpt-4o" not in got            # 只收 claude-*
-    assert "claude-broken" not in got     # 價格欄位不是數字就跳過，不要當 0
+    assert "gpt-4o" not in got  # 只收 claude-*
+    assert "claude-broken" not in got  # 價格欄位不是數字就跳過，不要當 0
 
 
 def test_refresh_rates_uses_upstream_then_reports_source(cost):

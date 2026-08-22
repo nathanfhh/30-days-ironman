@@ -21,6 +21,7 @@
 
 ⚠ 一律以 `data-testid` 取元素。
 """
+
 import json
 import logging
 import os
@@ -63,13 +64,20 @@ init_db()
 admin = auth.create_user("e2e-admin", "e2e-password-1", is_admin=True)
 
 now = utcnow()
-PROFILE = {"cli": "claude", "network": "restricted",
-           "capture": False, "telemetry": False}
+PROFILE = {"cli": "claude", "network": "restricted", "capture": False, "telemetry": False}
 with session_scope() as s:
     for i in (1, 2):
-        s.add(SessionRow(id=f"e{i}", container_name=f"ec{i}", user_id=admin["id"],
-                         workdir="/w", profile=PROFILE,
-                         created_at=now, last_active_at=now))
+        s.add(
+            SessionRow(
+                id=f"e{i}",
+                container_name=f"ec{i}",
+                user_id=admin["id"],
+                workdir="/w",
+                profile=PROFILE,
+                created_at=now,
+                last_active_at=now,
+            )
+        )
 
 
 class _FakeContainer:
@@ -170,9 +178,9 @@ paint(__SCALE__);                        // 起始狀態：畫布與 CSS 尺寸�
 __FONT_AFTER__                           // 見下方 stub_font_after 的說明（預設空字串）
 </script>"""
 
-posts = []          # 收到的每一發 /resize（依序）
-fail_next = 0       # 還要讓幾發失敗（驗「旗標黏著」）
-stub_scale = "2"    # iframe 起始的畫布倍率；"window.devicePixelRatio" ＝一開始就是好的
+posts = []  # 收到的每一發 /resize（依序）
+fail_next = 0  # 還要讓幾發失敗（驗「旗標黏著」）
+stub_scale = "2"  # iframe 起始的畫布倍率；"window.devicePixelRatio" ＝一開始就是好的
 
 
 view_flavor = "Rust"
@@ -196,9 +204,11 @@ stub_font_after = ""
 
 
 def route_session(route, _request):
-    route.fulfill(status=200, content_type="text/html; charset=utf-8",
-                  body=STUB.replace("__SCALE__", stub_scale)
-                          .replace("__FONT_AFTER__", stub_font_after))
+    route.fulfill(
+        status=200,
+        content_type="text/html; charset=utf-8",
+        body=STUB.replace("__SCALE__", stub_scale).replace("__FONT_AFTER__", stub_font_after),
+    )
 
 
 def route_resize(route, request):
@@ -206,8 +216,7 @@ def route_resize(route, request):
     posts.append(json.loads(request.post_data))
     if fail_next > 0:
         fail_next -= 1
-        route.fulfill(status=500, content_type="application/json",
-                      body='{"error":"session 還在 creating"}')
+        route.fulfill(status=500, content_type="application/json", body='{"error":"session 還在 creating"}')
     else:
         route.fulfill(status=204, body="")
 
@@ -217,7 +226,8 @@ def term_size(page):
     return page.evaluate(
         "() => { const t = document.querySelector('[data-testid=\"drawer-frame\"]')"
         ".contentWindow.term; return { cols: t.cols, rows: t.rows,"
-        " font: t.options.fontSize }; }")
+        " font: t.options.fontSize }; }"
+    )
 
 
 def canvas_state(page):
@@ -228,7 +238,8 @@ def canvas_state(page):
         " return { remeasures: w.__remeasures, dpr,"
         "   canvases: [...f.contentDocument.querySelectorAll('.xterm canvas')].map("
         "     (c) => ({ backing: c.width, css: parseFloat(c.style.width),"
-        "               ok: Math.abs(c.width - parseFloat(c.style.width) * dpr) <= 1 })) }; }")
+        "               ok: Math.abs(c.width - parseFloat(c.style.width) * dpr) <= 1 })) }; }"
+    )
 
 
 def open_drawer(page, sid):
@@ -236,14 +247,13 @@ def open_drawer(page, sid):
     page.wait_for_selector('[data-testid="drawer"]')
     # pending 收起來＝iframe 已載入且父頁面認得它，attachSizeSync 這時才會開始
     page.wait_for_selector('[data-testid="drawer-pending"]', state="hidden", timeout=8000)
-    page.wait_for_timeout(700)      # 讓 debounce（300ms）那一發送完
+    page.wait_for_timeout(700)  # 讓 debounce（300ms）那一發送完
 
 
 try:
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        ctx = browser.new_context(viewport={"width": 1440, "height": 900},
-                                  timezone_id="Asia/Taipei")
+        ctx = browser.new_context(viewport={"width": 1440, "height": 900}, timezone_id="Asia/Taipei")
         page = ctx.new_page()
         page.route("**/api/sessions/*/view", route_view)
         page.route("**/api/sessions/*/resize", route_resize)
@@ -261,21 +271,26 @@ try:
         open_drawer(page, "e1")
         check("有送出 /resize（不是靜靜地什麼都沒做）", len(posts) >= 1)
         first = posts[0] if posts else {}
-        check(f"帶 redraw=true（尺寸沒變時 SIGWINCH 不會發，TUI 會沿用舊版面）：{first}",
-              first.get("redraw") is True)
+        check(f"帶 redraw=true（尺寸沒變時 SIGWINCH 不會發，TUI 會沿用舊版面）：{first}", first.get("redraw") is True)
         live = term_size(page)
-        check(f"送的是 xterm 當下的尺寸 {live['cols']}×{live['rows']}，不是建立時的 140×40",
-              first.get("cols") == live["cols"] and first.get("rows") == live["rows"])
-        check("欄列數是真的量出來的（不是 0 或 80×24 這種預設值）",
-              first.get("cols", 0) > 40 and first.get("rows", 0) > 10)
+        check(
+            f"送的是 xterm 當下的尺寸 {live['cols']}×{live['rows']}，不是建立時的 140×40",
+            first.get("cols") == live["cols"] and first.get("rows") == live["rows"],
+        )
+        check(
+            "欄列數是真的量出來的（不是 0 或 80×24 這種預設值）",
+            first.get("cols", 0) > 40 and first.get("rows", 0) > 10,
+        )
 
         print("== 畫布與 CSS 尺寸脫節時要自己修好（不用手動按 +/- px）==")
         # 使用者回報：「我現在都是要刻意去觸發 +- px 那個大小才會是對的」。
         # 真因是畫布的 backing store 開在別的 dpr 上，xterm 依 1 倍去畫、畫進 2 倍的
         # 緩衝區，每個字只佔顯示上的一半。只有重新量字治得好——所以父頁面要自己做。
         cv = canvas_state(page)
-        check(f"畫布已經修好（dpr={cv['dpr']}，{cv['canvases']}）",
-              bool(cv["canvases"]) and all(c["ok"] for c in cv["canvases"]))
+        check(
+            f"畫布已經修好（dpr={cv['dpr']}，{cv['canvases']}）",
+            bool(cv["canvases"]) and all(c["ok"] for c in cv["canvases"]),
+        )
         # 一次修復＝兩次重量字（跳開 +1、再還原）。多於 2 就是每次 fit 都在瞎修——
         # 修好之後 glyphScaleBroken() 應該就不成立了，不該有第三次。
         # ⚠ **0 次現在也是合格的**（2026-07-31）：開啟時一律會逼一次 fit（見 app.js 裡
@@ -283,8 +298,7 @@ try:
         #   glyphScaleBroken() 多半根本不成立，那個字級跳開再還原的修復就不必跑。
         #   這條原本釘死 `== 2`，那是把「修好了」與「用哪一種手段修的」綁在一起；
         #   真正要守的是上面那條（畫布最後是對的）＋這裡的上限（沒有反覆瞎修）。
-        check(f"沒有反覆瞎修（重量字 {cv['remeasures']} 次；0＝fit 就修好了、2＝跳一次字級）",
-              cv["remeasures"] <= 2)
+        check(f"沒有反覆瞎修（重量字 {cv['remeasures']} 次；0＝fit 就修好了、2＝跳一次字級）", cv["remeasures"] <= 2)
         check(f"沒有動到使用者的字級（{live['font']}px）", term_size(page)["font"] == live["font"])
         check(f"也沒有因此多送一發 /resize（收到 {len(posts)} 發）", len(posts) == 1)
 
@@ -295,10 +309,9 @@ try:
         posts.clear()
         open_drawer(page, "e1")
         healthy = canvas_state(page)
-        check(f"完全沒有重量字級（實際 {healthy['remeasures']} 次）",
-              healthy["remeasures"] == 0)
+        check(f"完全沒有重量字級（實際 {healthy['remeasures']} 次）", healthy["remeasures"] == 0)
         check("畫布仍然是對的", all(c["ok"] for c in healthy["canvases"]))
-        stub_scale = "2"        # 抽屜留著開，下一段接手關它（與原本的流程一致）
+        stub_scale = "2"  # 抽屜留著開，下一段接手關它（與原本的流程一致）
 
         print("== 關掉再開一個：第二次照樣要帶 redraw（使用者回報的那個 bug）==")
         posts.clear()
@@ -308,10 +321,11 @@ try:
         check("關閉之後不再送尺寸", len(posts) == 0)
         open_drawer(page, "e2")
         check("第二次開也有送", len(posts) >= 1)
-        check(f"而且一樣帶 redraw=true：{posts[0] if posts else {}}",
-              bool(posts) and posts[0].get("redraw") is True)
-        check("送去的是第二場 session", "/e2/" in page.frame_locator(
-            '[data-testid="drawer-frame"]').owner.get_attribute("src"))
+        check(f"而且一樣帶 redraw=true：{posts[0] if posts else {}}", bool(posts) and posts[0].get("redraw") is True)
+        check(
+            "送去的是第二場 session",
+            "/e2/" in page.frame_locator('[data-testid="drawer-frame"]').owner.get_attribute("src"),
+        )
 
         print("== 連按縮放：只送最後一次，而且送的是最終尺寸 ==")
         posts.clear()
@@ -324,14 +338,13 @@ try:
         }""")
         page.wait_for_timeout(700)
         after = term_size(page)
-        check(f"字級真的連退三級 {before['font']} → {after['font']}",
-              after["font"] == before["font"] - 3)
+        check(f"字級真的連退三級 {before['font']} → {after['font']}", after["font"] == before["font"] - 3)
         check(f"併成一發送出（收到 {len(posts)} 發）", len(posts) == 1)
-        check(f"送的是最終尺寸 {after['cols']}×{after['rows']}，不是中途值",
-              bool(posts) and posts[0].get("cols") == after["cols"]
-              and posts[0].get("rows") == after["rows"])
-        check("這一發不帶 redraw（本來就有真正的尺寸變化）",
-              bool(posts) and posts[0].get("redraw") is False)
+        check(
+            f"送的是最終尺寸 {after['cols']}×{after['rows']}，不是中途值",
+            bool(posts) and posts[0].get("cols") == after["cols"] and posts[0].get("rows") == after["rows"],
+        )
+        check("這一發不帶 redraw（本來就有真正的尺寸變化）", bool(posts) and posts[0].get("redraw") is False)
 
         print("== 字級記得住：關掉再開沿用上次調的 ==")
         page.click('[data-testid="drawer-close"]')
@@ -340,11 +353,11 @@ try:
         open_drawer(page, "e1")
         reopened = term_size(page)
         check(f"沿用上次的字級 {reopened['font']}px", reopened["font"] == after["font"])
-        check("畫面上的數字對得上",
-              page.inner_text('[data-testid="drawer-font-value"]') == f"{reopened['font']}px")
-        check(f"送出的尺寸是**套用字級之後**的 {reopened['cols']}×{reopened['rows']}",
-              bool(posts) and posts[-1].get("cols") == reopened["cols"]
-              and posts[-1].get("rows") == reopened["rows"])
+        check("畫面上的數字對得上", page.inner_text('[data-testid="drawer-font-value"]') == f"{reopened['font']}px")
+        check(
+            f"送出的尺寸是**套用字級之後**的 {reopened['cols']}×{reopened['rows']}",
+            bool(posts) and posts[-1].get("cols") == reopened["cols"] and posts[-1].get("rows") == reopened["rows"],
+        )
 
         print("== 到界時把該側停用（按了沒反應等於壞掉）==")
         page.evaluate("""() => {
@@ -352,29 +365,26 @@ try:
           for (let i = 0; i < 40; i++) b.click();
         }""")
         page.wait_for_timeout(700)
-        check("縮到下限時縮小鍵停用",
-              page.locator('[data-testid="drawer-font-dec"]').is_disabled())
-        check("此時放大鍵仍可用",
-              page.locator('[data-testid="drawer-font-inc"]').is_enabled())
-        check("字級停在 8px（不是繼續往下掉）",
-              term_size(page)["font"] == 8)
+        check("縮到下限時縮小鍵停用", page.locator('[data-testid="drawer-font-dec"]').is_disabled())
+        check("此時放大鍵仍可用", page.locator('[data-testid="drawer-font-inc"]').is_enabled())
+        check("字級停在 8px（不是繼續往下掉）", term_size(page)["font"] == 8)
 
         print("== 送出失敗時 redraw 旗標要黏著（抽屜剛開時 session 可能還在 creating）==")
         page.click('[data-testid="drawer-close"]')
         page.wait_for_selector('[data-testid="drawer"]', state="detached")
         posts.clear()
-        fail_next = 1                      # 開啟時的那一發打回 500
+        fail_next = 1  # 開啟時的那一發打回 500
         open_drawer(page, "e2")
-        check(f"第一發帶 redraw 但失敗了：{posts[0] if posts else {}}",
-              bool(posts) and posts[0].get("redraw") is True)
+        check(f"第一發帶 redraw 但失敗了：{posts[0] if posts else {}}", bool(posts) and posts[0].get("redraw") is True)
         page.click('[data-testid="drawer-font-inc"]')
         page.wait_for_timeout(700)
-        check("失敗之後補送的那一發仍然帶 redraw=true（旗標沒有被提早清掉）",
-              len(posts) >= 2 and posts[1].get("redraw") is True)
+        check(
+            "失敗之後補送的那一發仍然帶 redraw=true（旗標沒有被提早清掉）",
+            len(posts) >= 2 and posts[1].get("redraw") is True,
+        )
         page.click('[data-testid="drawer-font-inc"]')
         page.wait_for_timeout(700)
-        check("成功之後才清掉，後續不再重複要求重繪",
-              len(posts) >= 3 and posts[2].get("redraw") is False)
+        check("成功之後才清掉，後續不再重複要求重繪", len(posts) >= 3 and posts[2].get("redraw") is False)
 
         print("== 抽屜關了就別再送 ==")
         posts.clear()
@@ -391,13 +401,14 @@ try:
         # 看得到的說明，所以它「在不在」與「路徑對不對」都要釘住。
         # ⚠ 比對的是 `config.DATA_BIND` 不是字面路徑：路徑改過一次（`/data` → 現在這個），
         #   寫死的話測試會變成「兩個地方都要記得改」，而不是守著同一個真相。
-        open_drawer(page, "e1")            # 上一段把抽屜關掉了，這裡要自己開回來
+        open_drawer(page, "e1")  # 上一段把抽屜關掉了，這裡要自己開回來
         persist = page.locator('[data-testid="drawer-persist"]')
         check("🔴 提示在（不是只有滑鼠那條）", persist.count() == 1)
-        check(f"🔴 顯示的就是後端給的落點（{config.DATA_BIND}）",
-              config.DATA_BIND in (persist.inner_text() if persist.count() else ""))
-        check("說得出「其他地方會消失」，不是只報一個路徑",
-              "消失" in (persist.get_attribute("data-tip") or ""))
+        check(
+            f"🔴 顯示的就是後端給的落點（{config.DATA_BIND}）",
+            config.DATA_BIND in (persist.inner_text() if persist.count() else ""),
+        )
+        check("說得出「其他地方會消失」，不是只報一個路徑", "消失" in (persist.get_attribute("data-tip") or ""))
 
         print("== 點路徑＝複製，而且要有 toast，且 toast 必須疊在抽屜之上 ==")
         # ⚠ z-index 對不對**不可以用讀 CSS 數字來證明**：數字只在同一個堆疊脈絡裡才可比。
@@ -409,8 +420,10 @@ try:
         page.evaluate("() => navigator.clipboard.writeText('__before__')")
         persist.locator("code").click()
         page.wait_for_selector(".toast", state="visible", timeout=4000)
-        check(f"🔴 點路徑本身就複製到了（{page.evaluate('navigator.clipboard.readText()')}）",
-              page.evaluate("navigator.clipboard.readText()") == config.DATA_BIND)
+        check(
+            f"🔴 點路徑本身就複製到了（{page.evaluate('navigator.clipboard.readText()')}）",
+            page.evaluate("navigator.clipboard.readText()") == config.DATA_BIND,
+        )
         # 🔴 **一次點擊只准產生一則 toast。**
         #
         # ⚠ 這條守的是「同一顆元素被兩個 handler 各接一次」——那不是假想：`ed96517` 加了
@@ -438,11 +451,11 @@ try:
             "([x, y]) => { const e = document.elementFromPoint(x, y);"
             "  return e ? (e.closest('.toast') ? 'toast'"
             "            : e.closest('.drawer') ? 'drawer' : e.tagName) : 'none'; }",
-            [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2])
+            [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2],
+        )
         check(f"🔴 toast 那個點上最上層的是 toast 本身而不是抽屜（{top}）", top == "toast")
         # 抽屜把 .shell 設成 inert；toast 掛在 document.body 而不是 .shell 裡，所以仍點得到。
-        check("toast 沒有被 inert 掃到（關閉鍵可以按）",
-              page.locator(".toast__close").first.is_enabled())
+        check("toast 沒有被 inert 掃到（關閉鍵可以按）", page.locator(".toast__close").first.is_enabled())
 
         print("== 提示是輪播：同時只露一條，而且會換 ==")
         # ⚠ 先把滑鼠移開、焦點放掉：輪播**依設計**在 hover/focus 時暫停（裡面有可點的
@@ -463,9 +476,11 @@ try:
         try:
             page.wait_for_function(
                 "(prev) => { const el = document.querySelector("
-                "  '[data-testid=\"drawer-hints\"] .drawer__hint[data-on=\"true\"]');"
+                '  \'[data-testid="drawer-hints"] .drawer__hint[data-on="true"]\');'
                 "  return el && el.dataset.testid !== prev; }",
-                arg=first, timeout=9000)
+                arg=first,
+                timeout=9000,
+            )
         except Exception:  # noqa: BLE001 — 逾時就是「沒換」，那正是要斷言的事
             rotated = False
         check("🔴 過一陣子會換成另一條（輪播真的在跑）", rotated)
@@ -473,20 +488,21 @@ try:
         # 沒露臉的不可以還在 Tab 序裡——否則鍵盤使用者會 Tab 到一顆看不見的複製鍵
         hidden_focusable = page.evaluate(
             "[...document.querySelectorAll('[data-testid=\"drawer-hints\"] .drawer__hint')]"
-            "  .filter(h => h.dataset.on !== 'true' && !h.inert).length")
+            "  .filter(h => h.dataset.on !== 'true' && !h.inert).length"
+        )
         check(f"🔴 沒露臉的都退出 Tab 序（{hidden_focusable} 個漏網）", hidden_focusable == 0)
-        page.click('[data-testid="drawer-close"]')     # 下一段要從沒有抽屜的狀態開始
+        page.click('[data-testid="drawer-close"]')  # 下一段要從沒有抽屜的狀態開始
         page.wait_for_selector('[data-testid="drawer"]', state="detached")
 
         print("== 標題列要說出這是哪一顆 ttyd（C / Rust）==")
         # 兩顆是同一個 UI，肉眼分不出來——而出問題時「你看到的是哪一版」正是第一個要問的。
         open_drawer(page, "e1")
         bin_tag = page.locator('[data-testid="drawer-bin"]')
-        check("🔴 標記在，而且寫的是後端給的那一顆", bin_tag.count() == 1
-              and bin_tag.inner_text().strip() == "Rust")
-        check("說得出它是什麼、怎麼換（tooltip）",
-              "ttyd" in (bin_tag.get_attribute("data-tip") or "")
-              and "設定" in (bin_tag.get_attribute("data-tip") or ""))
+        check("🔴 標記在，而且寫的是後端給的那一顆", bin_tag.count() == 1 and bin_tag.inner_text().strip() == "Rust")
+        check(
+            "說得出它是什麼、怎麼換（tooltip）",
+            "ttyd" in (bin_tag.get_attribute("data-tip") or "") and "設定" in (bin_tag.get_attribute("data-tip") or ""),
+        )
         page.click('[data-testid="drawer-close"]')
         page.wait_for_selector('[data-testid="drawer"]', state="detached")
 
@@ -495,8 +511,7 @@ try:
         #    已經在跑的 ttyd，那個推論剛好會在最需要它的時候騙人。
         globals()["view_flavor"] = None
         open_drawer(page, "e2")
-        check("🟡 後端沒給就不顯示（不猜）",
-              page.locator('[data-testid="drawer-bin"]').count() == 0)
+        check("🟡 後端沒給就不顯示（不猜）", page.locator('[data-testid="drawer-bin"]').count() == 0)
         page.click('[data-testid="drawer-close"]')
         page.wait_for_selector('[data-testid="drawer"]', state="detached")
         globals()["view_flavor"] = "Rust"
@@ -511,7 +526,7 @@ try:
         #    兩個一起錯會讓斷言全綠（既有那條「送的是 xterm 當下的尺寸」正是這個盲點）。
         #    所以期望值要從 iframe 的實際大小 + 實際字級**獨立算**出來。
         # （上一段結束時抽屜已經關了，這裡不必再關一次）
-        globals()["stub_font_after"] = "font = 18;"     # 套了字級但沒重 fit（＝ttyd 的行為）
+        globals()["stub_font_after"] = "font = 18;"  # 套了字級但沒重 fit（＝ttyd 的行為）
         page.evaluate("() => localStorage.setItem('claude-pty:term-font', '18')")
         posts.clear()
         open_drawer(page, "e1")
@@ -524,18 +539,19 @@ try:
         # 與替身 fit() 內同一個算式（等寬字的常見比例）——獨立於 term.cols 算出來
         want_cols = max(2, int(geom["w"] // (geom["font"] * 0.6)))
         want_rows = max(1, int(geom["h"] // (geom["font"] * 1.2)))
-        stale_cols = max(2, int(geom["w"] // (14 * 0.6)))      # 替身預設字級排出來的（錯的那個）
+        stale_cols = max(2, int(geom["w"] // (14 * 0.6)))  # 替身預設字級排出來的（錯的那個）
         sent = posts[0] if posts else {}
         check(f"存的字級真的套上去了（{geom['font']}px）", geom["font"] == 18)
-        check(f"🔴 送出的是 18px 的格數 {want_cols}×{want_rows}（實收 "
-              f"{sent.get('cols')}×{sent.get('rows')}）",
-              sent.get("cols") == want_cols and sent.get("rows") == want_rows)
-        check(f"🔴 **不是** ttyd 自己排版時的 {stale_cols} 欄（那是另一個字級的格數）",
-              sent.get("cols") != stale_cols)
-        check("🔴 xterm 自己也被重新 fit 過（不只是我們送對數字，畫面也要跟著對）",
-              geom["cols"] == want_cols and geom["rows"] == want_rows)
-        check(f"仍然只送一發（重 fit 與開啟那發要併起來，收到 {len(posts)} 發）",
-              len(posts) == 1)
+        check(
+            f"🔴 送出的是 18px 的格數 {want_cols}×{want_rows}（實收 {sent.get('cols')}×{sent.get('rows')}）",
+            sent.get("cols") == want_cols and sent.get("rows") == want_rows,
+        )
+        check(f"🔴 **不是** ttyd 自己排版時的 {stale_cols} 欄（那是另一個字級的格數）", sent.get("cols") != stale_cols)
+        check(
+            "🔴 xterm 自己也被重新 fit 過（不只是我們送對數字，畫面也要跟著對）",
+            geom["cols"] == want_cols and geom["rows"] == want_rows,
+        )
+        check(f"仍然只送一發（重 fit 與開啟那發要併起來，收到 {len(posts)} 發）", len(posts) == 1)
         check(f"redraw 旗標沒有因此掉了：{sent}", sent.get("redraw") is True)
         page.click('[data-testid="drawer-close"]')
         page.wait_for_selector('[data-testid="drawer"]', state="detached")
@@ -548,8 +564,10 @@ try:
         page.click('[data-testid="row-open-e2"]', force=True)
         page.wait_for_selector('[data-testid="drawer"]')
         page.wait_for_timeout(700)
-        check("開第二個時第一個要收掉（不然兩個 iframe 同時連著同一場）",
-              page.locator('[data-testid="drawer"]').count() == 1)
+        check(
+            "開第二個時第一個要收掉（不然兩個 iframe 同時連著同一場）",
+            page.locator('[data-testid="drawer"]').count() == 1,
+        )
 
         browser.close()
 finally:

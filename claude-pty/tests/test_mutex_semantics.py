@@ -20,6 +20,7 @@
 （view 的 port UNIQUE 與「一場一 view」由 DB 約束仲裁，釘在 test_persistence。
 四項合起來就是互斥語意的完整清單。）
 """
+
 import datetime as _dt
 import os
 import sys
@@ -66,6 +67,7 @@ def check(label, ok):
 
 # --- 假 docker：只要 create() 走得完，不記細節（那是 test_create_ordering 的事）--------
 
+
 class _FakeContainer:
     id = "cid-fake"
 
@@ -90,6 +92,7 @@ class _FakeContainers:
     def get(*a, **kw):
         # 背景的就緒偵測執行緒會來問容器；當它已經不在，讓那條執行緒安靜收場。
         import docker
+
         raise docker.errors.NotFound("gone")
 
 
@@ -141,7 +144,7 @@ class _FakeClient:
 
 print("== 配額：兩個執行緒搶最後一個名額，只能有一個成功 ==")
 uid = auth.create_user("mutex-user", "mutex-password-1")["id"]
-auth.set_cli_token(uid, "sk-test-setup-token")   # 憑證守門在 create() 入口，配額才是本段主角
+auth.set_cli_token(uid, "sk-test-setup-token")  # 憑證守門在 create() 入口，配額才是本段主角
 _orig_max = config.MAX_SESSIONS
 config.MAX_SESSIONS = 1
 results: list[str] = []
@@ -149,13 +152,13 @@ results: list[str] = []
 
 def try_create():
     mgr = SessionManager()
-    mgr._docker = _FakeClient()          # noqa: SLF001 — 就是要換掉它
+    mgr._docker = _FakeClient()  # noqa: SLF001 — 就是要換掉它
     try:
         mgr.create(user_id=uid)
         results.append("ok")
     except SessionError:
         results.append("quota")
-    except Exception as e:               # noqa: BLE001 — 其他例外要現形，不可以吞成綠燈
+    except Exception as e:  # noqa: BLE001 — 其他例外要現形，不可以吞成綠燈
         # ⚠ **訊息要一起帶出來，只有型別名不夠。**
         #   這條斷言 2026-08-07 紅過至少三次，每次都被當成「配額競態偶發」而略過——而它
         #   從來不是競態，是樹在半成品狀態下 `create()` 直接壞掉（見下方 boom 的判讀）。
@@ -183,16 +186,17 @@ for t in ts:
 #
 #   兩次都不是競態，兩次都是半成品的樹。真的競態長什麼樣：`['ok', 'ok']`（配額沒擋住）
 #   或 `['quota', 'quota']`（互相擋掉）——**那兩種才是這條斷言真正要抓的東西**。
-check(f"🔴 恰好一個成功、一個被配額擋下（{sorted(results)}）",
-      sorted(results) == ["ok", "quota"])
+check(f"🔴 恰好一個成功、一個被配額擋下（{sorted(results)}）", sorted(results) == ["ok", "quota"])
 config.MAX_SESSIONS = _orig_max
 
 print("== reconciler 租約：一次只有一個執行者 ==")
 check("A 先取得租約", reconciler.acquire_lease("mutex-lease", "A", ttl=60) is True)
 check("🔴 B 在租約有效期內拿不到", reconciler.acquire_lease("mutex-lease", "B", ttl=60) is False)
 check("A 自己可以續約", reconciler.acquire_lease("mutex-lease", "A", ttl=60) is True)
-check("still_leader：A 是、B 不是",
-      reconciler.still_leader("mutex-lease", "A") and not reconciler.still_leader("mutex-lease", "B"))
+check(
+    "still_leader：A 是、B 不是",
+    reconciler.still_leader("mutex-lease", "A") and not reconciler.still_leader("mutex-lease", "B"),
+)
 
 print("== 過期的租約可以被接手，而且只被一個接手者拿走 ==")
 # 直接把到期時間改到過去，不真的等 TTL。
@@ -200,8 +204,7 @@ from server.db import session_scope  # noqa: E402
 from server.models import Lease  # noqa: E402
 
 with session_scope() as s:
-    s.get(Lease, "mutex-lease").expires_at = (
-        _dt.datetime.now(_dt.UTC) - _dt.timedelta(seconds=1))
+    s.get(Lease, "mutex-lease").expires_at = _dt.datetime.now(_dt.UTC) - _dt.timedelta(seconds=1)
 
 grabbed: list[str] = []
 
@@ -243,9 +246,9 @@ def _hammer(n: int) -> None:
     for i in range(20):
         try:
             auth.set_ttyd_bin(_u["id"], _BINS[(n + i) % len(_BINS)])
-        except OperationalError as e:      # 就是 database is locked 那一族
+        except OperationalError as e:  # 就是 database is locked 那一族
             _errors.append(f"t{n}#{i}: {e.orig}")
-        except Exception as e:             # 其他例外照樣要看見，不要吞掉
+        except Exception as e:  # 其他例外照樣要看見，不要吞掉
             _errors.append(f"t{n}#{i}: {type(e).__name__}: {e}")
 
 
@@ -254,8 +257,11 @@ for _t in _ts:
     _t.start()
 for _t in _ts:
     _t.join(60)
-check(f"🔴 4 併發 × 20 輪的讀-改-寫，一次 database is locked 都不該有"
-      f"（實得 {len(_errors)} 次{'：' + _errors[0] if _errors else ''}）", not _errors)
+check(
+    f"🔴 4 併發 × 20 輪的讀-改-寫，一次 database is locked 都不該有"
+    f"（實得 {len(_errors)} 次{'：' + _errors[0] if _errors else ''}）",
+    not _errors,
+)
 
 # 🔴 靜態面：使用者路徑上的寫交易不准退回 deferred。
 # 上面那支只撞得到 set_ttyd_bin 一個點；這一條守的是「其他人不要再加回來」。
@@ -263,10 +269,11 @@ check(f"🔴 4 併發 × 20 輪的讀-改-寫，一次 database is locked 都不
 # 數量會隨重構變，形狀不會。
 import re as _re  # noqa: E402
 
-_SITES = {"auth.py": ["change_password", "set_ttyd_bin",
-                      "set_cli_token", "clear_cli_token", "set_gitlab_pat"],
-          "sessions.py": ["create", "rename", "probe_container", "touch", "resize"],
-          "views.py": ["open_view", "close_views", "_drop_view"]}
+_SITES = {
+    "auth.py": ["change_password", "set_ttyd_bin", "set_cli_token", "clear_cli_token", "set_gitlab_pat"],
+    "sessions.py": ["create", "rename", "probe_container", "touch", "resize"],
+    "views.py": ["open_view", "close_views", "_drop_view"],
+}
 # 🔴 **反向釘住：這幾支刻意維持 deferred，不要「順手補齊」。**
 # `authenticate` 穩態下是純讀（唯一的寫是 argon2 參數升級後的 rehash，已另開一筆小的
 # immediate），而它的交易體裡有一次 argon2id verify。改成 immediate 等於每一發登入都抱著
@@ -279,17 +286,26 @@ for _f, _fns in _SITES.items():
     for _fn in _fns:
         # ⚠ 要吃得下**類別方法**（有縮排的 def）。只認頂層 def 的話，sessions.py 那四個
         #   會回報「找不到」——而那看起來像清單過期，不像偵測器壞掉（第一版就是這樣）。
-        _m = next(((i, _re.match(r"(\s*)def ", ln).group(1))
-                   for i, ln in enumerate(_lines)
-                   if _re.match(rf"\s*def {_fn}\b", ln)), None)
+        _m = next(
+            (
+                (i, _re.match(r"(\s*)def ", ln).group(1))
+                for i, ln in enumerate(_lines)
+                if _re.match(rf"\s*def {_fn}\b", ln)
+            ),
+            None,
+        )
         if _m is None:
             _bad.append(f"{_f}: 找不到 {_fn}()（改名了就把這份清單一起更新）")
             continue
         _start, _ind = _m
-        _end = next((j for j in range(_start + 1, len(_lines))
-                     if _lines[j].strip()
-                     and len(_lines[j]) - len(_lines[j].lstrip()) <= len(_ind)),
-                    len(_lines))
+        _end = next(
+            (
+                j
+                for j in range(_start + 1, len(_lines))
+                if _lines[j].strip() and len(_lines[j]) - len(_lines[j].lstrip()) <= len(_ind)
+            ),
+            len(_lines),
+        )
         _body = "\n".join(_lines[_start:_end])
         # ⚠ needle 不可以綁 `with ` 開頭：`with suppress(Exception), session_scope() as s:`
         #   這種複合 with 會被漏掉，而 create() 的補償刪除正是那個形狀——躲在函式本體裡、
@@ -303,17 +319,26 @@ _wrong: list[str] = []
 for _f, _fns in _DEFERRED_BY_DESIGN.items():
     _lines = open(os.path.join(_root, _f), encoding="utf-8").read().splitlines()
     for _fn in _fns:
-        _m = next(((i, _re.match(r"(\s*)def ", ln).group(1))
-                   for i, ln in enumerate(_lines)
-                   if _re.match(rf"\s*def {_fn}\b", ln)), None)
+        _m = next(
+            (
+                (i, _re.match(r"(\s*)def ", ln).group(1))
+                for i, ln in enumerate(_lines)
+                if _re.match(rf"\s*def {_fn}\b", ln)
+            ),
+            None,
+        )
         if _m is None:
             _wrong.append(f"{_f}: 找不到 {_fn}()")
             continue
         _start, _ind = _m
-        _end = next((j for j in range(_start + 1, len(_lines))
-                     if _lines[j].strip()
-                     and len(_lines[j]) - len(_lines[j].lstrip()) <= len(_ind)),
-                    len(_lines))
+        _end = next(
+            (
+                j
+                for j in range(_start + 1, len(_lines))
+                if _lines[j].strip() and len(_lines[j]) - len(_lines[j].lstrip()) <= len(_ind)
+            ),
+            len(_lines),
+        )
         _body = "\n".join(_lines[_start:_end])
         # 只看「認證那一筆」：rehash 那一筆是 immediate 且刻意的，不能因為它存在就算違規。
         if "session_scope() as" not in _body:

@@ -71,7 +71,11 @@ def main() -> int:
     for golden_url, entry in data.items():
         repo = entry.get("source_repo", "unknown")
         fork = next(
-            (r["pr_url"] for r in entry.get("reviews", []) if r["tool"] == DIFF_FORK_TOOL),
+            (
+                r["pr_url"]
+                for r in entry.get("reviews", [])
+                if r["tool"] == DIFF_FORK_TOOL
+            ),
             None,
         )
         if not fork:
@@ -96,7 +100,11 @@ def main() -> int:
                     "fork_repo": fork_repo,
                     "pr_number": 1,
                     "golden_count": len(entry.get("golden_comments", [])),
-                    **({"base_rev": BASE_REV_OVERRIDE[slug]} if slug in BASE_REV_OVERRIDE else {}),
+                    **(
+                        {"base_rev": BASE_REV_OVERRIDE[slug]}
+                        if slug in BASE_REV_OVERRIDE
+                        else {}
+                    ),
                 }
             )
 
@@ -106,7 +114,9 @@ def main() -> int:
         # `pr_title` is absent for a handful of upstream entries; it is display
         # only, so a missing one must not take the manifest build down with it.
         title = (m["pr_title"] or "(no title in benchmark data)")[:50]
-        print(f"  {m['slug']:<28} {m['language']:<11} golden={m['golden_count']}  {title}")
+        print(
+            f"  {m['slug']:<28} {m['language']:<11} golden={m['golden_count']}  {title}"
+        )
     return 0
 
 

@@ -75,7 +75,7 @@ def is_fresh(now: _dt.datetime | None = None) -> bool:
     try:
         last = os.path.getmtime(config.TRIVY_DB_STAMP)
     except OSError:
-        return False                       # 沒更新過（或看不到）→ 去更新
+        return False  # 沒更新過（或看不到）→ 去更新
     now = now or _dt.datetime.now(_dt.timezone.utc)
     return (now.timestamp() - last) < config.TRIVY_DB_MIN_INTERVAL
 
@@ -139,7 +139,7 @@ def update(client: docker.DockerClient | None = None) -> dict:
     #   這個寫在四個地方的合約，唯一還會拋的那層剛好沒被包住——而測試只驗過 docker 層。
     try:
         got = acquire_lease(LEASE_NAME, owner, _lease_ttl())
-    except Exception as e:                 # noqa: BLE001 — DB 忙碌／鎖不到都算這次做不成
+    except Exception as e:  # noqa: BLE001 — DB 忙碌／鎖不到都算這次做不成
         return {"status": "error", "detail": f"取租約失敗 {type(e).__name__}: {e}"}
     if not got:
         # 不等待：等於白白讓開場慢一個下載的時間，而對方成功之後這一場自然就命中快取。
@@ -154,11 +154,9 @@ def update(client: docker.DockerClient | None = None) -> dict:
         #   容器寫進去的那些檔案一致。
         c.containers.run(
             config.IMAGE,
-            command=["-c", f"timeout -k 10 {config.TRIVY_DB_TIMEOUT} "
-                           f"trivy image --download-db-only"],
+            command=["-c", f"timeout -k 10 {config.TRIVY_DB_TIMEOUT} trivy image --download-db-only"],
             entrypoint="bash",
-            volumes={config.TRIVY_CACHE_VOLUME: {
-                "bind": "/home/nathan/.cache/trivy", "mode": "rw"}},
+            volumes={config.TRIVY_CACHE_VOLUME: {"bind": "/home/nathan/.cache/trivy", "mode": "rw"}},
             remove=True,
             detach=False,
             # ⚠ **不可以把 stdout 與 stderr 都設成 False。** `detach=False` 時 docker-py
@@ -175,15 +173,13 @@ def update(client: docker.DockerClient | None = None) -> dict:
         # 容器跑起來了但 trivy 回非 0（離線、逾時、鏡像站掛掉）。
         has = _has_db()
         if has is False:
-            return {"status": "missing",
-                    "detail": f"更新失敗且沒有既有 DB，本次 A2 無 DB 可用：{e.exit_status}"}
+            return {"status": "missing", "detail": f"更新失敗且沒有既有 DB，本次 A2 無 DB 可用：{e.exit_status}"}
         # has 為 None（看不到那個路徑）時也走這條：有沒有舊 DB 不確定，但「更新失敗」
         # 這件事是確定的，而它不該擋開場。
         # ⚠ 措辭不宣稱「沿用既有 DB」——那是從時間戳**推**的，不是看到 DB 檔。
         #   volume 被砍掉而時間戳還在的組合，說得太滿就是假話。
-        return {"status": "stale",
-                "detail": f"更新失敗；曾更新成功過，推定仍有可用的 DB（exit {e.exit_status}）"}
-    except Exception as e:                 # noqa: BLE001 — daemon 不通／image 不在／逾時
+        return {"status": "stale", "detail": f"更新失敗；曾更新成功過，推定仍有可用的 DB（exit {e.exit_status}）"}
+    except Exception as e:  # noqa: BLE001 — daemon 不通／image 不在／逾時
         return {"status": "error", "detail": f"{type(e).__name__}: {e}"}
     finally:
         # 提早交還：這是一次性的短工作，讓租約壓著 TTL 只會讓下一個開場的人被誤判成
@@ -194,5 +190,5 @@ def update(client: docker.DockerClient | None = None) -> dict:
         #   那比吃掉結果輕得多。
         try:
             release_lease(LEASE_NAME, owner)
-        except Exception:                  # noqa: BLE001 — 見上
+        except Exception:  # noqa: BLE001 — 見上
             pass

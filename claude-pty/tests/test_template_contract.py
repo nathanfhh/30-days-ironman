@@ -20,6 +20,7 @@
 
 ⚠ `fa-*` 是 Font Awesome 的，不在 app.css 裡，一律排除。
 """
+
 import os
 import re
 import subprocess
@@ -33,6 +34,8 @@ CSS = os.path.join(_ROOT, "server", "static", "css", "app.css")
 APP = os.path.join(_ROOT, "server", "app.py")
 
 _fails = 0
+
+
 def check(label, ok, detail=""):
     global _fails
     if not ok:
@@ -46,7 +49,7 @@ def read(p):
 
 print("== 模板宣稱的 class，CSS 裡都要有 ==")
 # 定義端：`.foo` 出現在 CSS 的任何位置（含組合選擇器）都算定義過。
-defined = set(re.findall(r'\.([A-Za-z][\w-]*)', read(CSS)))
+defined = set(re.findall(r"\.([A-Za-z][\w-]*)", read(CSS)))
 check("CSS 解析得到類別（解不到的話下面每一條都會假綠）", len(defined) > 50, str(len(defined)))
 for path in TEMPLATES:
     src, used = read(path), set()
@@ -55,8 +58,7 @@ for path in TEMPLATES:
     for m in re.finditer(r'class="([^"{}]+)"', src):
         used.update(m.group(1).split())
     missing = sorted(c for c in used - defined if not c.startswith("fa-"))
-    check(f"{os.path.basename(path)}（用了 {len(used)} 個）", not missing,
-          "CSS 裡找不到：" + "、".join(missing))
+    check(f"{os.path.basename(path)}（用了 {len(used)} 個）", not missing, "CSS 裡找不到：" + "、".join(missing))
 
 
 print("\n== 模板內嵌的 <script> 要解析得過 ==")
@@ -65,23 +67,26 @@ if subprocess.run(["which", "node"], capture_output=True).returncode != 0:
     print("  SKIP  host 上沒有 node，這一節沒有被驗證（不是通過）")
 else:
     for path in TEMPLATES:
-        blocks = re.findall(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', read(path), re.S)
+        blocks = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", read(path), re.S)
         if not blocks:
             continue
         # Jinja 先換掉再驗語法：`{{ x }}` 是值、`{% %}` 與 `{# #}` 不產生 JS。
         # 換成常數只夠驗**語法**，驗不了「if 分支各自產生的 JS 是否都合法」——那一半
         # 這裡涵蓋不到，不假裝涵蓋。
         js = "\n".join(blocks)
-        js = re.sub(r'\{#.*?#\}', '', js, flags=re.S)
-        js = re.sub(r'\{\{.*?\}\}', '0', js, flags=re.S)
-        js = re.sub(r'\{%.*?%\}', '', js, flags=re.S)
+        js = re.sub(r"\{#.*?#\}", "", js, flags=re.S)
+        js = re.sub(r"\{\{.*?\}\}", "0", js, flags=re.S)
+        js = re.sub(r"\{%.*?%\}", "", js, flags=re.S)
         tmp = tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8")
         tmp.write(js)
         tmp.close()
         r = subprocess.run(["node", "--check", tmp.name], capture_output=True, text=True)
         os.unlink(tmp.name)
-        check(f"{os.path.basename(path)} 的內嵌 script", r.returncode == 0,
-              (r.stderr.strip().splitlines() or [""])[-1][:160])
+        check(
+            f"{os.path.basename(path)} 的內嵌 script",
+            r.returncode == 0,
+            (r.stderr.strip().splitlines() or [""])[-1][:160],
+        )
 
 
 print("\n== ttyd 實況那一節：admin 限定，而且前後端對得上 ==")
@@ -89,6 +94,7 @@ account = read(TEMPLATES and [p for p in TEMPLATES if p.endswith("account.html")
 app = read(APP)
 
 check("區塊在（testid 是 e2e 的抓手）", 'data-testid="ttyd-views"' in account)
+
 
 # ⚠ **真的 render 一次，不要用字串位置算 Jinja 巢狀。**
 #   第一版寫成「`{% if user.is_admin %}` 的位置 < 面板的位置 < 最後一個 `{% endif %}`」，
@@ -98,39 +104,60 @@ check("區塊在（testid 是 e2e 的抓手）", 'data-testid="ttyd-views"' in a
 #   是**放行**——這正是這條斷言最不該出錯的方向。
 def render_account(is_admin: bool) -> str:
     from jinja2 import DictLoader, Environment
-    env = Environment(loader=DictLoader({
-        # base 與 masthead 換成最小樁：這一節要驗的是 account.html 自己的分支，
-        # 不是版面。樁裡保留 block 名稱，繼承鏈才接得起來。
-        "base.html": "{% block body %}{% endblock %}{% block scripts %}{% endblock %}",
-        "_masthead.html": "",
-        "account.html": account,
-    }), autoescape=True)
+
+    env = Environment(
+        loader=DictLoader(
+            {
+                # base 與 masthead 換成最小樁：這一節要驗的是 account.html 自己的分支，
+                # 不是版面。樁裡保留 block 名稱，繼承鏈才接得起來。
+                "base.html": "{% block body %}{% endblock %}{% block scripts %}{% endblock %}",
+                "_masthead.html": "",
+                "account.html": account,
+            }
+        ),
+        autoescape=True,
+    )
     return env.get_template("account.html").render(
         user={"id": 1, "username": "u", "is_admin": is_admin},
-        active="account", behind_proxy=False, min_password_length=8,
-        name_max=64, username_max=32, credentials={}, default_cli="claude",
-        gitlab_enabled=True, gitlab_host="gitlab.example.com",
-        gitlab_pat_set=False, gitlab_proxy_error=None)
+        active="account",
+        behind_proxy=False,
+        min_password_length=8,
+        name_max=64,
+        username_max=32,
+        credentials={},
+        default_cli="claude",
+        gitlab_enabled=True,
+        gitlab_host="gitlab.example.com",
+        gitlab_pat_set=False,
+        gitlab_proxy_error=None,
+    )
+
 
 try:
     as_admin, as_user = render_account(True), render_account(False)
-except Exception as e:      # noqa: BLE001 — render 不起來就是這一節失效，要講出來
+except Exception as e:  # noqa: BLE001 — render 不起來就是這一節失效，要講出來
     check("模板 render 得起來（render 不了就驗不了下面兩條）", False, f"{type(e).__name__}: {e}")
 else:
     check("管理員看得到這一節", 'data-testid="ttyd-views"' in as_admin)
-    check("🔴 一般使用者**看不到**這一節（後端有 @admin_only，但畫面不該先洩漏它存在）",
-          'data-testid="ttyd-views"' not in as_user)
-    check("順帶：帳號清單也只給管理員（同一個 gate，一起守）",
-          'data-testid="roster"' in as_admin and 'data-testid="roster"' not in as_user)
+    check(
+        "🔴 一般使用者**看不到**這一節（後端有 @admin_only，但畫面不該先洩漏它存在）",
+        'data-testid="ttyd-views"' not in as_user,
+    )
+    check(
+        "順帶：帳號清單也只給管理員（同一個 gate，一起守）",
+        'data-testid="roster"' in as_admin and 'data-testid="roster"' not in as_user,
+    )
 
 m = re.search(r'api\("(/api/ttyd/[a-z]+)"\)', account)
 check("前端打的端點抓得出來", m is not None)
 if m:
     ep = m.group(1)
     route = re.search(rf'@app\.get\("{re.escape(ep)}"\)\s*\n@admin_only\b', app)
-    check(f"🔴 後端有 {ep} 且掛著 @admin_only（前端 gate 只是禮貌，這條才是門）",
-          route is not None,
-          "找不到對應的路由，或它上面沒有 @admin_only")
+    check(
+        f"🔴 後端有 {ep} 且掛著 @admin_only（前端 gate 只是禮貌，這條才是門）",
+        route is not None,
+        "找不到對應的路由，或它上面沒有 @admin_only",
+    )
 
 print(f"\n{'done' if _fails == 0 else f'{_fails} FAILED'}")
 sys.exit(1 if _fails else 0)

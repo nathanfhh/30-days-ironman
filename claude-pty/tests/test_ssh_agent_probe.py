@@ -55,8 +55,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 #   自動找，不要寫死——寫死的那一邊會安靜地 SKIP，而 SKIP 看起來跟通過一樣。
 _DC = os.path.join(_HERE, "..", "..", "dev-container")
 _CANDIDATES = ("run-ncr-dev-container.sh", "run-claude-code-dev-container.sh")
-_WRAPPER = next((os.path.join(_DC, n) for n in _CANDIDATES
-                 if os.path.isfile(os.path.join(_DC, n))), "")
+_WRAPPER = next((os.path.join(_DC, n) for n in _CANDIDATES if os.path.isfile(os.path.join(_DC, n))), "")
 
 _pass = _fail = 0
 
@@ -93,14 +92,18 @@ if _start < 0:
 _indent = len(_LINES[_start]) - len(_LINES[_start].lstrip())
 # 終點：同一個縮排層級上的 `fi`。用縮排比對而不是寫死 "\n  fi\n"／"\n    fi\n"——
 # 兩個 repo 的縮排本來就不同，寫死字串等於在其中一邊碰運氣。
-_end = next((i for i in range(_start + 1, len(_LINES))
-             if _LINES[i].strip() == "fi"
-             and len(_LINES[i]) - len(_LINES[i].lstrip()) == _indent), -1)
+_end = next(
+    (
+        i
+        for i in range(_start + 1, len(_LINES))
+        if _LINES[i].strip() == "fi" and len(_LINES[i]) - len(_LINES[i].lstrip()) == _indent
+    ),
+    -1,
+)
 if _end < 0:
     print("  FAIL  找不到區塊結尾的 `fi`（wrapper 改了形狀？）")
     sys.exit(1)
-BLOCK = "\n".join(ln[_indent:] if ln.startswith(" " * _indent) else ln.lstrip()
-                  for ln in _LINES[_start:_end + 1])
+BLOCK = "\n".join(ln[_indent:] if ln.startswith(" " * _indent) else ln.lstrip() for ln in _LINES[_start : _end + 1])
 if "ssh-add -l" not in BLOCK:
     print("  FAIL  抽出來的區塊裡沒有 `ssh-add -l`（抽錯段了）")
     sys.exit(1)
@@ -123,10 +126,10 @@ def run_with(rc: int, stderr_msg: str) -> tuple[int, str]:
         with open(fake, "w", encoding="utf-8") as f:
             f.write(f'#!/bin/bash\n[ -n "{stderr_msg}" ] && echo "{stderr_msg}" >&2\nexit {rc}\n')
         os.chmod(fake, 0o755)
-        env = dict(os.environ, PATH=d + os.pathsep + os.environ["PATH"],
-                   SSH_AUTH_SOCK="/tmp/probe.sock")
-        r = subprocess.run(["bash", "-c", STRICT + "\n" + BLOCK], env=env, check=False,
-                           capture_output=True, text=True, timeout=20)
+        env = dict(os.environ, PATH=d + os.pathsep + os.environ["PATH"], SSH_AUTH_SOCK="/tmp/probe.sock")
+        r = subprocess.run(
+            ["bash", "-c", STRICT + "\n" + BLOCK], env=env, check=False, capture_output=True, text=True, timeout=20
+        )
         return r.returncode, r.stdout + r.stderr
 
 
@@ -148,16 +151,12 @@ print()
 print("== 三種結束碼要走三條不同的路 ==")
 check("0（有金鑰）不抱怨", "⚠️" not in out0)
 check("1（袋子空的）說的是「沒有任何金鑰」", "沒有任何金鑰" in out1)
-check("🔴 2（連不到）**不會**被說成「沒有任何金鑰」",
-      "沒有任何金鑰" not in out2 and out2.strip() != "")
+check("🔴 2（連不到）**不會**被說成「沒有任何金鑰」", "沒有任何金鑰" not in out2 and out2.strip() != "")
 check("🔴 2 明講是連不到 agent", "連不到" in out2)
-check("🔴 2 帶出 ssh-add 自己的原始訊息（那句話才指得到原因）",
-      "Error connecting to agent" in out2)
-check("🔴 1 與 2 的輸出確實不同（併成同一句正是這支要防的事）",
-      out1.strip() != out2.strip() and out1.strip() != "")
+check("🔴 2 帶出 ssh-add 自己的原始訊息（那句話才指得到原因）", "Error connecting to agent" in out2)
+check("🔴 1 與 2 的輸出確實不同（併成同一句正是這支要防的事）", out1.strip() != out2.strip() and out1.strip() != "")
 check("2 也把結束碼講出來（rc=2）", "rc=2" in out2)
-check("非預期的 rc=5 也帶出 rc 與原始訊息",
-      "rc=5" in out5 and "Something else went wrong" in out5)
+check("非預期的 rc=5 也帶出 rc 與原始訊息", "rc=5" in out5 and "Something else went wrong" in out5)
 
 print()
 print("== 原始碼層級：不可以退回會被 errexit 殺掉的捕捉寫法 ==")
@@ -171,14 +170,13 @@ SRC_CODE = "\n".join(ln for ln in SRC.splitlines() if not ln.lstrip().startswith
 # ⚠ 釘的是「rc 有預先歸零、用 `||` 捕捉、而且 1 是自己一條分支」。不比對完整的 if/elif
 #   形狀——那會讓任何合理的重構都紅，而重構不是回歸。
 check("🔴 rc 預先歸零（少了它 rc=0 那條路會撞上 nounset）", "_ssh_add_rc=0" in SRC_CODE)
-check("🔴 用 `|| _ssh_add_rc=$?` 捕捉（賦值本身的結束碼在 set -e 下會殺掉腳本）",
-      "|| _ssh_add_rc=$?" in SRC_CODE)
-check("🔴 不可以再出現 `…\"; _ssh_add_rc=$?`（那正是被 errexit 殺掉的那一版）",
-      '>/dev/null)"; _ssh_add_rc=$?' not in SRC_CODE)
-check("🔴 沒有用 `set +e` 把 errexit 整段關掉（那是把一行的例外擴大成整段沒保護）",
-      "set +e" not in SRC_CODE)
-check("🔴 rc=1 是自己一條分支（非 0 全部併一句的話不會有這個）",
-      '_ssh_add_rc" -eq 1' in SRC_CODE)
+check("🔴 用 `|| _ssh_add_rc=$?` 捕捉（賦值本身的結束碼在 set -e 下會殺掉腳本）", "|| _ssh_add_rc=$?" in SRC_CODE)
+check(
+    '🔴 不可以再出現 `…"; _ssh_add_rc=$?`（那正是被 errexit 殺掉的那一版）',
+    '>/dev/null)"; _ssh_add_rc=$?' not in SRC_CODE,
+)
+check("🔴 沒有用 `set +e` 把 errexit 整段關掉（那是把一行的例外擴大成整段沒保護）", "set +e" not in SRC_CODE)
+check("🔴 rc=1 是自己一條分支（非 0 全部併一句的話不會有這個）", '_ssh_add_rc" -eq 1' in SRC_CODE)
 check("🔴 原始錯誤訊息有被捕捉下來（2 的那則要帶出它）", "_ssh_add_err=" in SRC_CODE)
 
 print(f"\n{_pass} passed, {_fail} failed")

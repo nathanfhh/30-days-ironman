@@ -11,6 +11,7 @@
   🔴 那個環境座標**不准說謊**：開成記 active、沒開成記「要求了但沒開成」、沒要求記 off
      ——它的用途是事後比對，記謊會污染後續所有分析
 """
+
 import os
 import socket
 import sys
@@ -37,6 +38,8 @@ db.reset_engine()
 db.init_db()
 
 _fails = 0
+
+
 def check(label, ok):
     global _fails
     if not ok:
@@ -50,56 +53,86 @@ def check(label, ok):
 #   「送不送得到」由兩件事共同決定：控制平面探不探得到（`_jaeger_reachable`）、以及
 #   jaeger 在不在**這個使用者那張網**上。只模擬前者的話，下面那條「探得到但沒接上」
 #   的測試根本測不出來。
-_JAEGER_ATTACHED = True          # 由各段落切換
+_JAEGER_ATTACHED = True  # 由各段落切換
+
 
 class _FakeContainer:
     id = "fake-container-id"
-    def start(self): pass
-    def exec_run(self, *a, **k): return (1, b"")
+
+    def start(self):
+        pass
+
+    def exec_run(self, *a, **k):
+        return (1, b"")
+
 
 class _FakeJaeger:
     """扮演 jaeger 容器。`attrs` 是 `jaeger_on_network` 唯一會讀的東西。"""
+
     id = "fake-jaeger-id"
+
     @property
     def attrs(self):
         nets = {n: {} for n in _FAKE_NETS} if _JAEGER_ATTACHED else {}
         return {"NetworkSettings": {"Networks": nets}}
 
+
 class _FakeContainers:
-    def create(self, image, **kw): return _FakeContainer()
+    def create(self, image, **kw):
+        return _FakeContainer()
+
     def get(self, name, *a, **k):
         # OTEL_ENDPOINT 的 hostname 就是 jaeger 的容器名（預設 "jaeger"）。
         if name == urlparse(config.OTEL_ENDPOINT).hostname:
             return _FakeJaeger()
         raise docker.errors.NotFound(name)
-    def list(self, **k): return []
+
+    def list(self, **k):
+        return []
+
 
 class _FakeNetwork:
-    def __init__(self, name): self.name = name
-    def connect(self, *a, **k): pass
-    def remove(self): pass
+    def __init__(self, name):
+        self.name = name
+
+    def connect(self, *a, **k):
+        pass
+
+    def remove(self):
+        pass
+
 
 _FAKE_NETS: dict[str, _FakeNetwork] = {}
+
 
 class _FakeNetworks:
     def list(self, names=None, **k):
         if names:
             return [_FAKE_NETS[n] for n in names if n in _FAKE_NETS]
         return list(_FAKE_NETS.values())
+
     def create(self, name, **k):
         _FAKE_NETS[name] = _FakeNetwork(name)
         return _FAKE_NETS[name]
+
     def get(self, name):
         if name in _FAKE_NETS:
             return _FAKE_NETS[name]
         raise docker.errors.NotFound(name)
 
+
 class _FakeAPI:
-    def resize(self, *a, **k): pass
-    def remove_container(self, *a, **k): pass
+    def resize(self, *a, **k):
+        pass
+
+    def remove_container(self, *a, **k):
+        pass
+
 
 class _FakeImages:
-    def get(self, *a, **k): raise docker.errors.NotFound("x")
+    def get(self, *a, **k):
+        raise docker.errors.NotFound("x")
+
 
 class _FakeClient:
     def __init__(self):
@@ -110,7 +143,7 @@ class _FakeClient:
 
 
 uid = auth.create_user("tel-user", "tel-password-1")["id"]
-auth.set_cli_token(uid, "sk-test-setup-token")   # 過 create() 入口的憑證守門
+auth.set_cli_token(uid, "sk-test-setup-token")  # 過 create() 入口的憑證守門
 
 
 def make_mgr():
@@ -122,6 +155,7 @@ def make_mgr():
 def stored_profile(sid):
     from server.db import session_scope
     from server.models import Session as SessionRow
+
     with session_scope() as s:
         return dict(s.get(SessionRow, sid).profile)
 
@@ -129,9 +163,13 @@ def stored_profile(sid):
 # 攔 build_run_kwargs：記下它實際收到的 profile（＝真正要送進容器的那份）
 _captured = {}
 _orig_brk = sessions.build_run_kwargs
+
+
 def _spy_brk(name, sid, profile, user_id):
     _captured[sid] = profile
     return _orig_brk(name, sid, profile, user_id)
+
+
 sessions.build_run_kwargs = _spy_brk
 
 
@@ -146,8 +184,7 @@ try:
     config.OTEL_ENDPOINT = f"http://127.0.0.1:{live_port}"
     check("🔴 listener 在 → 探得到", sessions._jaeger_reachable() is True)
     srv.close()
-    check("🔴 listener 關掉 → 探不到（不拋錯，回 False）",
-          sessions._jaeger_reachable() is False)
+    check("🔴 listener 關掉 → 探不到（不拋錯，回 False）", sessions._jaeger_reachable() is False)
     config.OTEL_ENDPOINT = "http://nonexistent.invalid:4317"
     check("解析不了的 host → False（不拋錯）", sessions._jaeger_reachable() is False)
 finally:
@@ -161,10 +198,8 @@ mgr = make_mgr()
 sid = mgr.create(user_id=uid, profile=Profile(telemetry=False))["id"]
 prof = stored_profile(sid)
 check("stored telemetry=False", prof["telemetry"] is False)
-check("座標沒有 telemetry_active 這個鍵（沒要求就不談成不成）",
-      "telemetry_active" not in prof)
-check("build_run_kwargs 收到的 profile 也是不送",
-      _captured[sid].telemetry is False)
+check("座標沒有 telemetry_active 這個鍵（沒要求就不談成不成）", "telemetry_active" not in prof)
+check("build_run_kwargs 收到的 profile 也是不送", _captured[sid].telemetry is False)
 
 
 print("== 要求 telemetry 且 jaeger 探得到：真的送、座標記 active ==")
@@ -179,8 +214,10 @@ prof = stored_profile(sid)
 check("🔴 座標 telemetry=True（要求）", prof["telemetry"] is True)
 check("🔴 座標 telemetry_active=True（真的開成）", prof["telemetry_active"] is True)
 env = _orig_brk("c", sid, _captured[sid], uid)["environment"]
-check("🔴 送進容器的 profile 仍要 telemetry → 設了 OTEL env",
-      _captured[sid].telemetry is True and env.get("NCR_OTEL") == "1")
+check(
+    "🔴 送進容器的 profile 仍要 telemetry → 設了 OTEL env",
+    _captured[sid].telemetry is True and env.get("NCR_OTEL") == "1",
+)
 
 
 print("== 要求 telemetry 但 jaeger 探不到：照開場、不設 env、座標說實話 ==")
@@ -195,11 +232,9 @@ finally:
 check("🔴 session 照樣建起來了（不 fail-closed）", info.get("id") is not None)
 prof = stored_profile(sid)
 check("🔴 座標 telemetry=True 保留（使用者確實要求了）", prof["telemetry"] is True)
-check("🔴 座標 telemetry_active=False（要求了但沒開成——不記謊成 on）",
-      prof["telemetry_active"] is False)
+check("🔴 座標 telemetry_active=False（要求了但沒開成——不記謊成 on）", prof["telemetry_active"] is False)
 # 送進容器的 profile 被降級成不送，於是不會設 OTEL env（送去沒人接的地方是錯的）
-check("🔴 送進容器的 profile 已降級成不送 telemetry",
-      _captured[sid].telemetry is False)
+check("🔴 送進容器的 profile 已降級成不送 telemetry", _captured[sid].telemetry is False)
 env = _orig_brk("c", sid, _captured[sid], uid)["environment"]
 check("🔴 因此不設 OTEL env（NCR_OTEL 不在）", "NCR_OTEL" not in env)
 
@@ -211,8 +246,8 @@ print("== 探得到、但 jaeger 沒接上這個人的網路：一樣算沒開�
 #   畫面上還會說「有在錄」。座標說謊比沒有座標更糟：事後比對會拿一堆空的 trace 當基準。
 _saved = sessions._jaeger_reachable
 try:
-    sessions._jaeger_reachable = lambda: True      # 控制平面探得到
-    _JAEGER_ATTACHED = False                       # 但沒接上使用者那張網
+    sessions._jaeger_reachable = lambda: True  # 控制平面探得到
+    _JAEGER_ATTACHED = False  # 但沒接上使用者那張網
     mgr = make_mgr()
     info = mgr.create(user_id=uid, profile=Profile(telemetry=True))
     sid = info["id"]
@@ -221,12 +256,12 @@ finally:
     _JAEGER_ATTACHED = True
 check("🔴 session 照樣建起來了（不 fail-closed）", info.get("id") is not None)
 prof = stored_profile(sid)
-check("🔴 座標 telemetry_active=False（探得到不等於送得到）",
-      prof["telemetry_active"] is False)
-check("🔴 送進容器的 profile 已降級成不送",
-      _captured[sid].telemetry is False)
-check("🔴 不設 OTEL env（送去一個到不了的地方比不送更糟：畫面會說有在錄）",
-      "NCR_OTEL" not in _orig_brk("c", sid, _captured[sid], uid)["environment"])
+check("🔴 座標 telemetry_active=False（探得到不等於送得到）", prof["telemetry_active"] is False)
+check("🔴 送進容器的 profile 已降級成不送", _captured[sid].telemetry is False)
+check(
+    "🔴 不設 OTEL env（送去一個到不了的地方比不送更糟：畫面會說有在錄）",
+    "NCR_OTEL" not in _orig_brk("c", sid, _captured[sid], uid)["environment"],
+)
 
 sessions.build_run_kwargs = _orig_brk
 db.reset_engine()

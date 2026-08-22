@@ -63,13 +63,14 @@ def build_info() -> dict:
     """
     return version.summary()
 
+
 # 登入頁左下角的插畫。啟動時掃一次即可——static 是 COPY 進 image 的，執行期不會多出新檔，
 # 每次 request 重掃只是白花 I/O。放新圖需要 rebuild（與其他靜態資源一致）。
 _ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "images")
 try:
     LOGIN_ART = sorted(f for f in os.listdir(_ART_DIR) if f.endswith((".webp", ".png", ".svg")))
 except OSError:
-    LOGIN_ART = []          # 沒有這個目錄就不顯示插畫，登入功能不受影響
+    LOGIN_ART = []  # 沒有這個目錄就不顯示插畫，登入功能不受影響
 
 
 def _page(template: str, active: str, **extra):
@@ -97,41 +98,48 @@ def login_page():
     if session.get("uid") and auth.get_user(session["uid"]) is not None:
         return redirect("/")
     return render_template(
-        "login.html", behind_proxy=config.BEHIND_PROXY,
+        "login.html",
+        behind_proxy=config.BEHIND_PROXY,
         min_password_length=config.MIN_PASSWORD_LENGTH,
         # 每次載入隨機挑一張——在伺服端選，頁面第一次繪製就是最終畫面，
         # 不會出現「先空著、JS 載入後才蹦出一張圖」的跳動。
-        art=random.choice(LOGIN_ART) if LOGIN_ART else None)
+        art=random.choice(LOGIN_ART) if LOGIN_ART else None,
+    )
 
 
 @web.get("/")
 def sessions_page():
     # claude 的模型白名單在伺服端就給，列表的 chip 直接照它畫。
-    return _page("sessions.html", active="sessions",
-                 claude_models=list(config.CLAUDE_MODELS),
-                 # 這套部署有沒有開 GitLab 代理（ADR 0016）。列表的 GitLab 標記靠它 gate。
-                 # ⚠ **一定要 gate**：功能關掉時每一場的 `gitlab_proxy` 都是 False，不擋的話
-                 #   每一列都會掛一顆灰色 GitLab 圖示，對著使用者講一件這台機器上根本不存在
-                 #   的事。這是部署層的事實，不是 per-session 的，所以在伺服端算好給模板，
-                 #   不從列表 API 的每一列推。
-                 gitlab_enabled=config.gitlab_enabled())
+    return _page(
+        "sessions.html",
+        active="sessions",
+        claude_models=list(config.CLAUDE_MODELS),
+        # 這套部署有沒有開 GitLab 代理（ADR 0016）。列表的 GitLab 標記靠它 gate。
+        # ⚠ **一定要 gate**：功能關掉時每一場的 `gitlab_proxy` 都是 False，不擋的話
+        #   每一列都會掛一顆灰色 GitLab 圖示，對著使用者講一件這台機器上根本不存在
+        #   的事。這是部署層的事實，不是 per-session 的，所以在伺服端算好給模板，
+        #   不從列表 API 的每一列推。
+        gitlab_enabled=config.gitlab_enabled(),
+    )
 
 
 @web.get("/account")
 def account_page():
     # GitLab 那一塊的兩個事實都在伺服端算好：這套部署有沒有開這個功能，以及這個人設過沒。
     # ⚠ 只給**狀態**，永遠不給值（連密文都不出去）——見 auth._to_dict。
-    return _page("account.html", active="account",
-                 gitlab_enabled=config.gitlab_enabled(),
-                 gitlab_host=config.GITLAB_HOST,
-                 # ⚠ `get_user` 是 `dict | None`——直接下標在那一列剛好消失時會變成
-                 #   500 HTML 錯誤頁，而 gate 對同一件事的答案是導回登入頁（審查 F-032）。
-                 gitlab_pat_set=(auth.get_user(g.user["id"]) or {})
-                 .get("gitlab_pat_configured", False),
-                 # 代理**連續**起不來時 nginx 說的那句話（診斷麵包屑，見
-                 # auth.gitlab_proxy_error）。沒有它，使用者只會看到「GitLab 連不到」，
-                 # 然後往 token／網路／GitLab 是不是掛了這些錯的方向查。
-                 gitlab_proxy_error=auth.gitlab_proxy_error(g.user["id"]))
+    return _page(
+        "account.html",
+        active="account",
+        gitlab_enabled=config.gitlab_enabled(),
+        gitlab_host=config.GITLAB_HOST,
+        # ⚠ `get_user` 是 `dict | None`——直接下標在那一列剛好消失時會變成
+        #   500 HTML 錯誤頁，而 gate 對同一件事的答案是導回登入頁（審查 F-032）。
+        gitlab_pat_set=(auth.get_user(g.user["id"]) or {}).get("gitlab_pat_configured", False),
+        # 代理**連續**起不來時 nginx 說的那句話（診斷麵包屑，見
+        # auth.gitlab_proxy_error）。沒有它，使用者只會看到「GitLab 連不到」，
+        # 然後往 token／網路／GitLab 是不是掛了這些錯的方向查。
+        gitlab_proxy_error=auth.gitlab_proxy_error(g.user["id"]),
+    )
 
 
 @web.get("/healthz")

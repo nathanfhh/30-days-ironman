@@ -9,6 +9,7 @@ bash entrypoint（零 token）。需要 docker + ttyd + dev-container 的 image 
         --with playwright python tests/e2e_flow.py
 （首次需 `uv run --with playwright playwright install chromium`）
 """
+
 import logging
 import os
 import socket
@@ -18,7 +19,7 @@ import tempfile
 import threading
 import time
 
-for v in ("HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","http_proxy","https_proxy","all_proxy"):
+for v in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
     os.environ.pop(v, None)
 os.environ["NO_PROXY"] = os.environ["no_proxy"] = "127.0.0.1,localhost"
 os.environ["CLAUDE_PTY_IMAGE"] = os.environ.get("CLAUDE_PTY_IMAGE", "ncr-dev-container")
@@ -54,9 +55,12 @@ _PRE_EXISTING = {c.name for c in D.containers.list(all=True, filters=config.SESS
 
 
 def _leftovers():
-    return [c for c in D.containers.list(all=True, filters=config.SESSION_FILTERS)
-            if c.name not in _PRE_EXISTING]
+    return [c for c in D.containers.list(all=True, filters=config.SESSION_FILTERS) if c.name not in _PRE_EXISTING]
+
+
 _fails = 0
+
+
 def check(label, ok):
     global _fails
     if not ok:
@@ -64,10 +68,12 @@ def check(label, ok):
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
     return ok
 
+
 def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
 
 PORT = free_port()
 BASE = f"http://127.0.0.1:{PORT}"
@@ -136,10 +142,11 @@ try:
         # firewall 本身另有 live 驗證，不該讓它拖慢並增加環境相依。
         # 網路能力是二元的，用開關而非下拉：點一下即從 restricted 切到 unrestricted
         page.click("#pick-network .switch__control")
-        check("開關切換後 aria-checked 為 true",
-              page.get_attribute("#pick-network .switch__control", "aria-checked") == "true")
-        check("開關的標籤反映新狀態",
-              "完全開放" in page.text_content("#pick-network .switch__label"))
+        check(
+            "開關切換後 aria-checked 為 true",
+            page.get_attribute("#pick-network .switch__control", "aria-checked") == "true",
+        )
+        check("開關的標籤反映新狀態", "完全開放" in page.text_content("#pick-network .switch__label"))
         page.click("#create-btn")
         page.wait_for_selector(".manifest__row", timeout=60000)
         # 表頭也掛 .manifest__row（為了與資料列共用 grid 定義），數資料列要排除它
@@ -150,8 +157,10 @@ try:
         check("session id 顯示為 12 位 hex", len(sid) == 12 and all(c in "0123456789abcdef" for c in sid))
         # 這裡跑的是 bash entrypoint，不會印 DRIVER_MARKER（那是 entrypoint.sh 要進 CLI
         # 前才印的），所以 UI 應該誠實顯示「啟動中」——container 在跑 ≠ CLI 已經可用。
-        check("driver 未就緒時燈號為啟動中（container 在跑 ≠ CLI 可用）",
-              page.get_attribute(".lamp", "data-state") == "creating")
+        check(
+            "driver 未就緒時燈號為啟動中（container 在跑 ≠ CLI 可用）",
+            page.get_attribute(".lamp", "data-state") == "creating",
+        )
         check("狀態欄標示啟動中", "啟動中" in page.text_content(".manifest__status"))
         check("container 實際存在", D.containers.get(f"claude-pty-{sid}").status == "running")
         check("顯示 profile chips", len(page.query_selector_all(".chip")) >= 2)
@@ -180,6 +189,7 @@ try:
 
         print("== 關掉終端分頁 → ttyd 因 -q 自退（DB 記錄被回收）==")
         from server import views as views_mod
+
         live = views_mod.list_views(sid)
         check("關閉前有存活的 view", len(live) == 1)
         pid = live[0]["pid"]
@@ -192,17 +202,14 @@ try:
             time.sleep(0.25)
         check("關分頁後 ttyd 自行退出", gone)
         check("view 記錄已清、port 釋放", views_mod.list_views(sid) == [])
-        check("session 本體不受影響（container 仍在）",
-              D.containers.get(f"claude-pty-{sid}").status == "running")
+        check("session 本體不受影響（container 仍在）", D.containers.get(f"claude-pty-{sid}").status == "running")
 
         print("== 切換主題：JSON 套用到 CSS 變數 ==")
-        before = page.evaluate(
-            "getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim()")
+        before = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim()")
         page.click("#theme-picker .picker__button")
         page.click('#theme-picker .picker__option[data-value="daylight"]')
         page.wait_for_timeout(500)
-        after = page.evaluate(
-            "getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim()")
+        after = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim()")
         check(f"強調色由 {before} 變為 {after}", before != after and after)
         page.click("#theme-picker .picker__button")
         page.click('#theme-picker .picker__option[data-value="instrument"]')
@@ -228,10 +235,8 @@ try:
         # 操作結果以右上角 toast 呈現。改密碼的成功文案是「請重新登入」——因為 D 階段起
         # 改密碼＝這個帳號連著的東西全部斷掉，前端跟著在 1200ms 後送回登入頁。
         page.wait_for_selector(".toast[data-level='success']", timeout=8000)
-        check("顯示成功 toast（文案叫人重新登入）",
-              "請重新登入" in page.inner_text(".toast__title"))
-        check("toast 有倒數進度條（不需使用者手動關）",
-              page.query_selector(".toast__bar") is not None)
+        check("顯示成功 toast（文案叫人重新登入）", "請重新登入" in page.inner_text(".toast__title"))
+        check("toast 有倒數進度條（不需使用者手動關）", page.query_selector(".toast__bar") is not None)
         pw_ok = False
         try:
             auth.authenticate("e2e-user", "e2e-password-2")
@@ -259,8 +264,7 @@ try:
         page.wait_for_selector(".manifest__row", timeout=8000)
         page.click('button[data-act="kill"]')
         page.wait_for_selector(".modal", timeout=5000)
-        check("終止採用自訂對話框（非原生 confirm）",
-              "終止 Session" in page.text_content(".modal__title"))
+        check("終止採用自訂對話框（非原生 confirm）", "終止 Session" in page.text_content(".modal__title"))
         page.click('.modal button[data-act="ok"]')
         page.wait_for_selector("#manifest .empty", timeout=30000)
         check("列表已清空", page.query_selector(".manifest__row") is None)

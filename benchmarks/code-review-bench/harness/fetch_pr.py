@@ -27,10 +27,14 @@ FETCH_DEPTH = 60  # deep enough for merge-base on every benchmark PR seen so far
 
 
 def run(cmd: list[str], cwd: Path, timeout: int = 900) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
+    return subprocess.run(
+        cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False
+    )
 
 
-def fetch_pr_diff(repo_url: str, pr_number: int, workdir: Path, base_rev: str | None = None) -> dict:
+def fetch_pr_diff(
+    repo_url: str, pr_number: int, workdir: Path, base_rev: str | None = None
+) -> dict:
     """Clone just enough of `repo_url` to produce the PR's base..head diff.
 
     `base_rev` overrides the merge-base search. Two of the synthetic Sentry PRs
@@ -44,7 +48,14 @@ def fetch_pr_diff(repo_url: str, pr_number: int, workdir: Path, base_rev: str | 
         run(["git", "remote", "add", "origin", repo_url], workdir)
 
     head = run(
-        ["git", "fetch", "--depth", str(FETCH_DEPTH), "origin", f"refs/pull/{pr_number}/head:refs/ncr/pr"],
+        [
+            "git",
+            "fetch",
+            "--depth",
+            str(FETCH_DEPTH),
+            "origin",
+            f"refs/pull/{pr_number}/head:refs/ncr/pr",
+        ],
         workdir,
     )
     if head.returncode != 0:
@@ -53,17 +64,41 @@ def fetch_pr_diff(repo_url: str, pr_number: int, workdir: Path, base_rev: str | 
     if base_rev:
         rev = run(["git", "rev-parse", base_rev], workdir)
         if rev.returncode != 0:
-            return {"error": f"base_rev {base_rev} not resolvable: {rev.stderr.strip()[:200]}"}
+            return {
+                "error": f"base_rev {base_rev} not resolvable: {rev.stderr.strip()[:200]}"
+            }
         mb = rev
     else:
-        base = run(["git", "fetch", "--depth", str(FETCH_DEPTH), "origin", "HEAD:refs/ncr/base"], workdir)
+        base = run(
+            [
+                "git",
+                "fetch",
+                "--depth",
+                str(FETCH_DEPTH),
+                "origin",
+                "HEAD:refs/ncr/base",
+            ],
+            workdir,
+        )
         if base.returncode != 0:
             return {"error": f"fetch base failed: {base.stderr.strip()[:400]}"}
         mb = run(["git", "merge-base", "refs/ncr/base", "refs/ncr/pr"], workdir)
     if not base_rev and (mb.returncode != 0 or not mb.stdout.strip()):
         # Shallow histories can miss the merge base; deepen once and retry.
-        run(["git", "fetch", "--deepen", "200", "origin", f"refs/pull/{pr_number}/head:refs/ncr/pr"], workdir)
-        run(["git", "fetch", "--deepen", "200", "origin", "HEAD:refs/ncr/base"], workdir)
+        run(
+            [
+                "git",
+                "fetch",
+                "--deepen",
+                "200",
+                "origin",
+                f"refs/pull/{pr_number}/head:refs/ncr/pr",
+            ],
+            workdir,
+        )
+        run(
+            ["git", "fetch", "--deepen", "200", "origin", "HEAD:refs/ncr/base"], workdir
+        )
         mb = run(["git", "merge-base", "refs/ncr/base", "refs/ncr/pr"], workdir)
         if mb.returncode != 0 or not mb.stdout.strip():
             return {"error": "merge-base not found within fetch depth"}
@@ -90,7 +125,9 @@ def fetch_pr_diff(repo_url: str, pr_number: int, workdir: Path, base_rev: str | 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--manifest", required=True, help="JSON list of {slug, fork_repo, pr_number}")
+    ap.add_argument(
+        "--manifest", required=True, help="JSON list of {slug, fork_repo, pr_number}"
+    )
     ap.add_argument("--out", required=True, help="output directory for per-PR diffs")
     ap.add_argument("--workdir", required=True, help="scratch directory for git clones")
     ap.add_argument("--only", help="comma-separated slugs to fetch")
@@ -112,7 +149,10 @@ def main() -> int:
             continue
 
         result = fetch_pr_diff(
-            entry["fork_repo"], entry["pr_number"], work_root / slug, entry.get("base_rev")
+            entry["fork_repo"],
+            entry["pr_number"],
+            work_root / slug,
+            entry.get("base_rev"),
         )
         if "error" in result:
             print(f"FAIL  {slug}: {result['error']}", file=sys.stderr)

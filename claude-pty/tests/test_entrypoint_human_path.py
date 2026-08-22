@@ -9,6 +9,7 @@ bind-mount 進去，等同於「rebuild image 之後」的情況，再用真 PTY
 
 零 token：進到 Claude Code 的畫面就停手，不送任何 prompt。
 """
+
 import atexit
 import os
 import re
@@ -73,19 +74,26 @@ def _sandboxed_home() -> str:
         shutil.copy2(src_cfg, cfg)
     else:
         with open(cfg, "w") as f:
-            f.write("{}")      # 檔案必須存在，否則 docker 會建成目錄而非檔案
+            f.write("{}")  # 檔案必須存在，否則 docker 會建成目錄而非檔案
     return tmp
 
 
 SANDBOX = _sandboxed_home()
 
 argv = [
-    "run", "--rm", "-it", "--name", NAME,
+    "run",
+    "--rm",
+    "-it",
+    "--name",
+    NAME,
     # 關鍵：掛 repo 的 entrypoint.sh ＝ 模擬 rebuild image 之後的人類路徑
-    "-v", f"{REPO}/dev-container/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro",
+    "-v",
+    f"{REPO}/dev-container/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro",
     # 憑證是**副本**（見 _sandboxed_home）：容器內的 claude 怎麼寫都不會動到使用者的憑證
-    "-v", f"{SANDBOX}/.claude:/home/nathan/.claude",
-    "-v", f"{SANDBOX}/.claude.json:/home/nathan/.claude.json",
+    "-v",
+    f"{SANDBOX}/.claude:/home/nathan/.claude",
+    "-v",
+    f"{SANDBOX}/.claude.json:/home/nathan/.claude.json",
     IMAGE,
 ]
 
@@ -99,13 +107,13 @@ try:
     child.expect("網路能力")
     check("① 網路能力選單出現", True)
     child.expect(r"請選擇 \[1\]:")
-    child.sendline("2")                      # 選 unrestricted（測試不依賴白名單那條路）
+    child.sendline("2")  # 選 unrestricted（測試不依賴白名單那條路）
 
     # 2) 流量錄製
     child.expect("錄製本場流量")
     check("② 流量錄製選單出現", True)
     child.expect(r"錄製流量\? \[y/N\]:")
-    child.sendline("n")                      # 不錄製（測試不依賴 mitm addon）
+    child.sendline("n")  # 不錄製（測試不依賴 mitm addon）
 
     # 3) telemetry 只有在 OTEL_EXPORTER_OTLP_ENDPOINT 有值時才問
     idx = child.expect(["送 Jaeger\\? \\[Y/n\\]:", "網路能力：完全開放", pexpect.TIMEOUT], timeout=30)

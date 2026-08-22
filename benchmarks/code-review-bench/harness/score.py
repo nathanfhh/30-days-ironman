@@ -47,9 +47,17 @@ from candidates import candidate_texts
 # nobody reviewed, so the language a PR is scored under is derived from what its
 # diff actually contains.
 _EXT_LANG = {
-    "go": "Go", "ts": "TypeScript", "tsx": "TypeScript", "js": "TypeScript",
-    "es6": "TypeScript", "java": "Java", "rb": "Ruby", "py": "Python",
-    "scss": "SCSS/CSS", "css": "SCSS/CSS", "properties": "i18n/config",
+    "go": "Go",
+    "ts": "TypeScript",
+    "tsx": "TypeScript",
+    "js": "TypeScript",
+    "es6": "TypeScript",
+    "java": "Java",
+    "rb": "Ruby",
+    "py": "Python",
+    "scss": "SCSS/CSS",
+    "css": "SCSS/CSS",
+    "properties": "i18n/config",
 }
 
 
@@ -77,7 +85,9 @@ def diff_language(diff_path: Path) -> str | None:
 
 
 def f1(precision: float, recall: float) -> float:
-    return 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    return (
+        2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    )
 
 
 def score_raw(data_root: Path, slug: str, tool: str, lenient: bool = False) -> dict:
@@ -86,7 +96,9 @@ def score_raw(data_root: Path, slug: str, tool: str, lenient: bool = False) -> d
     `lenient` drops our tool's `open_questions` from the candidate list. See
     `candidates.py` for why both are reported rather than one being chosen.
     """
-    golden = json.loads((data_root / "prs" / slug / "golden.json").read_text())["comments"]
+    golden = json.loads((data_root / "prs" / slug / "golden.json").read_text())[
+        "comments"
+    ]
     candidates, n_issues = candidate_texts(data_root, slug, tool)
     if lenient:
         candidates = candidates[:n_issues]
@@ -118,13 +130,17 @@ def score_raw(data_root: Path, slug: str, tool: str, lenient: bool = False) -> d
         "total_golden": total_g,
         "matched_golden": sorted(best),
         "matched_candidates": sorted(matched_candidates),
-        "unmatched_candidates": [i for i in range(total_c) if i not in matched_candidates],
+        "unmatched_candidates": [
+            i for i in range(total_c) if i not in matched_candidates
+        ],
         "precision": tp / total_c if total_c else 0.0,
         "recall": tp / total_g if total_g else 0.0,
     }
 
 
-def score_corrected(data_root: Path, slug: str, tools: list[str], raw: dict[str, dict]) -> dict | None:
+def score_corrected(
+    data_root: Path, slug: str, tools: list[str], raw: dict[str, dict]
+) -> dict | None:
     """Rebuild the ground truth for one PR from the blind verifier's verdicts."""
     vpath = data_root / "calibration" / f"{slug}.verdicts.json"
     mpath = data_root / "calibration" / f"{slug}.map.json"
@@ -263,7 +279,12 @@ def _golden(cells: list[dict], precision: float) -> dict:
     tp = sum(c["golden_tp"] for c in cells)
     fn = sum(c["golden_fn"] for c in cells)
     recall = tp / (tp + fn) if (tp + fn) else 0.0
-    return {"golden_tp": tp, "golden_fn": fn, "golden_recall": recall, "golden_f1": f1(precision, recall)}
+    return {
+        "golden_tp": tp,
+        "golden_fn": fn,
+        "golden_recall": recall,
+        "golden_f1": f1(precision, recall),
+    }
 
 
 def _loo(cells: list[dict], precision: float) -> dict:
@@ -273,7 +294,12 @@ def _loo(cells: list[dict], precision: float) -> dict:
     tp = sum(c["loo_tp"] for c in cells)
     fn = sum(c["loo_fn"] for c in cells)
     recall = tp / (tp + fn) if (tp + fn) else 0.0
-    return {"loo_tp": tp, "loo_fn": fn, "loo_recall": recall, "loo_f1": f1(precision, recall)}
+    return {
+        "loo_tp": tp,
+        "loo_fn": fn,
+        "loo_recall": recall,
+        "loo_f1": f1(precision, recall),
+    }
 
 
 def table(title: str, rows: list[tuple], header: tuple) -> str:
@@ -344,46 +370,105 @@ def main() -> int:
     write_csv(
         "raw_cells.csv",
         raw_cells,
-        ["slug", "language", "tool", "tp", "fp", "fn", "total_candidates", "total_golden", "precision", "recall"],
+        [
+            "slug",
+            "language",
+            "tool",
+            "tp",
+            "fp",
+            "fn",
+            "total_candidates",
+            "total_golden",
+            "precision",
+            "recall",
+        ],
     )
     if corr_cells:
         write_csv(
             "corrected_cells.csv",
             corr_cells,
-            ["slug", "language", "tool", "tp", "tp_from_golden", "tp_from_discovered", "fp", "fn",
-             "total_candidates", "expanded_ground_truth", "precision", "recall",
-             "loo_tp", "loo_fn", "loo_ground_truth", "loo_recall",
-             "golden_tp", "golden_fn", "valid_golden"],
+            [
+                "slug",
+                "language",
+                "tool",
+                "tp",
+                "tp_from_golden",
+                "tp_from_discovered",
+                "fp",
+                "fn",
+                "total_candidates",
+                "expanded_ground_truth",
+                "precision",
+                "recall",
+                "loo_tp",
+                "loo_fn",
+                "loo_ground_truth",
+                "loo_recall",
+                "golden_tp",
+                "golden_fn",
+                "valid_golden",
+            ],
         )
     write_csv(
         "raw_cells_lenient.csv",
         lenient_cells,
-        ["slug", "language", "tool", "tp", "fp", "fn", "total_candidates", "total_golden", "precision", "recall"],
+        [
+            "slug",
+            "language",
+            "tool",
+            "tp",
+            "fp",
+            "fn",
+            "total_candidates",
+            "total_golden",
+            "precision",
+            "recall",
+        ],
     )
     (out_root / "ground_truth_audit.json").write_text(json.dumps(gt_notes, indent=2))
 
     summary = {
-        "raw": {}, "raw_lenient": {}, "corrected": {},
-        "raw_by_language": {}, "corrected_by_language": {},
+        "raw": {},
+        "raw_lenient": {},
+        "corrected": {},
+        "raw_by_language": {},
+        "corrected_by_language": {},
     }
     for tool in tools:
         summary["raw"][tool] = aggregate([c for c in raw_cells if c["tool"] == tool])
-        summary["raw_lenient"][tool] = aggregate([c for c in lenient_cells if c["tool"] == tool])
+        summary["raw_lenient"][tool] = aggregate(
+            [c for c in lenient_cells if c["tool"] == tool]
+        )
         if corr_cells:
-            summary["corrected"][tool] = aggregate([c for c in corr_cells if c["tool"] == tool])
+            summary["corrected"][tool] = aggregate(
+                [c for c in corr_cells if c["tool"] == tool]
+            )
         for lang in sorted({c["language"] for c in raw_cells}):
             summary["raw_by_language"].setdefault(lang, {})[tool] = aggregate(
                 [c for c in raw_cells if c["tool"] == tool and c["language"] == lang]
             )
             if corr_cells:
                 summary["corrected_by_language"].setdefault(lang, {})[tool] = aggregate(
-                    [c for c in corr_cells if c["tool"] == tool and c["language"] == lang]
+                    [
+                        c
+                        for c in corr_cells
+                        if c["tool"] == tool and c["language"] == lang
+                    ]
                 )
     (out_root / "summary.json").write_text(json.dumps(summary, indent=2))
 
     def rows(block: dict) -> list[tuple]:
         rs = [
-            (t, f"{m['precision']:.1%}", f"{m['recall']:.1%}", f"{m['f1']:.1%}", m["tp"], m["fp"], m["fn"], m["prs"])
+            (
+                t,
+                f"{m['precision']:.1%}",
+                f"{m['recall']:.1%}",
+                f"{m['f1']:.1%}",
+                m["tp"],
+                m["fp"],
+                m["fn"],
+                m["prs"],
+            )
             for t, m in block.items()
         ]
         return sorted(rs, key=lambda r: -float(r[3].rstrip("%")))
@@ -391,23 +476,46 @@ def main() -> int:
     header = ("tool", "precision", "recall", "F1", "TP", "FP", "FN", "PRs")
     print(table("RAW (upstream arithmetic, our judge)", rows(summary["raw"]), header))
     print()
-    print(table("RAW, lenient (our open_questions excluded)", rows(summary["raw_lenient"]), header))
+    print(
+        table(
+            "RAW, lenient (our open_questions excluded)",
+            rows(summary["raw_lenient"]),
+            header,
+        )
+    )
     if summary["corrected"]:
         print()
-        print(table("CORRECTED (blind-verified ground truth)", rows(summary["corrected"]), header))
+        print(
+            table(
+                "CORRECTED (blind-verified ground truth)",
+                rows(summary["corrected"]),
+                header,
+            )
+        )
         print()
         loo_rows = sorted(
             (
-                (t, f"{m['precision']:.1%}", f"{m['loo_recall']:.1%}", f"{m['loo_f1']:.1%}",
-                 m["loo_tp"], m["fp"], m["loo_fn"], m["prs"])
+                (
+                    t,
+                    f"{m['precision']:.1%}",
+                    f"{m['loo_recall']:.1%}",
+                    f"{m['loo_f1']:.1%}",
+                    m["loo_tp"],
+                    m["fp"],
+                    m["loo_fn"],
+                    m["prs"],
+                )
                 for t, m in summary["corrected"].items()
             ),
             key=lambda r: -float(r[3].rstrip("%")),
         )
-        print(table(
-            "CORRECTED, leave-one-out recall (target excludes each tool's solo finds)",
-            loo_rows, header,
-        ))
+        print(
+            table(
+                "CORRECTED, leave-one-out recall (target excludes each tool's solo finds)",
+                loo_rows,
+                header,
+            )
+        )
         print(
             "  precision is the corrected precision above, unchanged: leave-one-out "
             "narrows the recall target, not what counts as a hit. The F1 column is "
@@ -416,17 +524,30 @@ def main() -> int:
         print()
         g_rows = sorted(
             (
-                (t, f"{m['precision']:.1%}", f"{m['golden_recall']:.1%}", f"{m['golden_f1']:.1%}",
-                 m["golden_tp"], m["fp"], m["golden_fn"], m["prs"])
+                (
+                    t,
+                    f"{m['precision']:.1%}",
+                    f"{m['golden_recall']:.1%}",
+                    f"{m['golden_f1']:.1%}",
+                    m["golden_tp"],
+                    m["fp"],
+                    m["golden_fn"],
+                    m["prs"],
+                )
                 for t, m in summary["corrected"].items()
             ),
             key=lambda r: -float(r[3].rstrip("%")),
         )
-        print(table(
-            "CORRECTED, recall vs validated golden only (target no tool influences)",
-            g_rows, header,
-        ))
-    print(f"\nwrote {out_root}/summary.json, raw_cells.csv, corrected_cells.csv, ground_truth_audit.json")
+        print(
+            table(
+                "CORRECTED, recall vs validated golden only (target no tool influences)",
+                g_rows,
+                header,
+            )
+        )
+    print(
+        f"\nwrote {out_root}/summary.json, raw_cells.csv, corrected_cells.csv, ground_truth_audit.json"
+    )
     return 0
 
 

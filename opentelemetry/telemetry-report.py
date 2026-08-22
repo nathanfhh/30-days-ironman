@@ -40,7 +40,9 @@ def fetch_traces(base: str, service: str, lookback_h: int, limit: int) -> list[d
         with urllib.request.urlopen(url, timeout=30) as r:
             return json.load(r).get("data", [])
     except OSError as e:
-        sys.exit(f"連不上 Jaeger（{url}）：{e}\n它在跑嗎？docker compose -f opentelemetry/jaeger-compose.yaml up -d")
+        sys.exit(
+            f"連不上 Jaeger（{url}）：{e}\n它在跑嗎？docker compose -f opentelemetry/jaeger-compose.yaml up -d"
+        )
 
 
 def load_files(paths: list[str]) -> list[dict]:
@@ -70,9 +72,13 @@ def flatten(traces: list[dict]) -> tuple[dict, dict]:
         for s in tr.get("spans", []):
             tags = {t["key"]: t["value"] for t in s.get("tags", [])}
             tags["_start"] = s["startTime"]  # µs
-            tags["_dur"] = s["duration"]     # µs
+            tags["_dur"] = s["duration"]  # µs
             tags["_parent"] = next(
-                (r["spanID"] for r in s.get("references", []) if r["refType"] == "CHILD_OF"),
+                (
+                    r["spanID"]
+                    for r in s.get("references", [])
+                    if r["refType"] == "CHILD_OF"
+                ),
                 None,
             )
             spans[s["spanID"]] = tags
@@ -122,7 +128,9 @@ def report(spans: dict, resources: dict, session_prefix: str | None) -> None:
         have = "、".join(s[:8] for s in by_session) or "（一場都沒有）"
         sys.exit(f"沒有符合的 session。這批資料裡有：{have}")
 
-    for sid, ss in sorted(wanted.items(), key=lambda kv: min(x["_start"] for x in kv[1])):
+    for sid, ss in sorted(
+        wanted.items(), key=lambda kv: min(x["_start"] for x in kv[1])
+    ):
         res = resources.get(sid, {})
         session_spans = {k: v for k, v in spans.items() if v.get("session.id") == sid}
         dispatch = {
@@ -132,13 +140,23 @@ def report(spans: dict, resources: dict, session_prefix: str | None) -> None:
         }
 
         agg: dict[str, dict] = defaultdict(
-            lambda: {"first": None, "last": 0, "llm_us": 0, "out": 0, "cr": 0, "cw": 0, "n_llm": 0}
+            lambda: {
+                "first": None,
+                "last": 0,
+                "llm_us": 0,
+                "out": 0,
+                "cr": 0,
+                "cw": 0,
+                "n_llm": 0,
+            }
         )
         for s in session_spans.values():
             r = role_of(s, session_spans, dispatch)
             a = agg[r]
             end = s["_start"] + s["_dur"]
-            a["first"] = s["_start"] if a["first"] is None else min(a["first"], s["_start"])
+            a["first"] = (
+                s["_start"] if a["first"] is None else min(a["first"], s["_start"])
+            )
             a["last"] = max(a["last"], end)
             if s.get("span.type") == "llm_request":
                 a["n_llm"] += 1
@@ -150,17 +168,25 @@ def report(spans: dict, resources: dict, session_prefix: str | None) -> None:
         t0 = min(a["first"] for a in agg.values())
         t1 = max(a["last"] for a in agg.values())
         total_s = (t1 - t0) / 1e6
-        labels = [f"{k}={res[k]}" for k in ("experiment", "skill.version") if res.get(k)]
+        labels = [
+            f"{k}={res[k]}" for k in ("experiment", "skill.version") if res.get(k)
+        ]
         print(f"\nsession {sid[:8]}…" + (f" · {' · '.join(labels)}" if labels else ""))
         print(f"整場 wall-clock：{int(total_s // 60)} 分 {int(total_s % 60):02d} 秒\n")
 
         widths = (28, 8, 10, 10, 12, 10)
         hdr = lpad("角色", widths[0]) + "".join(
-            rpad(h, w) for h, w in zip(("Wall Time", "LLM 耗時", "輸出 tok", "cache 讀", "cache 寫"), widths[1:])
+            rpad(h, w)
+            for h, w in zip(
+                ("Wall Time", "LLM 耗時", "輸出 tok", "cache 讀", "cache 寫"),
+                widths[1:],
+            )
         )
         print(hdr)
         print("-" * sum(widths))
-        ordered = sorted(agg.items(), key=lambda kv: kv[1]["last"] - kv[1]["first"], reverse=True)
+        ordered = sorted(
+            agg.items(), key=lambda kv: kv[1]["last"] - kv[1]["first"], reverse=True
+        )
         for role, a in ordered:
             wall = (a["last"] - a["first"]) / 1e6
             cells = (
@@ -170,7 +196,10 @@ def report(spans: dict, resources: dict, session_prefix: str | None) -> None:
                 f"{a['cr']:,}",
                 f"{a['cw']:,}",
             )
-            print(lpad(role, widths[0]) + "".join(rpad(c, w) for c, w in zip(cells, widths[1:])))
+            print(
+                lpad(role, widths[0])
+                + "".join(rpad(c, w) for c, w in zip(cells, widths[1:]))
+            )
         print(
             "\n（Wall Time = 該角色首末 span 的時距；LLM 耗時 = llm_request span 加總，"
             "有平行請求時會大於 wall。）"
@@ -178,20 +207,30 @@ def report(spans: dict, resources: dict, session_prefix: str | None) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--jaeger", default="http://localhost:16686", help="Jaeger query 的位址")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--jaeger", default="http://localhost:16686", help="Jaeger query 的位址"
+    )
     ap.add_argument("--service", default="claude-code")
     ap.add_argument("--lookback", type=int, default=24, help="往回撈幾小時（預設 24）")
     ap.add_argument("--limit", type=int, default=200, help="最多撈幾個 trace")
     ap.add_argument("--session", help="只看 session id 以此開頭的場次")
-    ap.add_argument("--file", nargs="+", help="不連 Jaeger，直接讀 query API 匯出的 JSON 檔")
+    ap.add_argument(
+        "--file", nargs="+", help="不連 Jaeger，直接讀 query API 匯出的 JSON 檔"
+    )
     args = ap.parse_args()
 
-    traces = load_files(args.file) if args.file else fetch_traces(
-        args.jaeger, args.service, args.lookback, args.limit
+    traces = (
+        load_files(args.file)
+        if args.file
+        else fetch_traces(args.jaeger, args.service, args.lookback, args.limit)
     )
     if not traces:
-        sys.exit("撈不到任何 trace。確認 telemetry 有開（run wrapper 啟動時會印 📊 那行）。")
+        sys.exit(
+            "撈不到任何 trace。確認 telemetry 有開（run wrapper 啟動時會印 📊 那行）。"
+        )
     spans, resources = flatten(traces)
     report(spans, resources, args.session)
 

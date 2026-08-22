@@ -20,6 +20,7 @@
      名字被切成 `my-very-long-…` 卻沒有任何辦法看到全名（2026-07-31 使用者回報）。
      一起驗是因為修法也是共用的——截斷放內層、tooltip 掛外層。
 """
+
 import datetime as _dt
 import logging
 import os
@@ -45,6 +46,8 @@ from server.models import Session as SessionRow  # noqa: E402
 from server.sessions import utcnow  # noqa: E402
 
 _fails = 0
+
+
 def check(label, ok):
     global _fails
     if not ok:
@@ -79,15 +82,45 @@ now = utcnow()
 # 那是欄寬本來就照著抓的長度，不該被切）。
 LONG_NAME = "refactor-the-login-flow-and-then-some"
 with session_scope() as s:
-    for i, (prof, name) in enumerate([
-        ({"cli": "claude", "network": "restricted", "capture": False,
-          "telemetry": False, "model": TOO_LONG, "effort": "high"}, LONG_NAME),
-        ({"cli": "claude", "network": "restricted", "capture": False,
-          "telemetry": False, "model": REAL, "effort": "high"}, None),
-    ], start=1):
-        s.add(SessionRow(id=f"e{i}", container_name=f"ec{i}", user_id=admin["id"],
-                         workdir="/w", profile=prof, display_name=name,
-                         created_at=now - _dt.timedelta(minutes=i), last_active_at=now))
+    for i, (prof, name) in enumerate(
+        [
+            (
+                {
+                    "cli": "claude",
+                    "network": "restricted",
+                    "capture": False,
+                    "telemetry": False,
+                    "model": TOO_LONG,
+                    "effort": "high",
+                },
+                LONG_NAME,
+            ),
+            (
+                {
+                    "cli": "claude",
+                    "network": "restricted",
+                    "capture": False,
+                    "telemetry": False,
+                    "model": REAL,
+                    "effort": "high",
+                },
+                None,
+            ),
+        ],
+        start=1,
+    ):
+        s.add(
+            SessionRow(
+                id=f"e{i}",
+                container_name=f"ec{i}",
+                user_id=admin["id"],
+                workdir="/w",
+                profile=prof,
+                display_name=name,
+                created_at=now - _dt.timedelta(minutes=i),
+                last_active_at=now,
+            )
+        )
 
 
 class _FakeContainer:
@@ -106,6 +139,7 @@ class _FakeDocker:
 
 
 import server.app as app_mod  # noqa: E402
+
 app_mod.manager._docker = _FakeDocker()
 
 
@@ -176,12 +210,10 @@ with sync_playwright() as pw:
     check("畫面上顯示的是完整字串（切是視覺的，DOM 不動）", bool(m) and m["label"] == TOO_LONG)
     check("🔴 掛上了 tooltip", bool(m) and m["hasTip"] is True)
     check("🔴 tooltip 是完整的 slug（不是又一份被切過的）", bool(m) and m["tip"] == TOO_LONG)
-    check("🔴 chip 本身不裁切，否則 ::after 的提示會被切掉一半",
-          bool(m) and m["chipOverflow"] != "hidden")
+    check("🔴 chip 本身不裁切，否則 ::after 的提示會被切掉一半", bool(m) and m["chipOverflow"] != "hidden")
     # ⚠ 下伸部：`.chip` 是 line-height:1，文字盒剛好等於字級，配上 overflow:hidden 會把
     #   g／p 的尾巴切掉（實測有下伸部的字會少半截）。這條守的是「文字盒比字級高」。
-    check("🔴 文字盒容得下下伸部（line-height > font-size）",
-          bool(m) and m["lineHeight"] > m["fontSize"] + 1)
+    check("🔴 文字盒容得下下伸部（line-height > font-size）", bool(m) and m["lineHeight"] > m["fontSize"] + 1)
 
     print("== 真實長度的 slug：**不該**被切（chip 寬度要夠）==")
     # 只驗「長的會切」的話，把寬度改回連真實長度的模型名都塞不下也會全綠，
@@ -196,15 +228,13 @@ with sync_playwright() as pw:
     #    5.6rem 本來就放不下它們，只是先前 ellipsis 沒生效、看起來剛好而已。
     clipped = page.evaluate("""() => [...document.querySelectorAll('.chip__text')]
       .filter(t => t.scrollWidth > t.clientWidth + 1).map(t => t.textContent)""")
-    check("🔴 被切的只有那顆刻意超長的（claude／medium 這些真實長度值一律不准被切）",
-          clipped == [TOO_LONG])
+    check("🔴 被切的只有那顆刻意超長的（claude／medium 這些真實長度值一律不准被切）", clipped == [TOO_LONG])
 
     print("== 短的：不切，也**不可以**有 tooltip ==")
     e = page.evaluate(PROBE, ["effort", 0])
     check("effort chip 有畫出來", e is not None)
     check("沒有被切到", bool(e) and e["clipped"] is False)
-    check("🔴 沒有 tooltip（不然滑過去只會重複顯示同樣的字）",
-          bool(e) and e["hasTip"] is False and e["tip"] is None)
+    check("🔴 沒有 tooltip（不然滑過去只會重複顯示同樣的字）", bool(e) and e["hasTip"] is False and e["tip"] is None)
 
     print("== hover 真的看得到（不只是掛了 class）==")
     page.hover('.manifest__chips-cell .chip[data-tone="model"]')
@@ -263,8 +293,10 @@ with sync_playwright() as pw:
     # ⚠ 「不透明」與「內容對」要**併成一條**。沒有 .tip 時 ::after 根本沒有生成內容，而
     #   `getComputedStyle(el, '::after').opacity` 對一個不存在的 pseudo 仍然回 1
     #   ——拆成兩條的話，tooltip 完全沒掛的情況下前一條會綠燈，等於半個測試在說謊。
-    check("🔴 hover 後名稱的提示真的顯示出完整名稱（不透明 **且** 內容對）",
-          seen["opacity"] > 0.9 and LONG_NAME in (seen["content"] or ""))
+    check(
+        "🔴 hover 後名稱的提示真的顯示出完整名稱（不透明 **且** 內容對）",
+        seen["opacity"] > 0.9 and LONG_NAME in (seen["content"] or ""),
+    )
 
     browser.close()
 

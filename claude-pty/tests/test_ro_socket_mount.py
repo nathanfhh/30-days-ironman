@@ -73,8 +73,10 @@ def die(msg: str) -> None:
 try:
     import docker
 except ImportError:
-    die("缺 docker SDK：uv run --with docker python tests/test_ro_socket_mount.py\n"
-        "        （經 run-all.sh 跑時代表 NEEDS_DOCKER 那道 gate 已經放行，所以是設定漏了）")
+    die(
+        "缺 docker SDK：uv run --with docker python tests/test_ro_socket_mount.py\n"
+        "        （經 run-all.sh 跑時代表 NEEDS_DOCKER 那道 gate 已經放行，所以是設定漏了）"
+    )
 
 IMAGE = "python:3.13-slim"
 # ⚠ **每次執行一個唯一名字。** 固定名字時，同一台機器上兩個執行（或前一場沒收乾淨）
@@ -85,7 +87,7 @@ VOL = f"ncr-ro-socket-test-{os.getpid()}-{uuid.uuid4().hex[:8]}"
 # 是給人用的：`docker ps -a --filter label=ncr.test=ro-socket-mount` 一眼看得出殘留是誰的。
 LABELS = {"ncr.test": "ro-socket-mount", "ncr.test.run": VOL}
 
-SERVER = r'''
+SERVER = r"""
 import os, socket
 p = "/sock/agent.sock"
 try: os.unlink(p)
@@ -95,9 +97,9 @@ s.bind(p); os.chmod(p, 0o666); s.listen(5)
 print("SERVER-READY", flush=True)
 while True:
     c, _ = s.accept(); d = c.recv(1024); c.sendall(b"ACK:" + d); c.close()
-'''
+"""
 
-CLIENT = r'''
+CLIENT = r"""
 import socket, json, os
 out = {}
 out["mount"] = [l.strip() for l in open("/proc/mounts") if " /sock " in l][0]
@@ -120,21 +122,25 @@ try:
 except OSError as e:
     out["sock"] = f"errno={e.errno}"
 print("RESULT:" + json.dumps(out))
-'''
+"""
 
 try:
     cli = docker.from_env()
     cli.ping()
 except Exception as exc:  # noqa: BLE001
-    die(f"連不到 docker daemon（{type(exc).__name__}: {exc}）。先把 docker 起來再跑。\n"
-        "        這裡**不 SKIP**：exit 0 的自我 SKIP 會被 run-all.sh 算成「跑過而且過了」。")
+    die(
+        f"連不到 docker daemon（{type(exc).__name__}: {exc}）。先把 docker 起來再跑。\n"
+        "        這裡**不 SKIP**：exit 0 的自我 SKIP 會被 run-all.sh 算成「跑過而且過了」。"
+    )
 
 try:
     cli.images.get(IMAGE)
 except docker.errors.ImageNotFound:
-    die(f"本機沒有 {IMAGE}。這是**紅燈不是 SKIP**：exit 0 的自我 SKIP 會被 run-all.sh "
+    die(
+        f"本機沒有 {IMAGE}。這是**紅燈不是 SKIP**：exit 0 的自我 SKIP 會被 run-all.sh "
         f"算成「跑過」，於是下面每一條斷言都沒執行、CI 卻是綠的（實際發生過）。"
-        f"修法：docker pull {IMAGE}（CI 由 workflow 預拉）。")
+        f"修法：docker pull {IMAGE}（CI 由 workflow 預拉）。"
+    )
 
 # teardown 失敗要看得見。`suppress(Exception)` 會讓每一次執行都留下一顆新的 container
 # 與一顆新的 volume，而測試照樣全綠——直到磁碟滿了才有人發現，那時已經沒有線索指回這裡。
@@ -151,13 +157,14 @@ def teardown(label: str, fn) -> None:
 cli.volumes.create(VOL, labels=LABELS)
 srv = None
 try:
-    srv = cli.containers.run(IMAGE, ["python", "-c", SERVER], detach=True, labels=LABELS,
-                             volumes={VOL: {"bind": "/sock", "mode": "rw"}})
+    srv = cli.containers.run(
+        IMAGE, ["python", "-c", SERVER], detach=True, labels=LABELS, volumes={VOL: {"bind": "/sock", "mode": "rw"}}
+    )
     # ⚠ 等不到就**明確失敗**。跑完迴圈繼續往下的話，client 會爆出一個
     #   「連不上 socket」的錯——那看起來像本測試要驗的性質不成立，
     #   實際上只是 server 還沒起來。假失敗比沒有測試更糟。
     _ready = False
-    for _ in range(40):                       # 等 server bind 好（最多 10 秒）
+    for _ in range(40):  # 等 server bind 好（最多 10 秒）
         if b"SERVER-READY" in srv.logs():
             _ready = True
             break
@@ -166,31 +173,30 @@ try:
     if not _ready:
         print("  server log:", srv.logs().decode(errors="replace")[-300:])
     else:
-        out = cli.containers.run(IMAGE, ["python", "-c", CLIENT], remove=True, labels=LABELS,
-                                 volumes={VOL: {"bind": "/sock", "mode": "ro"}}).decode()
+        out = cli.containers.run(
+            IMAGE, ["python", "-c", CLIENT], remove=True, labels=LABELS, volumes={VOL: {"bind": "/sock", "mode": "ro"}}
+        ).decode()
         res = json.loads(out.split("RESULT:", 1)[1].strip())
 
         # ① 掛載真的是唯讀（否則後面兩條都不算數）
-        check("🔴 掛載確實是唯讀（/proc/mounts 有 ro）",
-              " ro," in res["mount"] or res["mount"].endswith(" ro"))
+        check("🔴 掛載確實是唯讀（/proc/mounts 有 ro）", " ro," in res["mount"] or res["mount"].endswith(" ro"))
         # ② 一般檔案寫不進去 —— 證明唯讀是有效的，不是設定沒生效
         check("🔴 一般檔案寫入被擋（EROFS=30）", res["write"] == "errno=30")
         # ③ 但 socket 照樣通 —— 這一條就是那個錯誤說法的反例
-        check("🔴 同一個唯讀掛載上，unix socket 仍能 connect/send/recv",
-              res["sock"] == "ACK:agent-protocol-write")
+        check("🔴 同一個唯讀掛載上，unix socket 仍能 connect/send/recv", res["sock"] == "ACK:agent-protocol-write")
         # ④⑤ **改成唯讀掛載真正買到的東西。** 少了這兩條，這支測試只證明了「:ro 沒有壞事」，
         #     沒有證明「:ro 有做事」——而後者才是做這個決定的理由。
         #     bind mount 與 host 共用同一個 inode，所以容器裡的 chmod 改的是 host 那一顆；
         #     原生 Linux 上那會弄壞使用者其他終端機的 ssh。
         check("🔴 唯讀掛載擋下 chmod（EROFS=30）", res["chmod"] == "errno=30")
-        check("🔴 而且 socket 的 mode 真的沒被改動",
-              res["mode_before"] == res["mode_after"])
+        check("🔴 而且 socket 的 mode 真的沒被改動", res["mode_before"] == res["mode_after"])
 except Exception as exc:  # noqa: BLE001
     # ⚠ 本體丟例外時**不要讓它直接往外拋**。拋出去的話 `finally` 雖然仍然會跑，
     #   但下面那段「資源沒收乾淨」的揭露、以及最後的 summary 都不會印——只剩一段
     #   traceback，而殘留的 container／volume 沒有任何人提起。
     #   主因仍然是這一條（排在最前面），teardown 的問題排在它後面附帶揭露。
     import traceback
+
     check(f"🔴 測試本體爆掉：{type(exc).__name__}: {exc}", False)
     traceback.print_exc()
 finally:
@@ -208,8 +214,10 @@ if _teardown_errors:
         #   而留了一顆殭屍 container 就是問題。本體已經紅的話這幾條只是附帶揭露，
         #   排在後面，主因仍然是上面那些。
         check(f"🔴 資源沒收乾淨：{err}", False)
-    print(f"  ⚠ 手動確認：docker ps -a --filter label=ncr.test.run={VOL}"
-          f" / docker volume ls --filter label=ncr.test.run={VOL}")
+    print(
+        f"  ⚠ 手動確認：docker ps -a --filter label=ncr.test.run={VOL}"
+        f" / docker volume ls --filter label=ncr.test.run={VOL}"
+    )
 
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)

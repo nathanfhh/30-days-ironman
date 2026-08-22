@@ -45,7 +45,9 @@ def main() -> int:
     slug = args.slug
     tools = args.tools.split(",")
 
-    golden = json.loads((data_root / "prs" / slug / "golden.json").read_text())["comments"]
+    golden = json.loads((data_root / "prs" / slug / "golden.json").read_text())[
+        "comments"
+    ]
 
     pool = [
         {"source": "golden", "golden_index": i, "tool": None, "text": g["comment"]}
@@ -57,12 +59,19 @@ def main() -> int:
         jpath = data_root / "judgments" / slug / f"{tool}.json"
         if not jpath.exists():
             continue
-        matched = {m["candidate_index"] for m in json.loads(jpath.read_text())["matches"]}
+        matched = {
+            m["candidate_index"] for m in json.loads(jpath.read_text())["matches"]
+        }
         for i, text in enumerate(cands):
             if i not in matched:
                 pool.append(
-                    {"source": "candidate", "golden_index": None, "tool": tool,
-                     "candidate_index": i, "text": text}
+                    {
+                        "source": "candidate",
+                        "golden_index": None,
+                        "tool": tool,
+                        "candidate_index": i,
+                        "text": text,
+                    }
                 )
 
     pool.sort(key=lambda c: hashlib.sha256(f"{slug}:{c['text']}".encode()).hexdigest())
@@ -71,16 +80,25 @@ def main() -> int:
 
     out_dir = data_root / "calibration"
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / f"{slug}.map.json").write_text(json.dumps({"slug": slug, "claims": pool}, indent=2))
+    (out_dir / f"{slug}.map.json").write_text(
+        json.dumps({"slug": slug, "claims": pool}, indent=2)
+    )
     (out_dir / f"{slug}.claims.json").write_text(
         json.dumps(
-            {"slug": slug, "claims": [{"claim_id": c["claim_id"], "text": c["text"]} for c in pool]},
+            {
+                "slug": slug,
+                "claims": [
+                    {"claim_id": c["claim_id"], "text": c["text"]} for c in pool
+                ],
+            },
             indent=2,
         )
     )
 
     n_golden = sum(1 for c in pool if c["source"] == "golden")
-    print(f"{slug}: {len(pool)} claims ({n_golden} golden + {len(pool) - n_golden} unmatched candidates)")
+    print(
+        f"{slug}: {len(pool)} claims ({n_golden} golden + {len(pool) - n_golden} unmatched candidates)"
+    )
     return 0
 
 
