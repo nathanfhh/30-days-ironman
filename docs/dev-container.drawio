@@ -29,7 +29,7 @@
         <mxCell id="ports" value="&lt;b&gt;-p 127.0.0.1:&lt;動態&gt;:8081&lt;/b&gt;&#xa;mitmweb UI（一律發布，&#xa;因為 published port 是 docker run&#xa;當下的決定，選單在那之後）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
           <mxGeometry x="1260" y="122" width="290" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="sshnote" value="&lt;b&gt;-v $SSH_AUTH_SOCK:/ssh/ssh_sock:ro&lt;/b&gt;&#xa;人的路徑一定掛（詳見第 2 頁）" style="text;html=1;fontSize=11;align=left;verticalAlign=top;fontColor=#b45309;" vertex="1" parent="1">
+        <mxCell id="sshnote" value="&lt;b&gt;-v $SSH_AUTH_SOCK:/ssh/ssh_sock:ro&lt;/b&gt;&#xa;未停用且 socket 存在時掛載（詳見第 2 頁）" style="text;html=1;fontSize=11;align=left;verticalAlign=top;fontColor=#b45309;" vertex="1" parent="1">
           <mxGeometry x="1570" y="126" width="190" height="48" as="geometry" />
         </mxCell>
         <mxCell id="netjoin" value="&lt;b&gt;--network gitlab-proxy&lt;/b&gt;（那張網存在才接；不存在就不帶，否則 docker run 直接報錯）　·　接上時一併給 NCR_GITLAB_API_BASE=http://gitlab-proxy:5678　·　&lt;font color=&quot;#b91c1c&quot;&gt;jaeger 必須在 docker run 之前接上&lt;/font&gt;——限制模式放行的是 entrypoint 起跑那一刻的直連網段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#94a3b8;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="1">
@@ -165,7 +165,7 @@
         <mxCell id="h1" value="host 有 agent 嗎？&#xa;&lt;b&gt;沒有&lt;/b&gt; → 自己 ssh-agent -s 起一個，ssh-add（不指定檔名，載入預設那幾把）&#xa;　　　　 起不來／載不到金鑰 → 只警告，&lt;b&gt;SSH 只是選配，不弄死腳本&lt;/b&gt;&#xa;&lt;b&gt;有但是空的&lt;/b&gt; → 只警告，&lt;b&gt;不擅自 ssh-add&lt;/b&gt;（那是使用者的 agent，&#xa;　　　　 載入的金鑰在腳本退出後還留著）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#86efac;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
           <mxGeometry x="60" y="126" width="660" height="94" as="geometry" />
         </mxCell>
-        <mxCell id="h1n" value="⚠ macOS 的 launchd agent &lt;b&gt;永遠都在&lt;/b&gt;：SSH_AUTH_SOCK 一定有值、socket 一定連得上，&#xa;但沒 ssh-add 過就是空的。只檢查「有沒有 agent」會讓這裡靜靜通過。&#xa;所以看的是 ssh-add -l 的結束碼：&lt;b&gt;0＝有金鑰　1＝連得上但空的　2＝連不上&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+        <mxCell id="h1n" value="⚠ macOS 一般互動登入下 launchd agent &lt;b&gt;通常都在&lt;/b&gt;：SSH_AUTH_SOCK 有值、socket 連得上，&#xa;但沒 ssh-add 過就是空的。只檢查「有沒有 agent」會讓這裡靜靜通過。&#xa;最終判準是 ssh-add -l 的結束碼：&lt;b&gt;0＝有金鑰　1＝連得上但空的　2＝連不到 agent&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#f59e0b;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
           <mxGeometry x="60" y="232" width="660" height="72" as="geometry" />
         </mxCell>
         <mxCell id="h2" value="&lt;b&gt;-v $SSH_AUTH_SOCK:/ssh/ssh_sock:ro&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=12;" vertex="1" parent="1">
@@ -174,7 +174,7 @@
         <mxCell id="h3" value="容器內 &lt;b&gt;socket 在&lt;/b&gt;　→　防火牆開 &lt;b&gt;GitLab:22&lt;/b&gt;（只有那一台）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbf7d0;strokeColor=#15803d;fontSize=12;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="60" y="362" width="660" height="34" as="geometry" />
         </mxCell>
-        <mxCell id="h4" value="&lt;b&gt;git over SSH 可用。&lt;/b&gt;退出時只 ssh-agent -k 掉&lt;b&gt;自己起的那個&lt;/b&gt;——&#xa;host 本來就有 agent 時去 -k，殺掉的是使用者原本那個。借得到，也還得回去。&#xa;（憑證檔與 agent 兩件善後必須寫在同一個函式裡，分開註冊會讓先註冊的那件默默不執行。）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#86efac;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+        <mxCell id="h4" value="&lt;b&gt;SSH 通道具備&lt;/b&gt;（仍取決於 agent 連得上、且裡面有可用金鑰）。&#xa;退出時只 ssh-agent -k 掉&lt;b&gt;自己起的那個&lt;/b&gt;——&#xa;host 本來就有 agent 時去 -k，殺掉的是使用者原本那個。借得到，也還得回去。&#xa;（憑證檔與 agent 兩件善後必須寫在同一個函式裡，分開註冊會讓先註冊的那件默默不執行。）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#86efac;fontSize=11;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
           <mxGeometry x="60" y="408" width="660" height="72" as="geometry" />
         </mxCell>
         <mxCell id="eh2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#16a34a;endArrow=block;" edge="1" parent="1" source="h1n" target="h2">

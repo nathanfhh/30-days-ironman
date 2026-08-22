@@ -5,7 +5,7 @@
 ## 背景
 
 人直接跑容器的那條路（run script）會把 host 的 SSH agent 帶進容器（`-v
-$SSH_AUTH_SOCK:/ssh/ssh_sock`），讓容器內走 SSH 的 git 操作可用。控制平面（[ADR
+$SSH_AUTH_SOCK:/ssh/ssh_sock:ro`），讓容器內走 SSH 的 git 操作可用。控制平面（[ADR
 0004](0004-flask-control-plane.md) / [0009](0009-containerized-deployment-docker-socket.md)）
 預設**不掛**——但這個決定原本只寫在註解裡，於是外顯行為變成：session 裡 `SSH_AUTH_SOCK`
 有值（image 的 ENV 還在）卻連不上 agent，看起來像「差一步沒設好」，實際是「這條路根本
