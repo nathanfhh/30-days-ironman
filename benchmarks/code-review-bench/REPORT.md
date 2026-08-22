@@ -239,7 +239,7 @@ precision 只取決於工具自己的輸出，所以直接可比。recall 的分
 | judge 沒有校準 | §9 承認 | **無** | §2 做了（對上游三個 judge） |
 | 候選重複 | README 有文件 | **有**（`step2_5_dedup_candidates.py`） | **沒跑——上游 published 結果也沒跑** |
 
-### 6.1 golden comments 有 24% 沒通過驗證
+### 6.1 golden comments 有 16.8% 沒通過驗證
 
 上游預期的是**漏收**（真 bug 不在 gold set，被算成 FP），§6 整節都在講怎麼補。
 

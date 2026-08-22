@@ -108,9 +108,13 @@ REPORT.md             the writeup
 
 ```bash
 cd benchmarks/code-review-bench
-git clone --depth 1 https://github.com/withmartian/code-review-benchmark.git /tmp/crb
+git clone https://github.com/withmartian/code-review-benchmark.git /tmp/crb
 
-uv run harness/build_manifest.py \
+# ⚠ 這一步會**覆蓋 committed 的 data/manifest.json**（那份是這次跑的 50 個 PR）。
+#   要保留就先備份，或用 --out 指到別的地方。
+# ⚠ `--full` 不能漏。沒有它會套 per-repo 配額、選出的 PR 比 50 個少，
+#   而後面每一步都吃這份 manifest，於是整條重現路徑都在跑另一個題目。
+uv run harness/build_manifest.py --full \
   --benchmark-data /tmp/crb/offline/results/benchmark_data.json \
   --out data/manifest.json
 uv run harness/fetch_pr.py --manifest data/manifest.json --out data/prs --workdir /tmp/clones
@@ -119,6 +123,18 @@ uv run harness/export_inputs.py \
   --candidates /tmp/crb/offline/results/anthropic_claude-opus-4-5-20251101/candidates.json \
   --manifest data/manifest.json --out data/prs
 ```
+
+⚠ **上游沒有釘在某個 commit 上，而我們也證明不出當初用的是哪一個。** 這次跑的時候
+是直接 clone 預設分支，`manifest.json`、`JOURNAL.md`、git history 與所有產物裡都沒有
+留下上游的 revision（查過了）。所以照上面重跑會拿到「你 clone 當下的上游」，而不是
+「我們當時看到的上游」——上游那邊改了 `benchmark_data.json` 的話，選出來的 PR 就會
+不一樣。這是這條重現路徑目前最大的一個缺口，補法是下次跑之前先把 `git rev-parse HEAD`
+記進 manifest；回頭補一個 hash 上去只是把猜測寫成事實。
+
+⚠ **這四個 agent 階段仍然需要一個 orchestrating LLM。** harness 自己不呼叫任何模型
+API——那是刻意的（計分與資料處理要能離線重跑、可稽核），但不等於整條重現流程不需要
+模型。review、extract、judge、verify 四段都是派給 agent 去跑的，成本與時間見 Day 15
+的帳。`plan_jobs.py` 與 `build_claims.py` 只負責產生它們的輸入。
 
 The four agent stages (review → extract → judge → verify) are dispatched by the
 orchestrating session using `harness/prompts/*.md`; `plan_jobs.py` and

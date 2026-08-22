@@ -262,7 +262,19 @@ if [ -f ~/.ssh/known_hosts ]; then
     RUN_MOUNTS+=(-v ~/.ssh/known_hosts:/home/nathan/.ssh/known_hosts:ro)
 else
     echo "⚠️  找不到 ~/.ssh/known_hosts，容器內第一次連 GitLab 會因 host key 未知而失敗。"
-    echo "   先在 host 執行一次：ssh-keyscan -t rsa,ed25519 <your-gitlab-host> >> ~/.ssh/known_hosts"
+    echo "   補的辦法是把那台主機的 host key 加進去，但**不要直接 >> 進 known_hosts**："
+    echo "   ssh-keyscan 是 TOFU（第一次連到就信任），照抄等於把「你信任誰」交給當下的網路。"
+    echo ""
+    echo "   1) 先抓到暫存檔，不要直接落進 known_hosts："
+    echo "        ssh-keyscan -t rsa,ed25519 <your-gitlab-host> > /tmp/gitlab-hostkey"
+    echo "   2) 印出指紋："
+    echo "        ssh-keygen -lf /tmp/gitlab-hostkey"
+    echo "   3) 拿那串指紋去跟**可信管道**核對：問 GitLab 管理員、或看該站台的官方文件"
+    echo "      （自架站台通常在內部文件裡；gitlab.com 的公布在 GitLab 官方文件）。"
+    echo "   4) 對得起來才寫進去："
+    echo "        cat /tmp/gitlab-hostkey >> ~/.ssh/known_hosts && rm /tmp/gitlab-hostkey"
+    echo ""
+    echo "   對不起來就停下來——那正是這道檢查存在的理由。"
 fi
 
 # gitlab-proxy：有跑就把容器接上那張 network。

@@ -40,7 +40,7 @@ install.sh              把 skills/ 底下的 skill 連進 Claude Code
 skills/
 └── nathan-code-review/ Code Review Skill
 dev-container/          可拋棄的審查環境：工具版本固定，憑證借進來、退出時還回去
-gitlab-proxy/           擋在 GitLab 前面的 nginx：憑證不進 session、端點白名單、限流
+gitlab-proxy/           擋在 GitLab 前面的 nginx：**只代理 API**、端點白名單、限流
 claude-pty/             多人共用的網頁終端：瀏覽器裡開 session，每人一顆自己的 GitLab 代理
 mitm/                   L7 流量側錄：脫敏 addon 與單頁報表，看線上實際流過什麼
 opentelemetry/          觀測：Jaeger compose 與三支報表腳本（時間、錢、單場 HTML）
@@ -95,9 +95,14 @@ benchmarks/             code-review-bench：50 個真實 PR 的評測資料集�
 git 的 SSH 憑證（**轉發 ssh-agent socket，不掛 `~/.ssh`**——交出去的是簽章的能力，
 不是私鑰本體），以及 Opengrep 的規則來源。
 
-容器啟動時還會問一次**網路能力**。限制模式預設拒絕所有 outbound，只放行 `api.anthropic.com`
-與直連的 docker 網段。腳本改寫自 Anthropic 官方 devcontainer 的版本，差異與理由見
-[`dev-container/README.md`](dev-container/README.md)。
+容器啟動時還會問一次**網路能力**。限制模式預設拒絕所有 outbound，一般的 TCP／HTTP(S)
+只放行 `api.anthropic.com` 與直連的 docker 網段。腳本改寫自 Anthropic 官方 devcontainer
+的版本，差異與理由見 [`dev-container/README.md`](dev-container/README.md)。
+
+⚠ **它不是資料外洩的邊界。** 白名單要靠網域解析才成立，所以 DNS 是通的；而查詢名稱本身
+就是一條出境通道（把資料編進 `<...>.attacker.example`，那台主機一個封包都不必回）。
+限制模式擋的是直來直往的對外連線，不是 DLP。這是已知並接受的限制，兩條可能的收法與
+它們各自的故障模式記在 [`docs/dns-egress-notes.md`](docs/dns-egress-notes.md)，本輪沒有實作。
 
 **SSH（22）的放行條件是「ssh-agent 真的被轉發進來」。** 沒有 agent 的容器一個 SSH
 出口都沒有——那個 port 當初進白名單就是為了服務 agent，沒有 agent 時它不會讓任何
@@ -121,6 +126,22 @@ MR 說明裡一段 prompt injection 就能讓它拿那把 token 做 scope 內的
 白名單只有六條，對照 skill 真的會呼叫的端點——GitLab 有的端點很多，但
 「知道有這個端點」跟「決定放行這個端點」是兩件事。
 
+⚠ **這一套跟 `claude-pty` 裡的 per-user 代理不是同一件事，覆蓋範圍差一塊。**
+
+| | `gitlab-proxy/`（獨立版） | `claude-pty` 的 per-user 代理 |
+|---|---|---|
+| API 呼叫 | 代理，token 由 nginx 蓋 | 同左 |
+| `git clone` / `fetch`（HTTPS） | **不經過它**，它只代理 API | 有 smart HTTP 那條路（`info/refs`、`git-upload-pack`、`git-receive-pack`），一併蓋章 |
+
+差別的後果要講白：獨立版底下，**HTTPS clone 沒有任何人替 agent 蓋章**。所以要嘛
+clone 這條路走不通（限制模式下它連不出去），要嘛你把 token 交給 agent 讓它自己帶
+——而一旦交了，「憑證不進 session」這句話對那條路就不成立了。獨立版買到的是
+「API 呼叫的憑證不進 session」，不是「這個容器裡沒有 GitLab 憑證」。
+
+只有 `claude-pty` 的 per-user 代理把 API 與 clone 都收進同一道憑證邊界裡。
+獨立版的 nginx 設定自己也記著這件事（`nginx.conf.template` 那句「等到哪天要連
+git clone 也走這個代理，這行就得搬進各自的 location」）。
+
 細節見 [`gitlab-proxy/README.md`](gitlab-proxy/README.md)。
 
 ## claude-pty
@@ -131,7 +152,7 @@ MR 說明裡一段 prompt injection 就能讓它拿那把 token 做 scope 內的
 它可以有很多人，但不是給很多人「一起」用的：各自登入、各自的狀態空間、各自的
 GitLab 憑證都做了；沒做的是同一場裡兩個人一起看、一起打字。
 
-十六支 ADR 記著每一個決定當初在權衡什麼，包含幾個後來被推翻的：
+ADR 記著每一個決定當初在權衡什麼，包含幾個後來被推翻的：
 [`claude-pty/docs/adr/`](claude-pty/docs/adr/)。想知道為什麼某個地方看起來繞，
 先翻那裡。細節見 [`claude-pty/README.md`](claude-pty/README.md)。
 

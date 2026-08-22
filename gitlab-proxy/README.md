@@ -2,8 +2,11 @@
 
 一顆 nginx 反向代理，替 `nathan-code-review` 這個 skill 擋在 GitLab 前面，做三件事：
 
-1. **憑證不進 session。** token 只存在於這顆容器的環境變數裡；agent 對代理裸打，
-   由代理蓋上 `PRIVATE-TOKEN` 再轉給 GitLab。
+1. **API 呼叫的憑證不進 session。** token 只存在於這顆容器的環境變數裡；agent 對代理
+   裸打，由代理蓋上 `PRIVATE-TOKEN` 再轉給 GitLab。
+   ⚠ **只有 API。** 這份設定不代理 git 的 smart HTTP，所以 `clone` 那條路仍然需要
+   agent 自己帶 token（見文末「已知缺口」）。把這一條寫成「憑證不進 session」會蓋掉
+   那一半。`claude-pty` 的 per-user 代理才是 API 與 clone 都收進同一道邊界的那一套。
 2. **端點白名單。** 只有 skill 真的會呼叫的六條路徑放行，其餘一律 403。
 3. **速率限制。** 2 req/s，避免 agent 失控時把 GitLab 打爆。
 

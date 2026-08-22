@@ -267,10 +267,21 @@ addon 不在就整場不錄，而不是退回錄未脫敏的原始流量。
 
 ```
 網路能力：
-  1 = 限制（白名單） — 只通 api.anthropic.com、直連的 docker 網段（gitlab-proxy），
-                       SSH 22 只通 build 時指定的那台 GitLab（預設）
+  1 = 限制（白名單） — 一般 TCP 出站收斂到 api.anthropic.com、直連的 docker 網段
+                       （gitlab-proxy），SSH 22 只通 build 時指定的那台 GitLab（預設）
   2 = 完全開放       — 不套用任何 iptables 規則
 ```
+
+⚠ **限制模式不是資料外洩的邊界，別把它當 DLP 用。** 它收斂的是一般的 TCP／HTTP(S)
+對外路徑；為了讓網域解析得動，**DNS 仍然是通的**。而 DNS 的查詢名稱本身就是一條
+出境通道：`<把秘密編進來>.attacker.example` 這種查詢會照樣送出去，即使那台主機
+一個封包都回不來。所以限制模式擋得住「agent 直接把東西 POST 到某個網站」，
+擋不住「有人刻意把資料編進 query name 慢慢送」。
+
+這是**已知並接受的限制**，不是還沒做完的東西。要真的關掉那條路，得在 agent 起來
+之前把 allowlist 解析完、然後連 53 一起封掉，或改用只放行核准網域的受控 resolver；
+兩條路各自要處理 CNAME、TTL、CDN 的 IP 漂移與長時間 session 的失效行為，
+評估見 [`docs/dns-egress-notes.md`](../docs/dns-egress-notes.md)。
 
 限制模式跑的是 `init-firewall.sh`，改寫自
 [Anthropic 官方 devcontainer 的同名腳本](https://github.com/anthropics/claude-code/blob/main/.devcontainer/init-firewall.sh)。
@@ -331,7 +342,7 @@ attacker.example.com` 把任意網域加進去、重建整道牆，**而且自�
 
 | 症狀 | 原因 | 處理 |
 |---|---|---|
-| `Host key verification failed.` | 容器裡沒有 known_hosts | host 上執行 `ssh-keyscan -t rsa,ed25519 <host> >> ~/.ssh/known_hosts` 後重跑 |
+| `Host key verification failed.` | 容器裡沒有 known_hosts | 把 host key 加進 `~/.ssh/known_hosts`，但要先核對指紋，見下方「加 host key 的安全做法」 |
 | `Error connecting to agent: No such file or directory` | image 的 `SSH_AUTH_SOCK` 有值，但 socket 沒掛進來 | 這是「這條路沒接」不是「設定壞了」。檢查 host 的 `$SSH_AUTH_SOCK`，或你是不是設了 `NCR_NO_SSH_AGENT` |
 | 容器裡 `$SSH_AUTH_SOCK` 是**空字串** | image 比 Dockerfile 舊。這個變數是 image 的 ENV，改了 Dockerfile 不重 build 就不會生效 | `docker build -t ncr-dev-container .`。啟動時印的 `image built:` 時間比你改 Dockerfile 的時間早就是這個情況 |
 | `Error connecting to agent: Permission denied`（Docker Desktop：macOS / WSL2 / Docker Desktop for Linux） | socket 掛進來了，但 Docker Desktop 代理出來的 socket 節點是 `root:root 0660`，而容器跑 uid 1001 | wrapper 只要沒有確定認出「原生 Linux Docker」就會補 `--group-add 0`（判不出來時也補）。還是出現代表你是自己下 `docker run`，補上這個參數 |
@@ -342,6 +353,31 @@ attacker.example.com` 把任意網域加進去、重建整道牆，**而且自�
 | `❌ Firewall 啟用失敗` 然後容器結束 | 規則沒套成功。fail closed，不會讓 agent 在沒有牆的情況下跑 | 看 `/tmp/firewall.log`。最常見是忘了 `--cap-add=NET_ADMIN`（自己下 `docker run` 時），或白名單網域解析不到 |
 | 限制模式下 WebFetch 還是連得出去 | 那個請求不是從這個 netns 出去的 | 不是設定問題，見上方〈已知限制〉最後一條 |
 | 限制模式下 `git push` 失敗 | build 時沒帶 `--build-arg GITLAB_SSH_HOST` | 帶了重 build，或該場選「2 完全開放」 |
+
+### 加 host key 的安全做法
+
+**不要**直接 `ssh-keyscan ... >> ~/.ssh/known_hosts`。`ssh-keyscan` 是 TOFU：它拿到什麼就
+信什麼，等於把「你信任哪一台 GitLab」這個決定交給你執行那一刻的網路。要補 host key，
+分成四步，中間那兩步才是真正在做事的：
+
+```bash
+# 1. 抓到暫存檔，先不要進 known_hosts
+ssh-keyscan -t rsa,ed25519 <your-gitlab-host> > /tmp/gitlab-hostkey
+
+# 2. 印出指紋
+ssh-keygen -lf /tmp/gitlab-hostkey
+
+# 3. 拿指紋去跟可信管道核對（三選一）：
+#    · 問 GitLab 管理員
+#    · 該站台的內部文件（自架站台通常寫在這裡）
+#    · GitLab 官方文件（gitlab.com 的 host key 指紋公布在那裡）
+
+# 4. 對得起來才寫進去
+cat /tmp/gitlab-hostkey >> ~/.ssh/known_hosts && rm /tmp/gitlab-hostkey
+```
+
+對不起來就停下來，那正是這道檢查存在的理由。跳過第 2、3 步的話，你做的不是「修好一個
+安全問題」，只是把「未經驗證的信任」從連線那一刻搬到 `known_hosts` 裡放著。
 
 ## 這個容器不做的事
 

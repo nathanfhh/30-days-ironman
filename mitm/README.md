@@ -17,10 +17,18 @@ wire_report.py     從 .mitm 算出線上實際流過什麼，輸出單頁 dashb
 dev container 啟動時會問一題，預設不錄：
 
 ```
-錄製本場流量？（mitmproxy，只錄 api.anthropic.com）
+錄製本場流量？（mitmproxy）
   y = 錄，落在 ~/ncr/mitm/<session-id>/（脫敏後）
   n = 不錄（預設）
+
+錄製範圍：
+  1 = 全部流量（預設）  — 這一場對外講的每一句話
+  2 = 只錄模型 API      — 只收 api.anthropic.com，其餘直連、不經過 proxy
 ```
+
+⚠ **答 y 之後的預設是全錄，不是只錄模型 API。** 只錄模型 API 是第二題的收斂選項。
+一份只錄了自己想看的東西的側錄，回答不了「除了模型 API 還連了誰」這個問題，
+而那正是做這件事的理由。
 
 答 y 之後畫面會印兩行：檔案落在哪，以及即時畫面的網址（帶一次性 token）。
 非互動環境用 `NCR_CAPTURE=1` 跳過選單。
