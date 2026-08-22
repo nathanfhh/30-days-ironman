@@ -522,6 +522,16 @@ with _scope() as _s:
     _left2 = _s.query(_View).filter(_View.session_id == "rv-sess").count()
 check("actor 是 NULL 的舊列，改 admin 密碼時照樣收（寧可多收）", _left2 == 0)
 
+# ⚠ 這一條是獨立審查抓到的：actor 只記得**建立**那一列的人，而 open_view 對已經活著的
+#   view 是直接沿用、不改 actor。所以「擁有者先開、admin 後看同一場」時 actor 是擁有者，
+#   只比對 actor 的話收不到 admin 正在看的那個畫面。
+with _scope() as _s:
+    _s.add(_View(session_id="rv-sess", port=61010, pid=None, actor_user_id=_victim["id"]))
+_views.close_user_views(_boss["id"])
+with _scope() as _s:
+    _left_seq = _s.query(_View).filter(_View.session_id == "rv-sess").count()
+check("擁有者先開、admin 後看：改 admin 密碼照樣收得掉（actor 停在擁有者身上）", _left_seq == 0)
+
 with _scope() as _s:
     _s.add(_View(session_id="rv-sess", port=61003, pid=None, actor_user_id=None))
 # 「不誤收」要換一個他完全沒有份的 session 才驗得到（rv-sess 的擁有者就是他本人，
@@ -533,6 +543,26 @@ _views.close_user_views(_victim["id"])
 with _scope() as _s:
     _stay = _s.query(_View).filter(_View.session_id == "rv-other").count()
 check("非 admin 改密碼不會去收別人 session 上 actor 未知的終端", _stay == 1)
+
+print("== kill 送不出去時，那一列不可以被刪掉 ==")
+# 獨立審查抓到的（F-5）：_kill 以前吞掉 PermissionError，而 close_views 照樣 delete 那一列
+# 並計入「已收」。結果是程序還活著、DB 記錄沒了，之後再也沒有人會去收它。
+_stuck_user = auth.create_user("kill-stuck", "kill-stuck-pw-1")
+with _scope() as _s:
+    _s.add(_Sess(id="rv-stuck", container_name="c-stuck", user_id=_stuck_user["id"], status="running"))
+    _s.add(_View(session_id="rv-stuck", port=61020, pid=999001, actor_user_id=_stuck_user["id"]))
+_orig_kill = _views._kill
+_views._kill = lambda pid: False  # 模擬 SIGTERM 送不出去
+try:
+    _c, _f = _views.close_user_views(_stuck_user["id"])
+    with _scope() as _s:
+        _still = _s.query(_View).filter(_View.session_id == "rv-stuck").count()
+    check("kill 失敗時那一列留著（不會變成沒人追的孤兒）", _still == 1)
+    check("而且算成失敗，不是「已收」", _f == 1 and _c == 0)
+finally:
+    _views._kill = _orig_kill
+with _scope() as _s:
+    _s.query(_View).filter(_View.session_id == "rv-stuck").delete()
 
 print("== 收終端失敗：不可以回 204、也不可以只印成功 ==")
 _boom = auth.create_user("revoke-boom", "revoke-boom-pw-1")
@@ -558,6 +588,25 @@ try:
     check("管理員改密碼的 API 不回 204（那是假成功）", _resp.status_code != 204)
     check("而是回 200 加上實情", _resp.status_code == 200 and _resp.get_json()["views_failed"] == 1)
     check("回應講得出密碼確實改掉了", _resp.get_json()["password_changed"] is True)
+    check("訊息講得出是幾場沒收掉", "1 場" in _resp.get_json()["warning"])
+
+    # 另一種失敗：連「有幾場要收」都查不到（close_user_views 整個拋出來）。
+    # 這比「N 場收不掉」更糟，訊息不可以用同一句話帶過。
+    def _explode_all(_uid):
+        raise RuntimeError("查不動（注入）")
+
+    _orig_cuv = _views.close_user_views
+    _views.close_user_views = _explode_all
+    try:
+        _r2 = auth.change_password(_boom["id"], "revoke-boom-pw-4", require_old=False)
+        check("整個查不動時 views_failed 是 -1（不是 0，也不是某個場數）", _r2["views_failed"] == -1)
+        check("帶得出原因", "查不動" in _r2.get("views_error", ""))
+        _resp2 = _ca.post(f"/api/users/{_boom['id']}/password", json={"new_password": "revoke-boom-pw-5"})
+        check("API 仍然不回 204", _resp2.status_code == 200)
+        _w = _resp2.get_json()["warning"]
+        check("訊息跟「N 場收不掉」不一樣（講出連幾場都不知道）", "都沒查到" in _w)
+    finally:
+        _views.close_user_views = _orig_cuv
 finally:
     _views.close_views = _orig_close
 

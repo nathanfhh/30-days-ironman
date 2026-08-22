@@ -297,6 +297,32 @@ def _too_large(e):
     return jsonify(error=f"檔案太大（上限 {mb} MB）"), 413
 
 
+def _partial_close_payload(r: dict) -> dict:
+    """改密碼成功、但收終端沒收乾淨時的回應本體。
+
+    ⚠ **兩種失敗要分開講。** `views_failed` 是正數＝那幾場個別收不掉，其餘收掉了；
+      是 `-1` ＝整個動作拋出來，連「有幾場要收」都沒問到，所以不知道還有幾個活著。
+      後者比前者糟，用同一句話帶過會讓人以為只是零星幾場。
+    """
+    failed = r["views_failed"]
+    if failed == -1:
+        warning = (
+            "密碼已經改掉，但**收終端這一步整個失敗了**，連有幾場要收都沒查到。"
+            "他既有的連線可能還可以打字。請再跑一次；再失敗就直接終止他的 session。"
+        )
+    else:
+        warning = f"密碼已經改掉，但有 {failed} 場的終端沒有收乾淨；那些連線在收掉之前仍然可以打字。請再跑一次。"
+    out = {
+        "password_changed": True,
+        "views_closed": r.get("views_closed", 0),
+        "views_failed": failed,
+        "warning": warning,
+    }
+    if r.get("views_error"):
+        out["views_error"] = r["views_error"]
+    return out
+
+
 @app.errorhandler(BadInput)
 def _bad_input(e: BadInput):
     return jsonify(error=str(e)), 400
@@ -769,12 +795,7 @@ def change_own_password():
     # ⚠ 收終端沒收乾淨就**不可以回 204**。密碼確實改了（回不去了），但那不是完整的
     #   「已經切斷」——回 200 加上實情，讓前端有東西可講。
     if r.get("views_failed"):
-        return jsonify(
-            password_changed=True,
-            views_closed=r.get("views_closed", 0),
-            views_failed=r["views_failed"],
-            warning="密碼已經改掉，但有終端沒有收乾淨；那些連線在收掉之前仍然可以打字。",
-        ), 200
+        return jsonify(**_partial_close_payload(r)), 200
     return "", 204
 
 
@@ -843,12 +864,7 @@ def admin_change_password(uid: int):
     r = auth.change_password(uid, body.get("new_password", ""), require_old=False)
     # ⚠ 同上：這條是「讓某個人退場」最常走的路，收不乾淨更不能靜靜回成功。
     if r.get("views_failed"):
-        return jsonify(
-            password_changed=True,
-            views_closed=r.get("views_closed", 0),
-            views_failed=r["views_failed"],
-            warning="密碼已經改掉，但有終端沒有收乾淨；那些連線在收掉之前仍然可以打字。",
-        ), 200
+        return jsonify(**_partial_close_payload(r)), 200
     return "", 204
 
 

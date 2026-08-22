@@ -11,11 +11,32 @@
 """
 
 import os
+import shutil
+import stat
 import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SH = os.path.join(os.path.dirname(HERE), "deploy", "redeploy.sh")
+
+# ⚠ **這支腳本在 image 檢查之前就會真的做事**（建 ${SPACE} 與 ~/.claude-pty、跑可寫檢查），
+#   通過那一關之後還會 `docker compose rm -sf reconciler` 與 `up -d --build`。所以測試
+#   一定要把環境整個架空。
+#
+#   這不是理論上的風險：第一版的這支測試**真的把開發機上正在跑的部署重佈了一次**
+#   （control 與 reconciler 被重建）。帶 skip 旗標的那一條通過 image 關卡之後就一路走到
+#   compose，而它斷言的訊息在 compose 之前就印了，所以測試「過」，副作用照發生。
+#
+#   兩件事一起做：HOME 與 CLAUDE_PTY_SPACE 指到 tmpdir；PATH 最前面插一個假的 `docker`，
+#   一律非零退出——image inspect 查不到（正是要測的情境），compose 那幾句也全部短路。
+TMP = tempfile.mkdtemp(prefix="preflight-test-")
+_BIN = os.path.join(TMP, "bin")
+os.makedirs(_BIN, exist_ok=True)
+_STUB = os.path.join(_BIN, "docker")
+with open(_STUB, "w", encoding="utf-8") as _f:
+    _f.write('#!/bin/sh\necho "stub docker: $*" >&2\nexit 1\n')
+os.chmod(_STUB, os.stat(_STUB).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 _pass = _fail = 0
 
@@ -28,7 +49,14 @@ def check(label, ok):
 
 
 def run(*args, **env):
-    e = dict(os.environ, CLAUDE_PTY_IMAGE="ncr-preflight-does-not-exist-42", **env)
+    e = dict(
+        os.environ,
+        CLAUDE_PTY_IMAGE="ncr-preflight-does-not-exist-42",
+        HOME=TMP,
+        CLAUDE_PTY_SPACE=os.path.join(TMP, "space"),
+        PATH=_BIN + os.pathsep + os.environ.get("PATH", ""),
+        **env,
+    )
     return subprocess.run(
         ["bash", SH, *args],
         capture_output=True,
@@ -68,5 +96,16 @@ r = run("--nope")
 check("未知參數 → exit 2", r.returncode == 2)
 check("錯誤訊息列得出收哪些", "--build-session-image" in (r.stdout + r.stderr))
 
+print("== 測試自己不可以碰到真實環境 ==")
+# ⚠ 這一組守的是「測試不會動到跑測試的人」。斷言不能寫成「真實家目錄裡沒有那個目錄」
+#   ——它本來就可能存在（開發機上有真的部署），那樣分不出「本來就有」與「我建的」。
+#   要驗的是兩件可以直接觀察的事：落點在 tmpdir、而且沒有任何一次呼叫到真的 docker。
+check("腳本的落點在 tmpdir 裡", os.path.isdir(os.path.join(TMP, "space")))
+_probe = run(CLAUDE_PTY_SKIP_SESSION_IMAGE_CHECK="1", CLAUDE_PTY_HOST_PLATFORM="Darwin")
+_probe_out = _probe.stdout + _probe.stderr
+check("略過 image 關卡之後打到的是 stub docker，不是真的 daemon", "stub docker:" in _probe_out)
+check("因此走不到 compose（stub 一律非零，腳本在那裡就停）", _probe.returncode != 0)
+
+shutil.rmtree(TMP, ignore_errors=True)
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)

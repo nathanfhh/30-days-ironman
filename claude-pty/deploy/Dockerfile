@@ -153,9 +153,14 @@ COPY server/ ./server/
 #   最後 `--no-deps .` 裝這個套件本身（相依已經裝齊，不要讓它再解一次）。
 RUN pip install --no-cache-dir uv==0.7.3 \
     && uv lock --check \
-    && uv export --frozen --no-dev --extra server --no-emit-project -o /tmp/requirements.txt \
+    && uv export --frozen --no-dev --extra server --group build --no-emit-project \
+         -o /tmp/requirements.txt \
     && pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt \
-    && pip install --no-cache-dir --no-deps . \
+    # ⚠ `--no-build-isolation`：沒有它的話 pip 會另開一個隔離環境、**從 PyPI 重新抓一份
+    #   沒釘版本也沒有雜湊的 setuptools** 來建這個套件，於是「由 lockfile 釘死」對相依
+    #   成立、對 build backend 不成立。`--group build` 把釘死的 setuptools 帶進上一步，
+    #   這裡就直接用它。
+    && pip install --no-cache-dir --no-build-isolation --no-deps . \
     && pip uninstall -y uv \
     && rm -f /tmp/requirements.txt \
     && pip freeze > /app/installed-requirements.txt \

@@ -193,6 +193,26 @@ os.unlink(_uploads)
 _restore(_uploads)
 check("擋完之後正常上傳仍然可用", send(ca, "sess-alice", "after.png", b"ok").status_code == 201)
 
+print("== provision 建 uploads 時也不可以跟著連結走 ==")
+# 獨立審查抓到的：上傳那條路徑用 fd 梯子擋住了，但 provision_user_space 當初是用
+# makedirs + chmod 建這一層，而那兩支都跟著連結走。既有空間重跑 provision 時，
+# 控制平面就會在對方指定的位置建目錄／改權限。
+from server import sessions as _sessions  # noqa: E402
+
+_prov_outside = os.path.join(TMP, "provision-escape")
+_swap_to_symlink(_uploads, _prov_outside)
+try:
+    _sessions.provision_user_space(alice["id"], "alice")
+    _raised = False
+except Exception:
+    _raised = True
+check("uploads 是連結時 provision 拒絕開場（不是安靜地跟著走）", _raised)
+check("連結指向的位置沒有被建出來", not os.path.exists(_prov_outside))
+if os.path.islink(_uploads):
+    os.unlink(_uploads)
+os.makedirs(_uploads, mode=0o700, exist_ok=True)
+check("還原之後 provision 正常跑得完", _sessions.provision_user_space(alice["id"], "alice") is None)
+
 print("== 閘 4：反 CSRF——multipart 例外只對這個端點、且要自訂標頭 ==")
 check(
     "缺 X-Requested-With → 400（form 設不了這個標頭）",

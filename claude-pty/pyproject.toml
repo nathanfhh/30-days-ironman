@@ -20,11 +20,26 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# 正式部署額外要的。⚠ deploy/Dockerfile **必須**照這裡裝（`pip install .[server]`），
-# 不要在 Dockerfile 裡另外寫死一串——兩份清單一旦分岔，CVE 掃描掃的是 uv.lock（由本檔
-# 產生）而實際跑的是另一串，等於掃了一個沒在跑的東西。gunicorn 是對外聽 port 的，
-# 尤其不該落在掃描範圍外。
+# 正式部署額外要的。⚠ **相依只有一份清單，就是這裡。** 不要在 Dockerfile 裡另外寫死
+# 一串——兩份一旦分岔，CVE 掃描掃的是 uv.lock（由本檔產生）而實際跑的是另一串，等於掃了
+# 一個沒在跑的東西。gunicorn 是對外聽 port 的，尤其不該落在掃描範圍外。
+# 裝法見 deploy/Dockerfile：`uv lock --check` 當閘、`uv export` 攤成帶雜湊的 requirements、
+# `pip install --require-hashes` 照裝。所以「這裡改了」跟「lockfile 沒跟著更新」會讓 build
+# 當場失敗，而不是安靜地裝出另一組版本。
 server = ["gunicorn>=21.0"]
+
+[build-system]
+# ⚠ 明確宣告並**釘死版本**。沒有這一表的話 pip 會走 PEP 517 的 fallback
+# （`setuptools.build_meta:__legacy__`）並開 build isolation，於是 build 期用的 setuptools
+# 是每次 build 從 PyPI 重新解析的、沒有版本也沒有雜湊——那正是 Dockerfile 那一段要消滅的
+# 「掃描的綠燈證明不了出貨那顆」，只是小一號。deploy/Dockerfile 配 `--no-build-isolation`，
+# 讓 backend 從帶雜湊的 requirements 進來。
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+# build backend 自成一組，才不會有一天有人往 dev 加東西就跟著進正式 image。
+build = ["setuptools==80.9.0"]
 
 [tool.setuptools.packages.find]
 include = ["server*"]

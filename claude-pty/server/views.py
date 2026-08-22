@@ -106,13 +106,20 @@ def close_views(session_id: str) -> int:
     正常情況不需呼叫——關網頁時 `-q` 會讓 ttyd 自己退出。
     """
     closed = 0
+    stuck: list[int] = []
     with session_scope(immediate=True) as s:
         rows = s.query(View).filter(View.session_id == session_id).all()
         for row in rows:
-            if row.pid:
-                _kill(row.pid)
+            if not _kill(row.pid):
+                # ⚠ **不刪這一列。** 刪掉唯一的追蹤記錄等於把一個還活著的 ttyd 變成孤兒，
+                #   而它正是我們要收的那個東西。留著讓 reconciler 之後還有機會，
+                #   並把失敗往上報。
+                stuck.append(row.pid or 0)
+                continue
             s.delete(row)
             closed += 1
+    if stuck:
+        raise ViewError(f"收不掉 {len(stuck)} 個終端（pid {', '.join(str(p) for p in stuck)}）")
     return closed
 
 
@@ -157,7 +164,8 @@ def close_user_views(user_id: int) -> int:
         targets = {r.id for r in s.query(SessionRow.id).filter(SessionRow.user_id == user_id).all()}
         targets |= {r.session_id for r in s.query(View.session_id).filter(View.actor_user_id == user_id).all()}
         if is_admin:
-            targets |= {r.session_id for r in s.query(View.session_id).filter(View.actor_user_id.is_(None)).all()}
+            # 見上：actor 只記得建立者，admin 沿用別人開的 view 時不會留下痕跡。
+            targets |= {r.session_id for r in s.query(View.session_id).all()}
     closed = failed = 0
     for sid in targets:
         try:
@@ -435,10 +443,24 @@ def _is_our_ttyd(pid: int | None) -> bool:
     return bool(argv) and os.path.basename(argv[0]) in _OUR_TTYD_NAMES
 
 
-def _kill(pid: int | None) -> None:
-    if pid and _is_our_ttyd(pid):
-        with suppress(ProcessLookupError, PermissionError, OSError):
-            os.kill(pid, 15)  # SIGTERM；不需 wait——它不是我們的子程序，由 init reap
+def _kill(pid: int | None) -> bool:
+    """送 SIGTERM。**回傳「這個 pid 現在確定不會再服務了」**。
+
+    ⚠ 以前這裡整段吞掉例外、也不回報。於是 `close_views` 對一個 `PermissionError` 的
+      ttyd 照樣刪掉 DB 那一列並計入「已收」——程序還活著、記錄沒了、之後再也沒有人會
+      去收它。切存取權的動作不可以安靜地失敗，所以失敗要說得出來。
+    """
+    if not pid:
+        return True  # 沒有 pid＝沒有東西要收
+    if not _is_our_ttyd(pid):
+        return True  # 不是我們的 ttyd（已退出、號碼被回收）＝沒事
+    try:
+        os.kill(pid, 15)  # SIGTERM；不需 wait——它不是我們的子程序，由 init reap
+    except ProcessLookupError:
+        return True  # 它剛好自己退了，結果一樣
+    except (PermissionError, OSError):
+        return False  # 送不出去：它可能還活著，不可以當成收掉了
+    return True
 
 
 def _process_alive(pid: int | None) -> bool:

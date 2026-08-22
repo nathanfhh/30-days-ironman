@@ -14,3 +14,6 @@ __pycache__/
 .ruff_cache/
 .playwright-mcp/
 .DS_Store
+
+# `pip install --no-build-isolation .` 在本機跑時的產物（image 裡不留）
+claude_pty.egg-info/

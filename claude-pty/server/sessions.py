@@ -667,20 +667,40 @@ def provision_user_space(user_id: int, username: str) -> None:
     for sub in ("claude", "persistent-data", "ncr"):
         os.makedirs(os.path.join(root, sub), mode=0o700, exist_ok=True)
     # ⚠ `persistent-data/uploads` 由**控制平面**建，不讓上傳那條路徑臨時 `makedirs`。
-    #   那底下是 session 容器寫得進去的地方，而 `makedirs` 會跟著 symlink 走——先建好，
-    #   上傳時就只剩「開得開嗎」這一個問題（app._open_uploads_dir 仍會逐層拒絕連結，
-    #   因為既有空間可能在這一行加進來之前就被動過手腳）。
-    os.makedirs(os.path.join(root, "persistent-data", "uploads"), mode=0o700, exist_ok=True)
+    #
+    # ⚠ 而且**不可以用 `makedirs` 建它**。上面那四層是掛載點本身、容器換不掉；`uploads`
+    #   不是——它住在 `persistent-data/` 底下，而那一層是 session 容器的 rw 掛載，容器
+    #   可以把它刪掉換成一條指向別處的連結。`makedirs` 會跟著連結走，於是控制平面（APP_UID
+    #   的身分）就在對方指定的任意位置建出一個 0700 目錄；接著那圈 `chmod` 也會跟著走。
+    #   這正是 app._open_uploads_dir 那支函式在防的事，在這裡自己踩一遍就白做了。
+    #   所以走 mkdirat：拿 persistent-data 的 fd 當錨，開的時候 O_NOFOLLOW，
+    #   權限用 fchmod 對著 fd 設，全程不經過字串路徑。
+    _pd_fd = os.open(os.path.join(root, "persistent-data"), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        with suppress(FileExistsError):
+            os.mkdir("uploads", 0o700, dir_fd=_pd_fd)
+        try:
+            _up_fd = os.open("uploads", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=_pd_fd)
+        except OSError as e:
+            # 開不起來＝它不是一個正常目錄（被換成連結或普通檔）。這是**拒絕開場**的理由，
+            # 不是可以繞過的雜訊：繞過就等於接受一個已經被動過手腳的空間。
+            raise SessionError(
+                f"使用者空間裡的 persistent-data/uploads 不是一個正常目錄（{e}）。"
+                f"這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
+            ) from e
+        try:
+            os.fchmod(_up_fd, 0o700)
+        finally:
+            os.close(_up_fd)
+    finally:
+        os.close(_pd_fd)
     # ⚠ `makedirs(mode=...)` **只對它新建的那一層生效**，已經存在的目錄權限不會動。
     #   所以每一層都要明確 chmod——升級前用預設 0755 建出來的空間，否則會一直維持
     #   世界可讀，而 `mitm/` 裡是完整的 API 請求本文。
-    for d in (
-        root,
-        *(
-            os.path.join(root, x)
-            for x in ("claude", "persistent-data", "ncr", os.path.join("persistent-data", "uploads"))
-        ),
-    ):
+    # ⚠ 這一圈**只涵蓋掛載點本身那四層**。`persistent-data/uploads` 不在裡面，因為
+    #   `os.chmod` 跟著連結走，而那一層是容器換得掉的（見上）——它的權限在上面用
+    #   `fchmod` 對著已經驗過的 fd 設好了。
+    for d in (root, *(os.path.join(root, x) for x in ("claude", "persistent-data", "ncr"))):
         with suppress(OSError):
             os.chmod(d, 0o700)
 

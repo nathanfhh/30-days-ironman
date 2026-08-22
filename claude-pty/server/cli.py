@@ -61,11 +61,21 @@ def main(argv: list[str] | None = None) -> int:
             print(f"已重設 {args.username} 的密碼")
             # ⚠ 「密碼改了」不等於「他被請出去了」：cookie 全滅擋不到一條已經升級完成的
             #   WebSocket，所以要接著收終端——而收不掉的時候不可以只印成功就走人。
-            if r.get("views_failed"):
+            _f = r.get("views_failed")
+            if _f == -1:
+                # 整個動作拋出來，連「有幾場要收」都沒問到——比「N 場收不掉」更糟。
                 print(
-                    f"⚠ 有 {r['views_failed']} 場的終端沒有收乾淨（收掉 "
-                    f"{r.get('views_closed', 0)} 個）。那些連線在收掉之前仍然可以打字，"
-                    f"請再跑一次，或直接終止那幾場 session。",
+                    f"⚠ 收終端這一步整個失敗了（{r.get('views_error', '原因不明')}），"
+                    f"連有幾場要收都沒查到。他既有的連線可能還可以打字。"
+                    f"請再跑一次；再失敗就直接終止他的 session。",
+                    file=sys.stderr,
+                )
+                return 1
+            if _f:
+                print(
+                    f"⚠ 有 {_f} 場的終端沒有收乾淨（收掉 {r.get('views_closed', 0)} 個）。"
+                    f"那些連線在收掉之前仍然可以打字，請再跑一次，"
+                    f"或直接終止那幾場 session。",
                     file=sys.stderr,
                 )
                 return 1
