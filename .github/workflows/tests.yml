@@ -72,6 +72,14 @@ jobs:
                        python -c "import sys; sys.path.insert(0, '.'); from server import config; print(config.PROXY_IMAGE)")
           echo "代理 image：${img}"
           docker pull "${img}"
+      # `test_ro_socket_mount` 用一顆現成的小 image 當 socket 的兩端（server 掛 rw、
+      # client 掛 ro）。與代理 image 同一個做法：**由 workflow 預拉，測試缺了就紅**。
+      # ⚠ 這一步是 2026-08-22 補的。在它之前那支測試自己 `print("SKIP"); exit(0)`，
+      #   run-all.sh 於是把它算成「跑過」、不進跳過清單，下面那道「跳過上限 1」的 gate
+      #   完全看不到它——chmod／mode 兩條斷言從來沒有在 CI 上跑過，而畫面是綠的
+      #   （run 32579472171 的 log 就是證據）。
+      - name: 預拉 test_ro_socket_mount 用的 image
+        run: docker pull python:3.13-slim
       # 兩支測試會在 host 上真的把 ttyd 生出來（不是在容器裡跑）。裝的是 C 版，因為
       # TTYD_BIN_DEFAULT 就是它——Rust 那顆是可選的第二顆，要驗 --auth-url 那層才需要。
       # ⚠ 版本與雜湊一律從 deploy/Dockerfile 讀，不在這裡抄一份：抄一份的那天，CI 驗的
@@ -116,3 +124,7 @@ jobs:
             echo "::error::跳過的數量超出預期——CI 上的跳過幾乎都是設定漏了，不是正當的環境限制"
             exit 1
           fi
+          # ⚠ 上面那個數字**只數 run-all.sh 自己跳掉的**。測試在自己內部 print 一行 SKIP
+          #   再 exit 0 的話，這道 gate 完全看不到——那道檢查在 `run-all.sh` 的 `run_one`
+          #   裡（「空跑：exit 0，但一條 PASS/FAIL 都沒印出來」），放那裡是因為它知道剛跑的
+          #   是哪一支，不必從 log 猜區塊標題的形狀，而且本機跑 `--all` 也吃得到。

@@ -39,6 +39,17 @@ NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
 # `fake_gitlab.py` 不是測試，是被 test_gitlab_upstream_e2e 掛進容器裡跑的假上游。
 # ⚠ 它的檔名沒有 `test_` 前綴正是為了不被下面那個 glob 撿走——改名前先想清楚。
 
+# 需要 dev-container image 已經 build 好的。
+# ⚠ 這兩支遇到缺 image 時**自己** print SKIP 再 exit 0——那正是「空跑」偵測要抓的形狀
+#   （test_ro_socket_mount 就是這樣在 CI 上綠著跑完的）。但缺 image 是**真的環境條件**，
+#   不是設定漏了，所以正解是讓它進跳過清單、看得見，而不是紅燈。
+#   ⚠ CI 不受影響：dev-container job 會先現 build 這顆 image。
+# ⚠ image 名字與那兩支同一個來源（CLAUDE_PTY_IMAGE），不在這裡抄第二份——抄一份的那天，
+#   gate 判的就不是測試真正要用的那顆了。
+NEEDS_NCR_IMAGE=(test_token_fd test_trivy_volume)
+have_ncr_image=0
+docker image inspect "${CLAUDE_PTY_IMAGE:-ncr-dev-container}" >/dev/null 2>&1 && have_ncr_image=1
+
 # 另外需要 host 上有 ttyd binary 的：這兩支會真的把 ttyd 生出來（不是在容器裡跑）。
 # 沒裝的話所有 port 都起不來，會以「無可用 port」這種完全不像缺工具的訊息失敗。
 NEEDS_TTYD=(test_view_lifecycle e2e_flow)
@@ -141,6 +152,11 @@ run_one() {
   if in_list "${base}" "${NEEDS_LINUX[@]}" && [ "${is_linux}" -eq 0 ]; then
     skipped+=("${base}（$(uname -s) 上驗不到這條性質，見 docs/linux-acceptance.md）"); return
   fi
+  # ⚠ 排在平台判斷**之後**：平台限制更根本——macOS 上這條性質 build 了 image 也還是
+  #   驗不到，先報「缺 image」會把人送去做一件白做的事。
+  if in_list "${base}" "${NEEDS_NCR_IMAGE[@]}" && [ "${have_ncr_image}" -eq 0 ]; then
+    skipped+=("${base}（沒有 ${CLAUDE_PTY_IMAGE:-ncr-dev-container} image，先跑 dev-container/build.sh）"); return
+  fi
   if in_list "${base}" "${NEEDS_CLAUDE_CRED[@]}" && [ "${have_claude_cred}" -eq 0 ]; then
     skipped+=("${base}（host 上沒有 claude 憑證可複製進沙盒）"); return
   fi
@@ -149,10 +165,35 @@ run_one() {
   fi
   printf '\n\033[1m== %s\033[0m\n' "${base}"
   ran=$((ran + 1))
-  if ! uv run "${DEPS[@]}" python "${f}"; then
+  # ⚠ 邊印邊收（tee）：跑完之後還看得到它印了什麼——下面那道「空跑」檢查需要。
+  #   直接 `> file` 的話跑很久的測試會整段沒有畫面。
+  # ⚠ **`-u` 不是裝飾。** 接上 pipe 之後 stdout 不再是 TTY，CPython 會從行緩衝切成
+  #   塊緩衝（8KB）——實測：三行間隔一秒的輸出，不加 -u 時會在行程結束那一刻**一次
+  #   全部吐出來**。跑五分鐘的整合測試因此整段沒有畫面，看起來像卡死。
+  #   這是 tee 帶進來的回歸，不是原本就有的：沒有 pipe 時 stdout 是 TTY，本來就是行緩衝。
+  local out; out="$(mktemp)"
+  if ! uv run "${DEPS[@]}" python -u "${f}" 2>&1 | tee "${out}"; then
     fails=$((fails + 1))
     echo "   ↑ ${base} 失敗"
+  # --- 空跑：exit 0 但一條斷言都沒跑 -------------------------------------------
+  #
+  # ⚠ 這是假綠燈的第二種形狀，比「安靜地跳過」更難發現：測試在**自己內部** print 一行
+  #   SKIP 再 `sys.exit(0)`，於是 run-all.sh 看到的是「跑完而且過了」，它不會進跳過清單，
+  #   CI 那道「跳過上限 1」的 gate 也看不到。2026-08-22 實際發生：test_ro_socket_mount
+  #   在 CI 上一路 SKIP（run 32579472171 的 log），而它存在的理由正是那幾條 chmod／mode
+  #   斷言——它們從來沒有在 CI 上跑過，畫面卻一直是綠的。
+  # ⚠ 判準是「有沒有印出任何 PASS/FAIL」，不是「有沒有出現 SKIP 這個字」。有幾支測試
+  #   會跳過**其中一節**、其他斷言照跑（telemetry 選單、沒帶 build arg 的那條規則），
+  #   那是正當的，抓字串會把它們一起弄紅——製造噪音的 gate 最後會被當成背景消化掉。
+  # ⚠ 放在 run-all.sh 而不是 CI 的 log 剖析：這裡知道剛跑的是哪一支，不必去猜區塊標題
+  #   的形狀（實測猜錯過——測試自己印的小節標題長得跟區塊標題一樣）。本機跑也吃得到。
+  elif ! grep -qE '^[[:space:]]+(PASS|FAIL)[[:space:]]' "${out}"; then
+    fails=$((fails + 1))
+    echo "   ↑ ${base} 空跑：exit 0，但一條 PASS/FAIL 都沒印出來"
+    echo "     這會被算成「跑過而且過了」。要嘛讓它明確失敗，要嘛加進上面的 NEEDS_* 清單"
+    echo "     （那樣才會出現在跳過清單上，被 CI 的跳過上限管到）。"
   fi
+  rm -f "${out}"
 }
 
 # --- 先驗 app.js 的語法 -------------------------------------------------------
