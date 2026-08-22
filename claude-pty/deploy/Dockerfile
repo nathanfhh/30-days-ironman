@@ -129,10 +129,31 @@ WORKDIR /app
 #        真正的把關邏輯在本機測不到。
 #     2. CVE 掃描掃的是由 pyproject 產生的 uv.lock，而實際跑的是另一串；gunicorn 是
 #        對外聽 port 的東西，卻從來沒被任何一次掃描涵蓋過。
-#   程式碼要在 pip install 之前 COPY 進來——`pip install .` 要建的就是這個套件本身。
-COPY pyproject.toml ./
+#   程式碼要在安裝之前 COPY 進來——要建的就是這個套件本身。
+#
+# ⚠ 而「同一份清單」還不夠，要**同一組版本**。`pip install ".[server]"` 是每次 build
+#   重新解析一次，於是 Trivy 掃的 lockfile 與 image 裡實際裝的可以是兩組不同的版本
+#   ——掃出來的綠燈證明不了出貨的那顆。所以改成由 uv.lock 釘死。
+COPY pyproject.toml uv.lock ./
 COPY server/ ./server/
-RUN pip install --no-cache-dir ".[server]"
+# ⚠ 三步走：
+#   1. `uv lock --check` 是那道閘：**lockfile 與 pyproject 對不上就直接失敗**。
+#      不能只靠 `uv export --frozen`——`--frozen` 的意思是「不要更新 lockfile」，
+#      它會安靜地照舊的鎖檔輸出，新加的相依連提都不提（實測 exit 0）。少了這一行，
+#      改了 pyproject 卻忘記 `uv lock` 的人會 build 出一顆缺東西的 image。
+#   2. `uv export` 把 uv.lock 攤成帶雜湊的 requirements。
+#   3. `pip install --require-hashes` 只裝那些版本與雜湊。少了 --require-hashes 的話
+#      pip 仍可能為了相容自己再解一次，那就又分岔了。
+#   最後 `--no-deps .` 裝這個套件本身（相依已經裝齊，不要讓它再解一次）。
+RUN pip install --no-cache-dir uv==0.7.3 \
+    && uv lock --check \
+    && uv export --frozen --no-dev --extra server --no-emit-project -o /tmp/requirements.txt \
+    && pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt \
+    && pip install --no-cache-dir --no-deps . \
+    && pip uninstall -y uv \
+    && rm -f /tmp/requirements.txt \
+    && pip freeze > /app/installed-requirements.txt \
+    && python -c "import gunicorn, psutil, flask, sqlalchemy, argon2"
 
 # registry / secret key 的落腳處；compose 以 volume 掛入使其跨重啟持久。
 ENV CLAUDE_PTY_CONTROL_HOST=0.0.0.0
