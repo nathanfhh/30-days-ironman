@@ -20,10 +20,14 @@ dev container 啟動時會問一題，預設不錄：
 錄製本場流量？（mitmproxy）
   y = 錄，落在 ~/ncr/mitm/<session-id>/（脫敏後）
   n = 不錄（預設）
+```
 
+答 y 之後才會問第二題：
+
+```
 錄製範圍：
-  1 = 全部流量（預設）  — 這一場對外講的每一句話
-  2 = 只錄模型 API      — 只收 api.anthropic.com，其餘直連、不經過 proxy
+  1 = 全部流量（預設） — 憑證裝進容器的系統信任庫，proxy 進關鍵路徑
+  2 = 只錄模型 API     — 只收 api.anthropic.com，其餘直連不經過 proxy
 ```
 
 ⚠ **答 y 之後的預設是全錄，不是只錄模型 API。** 只錄模型 API 是第二題的收斂選項。

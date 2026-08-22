@@ -363,15 +363,23 @@
     submitting(document.getElementById("pw-form"), async (e) => {
     e.preventDefault();
     try {
-      await api("/api/users/me/password", {
+      const r = await api("/api/users/me/password", {
         method: "POST",
         body: { old_password: oldPw.value, new_password: newPw.value },
       });
       // ⚠ 改密碼＝這個帳號現在連著的東西全部斷掉，**包含這一台**。所以不 reset 表單、
       //   不留在原頁——直接送回登入頁。留在這裡的話下一個動作一定是 401，那比直接
       //   跳轉更難懂（畫面看起來還在，按什麼都失敗）。
-      toast("密碼已更改，請重新登入", "success",
-            { body: "所有裝置的登入與開著的終端都已失效；容器不受影響，重新登入即可接回" });
+      // ⚠ **不要無條件宣稱終端都收掉了。** 後端在收不乾淨時回 200 加實情（不是 204），
+      //   而那正是這一整條線在買的東西——在這裡丟掉的話，畫面又變回「看起來都好」。
+      if (r && r.views_failed) {
+        toast("密碼已更改，但終端沒有收乾淨", "warning",
+              { body: "所有裝置的登入已失效，但有終端沒收掉；那些連線在收掉之前仍然可以打字。"
+                      + "重新登入之後把它們關掉，或直接終止那幾場 session。" });
+      } else {
+        toast("密碼已更改，請重新登入", "success",
+              { body: "所有裝置的登入與開著的終端都已失效；容器不受影響，重新登入即可接回" });
+      }
       setTimeout(() => { location.href = "/login"; }, 1200);
     } catch (ex) { toastError("更新密碼", ex); }
   }));
@@ -395,7 +403,12 @@
         renderRosterPager(data);
         body.innerHTML = data.users.map((u) => {
           // 這裡刻意只有「重設密碼」一顆動作鈕。帳號的退場就是它：改掉密碼＝cookie
-          // 全滅＋終端全收＋他登不回來，效果等同停用而少維護一個狀態（見 auth.py 尾段）。
+          // 全滅＋接著收他的終端＋他登不回來。
+          // ⚠ **這不等於「停用帳號」。** 他的容器繼續跑、他存的 PAT 與 per-user proxy
+          //   也還在，而收終端有可能失敗（後端會回報，見下方那顆按鈕的處理）。
+          // ⚠ 措辭避開「GitLab 憑」那三個字是刻意的：test_gitlab_proxy_conf 用整頁字串
+          //   比對驗「沒設 GitLab 主機時不畫這一塊」，註解寫進去會讓那條誤判。
+          //   完整的理由與缺口寫在 auth.py 尾段與 ADR 0010。
           // 沒有刪除（ADR 0010：刪除會 cascade 掉 session 登錄、斷稽核鏈），也沒有事後
           // 提權/降權——權限在建立時決定，設錯就再建一個對的。
           const role = u.is_admin
@@ -471,9 +484,16 @@
             input: { type: "password", placeholder: "新密碼" },
           });
           if (!pw) { toast("已取消", "info", { body: `${name} 的密碼未變動` }); return; }
-          await api(`/api/users/${id}/password`, { method: "POST", body: { new_password: pw } });
-          toast(`已重設 ${name} 的密碼`, "success",
-                { body: "他既有的登入與開著的終端都已立刻失效" });
+          const r = await api(`/api/users/${id}/password`, { method: "POST", body: { new_password: pw } });
+          // ⚠ 同上：這條是「讓某個人退場」最常走的路，收不乾淨更不能報成功。
+          if (r && r.views_failed) {
+            toast(`已重設 ${name} 的密碼，但終端沒有收乾淨`, "warning",
+                  { body: "他的登入已經失效，但有終端沒收掉；那些連線在收掉之前仍然可以打字。"
+                          + "請再按一次，或直接終止他那幾場 session。" });
+          } else {
+            toast(`已重設 ${name} 的密碼`, "success",
+                  { body: "他既有的登入與開著的終端都已立刻失效" });
+          }
         }
       } catch (ex) { toastError("操作", ex); }
     });

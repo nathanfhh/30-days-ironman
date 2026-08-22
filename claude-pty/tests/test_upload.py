@@ -174,14 +174,20 @@ for target in (config.DATA_BIND, "/app"):
 print("== 閘 3b：檔案本身被搶先種成連結（O_NOFOLLOW 這一層）==")
 # 連結種在 uploads/ 裡、名字剛好是我們要寫的那一個。O_EXCL 本來就會撞 EEXIST，
 # 但 O_NOFOLLOW 讓「即使 O_EXCL 被拿掉也不會跟著走」這件事有測試守著。
+# ⚠ 連結要種在**它真的會去開的那個名字**上。落檔名帶時間戳前綴
+# （`%Y%m%d-%H%M%S-<stem>.<ext>`），種一個叫 `planted.png` 的連結永遠撞不到——
+# 那樣測試在修復前後都會過，等於沒測到 O_NOFOLLOW。所以先算出這一秒的落檔名。
 _victim = os.path.join(TMP, "victim.txt")
 io.open(_victim, "w").write("original")
-_planted = os.path.join(_uploads, "planted.png")
+_expect = f"{__import__('datetime').datetime.now():%Y%m%d-%H%M%S}-planted.png"
+_planted = os.path.join(_uploads, _expect)
 os.symlink(_victim, _planted)
 r = send(ca, "sess-alice", "planted.png", b"overwritten")
 check("種好的連結沒有被跟過去（受害檔內容不變）", io.open(_victim).read() == "original")
-check("上傳本身仍然成功（換一個名字落地）", r.status_code == 201)
-os.unlink(_planted)
+check("上傳本身仍然成功（O_EXCL 撞名之後換一個序號落地）", r.status_code == 201)
+check("落地的不是那條連結", r.status_code == 201 and r.get_json()["name"] != _expect)
+if os.path.islink(_planted):
+    os.unlink(_planted)
 
 print("== 閘 3b：uploads/ 被換成一般檔案 ==")
 if os.path.isdir(_uploads) and not os.path.islink(_uploads):

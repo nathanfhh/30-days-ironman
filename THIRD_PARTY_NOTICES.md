@@ -29,6 +29,26 @@ repo 內的實際位置：
 | `claude-pty/server/static/vendor/fontawesome/webfonts/fa-regular-400.woff2` | Fonts（SIL OFL 1.1） |
 | `claude-pty/server/static/vendor/fontawesome/webfonts/fa-brands-400.woff2` | Fonts（SIL OFL 1.1） |
 
+## Instrument Serif
+
+- 上游：<https://github.com/Instrument/instrument-serif>
+- 授權：**SIL Open Font License 1.1**
+- 授權原文（未經改寫，取自上游）：
+  [`claude-pty/server/static/vendor/fonts/OFL.txt`](claude-pty/server/static/vendor/fonts/OFL.txt)
+- Copyright 2022 The Instrument Serif Project Authors
+
+repo 內的實際位置：
+
+| 檔案 | 屬於 |
+|---|---|
+| `claude-pty/server/static/vendor/fonts/instrument-serif.css` | 由 Google Fonts 產生的 `@font-face` 宣告 |
+| `claude-pty/server/static/vendor/fonts/instrument-serif-{0,1,2,3}.woff2` | 字型本體（OFL 1.1） |
+
+⚠ OFL 1.1 要求散布字型時**附上授權原文**，所以 `OFL.txt` 必須跟著那幾個 woff2 一起留在
+repo 裡，不可以只在這份文件裡提一句。
+
+---
+
 ⚠ `all.min.css` 開頭那段 `/*! Font Awesome Free 6.7.2 by @fontawesome ... */` 是上游的
 attribution，**不要在壓縮或處理流程裡把它拿掉**。CC BY 4.0 要求標示來源，那段註解就是標示。
 

@@ -283,8 +283,12 @@ class View(Base):
     #   ——`ended_by_user_id` 已經這樣掉過一次。掛上去只會讓新建的資料庫有約束、
     #   既有部署沒有，兩種行為而且沒有人看得出來。寫成純 Integer，程式碼講的就是
     #   實際跑的：關聯由應用層維護。
-    # nullable：這個欄位是後來才加的，既有的列填不出可靠的值。**NULL 代表「不知道
-    #   是誰開的」，不是「沒有人開」**——close_user_views 對這種列採保守處置。
+    # nullable：這個欄位是後來才加的，既有的列填不出可靠的值。NULL 代表「不知道是誰
+    #   開的」，不是「沒有人開」。
+    # ⚠ 而且它**只記得建立那一列的人**：views.session_id 是 UNIQUE、一場只有一個 view，
+    #   而 open_view 對已經活著的 view 是直接沿用、不改 actor。所以「擁有者先開、admin
+    #   後看同一場」時這一格是擁有者。close_user_views 因此對 admin 一律全收，不是只比
+    #   對這個欄位——細節寫在那支函式的 docstring。
     actor_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 這個 view 實際是用哪一顆 ttyd 起的（config.TTYD_BINS 的 key）。
     # ⚠ **不可以**改用「這個人現在的偏好」去推：偏好改了不會換掉已經在跑的 ttyd

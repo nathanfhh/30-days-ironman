@@ -145,7 +145,7 @@ def close_user_views(user_id: int) -> int:
 
         1. session 的擁有者是他                  → 收（不管是誰開的）
         2. view 的 `actor_user_id` 是他          → 收（他開在別人 session 上的那些）
-        3. `actor_user_id` 是 NULL 且他是 admin  → 也收
+        3. **他是 admin → 全部都收**
 
       第 3 條是給這個欄位加上去之前就存在的舊列用的。NULL 的意思是「不知道是誰開的」，
       而**只有 admin 開得了別人的 session**，所以未知的開啟者有可能就是他。收錯的代價

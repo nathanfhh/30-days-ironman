@@ -307,7 +307,7 @@ def _partial_close_payload(r: dict) -> dict:
     failed = r["views_failed"]
     if failed == -1:
         warning = (
-            "密碼已經改掉，但**收終端這一步整個失敗了**，連有幾場要收都沒查到。"
+            "密碼已經改掉，但收終端這一步整個失敗了，連有幾場要收都沒查到。"
             "他既有的連線可能還可以打字。請再跑一次；再失敗就直接終止他的 session。"
         )
     else:
