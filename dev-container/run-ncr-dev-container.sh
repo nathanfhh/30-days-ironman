@@ -168,7 +168,22 @@ else
     fi
 fi
 
-# socket 掛載。⚠ 不能加 :ro——連 unix socket 需要寫權限，唯讀會 EACCES，掛了等於沒掛。
+# socket 掛載。
+# ⚠ 這裡不加 :ro，但**理由不是「唯讀會讓 socket 連不上」**——那是錯的，2026-08-22 已實測推翻：
+#   Docker :ro 設的是**掛載層**的 MNT_READONLY。kernel 只在走 mnt_want_write() 的寫入
+#   路徑（create / unlink / open-for-write / chmod）檢查它並回 EROFS；而 socket 的 connect
+#   走 unix_find_bsd() → path_permission(MAY_WRITE)，那是 inode mode bits 的檢查，整條
+#   路徑不經過 mnt_want_write。所以同一個 :ro 掛載上，寫一般檔案回 EROFS、socket 的
+#   connect/send/recv 照樣成功（Docker named volume + 純 Linux container 驗過）。
+#   `unix(7)` 說的「connect 需要 write permission」指的是 **socket inode 的 mode bits**，
+#   不是掛載是否唯讀，兩者是不同的東西。
+# ⚠ 真正會讓 connect 失敗的是 inode 權限，那會回 EACCES——就是下面那段 Docker Desktop
+#   的 root:root 0660 與 --group-add 0。舊註解把真實原因歸給了錯的機制。
+# 不加 :ro 的實際理由：它擋得到的只有 metadata 寫入（chmod/chown/setxattr 走
+#   mnt_want_write），擋不到 agent 的任何一項能力——列舉金鑰、簽章、轉送全都照舊。
+#   ⚠ 但「擋不到任何東西」也是講過頭：原生 Linux 上 uid 對齊時，容器確實可以 chmod
+#     host 的 agent socket、弄壞 host 使用者其他終端機的 ssh，而 :ro 擋得住那個。
+#     維持非唯讀是既有決定，重點是別把它說成安全措施，也別把 :ro 說成沒用。
 # ⚠ 路徑不能寫死：systemd/gnome-keyring 起的在 /run/user/<uid>/…，
 #   ssh-agent -s 起的在 /tmp/ssh-XXXX/agent.<pid>，每次都不一樣，只能靠 $SSH_AUTH_SOCK。
 if [ -z "${NCR_NO_SSH_AGENT:-}" ] && [ -S "${SSH_AUTH_SOCK:-}" ]; then

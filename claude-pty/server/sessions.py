@@ -1928,7 +1928,11 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
     if config.SSH_AUTH_SOCK_HOST:
         kwargs["mounts"] = [docker.types.Mount(
             target=config.SSH_AUTH_SOCK_BIND, source=config.SSH_AUTH_SOCK_HOST,
-            type="bind", read_only=False)]     # 連 unix socket 需要寫權限，ro 會 EACCES
+            # read_only=False 不是必要條件：:ro 的掛載上 unix socket 照樣 connect 得了
+            # （connect 走 path_permission(MAY_WRITE)，是 inode 檢查，不經過
+            #  mnt_want_write，所以 MNT_READONLY 沒被諮詢）。維持 False 是既有決定；
+            # :ro 擋得到的只有 metadata 寫入，擋不到 agent 的任何能力。詳見 ADR 的勘誤。
+            type="bind", read_only=False)]
 
     # **網路：無條件指定成這個使用者自己那張**（ADR 0016）。
     #

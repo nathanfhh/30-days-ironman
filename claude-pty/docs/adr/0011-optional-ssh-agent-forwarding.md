@@ -42,6 +42,28 @@ profile——後者會讓人誤以為「只有這一場有」，但開得起這�
 
 非唯讀：連 unix socket 需要寫權限，`ro` 會 EACCES。
 
+> **勘誤（2026-08-22）**：上面這句的推論是錯的，保留原文只為存證。
+> `unix(7)` 的「connect 需要 write permission」指的是 **socket inode 的 mode bits**，
+> 與掛載是否唯讀無關。
+>
+> Docker `:ro` 設的是**掛載層**的 `MNT_READONLY`（不是 superblock 唯讀）。kernel 只在走
+> `mnt_want_write()` 的寫入路徑（create／unlink／open-for-write／chmod）檢查它並回
+> `EROFS`；而 socket 的 connect 走 `unix_find_bsd()` → `path_permission(&path, MAY_WRITE)`，
+> 那是 inode 層的檢查，**整條路徑不經過 `mnt_want_write`**。
+> （即使 superblock 真的唯讀，`sb_permission()` 也只涵蓋 `S_ISREG`／`S_ISDIR`／`S_ISLNK`，
+> socket 一樣豁免。兩層都擋不住 socket IPC。）
+>
+> 實測（Docker named volume ＋純 Linux container）：同一個 `:ro` 掛載上，寫一般檔案回
+> `EROFS`，而 socket 的 connect/send/recv 成功。真正會讓 connect 失敗的是 inode 權限
+> （回 `EACCES`），也就是 Docker Desktop 那個 `root:root 0660` 的代理節點。
+>
+> 結論不變（仍維持非唯讀），但理由改成：`:ro` 擋得到的只有 metadata 寫入
+> （chmod／chown／setxattr），擋不到 agent 的任何一項能力。
+> ⚠ 它也不是全無作用：原生 Linux 上 uid 對齊時，容器可以 chmod host 的 agent socket、
+> 弄壞 host 使用者其他終端機的 ssh，而 `:ro` 擋得住那個。要重新考慮時，這是真正的取捨點。
+>
+> 反例可重跑：`claude-pty/tests/test_ro_socket_mount.py`。
+
 ### 啟動自檢會講話
 
 開啟時每次啟動提醒一次「這把 agent 等於發給每個能建 session 的帳號」。非容器化部署
