@@ -42,6 +42,10 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
     apt-get -o Acquire::https::Verify-Peer=false update && \
     DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::https::Verify-Peer=false install -y ca-certificates && \
     apt-get update && \
+    # ⚠ base image 的套件會隨時間長出 CVE，而 ubuntu:24.04 的重建節奏不歸我們管。
+    #   在這裡做一次安全更新，Trivy image scan 掃到的就是實際出貨的那一顆，
+    #   不是「理論上 base 應該長什麼樣」。
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         curl git jq tzdata shellcheck vim openssh-client \
         sudo iptables ipset iproute2 dnsutils && \
@@ -142,6 +146,10 @@ RUN OPENGREP_VERSION=v1.26.0 && \
 # api.anthropic.com——跟限制模式天生相容，零 firewall 改動。
 # pin 版本：.mitm 的檔案格式會隨大版本破壞相容，釘住才能保證舊的 capture 讀得回、
 # addon 的行為不飄。查最新版：https://pypi.org/project/mitmproxy/
+# ⚠ 它帶進來的 msgpack 1.1.2 有 GHSA-6v7p-g79w-8964（HIGH）。試過用
+#   `--with "msgpack>=1.2.1"` 往上推，**build 直接失敗**——mitmproxy 12.2.3 的相依
+#   範圍不允許。要修就得動 mitmproxy 的版本，而那條是為了 capture 格式相容釘住的。
+#   目前的處置是留著並記錄（見 SECURITY-SCAN.md），不是沒看到。
 RUN uv tool install mitmproxy==12.2.3 && mitmdump --version
 
 # CodeGraph：程式碼知識圖譜 / 導航輔助（blast radius、caller 矩陣）。
@@ -240,6 +248,21 @@ USER nathan
 #   （而 trivy 除了 DB 還要往同一個 cache 寫掃描結果）。
 # ⚠ 放在 `USER nathan` **之後**：以他的身分建，擁有者自然就對，不必再 chown。
 RUN mkdir -p /home/nathan/.cache/trivy
+
+# --- 供應鏈收尾：把「不需要留在 image 裡的東西」清掉 ---------------------------------
+#
+# ⚠ 這兩件不是整潔，是 CVE 面積。Trivy image scan 掃的是 image 內的**檔案**，不是
+#   「哪些套件真的會被執行」，所以下面兩坨都會被算進去：
+#
+#   1. `~/.cache/uv/archive-v0/` 是 uv 的**下載快取**，裡面是安裝過程留下的解壓檔
+#      （cryptography 48.0.1、tornado 6.5.5、h2、msgpack 等）。它們不是任何一支工具
+#      實際載入的版本，但掃描器看得到、也照樣算 CVE。工具都裝完了，快取沒有用途。
+#   2. npm 自己捆的相依（tar、undici、brace-expansion、ip-address）跟著 nvm 裝的
+#      node 版本走。升 npm 就一起換掉，這是唯一不必動 node 版本的修法。
+RUN . "$NVM_DIR/nvm.sh" && npm install -g npm@latest && npm --version \
+    && npm cache clean --force \
+    && uv cache clean \
+    && rm -rf /home/nathan/.npm/_logs
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["claude", "--dangerously-skip-permissions"]

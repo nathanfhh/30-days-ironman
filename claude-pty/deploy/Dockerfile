@@ -83,7 +83,13 @@ ARG TTYD_SHA256_ARM64=b38acadd89d1d396a0f5649aa52c539edbad07f4bc7348b27b4f4b7219
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::https::Verify-Peer=false update \
     && apt-get -o Acquire::https::Verify-Peer=false install -y --no-install-recommends ca-certificates \
-    && apt-get update && apt-get install -y --no-install-recommends \
+    && apt-get update \
+    # ⚠ base image 的套件會隨時間長出 CVE，而 python:3.13-slim 的重建節奏不歸我們管。
+    #   Trivy 掃 image 時抓到 util-linux 那一組（CVE-2026-53612/13/14/15 等 54 筆
+    #   MEDIUM 以上）在 base 裡是 2.41-5，而 Debian 已經出了 2.41.5-0+deb13u1。
+    #   在這裡做一次安全更新，掃到的就是實際出貨的那一顆。
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         curl gnupg \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg \
