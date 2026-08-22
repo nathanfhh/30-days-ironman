@@ -31,7 +31,9 @@
 
 from __future__ import annotations
 
+import os
 import sys
+import uuid
 
 try:
     import docker
@@ -53,7 +55,10 @@ def check(label: str, ok: bool) -> None:
 
 
 IMAGE = "python:3.13-slim"
-VOL = "ncr-ro-socket-test"
+# ⚠ **每次執行一個唯一名字。** 固定名字時，同一台機器上兩個執行（或前一場沒收乾淨）
+#   會互相刪對方的 volume——而症狀是隨機的、看起來像 docker 壞掉。
+#   只用 [a-zA-Z0-9][a-zA-Z0-9_.-] 這組字元，那是 docker volume 的命名規則。
+VOL = f"ncr-ro-socket-test-{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
 SERVER = r'''
 import os, socket
@@ -75,6 +80,14 @@ try:
     open("/sock/plain.txt", "w").write("x"); out["write"] = "ok"
 except OSError as e:
     out["write"] = f"errno={e.errno}"
+# 這一組才是「改成唯讀掛載」真正買到的保護：bind mount 與 host 共用同一個 inode，
+# 容器對它 chmod 就是改到 host 那一顆。
+out["mode_before"] = oct(os.stat("/sock/agent.sock").st_mode)
+try:
+    os.chmod("/sock/agent.sock", 0o777); out["chmod"] = "ok"
+except OSError as e:
+    out["chmod"] = f"errno={e.errno}"
+out["mode_after"] = oct(os.stat("/sock/agent.sock").st_mode)
 try:
     c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     c.connect("/sock/agent.sock"); c.sendall(b"agent-protocol-write")
@@ -91,18 +104,27 @@ except docker.errors.ImageNotFound:
     print(f"  SKIP  本機沒有 {IMAGE}（離線環境）")
     sys.exit(0)
 
-with __import__("contextlib").suppress(Exception):
-    cli.volumes.get(VOL).remove(force=True)
+# ⚠ 這裡**不做**「先刪掉同名的再建」。名字是這次執行獨有的，同名只可能是別人的；
+#   盲刪就是把別人正在用的東西砍掉。
 cli.volumes.create(VOL)
 srv = None
 try:
     srv = cli.containers.run(IMAGE, ["python", "-c", SERVER], detach=True,
                              volumes={VOL: {"bind": "/sock", "mode": "rw"}})
     import time
-    for _ in range(40):                       # 等 server bind 好
+    # ⚠ 等不到就**明確失敗**。跑完迴圈繼續往下的話，client 會爆出一個
+    #   「連不上 socket」的錯——那看起來像本測試要驗的性質不成立，
+    #   實際上只是 server 還沒起來。假失敗比沒有測試更糟。
+    _ready = False
+    for _ in range(40):                       # 等 server bind 好（最多 10 秒）
         if b"SERVER-READY" in srv.logs():
+            _ready = True
             break
         time.sleep(0.25)
+    check("🔴 server 在期限內就緒（沒有的話下面每一條都不算數）", _ready)
+    if not _ready:
+        print("  server log:", srv.logs().decode(errors="replace")[-300:])
+        raise SystemExit(1)
 
     out = cli.containers.run(IMAGE, ["python", "-c", CLIENT], remove=True,
                              volumes={VOL: {"bind": "/sock", "mode": "ro"}}).decode()
@@ -117,6 +139,13 @@ try:
     # ③ 但 socket 照樣通 —— 這一條就是那個錯誤說法的反例
     check("🔴 同一個唯讀掛載上，unix socket 仍能 connect/send/recv",
           res["sock"] == "ACK:agent-protocol-write")
+    # ④⑤ **改成唯讀掛載真正買到的東西。** 少了這兩條，這支測試只證明了「:ro 沒有壞事」，
+    #     沒有證明「:ro 有做事」——而後者才是做這個決定的理由。
+    #     bind mount 與 host 共用同一個 inode，所以容器裡的 chmod 改的是 host 那一顆；
+    #     原生 Linux 上那會弄壞使用者其他終端機的 ssh。
+    check("🔴 唯讀掛載擋下 chmod（EROFS=30）", res["chmod"] == "errno=30")
+    check("🔴 而且 socket 的 mode 真的沒被改動",
+          res["mode_before"] == res["mode_after"])
 finally:
     if srv is not None:
         with __import__("contextlib").suppress(Exception):

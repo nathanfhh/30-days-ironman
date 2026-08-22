@@ -30,7 +30,7 @@ NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
               test_reconciler test_entrypoint_human_path test_entrypoint_profile
               test_firewall_ssh_gate test_user_proxy test_network_isolation
               test_gitlab_upstream_e2e test_restricted_proxy_reach e2e_flow
-              test_token_fd test_trivy_volume)
+              test_token_fd test_trivy_volume test_ro_socket_mount)
 # ⚠ 判準是「會不會真的起容器／建 volume」，不是「檔案裡有沒有出現 docker」。用假 client
 #   的那幾支（test_host_platform／test_jaeger_wiring／test_trivy_db／test_ttyd_identity）
 #   一個容器都不起，留在 quick 模式是對的。自我 SKIP 不能取代這道 gate：docker 在的開發機

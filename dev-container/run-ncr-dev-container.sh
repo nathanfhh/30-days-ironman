@@ -156,15 +156,28 @@ else
     # ⚠ 只警告，不自動 ssh-add：這個 agent 是使用者的，載入的金鑰在腳本退出後還留著。
     #   而且上面那段「另起一個只加受限 key 的 agent」正是預期用法之一，
     #   自動補上預設金鑰會安靜地破壞掉那個限縮。（自己起的 agent 才由自己載入金鑰。）
-    #   ssh-add -l：0=有金鑰，1=連得上但空的，2=連不上。
-    if ssh-add -l >/dev/null 2>&1; then
+    #   ssh-add -l 的退出碼有三種，`ssh-add(1)` 明定：0=有金鑰，1=連得上但袋子是空的，
+    #   2=**連不到 agent**。
+    # ⚠ 把 1 與 2 併成同一句是錯的，而且錯得很難查：socket 失效、權限不對、
+    #   SSH_AUTH_SOCK 指到一個已經消失的路徑——這些全都是 2，卻會被告知「袋子是空的、
+    #   去跑 ssh-add」。照做之後 ssh-add 也連不上，於是使用者卡在一個與真正原因無關的指令上。
+    #   （這一行的上一版註解就寫著三種碼的差別，程式卻只分了兩類。）
+    _ssh_add_err="$(ssh-add -l 2>&1 >/dev/null)"; _ssh_add_rc=$?
+    if [ "$_ssh_add_rc" -eq 0 ]; then
         echo "🔐 SSH：轉發 host 現有的 agent（${SSH_AUTH_SOCK}）"
-    else
-        echo "⚠️  SSH：host 的 agent 裡沒有任何金鑰（${SSH_AUTH_SOCK}），容器內走 SSH 的 git 操作會失敗。"
+    elif [ "$_ssh_add_rc" -eq 1 ]; then
+        echo "⚠️  SSH：host 的 agent 連得上，但裡面沒有任何金鑰（${SSH_AUTH_SOCK}）。"
         # ⚠ 這裡不舉例任何檔名。上面 ssh-add 那段的理由同樣適用於**訊息**：
         #   寫 id_ed25519 會讓只有 id_rsa 的人照抄後失敗，反之亦然。
         #   不帶參數的 ssh-add 本來就會載入預設的那幾把，那才是正確的通用指令。
         echo "   先在 host 執行 ssh-add（不必指定檔名，會載入預設金鑰）再重跑本腳本。"
+    else
+        # 2（或其他非預期的碼）＝**連不到 agent**，跟「有沒有金鑰」無關。
+        # 原始錯誤訊息一定要帶出來：那句話才指得到真正的原因。
+        echo "⚠️  SSH：連不到 host 的 agent（${SSH_AUTH_SOCK}），rc=${_ssh_add_rc}。"
+        echo "   ssh-add 說：${_ssh_add_err:-（沒有訊息）}"
+        echo "   常見原因：SSH_AUTH_SOCK 指到已經消失的路徑（重開機／換登入 session）、"
+        echo "   socket 權限不對，或那個 agent 已經結束。重新登入或另起一個 agent 再試。"
     fi
 fi
 
