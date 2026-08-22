@@ -162,7 +162,15 @@ else
     #   SSH_AUTH_SOCK 指到一個已經消失的路徑——這些全都是 2，卻會被告知「袋子是空的、
     #   去跑 ssh-add」。照做之後 ssh-add 也連不上，於是使用者卡在一個與真正原因無關的指令上。
     #   （這一行的上一版註解就寫著三種碼的差別，程式卻只分了兩類。）
-    _ssh_add_err="$(ssh-add -l 2>&1 >/dev/null)"; _ssh_add_rc=$?
+    # ⚠ **不可以寫成 `_ssh_add_err="$(…)"; _ssh_add_rc=$?`。** 賦值的結束碼會繼承
+    #   command substitution，在 `set -e` 下 ssh-add 回 1／2 就地退出——下面三條分支
+    #   一條都走不到。而且**不只是分支失效：整個 wrapper 死在這一行，容器根本不會啟動**，
+    #   受害的正好是這幾句訊息要幫的那些人（袋子是空的、socket 失效）。
+    #   實測（fake ssh-add）：rc=1 → 腳本結束碼 1、一個字都沒印；rc=2 → 結束碼 2。
+    # ⚠ 也不要改用 `set +e … set -e` 把 errexit 關掉再開：那會讓中間每一個指令一起失去
+    #   保護，為了一行的例外付整段的代價。`|| _ssh_add_rc=$?` 只豁免這一個指令。
+    _ssh_add_rc=0
+    _ssh_add_err="$(ssh-add -l 2>&1 >/dev/null)" || _ssh_add_rc=$?
     if [ "$_ssh_add_rc" -eq 0 ]; then
         echo "🔐 SSH：轉發 host 現有的 agent（${SSH_AUTH_SOCK}）"
     elif [ "$_ssh_add_rc" -eq 1 ]; then
