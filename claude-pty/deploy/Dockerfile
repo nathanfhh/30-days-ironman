@@ -161,7 +161,11 @@ RUN pip install --no-cache-dir uv==0.7.3 \
     #   成立、對 build backend 不成立。`--group build` 把釘死的 setuptools 帶進上一步，
     #   這裡就直接用它。
     && pip install --no-cache-dir --no-build-isolation --no-deps . \
-    && pip uninstall -y uv \
+    # ⚠ build backend 裝完就移掉。它只有建這個套件那一步要用，留在 runtime 裡不會被
+    #   任何東西 import，卻會被 Trivy 算進去——setuptools 自己還 vendor 了 wheel 與
+    #   jaraco.context，實測多出三筆 MEDIUM 以上。`--group build` 換來的雜湊驗證是
+    #   build 期的事，不必用 runtime 的攻擊面去付。
+    && pip uninstall -y uv setuptools wheel \
     && rm -f /tmp/requirements.txt \
     && pip freeze > /app/installed-requirements.txt \
     && python -c "import gunicorn, psutil, flask, sqlalchemy, argon2"

@@ -36,7 +36,11 @@ macOS 上 trivy 找不到 docker daemon 時：`export DOCKER_HOST=unix://$HOME/.
 2. **兩顆 image 的 OS 套件做安全更新**（`apt-get upgrade`）。`claude-pty` 那 54 筆可修的
    全部出自同一個來源套件（util-linux 2.41-5 → 2.41.5-0+deb13u1，CVE-2026-53612 等）。
    base image 的重建節奏不歸我們管，所以在自己的 build 裡補一次。
-3. **`ncr-dev-container` 清掉 uv 的下載快取、升級 npm 並清 npm cache**。
+3. **`claude-pty` 的 build backend 裝完就移除**（`pip uninstall -y uv setuptools wheel`）。
+   `--group build` 帶進來的釘死 setuptools 只有建套件那一步要用；留在 runtime 裡不會被
+   任何東西 import，卻會被掃進去——它自己還 vendor 了 wheel 與 jaraco.context，實測多出
+   三筆 MEDIUM 以上。build 期的雜湊驗證不必用 runtime 的攻擊面去付。
+4. **`ncr-dev-container` 清掉 uv 的下載快取、升級 npm 並清 npm cache**。
    `~/.cache/uv/archive-v0/` 是安裝過程留下的解壓檔（cryptography 48.0.1、tornado 6.5.5、
    h2、msgpack 各一份），沒有任何工具會載入它們，但掃描器看得到、照樣算 CVE。
    工具都裝完了，快取沒有用途。這一項就清掉 60 幾筆。
