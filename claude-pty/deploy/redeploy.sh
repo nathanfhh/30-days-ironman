@@ -36,16 +36,22 @@
 #   deploy/redeploy.sh              # 重建並啟動（改了 server/ 之後用這個）
 #   deploy/redeploy.sh --no-build   # 只重啟，不重新 build（改 nginx.conf 之類）
 #   deploy/redeploy.sh --force      # 強制重建容器（config 沒變但要重來一次時）
+#   deploy/redeploy.sh --build-session-image
+#                                   # 順便把 session image 也 build 起來（第一次部署用）
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 FLAGS="--build"
+BUILD_SESSION_IMAGE=0
 case "${1:-}" in
   --no-build) FLAGS="" ;;
   --force)    FLAGS="--build --force-recreate" ;;
+  # ⚠ 明確 opt-in，不預設。session image 是好幾 GB、要跑好幾分鐘的東西，
+  #   在一支「重啟控制平面」的腳本裡默默做那件事會讓人以為它當掉了。
+  --build-session-image) BUILD_SESSION_IMAGE=1 ;;
   "")         ;;
-  *)          echo "不認得的參數：${1}（只收 --no-build / --force）" >&2; exit 2 ;;
+  *)          echo "不認得的參數：${1}（只收 --no-build / --force / --build-session-image）" >&2; exit 2 ;;
 esac
 
 # 這一版是哪個 commit——烘進 image 供頁尾顯示。
@@ -144,18 +150,41 @@ done
 # ⚠ 為什麼擋在這裡而不是只靠 preflight：preflight 是**控制平面起來之後**才喊，那時你
 #   已經離開鍵盤了；而這裡你正在打指令，訊息能直接告訴你下一句該打什麼。preflight 那道
 #   留著當第二層（它涵蓋「沒經過這支腳本」的部署）。
-# ⚠ 只在 host 是 Linux 時檢查——Docker Desktop 做 uid 對映，在那邊喊是純噪音。
+# --- session image 在不在：**所有平台都要查** -------------------------------------
+#
+# ⚠ 這一段以前整個包在下面那個 Linux 判斷裡，於是 macOS 上完全沒有檢查——第一次部署
+#   看起來成功，直到按下「建立 session」才發現 image 根本不存在。uid 對不對得上確實
+#   只有 Linux 才有意義（Docker Desktop 做 uid 對映），但「image 在不在」跟平台無關。
+SESSION_IMAGE="${CLAUDE_PTY_IMAGE:-ncr-dev-container}"
+if [ "${BUILD_SESSION_IMAGE}" = "1" ]; then
+  echo "🔨 build session image「${SESSION_IMAGE}」（--build-session-image）…"
+  # ⚠ build 失敗就停：帶了這個旗標代表你要的是一套能開場的部署，
+  #   而不是「控制平面起來了但開不了場」。
+  ../../dev-container/build.sh
+fi
+if ! docker image inspect "${SESSION_IMAGE}" >/dev/null 2>&1; then
+  echo "✗ 找不到 session image「${SESSION_IMAGE}」。控制平面起得來，但一按「建立 session」就會失敗。" >&2
+  echo "  先 build 它：" >&2
+  echo "    (cd $(cd ../../dev-container && pwd) && ./build.sh)" >&2
+  echo "  或讓這支腳本順便做（會跑好幾分鐘）：" >&2
+  echo "    $0 --build-session-image" >&2
+  echo "  真的要在沒有 session image 的情況下先起控制平面（只改 nginx/前端時）：" >&2
+  echo "    CLAUDE_PTY_SKIP_SESSION_IMAGE_CHECK=1 $0 ${1:-}" >&2
+  [ "${CLAUDE_PTY_SKIP_SESSION_IMAGE_CHECK:-0}" = "1" ] || exit 1
+  echo "⚠ 已用 CLAUDE_PTY_SKIP_SESSION_IMAGE_CHECK 略過——這次部署開不了 session。" >&2
+fi
+
+# ⚠ uid 對齊**只在 host 是 Linux 時檢查**——Docker Desktop 做 uid 對映，在那邊喊是純噪音。
 if [ "${CLAUDE_PTY_HOST_PLATFORM}" = "Linux" ]; then
-  SESSION_IMAGE="${CLAUDE_PTY_IMAGE:-ncr-dev-container}"
   IMG_UID="$(docker image inspect -f '{{index .Config.Labels "ncr.uid"}}' \
              "${SESSION_IMAGE}" 2>/dev/null || true)"
   MY_UID="$(id -u)"
   APP_UID_EFF="${APP_UID:-$(sed -n 's/^[[:space:]]*APP_UID=//p' .env 2>/dev/null | tail -1)}"
   if [ -z "${IMG_UID}" ] || [ "${IMG_UID}" = "<no value>" ]; then
-    # image 不在、或是改版前 build 的（沒有 stamp）。不擋——你可能正要第一次部署，
-    # 而 session image 不是控制平面起得來的前提。但要講清楚它沒被驗過。
-    echo "⚠ 沒能查證 session image「${SESSION_IMAGE}」裡的 uid（image 不在，或是加上"
-    echo "  NCR_UID 標記之前 build 的）。要驗得到請重建：dev-container/build.sh"
+    # 走到這裡代表 image 在（上面那道已經確認過），但沒有 ncr.uid 標記——加上那個
+    # 標記之前 build 的舊 image。不擋，但要講清楚它沒被驗過。
+    echo "⚠ 沒能查證 session image「${SESSION_IMAGE}」裡的 uid（是加上 NCR_UID 標記"
+    echo "  之前 build 的）。要驗得到請重建：dev-container/build.sh"
   elif [ "${IMG_UID}" != "${MY_UID}" ] || [ "${APP_UID_EFF}" != "${MY_UID}" ]; then
     echo "✗ uid 沒有對齊，先修好再部署（Linux 的 bind mount 不做 uid 翻譯）：" >&2
     echo "    你（id -u）                 ${MY_UID}" >&2

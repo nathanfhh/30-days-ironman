@@ -45,6 +45,14 @@ APP_UID=$(id -u)                     # 寫進 deploy/.env
 cd ../../dev-container && ./build.sh # 它自己帶 --build-arg NCR_UID=$(id -u)
 ```
 
+⚠ **session image 一定要先 build 起來。** 控制平面沒有它照樣起得來，於是第一次部署
+看起來成功，直到按下「建立 session」才發現什麼都開不了。`redeploy.sh` 在動任何容器
+之前會先查它在不在，不在就擋下來並印出該打的指令。要讓部署順便做那件事：
+
+```bash
+deploy/redeploy.sh --build-session-image   # 明確 opt-in，會跑好幾分鐘；build 失敗就停
+```
+
 ⚠ **直接 `docker build` 不會失敗**，只會安靜地給預設的 1001。所以 `redeploy.sh` 在
 build 之前會先查 image 的 `ncr.uid`，三個數字對不上就**當場擋下來**並印出該打的指令。
 
