@@ -564,7 +564,12 @@ def auth_view():
             # 查得到就回、查不到就 403，不在這裡生任何東西。
             return "", 403
         try:
-            view = views.open_view(sid, session_info["container"], g.user.get("ttyd_bin"))
+            view = views.open_view(
+                sid,
+                session_info["container"],
+                g.user.get("ttyd_bin"),
+                actor_user_id=g.user["id"],
+            )
         except ViewError:
             return "", 403
         manager.touch(sid)
@@ -755,12 +760,21 @@ def change_own_password():
     """
     body = _body()
     _reject_unknown(body, {"old_password", "new_password"})
-    auth.change_password(
+    r = auth.change_password(
         g.user["id"], body.get("new_password", ""), old_password=body.get("old_password"), require_old=True
     )
     # ⚠ 這一張 cookie 也作廢：session 清掉，下一個請求就會被 gate 送回登入頁。
     #   不清的話它會帶著舊版號活到下一次請求才被擋，中間那段是說一套做一套。
     session.clear()
+    # ⚠ 收終端沒收乾淨就**不可以回 204**。密碼確實改了（回不去了），但那不是完整的
+    #   「已經切斷」——回 200 加上實情，讓前端有東西可講。
+    if r.get("views_failed"):
+        return jsonify(
+            password_changed=True,
+            views_closed=r.get("views_closed", 0),
+            views_failed=r["views_failed"],
+            warning="密碼已經改掉，但有終端沒有收乾淨；那些連線在收掉之前仍然可以打字。",
+        ), 200
     return "", 204
 
 
@@ -826,7 +840,15 @@ def admin_change_password(uid: int):
     """
     body = _body()
     _reject_unknown(body, {"new_password"})
-    auth.change_password(uid, body.get("new_password", ""), require_old=False)
+    r = auth.change_password(uid, body.get("new_password", ""), require_old=False)
+    # ⚠ 同上：這條是「讓某個人退場」最常走的路，收不乾淨更不能靜靜回成功。
+    if r.get("views_failed"):
+        return jsonify(
+            password_changed=True,
+            views_closed=r.get("views_closed", 0),
+            views_failed=r["views_failed"],
+            warning="密碼已經改掉，但有終端沒有收乾淨；那些連線在收掉之前仍然可以打字。",
+        ), 200
     return "", 204
 
 
@@ -960,7 +982,9 @@ def open_view(sid: str):
             "沒有終端可以開。對話沒有消失——建一場新的 session 再用 /resume 接回來。",
             docker_state=state,
         ), 409
-    view = views.open_view(sid, s["container"], g.user.get("ttyd_bin"))
+    # ⚠ 記的是**按下去的那個人**，不是 session 的擁有者：admin 開得了別人的 session，
+    #   而收終端要跟著開的人走（views.close_user_views）。
+    view = views.open_view(sid, s["container"], g.user.get("ttyd_bin"), actor_user_id=g.user["id"])
     manager.touch(sid)
     return jsonify(view), 201
 

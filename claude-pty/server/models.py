@@ -275,6 +275,17 @@ class View(Base):
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     port: Mapped[int] = mapped_column(Integer, nullable=False)
     pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 誰把這個 view 打開的。**不是** session 的擁有者：admin 開得了別人的 session，
+    # 而收終端這件事要跟著「開的人」走，不然改掉一位 admin 的密碼收不掉他正開著的、
+    # 屬於別人的那些終端（見 views.close_user_views）。
+    # ⚠ 刻意**不宣告 ForeignKey**。輕量升級（db._add_missing_columns）用的
+    #   `ALTER TABLE ADD COLUMN` 帶不出 REFERENCES 與 ON DELETE，而且不會報錯
+    #   ——`ended_by_user_id` 已經這樣掉過一次。掛上去只會讓新建的資料庫有約束、
+    #   既有部署沒有，兩種行為而且沒有人看得出來。寫成純 Integer，程式碼講的就是
+    #   實際跑的：關聯由應用層維護。
+    # nullable：這個欄位是後來才加的，既有的列填不出可靠的值。**NULL 代表「不知道
+    #   是誰開的」，不是「沒有人開」**——close_user_views 對這種列採保守處置。
+    actor_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 這個 view 實際是用哪一顆 ttyd 起的（config.TTYD_BINS 的 key）。
     # ⚠ **不可以**改用「這個人現在的偏好」去推：偏好改了不會換掉已經在跑的 ttyd
     #   （見 app.set_prefs 的註解），那時推出來的答案剛好在最需要它的時候是錯的。

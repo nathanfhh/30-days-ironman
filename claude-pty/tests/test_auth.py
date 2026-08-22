@@ -492,6 +492,75 @@ check("擋下之後值真的沒被改掉", cpref.get("/api/prefs").get_json()["t
 r = app.test_client().patch("/api/prefs", json={"ttyd_bin": "ttyd"})
 check("未登入 → 401", r.status_code == 401)
 
+print("== 收終端：view 記得是誰開的（不是 session 的擁有者）==")
+# 為什麼要有這一段：admin 開得了別人的 session，而 view 以前只掛在 session 上。
+# 於是「改掉一位 admin 的密碼」收不掉他正開在別人 session 上的終端——他手上那個分頁
+# 仍然是一個能打字的 shell。actor_user_id 補的就是這一格。
+from server import views as _views  # noqa: E402
+from server.db import session_scope as _scope  # noqa: E402
+from server.models import Session as _Sess  # noqa: E402
+from server.models import View as _View  # noqa: E402
+
+_boss = auth.create_user("revoke-admin", "revoke-admin-pw-1", is_admin=True)
+_victim = auth.create_user("revoke-owner", "revoke-owner-pw-1")
+with _scope() as _s:
+    _s.add(_Sess(id="rv-sess", container_name="c-rv", user_id=_victim["id"], status="running"))
+    # admin 開在**別人** session 上的 view
+    _s.add(_View(session_id="rv-sess", port=61001, pid=None, actor_user_id=_boss["id"]))
+
+_closed, _failed = _views.close_user_views(_boss["id"])
+with _scope() as _s:
+    _left = _s.query(_View).filter(_View.session_id == "rv-sess").count()
+check("改 admin 的密碼會收掉他開在別人 session 上的終端", _left == 0)
+check("回傳是 (收掉幾個, 失敗幾場)", isinstance(_closed, int) and _failed == 0)
+
+print("== 收終端：actor 未知（舊資料）對 admin 採保守處置 ==")
+with _scope() as _s:
+    _s.add(_View(session_id="rv-sess", port=61002, pid=None, actor_user_id=None))
+_c2, _f2 = _views.close_user_views(_boss["id"])
+with _scope() as _s:
+    _left2 = _s.query(_View).filter(_View.session_id == "rv-sess").count()
+check("actor 是 NULL 的舊列，改 admin 密碼時照樣收（寧可多收）", _left2 == 0)
+
+with _scope() as _s:
+    _s.add(_View(session_id="rv-sess", port=61003, pid=None, actor_user_id=None))
+# 「不誤收」要換一個他完全沒有份的 session 才驗得到（rv-sess 的擁有者就是他本人，
+# 那一列本來就會被第 1 條規則收掉，證明不了什麼）。
+with _scope() as _s:
+    _s.add(_Sess(id="rv-other", container_name="c-rv2", user_id=_boss["id"], status="running"))
+    _s.add(_View(session_id="rv-other", port=61004, pid=None, actor_user_id=None))
+_views.close_user_views(_victim["id"])
+with _scope() as _s:
+    _stay = _s.query(_View).filter(_View.session_id == "rv-other").count()
+check("非 admin 改密碼不會去收別人 session 上 actor 未知的終端", _stay == 1)
+
+print("== 收終端失敗：不可以回 204、也不可以只印成功 ==")
+_boom = auth.create_user("revoke-boom", "revoke-boom-pw-1")
+_orig_close = _views.close_views
+
+
+def _explode(_sid):
+    raise RuntimeError("kill 失敗（注入）")
+
+
+with _scope() as _s:
+    _s.add(_Sess(id="rv-boom", container_name="c-boom", user_id=_boom["id"], status="running"))
+    _s.add(_View(session_id="rv-boom", port=61005, pid=None, actor_user_id=_boom["id"]))
+_views.close_views = _explode
+try:
+    _r = auth.change_password(_boom["id"], "revoke-boom-pw-2", require_old=False)
+    check("收終端炸掉時，改密碼本身仍然成功（密碼回不去了）", _r["password_version"] >= 1)
+    check("但失敗有被數出來，不是靜靜吞掉", _r["views_failed"] == 1)
+    check("收掉的數量誠實回報", _r["views_closed"] == 0)
+    _ca = app.test_client()
+    _ca.post("/api/auth/login", json={"username": "admin", "password": "admin-password-1"})
+    _resp = _ca.post(f"/api/users/{_boom['id']}/password", json={"new_password": "revoke-boom-pw-3"})
+    check("管理員改密碼的 API 不回 204（那是假成功）", _resp.status_code != 204)
+    check("而是回 200 加上實情", _resp.status_code == 200 and _resp.get_json()["views_failed"] == 1)
+    check("回應講得出密碼確實改掉了", _resp.get_json()["password_changed"] is True)
+finally:
+    _views.close_views = _orig_close
+
 print("== 清理 ==")
 db.reset_engine()
 __import__("shutil").rmtree(_tmp, ignore_errors=True)

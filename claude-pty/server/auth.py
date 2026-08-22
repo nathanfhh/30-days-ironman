@@ -240,7 +240,10 @@ def authenticate(username: str, password: str) -> dict:
 def change_password(user_id: int, new_password: str, old_password: str | None = None, require_old: bool = True) -> dict:
     """改密碼。require_old=True（使用者自行修改）時必須驗舊密碼；admin 代改可略過。
 
-    回傳改完之後的 user（含遞增過的 password_version）。
+    回傳改完之後的 user（含遞增過的 password_version），另外帶三個欄位講收終端的結果：
+    `views_closed`、`views_failed`（`-1` 代表整個動作拋出來、連收幾場都不知道）、
+    以及失敗時的 `views_error`。**呼叫端不可以只看有沒有拋例外就回報成功**，密碼改掉了
+    而終端沒收乾淨是一種部分成功，要講出來。
 
     ⚠ **不為「操作中的這一台」留特例**（ADR 0010）：password_version 一遞增，這個帳號的
       每一張 cookie 都當場失效，包含按下送出的那一張——`app.change_own_password` 自己
@@ -288,8 +291,20 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
         result = _to_dict(user)
     # ⚠ 交易關掉之後才做——見 docstring：close_user_views 自己會開交易。
     #   而且**一定要做**：cookie 全滅擋不到一條已經升級完成的 WebSocket。
-    with suppress(Exception):  # noqa: BLE001 — 收不掉終端不可以讓改密碼本身失敗
-        views.close_user_views(user_id)
+    # ⚠ **不再把例外吞掉。** 舊版是 `with suppress(Exception)`，理由寫的是「收不掉終端
+    #   不可以讓改密碼本身失敗」——那半句仍然對（密碼已經改了，`password_version` 也遞增
+    #   了，回滾不了），但吞掉的後果是呼叫端拿到一個乾淨的成功，而對方的分頁其實還是
+    #   一個能打字的 shell。改成**照樣回成功、但把收終端的結果一起交出去**，讓呼叫端
+    #   有辦法講出「密碼改了，終端沒收乾淨」這句話。
+    try:
+        closed, failed = views.close_user_views(user_id)
+    except Exception as e:  # noqa: BLE001 — 這一步失敗不能讓已經改掉的密碼變成錯誤回應
+        result["views_closed"] = 0
+        result["views_failed"] = -1  # -1＝連查都查不動，比「收了 N 場失敗 M 場」更糟
+        result["views_error"] = str(e)
+    else:
+        result["views_closed"] = closed
+        result["views_failed"] = failed
     return result
 
 
@@ -482,13 +497,24 @@ def gitlab_proxy_error(user_id: int) -> str | None:
 # `session_history` 仍保留 user_id ON DELETE SET NULL 與 username 快照——那是給
 # 「有人直接動資料庫」的兜底，不是應用層還會走的路徑。
 #
-# 退場的做法是**管理員改掉他的密碼**（app.admin_change_password），這樣就夠了：
+# 讓一個人退場的做法是**管理員改掉他的密碼**（app.admin_change_password）：
 #   1. password_version 遞增 → 他既有的 cookie 全部當場失效；
-#   2. 呼叫端會切斷他所有開著的終端（cookie 管不到已升級的 WebSocket，見該處說明）；
+#   2. 接著切斷他所有開著的終端（cookie 管不到已升級的 WebSocket，見 views.close_user_views）；
 #   3. 他不知道新密碼，登不回來。
-# 三件合起來與「停用」的效果相同，而少維護一個狀態——不必有 is_active 欄位、不必在
-# 登入與 gate 各查一次、也不必替「停用最後一位管理員」造一道專屬防線。要讓他回來，
-# 就把新密碼告訴他，這也同時取代了「復用」。
+#
+# ⚠ **這不等於「停用帳號」，別把它講成那樣。** 這一段以前寫的是「三件合起來與停用的效果
+#   相同」，而那句話不成立，缺口是具體的：
+#     · **他的容器繼續跑。** 這是設計（切存取權不終止工作，ADR 0003／0010），但它意味著
+#       他名下的 session 還活著，而不是「什麼都停了」。
+#     · **他存的 GitLab 憑證還在，per-user proxy 也還在**（ADR 0016）。改密碼刻意不動它，
+#       因為改密碼是例行操作；代價是那條對外的路不會因為改密碼而關上。
+#     · 收終端**可能失敗**。以前失敗會被吞掉、畫面照樣回成功；現在會回報（見 change_password），
+#       但「回報得出來」不等於「一定收得掉」。
+#   要真正的撤銷語意（不能再登入、憑證作廢、工作終止、失敗可重試），需要的是一個獨立的
+#   帳號狀態與一條對帳迴圈，這個工具目前沒有做，也不假裝有。它是單機／小團隊的東西，
+#   威脅模型是「把某個人請出去」，不是「即時圍堵一個正在攻擊的內部人」。
+#
+# 要讓他回來，就把新密碼告訴他，這也同時取代了「復用」。
 
 
 def _to_dict(user: User) -> dict:

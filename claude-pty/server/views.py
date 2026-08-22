@@ -45,14 +45,23 @@ except ImportError:  # pragma: no cover - 取決於環境
 # --- 對外 API --------------------------------------------------------------------
 
 
-def open_view(session_id: str, container_name: str, ttyd_bin: str | None = None) -> dict:
-    """為 session 開一個 on-demand 終端 view；已有存活的就沿用（點兩次不會多起一個）。"""
+def open_view(
+    session_id: str,
+    container_name: str,
+    ttyd_bin: str | None = None,
+    actor_user_id: int | None = None,
+) -> dict:
+    """為 session 開一個 on-demand 終端 view；已有存活的就沿用（點兩次不會多起一個）。
+
+    ⚠ `actor_user_id` 是**按下去的那個人**，不是 session 的擁有者。兩者在 admin 身上會
+      分岔（他開得了別人的 session），而收終端要跟著開的人走——見 `close_user_views`。
+    """
     existing = _alive_view(session_id)
     if existing is not None:
         return existing
 
     for port in range(config.TTYD_PORT_MIN, config.TTYD_PORT_MAX + 1):
-        view_id = _claim_port(session_id, port)
+        view_id = _claim_port(session_id, port, actor_user_id)
         if view_id is _PEER:
             # 別的 worker 已搶先為「同一個 session」建立 view（session_id UNIQUE）。
             # 不該再起第二個 ttyd，等它就緒後沿用（review H1）。
@@ -124,20 +133,38 @@ def close_user_views(user_id: int) -> int:
     ⚠ session 本身不動：這是「切斷存取」不是「終止工作」。容器繼續跑，重開網頁就會起一個
       新的 ttyd（ADR 0003：不重播，畫面由 TUI 自行重繪），代價幾乎是零。
 
-    ⚠ **涵蓋範圍是「他擁有的 session」，不是「他開著的終端」**——這兩者在 admin 身上會分岔：
-      admin 開得了別人的 session，而 view 掛在 session 上、不記得是誰在看。所以「改掉一位
-      admin 的密碼」收不掉他正開著的、屬於別人的終端。要補得先讓 view 記錄開啟者，那是
-      schema 變更；在那之前這是已知的缺口，不要以為改密碼等於全斷。
+    ⚠ **涵蓋範圍是「他擁有的」加「他開著的」**，兩者在 admin 身上會分岔：admin 開得了別人
+      的 session，而那個 view 掛在別人的 session 上。三條都要收：
+
+        1. session 的擁有者是他                  → 收（不管是誰開的）
+        2. view 的 `actor_user_id` 是他          → 收（他開在別人 session 上的那些）
+        3. `actor_user_id` 是 NULL 且他是 admin  → 也收
+
+      第 3 條是給這個欄位加上去之前就存在的舊列用的。NULL 的意思是「不知道是誰開的」，
+      而**只有 admin 開得了別人的 session**，所以未知的開啟者有可能就是他。收錯的代價
+      幾乎是零（ADR 0003 不重播，重開網頁就長一個新的），漏收的代價是一個剛被收掉存取權
+      的人手上還有一個能打字的 shell。往保守那一側倒。
+
+    ⚠ **回傳 `(收掉幾個, 失敗幾場)`。** 以前這裡把每一場的例外都吞掉、只回一個數字，
+      呼叫端無從分辨「三場都收掉了」與「三場都沒收掉」。切存取權的動作不可以安靜地失敗，
+      所以失敗要數出來，讓上面決定怎麼講。
     """
     from .models import Session as SessionRow  # 區域 import：避免與 auth 的載入順序打架
+    from .models import User as UserRow
 
     with session_scope() as s:
-        sids = [r.id for r in s.query(SessionRow.id).filter(SessionRow.user_id == user_id).all()]
-    closed = 0
-    for sid in sids:
-        with suppress(Exception):  # noqa: BLE001 — 一場收不掉不可以讓其餘的不收
+        is_admin = bool(getattr(s.get(UserRow, user_id), "is_admin", False))
+        targets = {r.id for r in s.query(SessionRow.id).filter(SessionRow.user_id == user_id).all()}
+        targets |= {r.session_id for r in s.query(View.session_id).filter(View.actor_user_id == user_id).all()}
+        if is_admin:
+            targets |= {r.session_id for r in s.query(View.session_id).filter(View.actor_user_id.is_(None)).all()}
+    closed = failed = 0
+    for sid in targets:
+        try:
             closed += close_views(sid)
-    return closed
+        except Exception:  # noqa: BLE001 — 一場收不掉不可以讓其餘的不收
+            failed += 1
+    return closed, failed
 
 
 def list_views(session_id: str) -> list[dict]:
@@ -178,7 +205,7 @@ def list_views(session_id: str) -> list[dict]:
 _PEER = object()  # _claim_port 的哨兵：撞的是 session_id，不是 port
 
 
-def _claim_port(session_id: str, port: int):
+def _claim_port(session_id: str, port: int, actor_user_id: int | None = None):
     """試著佔一個 port。
 
     回傳 view_id（搶到）／`None`（這個 port 被別的 session 佔走，換下一個）／
@@ -189,7 +216,7 @@ def _claim_port(session_id: str, port: int):
     """
     try:
         with session_scope() as s:
-            row = View(session_id=session_id, port=port)
+            row = View(session_id=session_id, port=port, actor_user_id=actor_user_id)
             s.add(row)
             s.flush()
             return row.id
