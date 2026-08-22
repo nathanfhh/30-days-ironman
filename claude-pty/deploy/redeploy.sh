@@ -121,7 +121,10 @@ fi
 #   腳本會去建 .env 指的那個目錄並對它做可寫檢查（通過），compose 卻掛 env 指的
 #   那個（不存在）→ dockerd 以 root 建出來，正是下面整段註解在防的症狀，而防線
 #   從這裡被繞過（審查 F-022）。同一支腳本上面才剛為 HOST_PLATFORM 寫下這個優先序。
-SPACE_FROM_FILE="$(sed -n 's/^[[:space:]]*CLAUDE_PTY_SPACE=//p' .env 2>/dev/null | tail -1 | tr -d '"'\''')"
+# ⚠ 結尾的 `|| true` 不是裝飾。`.env` 不存在時 sed 回非零，而這支腳本開了
+#   `set -euo pipefail`——少了它，整支會在這一行**靜靜 exit 1，一個字都不印**。
+#   而「還沒有 .env」正是第一次部署的樣子（.env 不進版控），也就是最需要看到訊息的那次。
+SPACE_FROM_FILE="$(sed -n 's/^[[:space:]]*CLAUDE_PTY_SPACE=//p' .env 2>/dev/null | tail -1 | tr -d '"'\''' || true)"
 SPACE="${CLAUDE_PTY_SPACE:-${SPACE_FROM_FILE}}"
 SPACE="${SPACE:-${HOME}/claude-pty-space}"
 # ⚠ `~` 在 .env 裡不會被展開（compose 不展、Python 也不展），照著建會真的長出一個名字叫
@@ -179,7 +182,7 @@ if [ "${CLAUDE_PTY_HOST_PLATFORM}" = "Linux" ]; then
   IMG_UID="$(docker image inspect -f '{{index .Config.Labels "ncr.uid"}}' \
              "${SESSION_IMAGE}" 2>/dev/null || true)"
   MY_UID="$(id -u)"
-  APP_UID_EFF="${APP_UID:-$(sed -n 's/^[[:space:]]*APP_UID=//p' .env 2>/dev/null | tail -1)}"
+  APP_UID_EFF="${APP_UID:-$(sed -n 's/^[[:space:]]*APP_UID=//p' .env 2>/dev/null | tail -1 || true)}"
   if [ -z "${IMG_UID}" ] || [ "${IMG_UID}" = "<no value>" ]; then
     # 走到這裡代表 image 在（上面那道已經確認過），但沒有 ncr.uid 標記——加上那個
     # 標記之前 build 的舊 image。不擋，但要講清楚它沒被驗過。

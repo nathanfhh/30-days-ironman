@@ -79,12 +79,40 @@ check("給了可複製的 build 指令", "dev-container" in out and "build.sh" i
 check("也講了 opt-in 的做法", "--build-session-image" in out)
 check("擋在 docker compose 之前（沒有動到任何容器）", "Recreated" not in out and "Started" not in out)
 
+print("== 沒有 deploy/.env 也要跑得動（第一次部署就是這個樣子）==")
+# CI 上沒有 .env（它不進版控），而腳本開了 set -euo pipefail：`sed ... .env` 在檔案不存在
+# 時回非零，於是整支會**靜靜 exit 1、一個字都不印**。這是第一次部署的情境，也是最需要
+# 看到訊息的那一次。本機有 .env 所以看不出來，是 CI 把它抓出來的。
+_ENV = os.path.join(os.path.dirname(SH), ".env")
+_env_backup = None
+if os.path.exists(_ENV):
+    _env_backup = _ENV + ".preflight-test-bak"
+    os.rename(_ENV, _env_backup)
+try:
+    r = run()
+    out = r.stdout + r.stderr
+    check("沒有 .env 時仍然走得到 image 檢查（不是靜靜退出）", "ncr-preflight-does-not-exist-42" in out)
+    check("而且有輸出（靜默失敗最難查）", len(out.strip()) > 0)
+finally:
+    if _env_backup:
+        os.rename(_env_backup, _ENV)
+
 print("== 這一段不是只有 Linux 才跑 ==")
-# 以前整段包在 `if [ "$CLAUDE_PTY_HOST_PLATFORM" = "Linux" ]` 裡。裝成 Darwin 仍要擋。
-r = run(CLAUDE_PTY_HOST_PLATFORM="Darwin")
-check("host 是 Darwin 時照樣擋", r.returncode != 0)
-r = run(CLAUDE_PTY_HOST_PLATFORM="Linux")
-check("host 是 Linux 時也擋", r.returncode != 0)
+# 以前整段包在 `if [ "$CLAUDE_PTY_HOST_PLATFORM" = "Linux" ]` 裡，所以 macOS 完全沒有檢查。
+#
+# ⚠ 這一條**用讀原始碼驗，不用注入環境變數驗**。腳本刻意寫死
+#   `CLAUDE_PTY_HOST_PLATFORM="$(uname -s)"`（那是事實來源，不可以被塞——
+#   test_host_platform.py 有一條專門守這件事），所以注入根本不會生效：
+#   兩條「Darwin/Linux 都要擋」的測試會一起走同一條路、一起假通過。
+#   真正要守的是**結構**：image 檢查在平台判斷之外。
+_src = open(SH, encoding="utf-8").read()
+_img_at = _src.index("找不到 session image")
+_plat_at = _src.index('if [ "${CLAUDE_PTY_HOST_PLATFORM}" = "Linux" ]')
+check("image 檢查排在平台判斷**之前**（所以不分平台都會跑）", _img_at < _plat_at)
+check(
+    "而且不在那個 if 區塊裡（uid 檢查才是 Linux 限定）",
+    "找不到 session image" not in _src[_plat_at:],
+)
 
 print("== 略過的那條路要寫出來，而且要講代價 ==")
 r = run(CLAUDE_PTY_SKIP_SESSION_IMAGE_CHECK="1", CLAUDE_PTY_HOST_PLATFORM="Darwin")
