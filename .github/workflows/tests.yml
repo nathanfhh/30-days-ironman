@@ -25,7 +25,11 @@ jobs:
       # ⚠ 這道閘是 2026-08-23 補的，補的當下就抓到 8 支從來沒被 format 過的 .py
       #   （crypto.py、leases.py、wire_report.py 等）。上一輪的 format 宣告過範圍，
       #   但沒有機制保證它跑完——這就是那個機制。
-      - run: git ls-files '*.py' | xargs uvx ruff@0.16.3 format --check
+      # ⚠ `-co --exclude-standard`（tracked ＋ 未被 ignore 的 untracked），不是只有 tracked。
+      #   上一輪就是這個差別讓本機看起來全綠：那時新測試檔還沒 `git add`，不在 `ls-files`
+      #   的輸出裡，本機說「93 files already formatted」，CI 在它們被 commit 之後才紅。
+      #   兩邊用**同一條指令**，本機看到的就是 CI 會看到的。
+      - run: git ls-files -co --exclude-standard '*.py' | xargs uvx ruff@0.16.3 format --check
       - run: uv sync --locked
       - run: uv run pytest
 
@@ -51,10 +55,24 @@ jobs:
           set -euo pipefail
           docker run --rm --entrypoint cat claude-pty-control:ci \
             /app/installed-requirements.txt > /tmp/installed.txt
-          pip install --quiet uv==0.7.3
+          # ⚠ marker 要用 **image 自己**的環境算，不是這台 runner 的。實測踩過：在
+          #   macOS/arm64 上 `platform_machine` 是 `arm64`，而 greenlet 的 marker 只列到
+          #   `aarch64`，於是它被算成「不該裝」、image 裡那顆反而被判成多出來的。
+          docker run --rm --entrypoint python claude-pty-control:ci -c \
+            'import json; from packaging.markers import default_environment; print(json.dumps(default_environment()))' \
+            > /tmp/imgenv.json
+          cat /tmp/imgenv.json
+          pip install --quiet uv==0.7.3 packaging
           uv export --frozen --no-dev --extra server --group build --no-emit-project \
             -o /tmp/locked.txt
-          python3 deploy/verify_locked_runtime.py /tmp/installed.txt /tmp/locked.txt
+          python3 deploy/verify_locked_runtime.py /tmp/installed.txt /tmp/locked.txt /tmp/imgenv.json
+      # ⚠ 上面那一步只證明「這一次的 image 是對的」，證明不了「驗證器抓得到錯的」。
+      #   一道自己沒被驗過的閘就只是一句宣稱，而它的第一版確實是假綠的（見該檔的說明）。
+      #   負向測試在 claude-pty job 裡跑（tests/test_locked_runtime.py），這裡再跑一次是
+      #   因為這個 job 才是它真正守著的東西，兩邊都紅才叫做守住了。
+      - name: 驗證器的負向測試（錯的輸入必須紅）
+        working-directory: claude-pty
+        run: python3 tests/test_locked_runtime.py
 
   claude-pty:
     # quick 模式：跳過所有會真的起容器的整合測試，不需要 image，約一分鐘。

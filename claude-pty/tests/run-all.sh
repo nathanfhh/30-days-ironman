@@ -18,7 +18,11 @@ cd "$(dirname "$0")/.."
 
 DEPS=(--with flask --with docker --with sqlalchemy --with argon2-cffi
       --with psutil --with cryptography
-      --with websocket-client --with pexpect --with playwright)
+      --with websocket-client --with pexpect --with playwright
+      # ⚠ 只有 test_locked_runtime 用得到，而且**刻意不是**專案相依：它是 deploy 那道閘
+      #   拿來照規格評估 requirement marker 的工具，進了 pyproject 就會跟著進正式 image。
+      #   同 playwright／pexpect／websocket-client，都是只在這裡出現的測試期工具。
+      --with packaging)
 
 # 需要真的 docker daemon 的（README 標 ✓ 的那些）。
 # ⚠ 測試與正式 stack 共用同一個 dockerd，這幾支會呼叫 reconcile_once——它們靠
