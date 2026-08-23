@@ -23,7 +23,9 @@ Docker Desktop（macOS／Windows）都做 uid 對映，uid 不同是正常的。
   🔴 `sessions.py` 不可以再出現 `sys.platform`（有人改回去就當場紅）
 """
 
+import io
 import os
+import re
 import sys
 import tempfile
 
@@ -98,7 +100,7 @@ try:
     def _run(platform, image_uid_result):
         config.HOST_PLATFORM = platform
         sessions.image_uid = lambda *a, **k: image_uid_result
-        return [p for p in sessions.preflight() if NEEDLE in p]
+        return [p for p in sessions.preflight()[0] if NEEDLE in p]
 
     try:
         # (a) macOS：不管 image 回什麼都不該喊——bind mount 的 uid 在那邊本來就會被對映
@@ -179,6 +181,78 @@ check("🔴 sessions.py 的程式碼不再用 sys.platform 判斷 host", not any
 check("preflight 走的是 config.host_is_linux()", "config.host_is_linux()" in src)
 
 __import__("shutil").rmtree(TMP, ignore_errors=True)
+print("== HOST_REPO_ROOT 設錯要在啟動就喊，不是等到建 session 才炸 ==")
+# 2026-08-23 實際踩到：deploy/.env 少了 HOST_REPO_ROOT，預設落到 `/repo`。啟動自檢
+# 一句話都沒說（登入頁 200、preflight 全過），直到有人按「建立 session」才收到 docker
+# 的 500：`mounts denied: The path /repo/dev-container/entrypoint.sh is not shared`。
+#
+# ⚠ `os.path.exists()` **驗不到這件事**：compose 把 repo 掛在 ${HOST_REPO_ROOT}，
+#   所以控制平面容器裡那個路徑一定存在，即使 host 上根本沒有。查得到真相的只有 daemon，
+#   而問法是「我自己那個掛載的來源是什麼」——來源必須等於目的（ADR 0009 同路徑設計）。
+
+
+class _FakeMe:
+    def __init__(self, mounts):
+        self.attrs = {"Mounts": mounts}
+
+
+class _FakeClient:
+    def __init__(self, mounts):
+        self._m = mounts
+
+    @property
+    def containers(self):
+        outer = self
+
+        class _C:
+            def get(self, _name):
+                return _FakeMe(outer._m)
+
+        return _C()
+
+
+class _FakeDocker:
+    def __init__(self, mounts):
+        self._m = mounts
+
+    def from_env(self, **_kw):
+        return _FakeClient(self._m)
+
+
+def _preflight_with(mounts, host_repo_root):
+    old_docker, old_root, old_mounts = sessions.docker, config.HOST_REPO_ROOT, config.MOUNTS
+    try:
+        sessions.docker = _FakeDocker(mounts)
+        config.HOST_REPO_ROOT = host_repo_root
+        config.MOUNTS = config.MOUNTS or {"/tmp": {}}
+        # HOST_REPO_ROOT 是**致命**那一份（起來也做不了事），所以取 [1] 不是 [0]
+        return sessions.preflight()[1]
+    finally:
+        sessions.docker, config.HOST_REPO_ROOT, config.MOUNTS = old_docker, old_root, old_mounts
+
+
+_ROOT = "/Users/someone/Projects/repo"
+check(
+    "來源與目的相同（設對了）→ 不算致命",
+    not _preflight_with([{"Destination": _ROOT, "Source": _ROOT}], _ROOT),
+)
+_hit = _preflight_with([{"Destination": "/repo", "Source": _ROOT}], "/repo")
+check("來源與目的不同（沒設，落到 /repo）→ 列為**致命**（服務不該起來）", bool(_hit))
+check("而且訊息講得出正確的值該填什麼", bool(_hit) and _ROOT in _hit[0])
+check("也講明現在這樣建 session 一定會失敗", bool(_hit) and "建 session" in _hit[0])
+check(
+    "沒有對應的掛載（非容器化部署）→ 不誤報",
+    not _preflight_with([{"Destination": "/other", "Source": "/x"}], _ROOT),
+)
+
+# 致命清單非空時，import server.app 必須直接 SystemExit——只印不停等於沒有人會看。
+_appsrc = io.open(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "server", "app.py"),
+    encoding="utf-8",
+).read()
+check("app.py 拿得到致命清單（回傳是兩份）", "_problems, _fatal = sessions_mod.preflight()" in _appsrc)
+check("而且致命時真的停掉，不是只印", re.search(r"if _fatal:.*?raise SystemExit\(1\)", _appsrc, re.S) is not None)
+
 print("== COOKIE_SECURE 提醒只在入口真的對外時才喊 ==")
 # 以前不分情況都喊，於是本機開發每次啟動都收到一次——每次都喊的提醒，等到真的該喊
 # 那次就沒有人在看了。判準是 nginx 綁在哪，而那件事只有 compose 知道。
@@ -196,12 +270,12 @@ try:
         ("", True, "不知道就當成連得到——查不到不等於通過"),
     ):
         config.BIND_ADDR = addr
-        hit = any("COOKIE_SECURE=0" in p for p in sessions.preflight())
+        hit = any("COOKIE_SECURE=0" in p for p in sessions.preflight()[0])
         check(f"bind={addr or '（未知）'} → {'喊' if should_warn else '不喊'}（{why}）", hit is should_warn)
     # COOKIE_SECURE=1 時任何位址都不該喊
     config.COOKIE_SECURE = True
     config.BIND_ADDR = "0.0.0.0"
-    check("設了 COOKIE_SECURE=1 之後就不喊了", not any("COOKIE_SECURE=0" in p for p in sessions.preflight()))
+    check("設了 COOKIE_SECURE=1 之後就不喊了", not any("COOKIE_SECURE=0" in p for p in sessions.preflight()[0]))
 finally:
     config.BIND_ADDR = _old_bind
     config.BEHIND_PROXY = _old_behind

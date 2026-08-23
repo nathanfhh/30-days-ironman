@@ -252,7 +252,7 @@ try:
         _probe_dir: {"bind": "/x", "mode": "rw"},  # 存在的路徑
         os.path.join(_probe_dir, "nope"): {"bind": "/y", "mode": "rw"},  # 不存在的路徑
     }
-    msgs = [m for m in sessions.preflight() if "掛載來源不存在" in m]
+    msgs = [m for m in sessions.preflight()[0] if "掛載來源不存在" in m]
 finally:
     docker.from_env = _old_from_env
     config.MOUNTS = _old_mounts

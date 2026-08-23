@@ -810,8 +810,14 @@ def image_uid(client: docker.DockerClient | None = None) -> tuple[str, int | Non
         return ("unstamped", None)
 
 
-def preflight() -> list[str]:
-    """啟動自檢：回傳需要提醒使用者的問題清單。
+def preflight() -> tuple[list[str], list[str]]:
+    """啟動自檢：回傳 `(提醒, 致命)` 兩份清單。
+
+    ⚠ **兩者的差別是「服務該不該起來」，不是嚴重度的形容詞。**
+      提醒＝有這個問題服務仍然做得了事（例如 uid 對不上只影響某些情境）；
+      致命＝起來了也一定做不了事（例如 HOST_REPO_ROOT 設錯，每一次建 session 都會
+      在 docker 的 `mounts denied` 500 上失敗）。後者只印不停等於沒有人會看：訊息在
+      docker log 裡一秒被沖走，而健康檢查照樣綠燈。
 
     ⚠ **這支有副作用**：它會 `makedirs` per-user 空間的根目錄（ADR 0014）。那不是「檢查」
       該做的事，但必須有人做——不先建的話 dockerd 會在 bind mount 時把它建成 root:root，
@@ -822,6 +828,11 @@ def preflight() -> list[str]:
     靜默降級（2026-07-25 實測踩到：容器化後 _SELF_REPO_ROOT 推導成 "/"）。
     """
     problems = []
+    # ⚠ `fatal` 與 `problems` 的差別是**會不會讓服務起來**。
+    #   這個系統原本的立場是「大聲講，不要靜默降級」——但只印不停等於沒有人會看：
+    #   訊息在 docker log 裡一秒就被沖走，而服務照樣顯示健康。對於「起得來但一定
+    #   做不了事」的設定錯誤，正確的行為是**當場停掉**，讓部署的人立刻知道。
+    fatal = []
     # ⚠ **這裡不再建任何共用的 session network。** session 住在**它主人那一張**上
     #   （`claude-pty-user-{id}`），由 `create()` 在建容器之前 `ensure_network` 建出來——
     #   那是 per-user 的，開機時根本不知道等一下會有誰來開場，先建不了。
@@ -885,6 +896,32 @@ def preflight() -> list[str]:
             f"若該版本沒有 CLAUDE_PTY_* env-skip 就會停在互動選單。"
             f"容器化部署請設 CLAUDE_PTY_SELF_REPO_ROOT 指向掛進來的 repo 路徑。"
         )
+    # ⚠ **HOST_REPO_ROOT 設錯的話，這裡不喊就要等到有人按「建立 session」才炸。**
+    #   而且炸的樣子是 docker 的 500：
+    #     mounts denied: The path /repo/dev-container/entrypoint.sh is not shared from the host
+    #   `os.path.exists()` 驗不到這件事：compose 把 repo 掛在 `${HOST_REPO_ROOT}`，所以
+    #   **控制平面容器裡那個路徑一定存在**，即使 host 上根本沒有。查得到真相的只有 daemon。
+    #
+    #   問法：compose 的設計是把 repo 掛成**同一個路徑**（來源＝目的，見 ADR 0009），
+    #   所以只要問 daemon「我自己那個掛載的來源是什麼」，跟目的一比就知道。
+    #   不相等＝`.env` 的 HOST_REPO_ROOT 沒設或設錯，而 session 容器會拿那個值當來源。
+    if config.MOUNTS:
+        try:
+            _c = docker.from_env(timeout=config.DOCKER_TIMEOUT)
+            _me = _c.containers.get(socket.gethostname())
+            _mine = {m.get("Destination"): m.get("Source") for m in (_me.attrs.get("Mounts") or [])}
+        except Exception:  # noqa: BLE001 — 問不到就跳過；docker 不通有別的地方會喊
+            _mine = {}
+        _src = _mine.get(config.HOST_REPO_ROOT)
+        if _src and _src != config.HOST_REPO_ROOT:
+            # **致命**：這個設定錯了，每一次建 session 都會失敗，服務起來也做不了事。
+            fatal.append(
+                f"HOST_REPO_ROOT 設錯了：容器裡看到的是 {config.HOST_REPO_ROOT}，"
+                f"但 daemon 那側的來源是 {_src}。這兩個必須相同（repo 掛成同一個路徑，"
+                f"ADR 0009）。**現在這樣建 session 一定會失敗**，而且錯誤會出現在 docker "
+                f"的 500 裡（mounts denied），不會指回這裡。"
+                f"請在 deploy/.env 設 HOST_REPO_ROOT={_src} 再重新部署。"
+            )
     # MOUNTS 的來源是 host 路徑，由 daemon 解讀；控制平面容器化後本來就看不到它們，
     # 故只在「HOST 與 SELF 相同」（非容器化）時檢查，否則會誤報。
     # ⚠ MOUNTS 的 key **不一定是路徑**：trivy 的 cache 是 named volume（ADR 0018），
@@ -1030,7 +1067,7 @@ def preflight() -> list[str]:
                 f"（502），而畫面上的代理狀態是綠的、不會有任何錯誤訊息。"
                 f"容器化部署請另外以 CLAUDE_PTY_GITLAB_CA_FILE_SELF 指明控制平面看得到的路徑。"
             )
-    return problems
+    return problems, fatal
 
 
 class SessionManager:

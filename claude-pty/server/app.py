@@ -52,8 +52,17 @@ app.config.update(
 init_db()  # 建表（冪等）；registry 持久化於 DB（ADR 0008），多 worker 共用同一份
 manager = SessionManager()
 
-for _problem in sessions_mod.preflight():  # 設定不對就大聲講，不要靜默降級
+_problems, _fatal = sessions_mod.preflight()  # 設定不對就大聲講，不要靜默降級
+for _problem in _problems:
     print(f"[claude-pty] ⚠ {_problem}", flush=True)
+if _fatal:
+    # ⚠ **這裡是刻意 exit，不是拋例外。** 只印不停等於沒有人會看：訊息在 docker log
+    #   裡一秒被沖走，而容器 restart: unless-stopped 會讓它一直起著、健康檢查照樣綠。
+    #   起得來但一定做不了事，那不叫降級，那叫假裝在跑。停掉才會有人來修。
+    for _f in _fatal:
+        print(f"[claude-pty] ✗ {_f}", flush=True)
+    print("[claude-pty] ✗ 上面是**會讓服務做不了事**的設定錯誤，因此不啟動。修好 deploy/.env 再重新部署。", flush=True)
+    raise SystemExit(1)
 
 # 不需登入的端點：登入 API、登入頁、靜態資源、健康檢查。其餘一律過 gate。
 _PUBLIC_ENDPOINTS = {"login", "web.login_page", "web.healthz", "static"}

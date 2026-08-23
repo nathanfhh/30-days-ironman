@@ -466,12 +466,12 @@ try:
 
     # 5) preflight：填了卻找不到要在啟動時就喊，不可以靜靜退回系統 CA。
     config.GITLAB_CA_FILE = config.GITLAB_CA_FILE_SELF = os.path.join(_ca_dir, "nope.pem")
-    _probs = " ".join(sessions.preflight())
+    _probs = " ".join(sessions.preflight()[0])
     check(
         "🔴 CA 檔不存在 → preflight 出聲，而且講得出症狀（502／狀態是綠的）", "nope.pem" in _probs and "502" in _probs
     )
     config.GITLAB_CA_FILE = config.GITLAB_CA_FILE_SELF = _ca
-    check("🔴 檔案在就不要吵", not any("GITLAB_CA_FILE" in p for p in sessions.preflight()))
+    check("🔴 檔案在就不要吵", not any("GITLAB_CA_FILE" in p for p in sessions.preflight()[0]))
 finally:
     config.GITLAB_CA_FILE, config.GITLAB_CA_FILE_SELF = _saved_ca
     shutil.rmtree(_ca_dir, ignore_errors=True)
