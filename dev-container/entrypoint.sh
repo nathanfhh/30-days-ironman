@@ -49,6 +49,9 @@ fi
 #   - 落地的是脫敏過的副本，addon fail-closed：脫敏出錯就整條丟掉，
 #     絕不改寫成未脫敏版落地；addon 不在就整場不錄，而不是退回錄原始流量。
 #   - 範圍由人在啟動時選，**預設全錄**；選「只錄模型 API」時其餘 host 直連、不走 proxy。
+#   - ⚠ 「全部」的範圍是**這一場 CLI 及其子行程**，不是這顆容器：proxy 靠環境變數交出去，
+#     而環境變數只往下傳。`docker exec` 另外開的行程繼承的是 PID 1 那份（還沒 export），
+#     所以不經過 mitm、也不會被錄到。要涵蓋它們得改用 iptables 透明轉址。
 #     選了什麼會寫進 meta.json，報表據此揭露——端點表看起來像「連過的全部」，
 #     實際上是「過濾器讓我看到的那些」，不記下來讀報表的人分不出這兩件事。
 #
@@ -451,6 +454,7 @@ if [ "$CAPTURE_ON" = "1" ]; then
     echo ""
     echo "錄製範圍："
     echo "  1 = 全部流量（預設） — 憑證裝進容器的系統信任庫，proxy 進關鍵路徑"
+    echo "      （範圍是這一場 CLI 及其子行程；另外 docker exec 進來的不在裡面）"
     echo "  2 = 只錄模型 API     — 只收 ${CAPTURE_MODEL_HOSTS}，其餘直連不經過 proxy"
     echo ""
     if [ -n "${NCR_CAPTURE_SCOPE:-}" ]; then
