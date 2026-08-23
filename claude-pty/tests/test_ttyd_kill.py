@@ -137,6 +137,7 @@ try:
     _kill(pid)
 
     print("== 🔴 等的是「原本那個程序」，不是「這個號碼」==")
+
     # PID 會被回收。只看存在性的話，等待期間有人接手同一個號碼就會一路等到逾時，
     # 然後把 SIGKILL 送給一個無關的程序。psutil 的 Process 記著 create_time，
     # is_running() 分得出「號碼還在但已經換人」。

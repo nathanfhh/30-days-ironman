@@ -85,11 +85,7 @@ def _exits(node) -> bool:
     )
 
 
-guards = [
-    n
-    for n in ast.walk(tree)
-    if isinstance(n, ast.If) and isinstance(n.test, ast.Name) and n.test.id == "_fatal"
-]
+guards = [n for n in ast.walk(tree) if isinstance(n, ast.If) and isinstance(n.test, ast.Name) and n.test.id == "_fatal"]
 check("找得到 `if _fatal:` 這個分支", len(guards) == 1)
 check("🔴 該分支裡會 raise SystemExit（不是只印一行）", bool(guards) and _exits(guards[0]))
 
