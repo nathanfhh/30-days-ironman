@@ -149,8 +149,8 @@ elif [ -z "${SSH_AUTH_SOCK:-}" ]; then
         echo "⚠️  SSH：起不了 ssh-agent，本場不轉發。"
     fi
 else
-    # 轉發現成的 agent 之前先確認它裡面有東西。macOS 的 launchd agent 是**永遠都在**的
-    # ——SSH_AUTH_SOCK 一定有值，socket 一定連得上，但沒 ssh-add 過就是空的。
+    # 轉發現成的 agent 之前先確認它裡面有東西。macOS 一般互動登入下 launchd agent
+    # **通常都在**：SSH_AUTH_SOCK 有值、socket 連得上，但沒 ssh-add 過就是空的。
     # 只看「有沒有 agent」會讓這裡印出 🔐 成功訊息，然後容器裡的 git 才發現沒有金鑰。
     #
     # ⚠ 只警告，不自動 ssh-add：這個 agent 是使用者的，載入的金鑰在腳本退出後還留著。
