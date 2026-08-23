@@ -30,12 +30,11 @@ def acquire_lease(name: str, owner: str, ttl: int) -> bool:
     with session_scope(immediate=True) as s:
         row = s.get(Lease, name)
         if row is None:
-            s.add(Lease(name=name, owner=owner,
-                        expires_at=now + _dt.timedelta(seconds=ttl)))
+            s.add(Lease(name=name, owner=owner, expires_at=now + _dt.timedelta(seconds=ttl)))
             return True
         if row.owner != owner and row.expires_at > now:
-            return False                    # 別人持有中且未過期
-        row.owner = owner                   # 自己續約，或接手已過期的租約
+            return False  # 別人持有中且未過期
+        row.owner = owner  # 自己續約，或接手已過期的租約
         row.expires_at = now + _dt.timedelta(seconds=ttl)
         return True
 

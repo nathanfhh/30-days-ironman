@@ -16,6 +16,7 @@
 
     uv run --with flask --with docker --with sqlalchemy python tests/test_secret_key.py
 """
+
 import multiprocessing as mp
 import os
 import shutil
@@ -42,15 +43,16 @@ def _worker(home, q, barrier):
       也因此每個子行程都要重新 import（spawn 會給一個乾淨的直譯器，正好）。
     """
     os.environ["HOME"] = home
-    os.environ.pop("CLAUDE_PTY_SECRET_KEY", None)   # 有 env 就走不到檔案那條路
+    os.environ.pop("CLAUDE_PTY_SECRET_KEY", None)  # 有 env 就走不到檔案那條路
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    barrier.wait()          # 四個行程對齊起跑線，把競態窗口撐到最大
+    barrier.wait()  # 四個行程對齊起跑線，把競態窗口撐到最大
     from server import config
+
     q.put(config.SECRET_KEY)
 
 
 if __name__ == "__main__":
-    mp.set_start_method("spawn", force=True)   # fork 會沿用父行程已 import 的 config
+    mp.set_start_method("spawn", force=True)  # fork 會沿用父行程已 import 的 config
     N_PROCS, ROUNDS = 4, 12
     print(f"== {N_PROCS} 個行程同時啟動 × {ROUNDS} 輪，每一輪都必須拿到同一把金鑰 ==")
     diverged = 0
@@ -58,8 +60,7 @@ if __name__ == "__main__":
         home = tempfile.mkdtemp(prefix=f"claude-pty-secret-{i}-")
         try:
             q, barrier = mp.Queue(), mp.Barrier(N_PROCS)
-            procs = [mp.Process(target=_worker, args=(home, q, barrier))
-                     for _ in range(N_PROCS)]
+            procs = [mp.Process(target=_worker, args=(home, q, barrier)) for _ in range(N_PROCS)]
             for p in procs:
                 p.start()
             for p in procs:
@@ -67,14 +68,15 @@ if __name__ == "__main__":
             keys = {q.get(timeout=10) for _ in procs}
             with open(os.path.join(home, ".claude-pty", "secret.key")) as f:
                 on_disk = f.read().strip()
-            leftovers = [n for n in os.listdir(os.path.join(home, ".claude-pty"))
-                         if n.startswith("secret.key.")]
+            leftovers = [n for n in os.listdir(os.path.join(home, ".claude-pty")) if n.startswith("secret.key.")]
             if len(keys) != 1 or on_disk not in keys or leftovers:
                 diverged += 1
                 if diverged == 1:
-                    print(f"  第 {i} 輪：記憶體裡有 {len(keys)} 把不同的金鑰、"
-                          f"磁碟上是{'其中一把' if on_disk in keys else '別的'}"
-                          f"、殘留暫存檔 {leftovers}")
+                    print(
+                        f"  第 {i} 輪：記憶體裡有 {len(keys)} 把不同的金鑰、"
+                        f"磁碟上是{'其中一把' if on_disk in keys else '別的'}"
+                        f"、殘留暫存檔 {leftovers}"
+                    )
         finally:
             shutil.rmtree(home, ignore_errors=True)
     check(f"{ROUNDS} 輪全部只有一把金鑰（分岔 {diverged} 輪）", diverged == 0)

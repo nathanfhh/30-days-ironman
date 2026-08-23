@@ -21,7 +21,9 @@ from pathlib import Path
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--results", required=True, help="upstream offline/results directory")
+    ap.add_argument(
+        "--results", required=True, help="upstream offline/results directory"
+    )
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--tools", required=True)
     ap.add_argument("--out", required=True)
@@ -48,8 +50,12 @@ def main() -> int:
             p = tp / (tp + fp) if (tp + fp) else 0.0
             rc = tp / (tp + fn) if (tp + fn) else 0.0
             out[judge][tool] = {
-                "tp": tp, "fp": fp, "fn": fn, "prs": n,
-                "precision": p, "recall": rc,
+                "tp": tp,
+                "fp": fp,
+                "fn": fn,
+                "prs": n,
+                "precision": p,
+                "recall": rc,
                 "f1": 2 * p * rc / (p + rc) if (p + rc) else 0.0,
             }
 
@@ -57,8 +63,10 @@ def main() -> int:
     for judge, block in out.items():
         print(f"== {judge} ==")
         for tool, m in block.items():
-            print(f"  {tool:<16} P={m['precision']:6.1%} R={m['recall']:6.1%} "
-                  f"F1={m['f1']:6.1%}  TP={m['tp']:3} FP={m['fp']:3} FN={m['fn']:3}  n={m['prs']}")
+            print(
+                f"  {tool:<16} P={m['precision']:6.1%} R={m['recall']:6.1%} "
+                f"F1={m['f1']:6.1%}  TP={m['tp']:3} FP={m['fp']:3} FN={m['fn']:3}  n={m['prs']}"
+            )
     return 0
 
 

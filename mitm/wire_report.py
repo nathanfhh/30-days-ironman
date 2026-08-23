@@ -59,7 +59,9 @@ _cost = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_cost)
 
 # 「靜止多久算空窗」沿用場次報表的定義（同一個常數，兩份報表不該各有一套）。
-_SESSION_PATH = Path(__file__).resolve().parent.parent / "opentelemetry" / "session-report.py"
+_SESSION_PATH = (
+    Path(__file__).resolve().parent.parent / "opentelemetry" / "session-report.py"
+)
 _sr_spec = importlib.util.spec_from_file_location("_ncr_sessionmod", _SESSION_PATH)
 if _sr_spec is None or _sr_spec.loader is None:  # pragma: no cover - import plumbing
     raise SystemExit(f"載入不了 {_SESSION_PATH}")
@@ -76,6 +78,7 @@ MESSAGES_PATH = "/v1/messages"
 # --------------------------------------------------------------------------------------
 # 讀檔與逐 flow 抽取
 # --------------------------------------------------------------------------------------
+
 
 def _body_bytes(msg) -> bytes:
     """落在線上的那份 body。
@@ -211,7 +214,9 @@ def resolve_capture(target: Path) -> Path:
     檔案的路徑也要能走。
     """
     if target.is_dir():
-        found = sorted(target.glob("*.mitm"), key=lambda p: p.stat().st_mtime, reverse=True)
+        found = sorted(
+            target.glob("*.mitm"), key=lambda p: p.stat().st_mtime, reverse=True
+        )
         if not found:
             raise SystemExit(f"{target} 裡沒有 .mitm")
         if len(found) > 1:
@@ -281,16 +286,23 @@ def parse_firewall(text: str) -> dict:
         parts = line.split()
         if chain is None or len(parts) < 4 or not _counter(parts[0]):
             continue
-        chain["rules"].append({
-            "packets": _counter(parts[0]) or 0,
-            "bytes": parts[1],
-            "target": parts[2],
-            "detail": " ".join(parts[3:]),
-        })
-    blocked = sum(r["packets"] for c in chains for r in c["rules"]
-                  if r["target"] in ("REJECT", "DROP"))
-    allowed = sum(r["packets"] for c in chains for r in c["rules"]
-                  if r["target"] == "ACCEPT")
+        chain["rules"].append(
+            {
+                "packets": _counter(parts[0]) or 0,
+                "bytes": parts[1],
+                "target": parts[2],
+                "detail": " ".join(parts[3:]),
+            }
+        )
+    blocked = sum(
+        r["packets"]
+        for c in chains
+        for r in c["rules"]
+        if r["target"] in ("REJECT", "DROP")
+    )
+    allowed = sum(
+        r["packets"] for c in chains for r in c["rules"] if r["target"] == "ACCEPT"
+    )
     return {"chains": chains, "blocked": blocked, "allowed": allowed}
 
 
@@ -310,7 +322,8 @@ def load_flows(path: str) -> list[dict]:
             # 幾十次請求共用一條——用連線時間會讓它們全部塌在同一個時間點上，
             # 時間軸與空窗偵測跟著一起錯。
             started = getattr(request, "timestamp_start", None) or getattr(
-                getattr(flow, "client_conn", None), "timestamp_start", None)
+                getattr(flow, "client_conn", None), "timestamp_start", None
+            )
             row = {
                 "ts": started or 0.0,
                 "host": request.pretty_host,
@@ -321,8 +334,11 @@ def load_flows(path: str) -> list[dict]:
                 "down": len(down),
                 # 上行有沒有壓縮，決定「網卡上的量」跟這裡的數字能不能直接對帳。
                 "req_encoding": request.headers.get("content-encoding", ""),
-                "resp_encoding": getattr(response, "headers", {}).get("content-encoding", "")
-                if response is not None else "",
+                "resp_encoding": getattr(response, "headers", {}).get(
+                    "content-encoding", ""
+                )
+                if response is not None
+                else "",
                 "model": None,
                 "lane": None,
                 "breakpoints": 0,
@@ -353,6 +369,7 @@ def load_flows(path: str) -> list[dict]:
 # --------------------------------------------------------------------------------------
 # 指標
 # --------------------------------------------------------------------------------------
+
 
 def annotate_repeat(rows: list[dict]) -> None:
     """算每一次請求裡「上一次就送過」的 byte 數。
@@ -396,7 +413,8 @@ def summarize(rows: list[dict]) -> dict:
     stamps = [r["ts"] for r in rows if r["ts"]]
 
     endpoints: dict[tuple[str, str], dict] = defaultdict(
-        lambda: {"count": 0, "up": 0, "down": 0})
+        lambda: {"count": 0, "up": 0, "down": 0}
+    )
     for row in rows:
         slot = endpoints[(row["host"], row["path"])]
         slot["count"] += 1
@@ -404,8 +422,16 @@ def summarize(rows: list[dict]) -> dict:
         slot["down"] += row["down"]
 
     models: dict[str, dict] = defaultdict(
-        lambda: {"calls": 0, "input": 0, "cache_read": 0, "cache_write": 0,
-                 "output": 0, "cost": 0.0, "priced": True})
+        lambda: {
+            "calls": 0,
+            "input": 0,
+            "cache_read": 0,
+            "cache_write": 0,
+            "output": 0,
+            "cost": 0.0,
+            "priced": True,
+        }
+    )
     for row in rows:
         model = row.get("model")
         if not model:
@@ -423,7 +449,7 @@ def summarize(rows: list[dict]) -> dict:
         clean = {k: (v if v is not None else 0) for k, v in usage.items()}
         priced = _cost.cost_usd(model, _cost.normalize_usage(clean))
         if priced is None:
-            slot["priced"] = False      # 牌價表上沒有就不猜，報表標「無牌價」
+            slot["priced"] = False  # 牌價表上沒有就不猜，報表標「無牌價」
         else:
             slot["cost"] += priced
 
@@ -447,12 +473,12 @@ def summarize(rows: list[dict]) -> dict:
         "endpoints": [
             {"host": host, "path": path, **slot}
             for (host, path), slot in sorted(
-                endpoints.items(), key=lambda kv: -kv[1]["up"])
+                endpoints.items(), key=lambda kv: -kv[1]["up"]
+            )
         ],
         "models": [{"model": name, **slot} for name, slot in models.items()],
         "calls": [
-            {k: v for k, v in row.items() if not k.startswith("_")}
-            for row in rows
+            {k: v for k, v in row.items() if not k.startswith("_")} for row in rows
         ],
     }
 
@@ -460,6 +486,7 @@ def summarize(rows: list[dict]) -> dict:
 # --------------------------------------------------------------------------------------
 # 呈現
 # --------------------------------------------------------------------------------------
+
 
 def fmt_bytes(n: float) -> str:
     for unit in ("B", "KB", "MB", "GB"):
@@ -507,8 +534,12 @@ def json_for_script(value: object) -> str:
     區塊、後面的內容變成 HTML。而這裡的資料**來自 capture**——request path 是容器
     裡的東西可以影響的，等於讓沙箱裡的資料在 host 的瀏覽器拿到執行權。
     """
-    return (json.dumps(value, ensure_ascii=False)
-            .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
+    return (
+        json.dumps(value, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
 
 def _chart(rows: list[dict]) -> tuple[str, str]:
@@ -525,10 +556,10 @@ def _chart(rows: list[dict]) -> tuple[str, str]:
     total = sum(r["up"] for r in rows) or 1
     gaps = find_gaps(rows)
 
-    W, H = 1000, 330          # viewBox 座標，實際大小由 CSS 撐滿
+    W, H = 1000, 330  # viewBox 座標，實際大小由 CSS 撐滿
     PAD_L, PAD_B, PAD_T = 92, 56, 16
     plot_w, plot_h = W - PAD_L - 20, H - PAD_B - PAD_T
-    BREAK_PX = 16             # 斷口在圖上固定佔這麼寬，不隨空窗長度變
+    BREAK_PX = 16  # 斷口在圖上固定佔這麼寬，不隨空窗長度變
 
     # 把時間切成「有動靜的區間」，每段照它的實際長度分配寬度，段與段之間插一個固定
     # 寬度的斷口。先前是在時間域裡壓縮，結果是空窗愈長、斷口在圖上反而愈窄到看不見。
@@ -561,19 +592,21 @@ def _chart(rows: list[dict]) -> tuple[str, str]:
         x, ts = x_of(row["ts"] or t0), row["ts"] or t0
         pts_up.append(f"{x:.1f},{y_of(cum_up):.1f}")
         pts_rep.append(f"{x:.1f},{y_of(cum_rep):.1f}")
-        points.append({
-            "x": round(x, 1),
-            "yUp": round(y_of(cum_up), 1),
-            "yRep": round(y_of(cum_rep), 1),
-            "rel": fmt_secs(ts - t0),
-            "clock": fmt_clock(ts),
-            "path": row["path"],
-            "model": (row.get("model") or "").replace("claude-", "") or "—",
-            "up": fmt_bytes(row["up"]),
-            "repeat": fmt_bytes(row.get("repeat", 0)),
-            "cumUp": fmt_bytes(cum_up),
-            "cumRep": fmt_bytes(cum_rep),
-        })
+        points.append(
+            {
+                "x": round(x, 1),
+                "yUp": round(y_of(cum_up), 1),
+                "yRep": round(y_of(cum_rep), 1),
+                "rel": fmt_secs(ts - t0),
+                "clock": fmt_clock(ts),
+                "path": row["path"],
+                "model": (row.get("model") or "").replace("claude-", "") or "—",
+                "up": fmt_bytes(row["up"]),
+                "repeat": fmt_bytes(row.get("repeat", 0)),
+                "cumUp": fmt_bytes(cum_up),
+                "cumRep": fmt_bytes(cum_rep),
+            }
+        )
 
     # Y 軸：累計上傳量
     y_axis = []
@@ -582,30 +615,37 @@ def _chart(rows: list[dict]) -> tuple[str, str]:
         y_axis.append(
             f'<line class="grid" x1="{PAD_L}" y1="{y:.1f}" x2="{W - 16}" y2="{y:.1f}"/>'
             f'<text class="tick" x="{PAD_L - 10}" y="{y + 5:.1f}" text-anchor="end">'
-            f'{html.escape(fmt_bytes(tick))}</text>')
+            f"{html.escape(fmt_bytes(tick))}</text>"
+        )
 
     # X 軸：每一段有動靜的區間標它的起訖時間，斷口另外標它壓掉了多久。
     # 兩層都要防重疊——斷軸會把相鄰的邊界擠到同一個位置，直接全部畫上去就是糊成一團。
-    def place_labels(items: list[tuple[float, str]], min_px: float,
-                     row_y: float, cls: str) -> list[str]:
+    def place_labels(
+        items: list[tuple[float, str]], min_px: float, row_y: float, cls: str
+    ) -> list[str]:
         out, last_x = [], -1e9
         for x, text in sorted(items):
             if x - last_x < min_px:
                 continue
             out.append(
                 f'<text class="{cls}" x="{x:.1f}" y="{row_y:.1f}" text-anchor="middle">'
-                f'{html.escape(text)}</text>')
+                f"{html.escape(text)}</text>"
+            )
             last_x = x
         return out
 
     x_axis = []
-    for _, _, x0, width in placed:                      # 區間邊界的垂直格線
+    for _, _, x0, width in placed:  # 區間邊界的垂直格線
         for x in (x0, x0 + width):
-            x_axis.append(f'<line class="grid" x1="{x:.1f}" y1="{PAD_T}" '
-                          f'x2="{x:.1f}" y2="{PAD_T + plot_h}"/>')
-    for (start_ts, end_ts, x0, width), gap in zip(placed, gaps):   # 斷口的灰帶
-        x_axis.append(f'<rect class="break" x="{x0 + width:.1f}" y="{PAD_T}" '
-                      f'width="{BREAK_PX}" height="{plot_h}"/>')
+            x_axis.append(
+                f'<line class="grid" x1="{x:.1f}" y1="{PAD_T}" '
+                f'x2="{x:.1f}" y2="{PAD_T + plot_h}"/>'
+            )
+    for (start_ts, end_ts, x0, width), gap in zip(placed, gaps):  # 斷口的灰帶
+        x_axis.append(
+            f'<rect class="break" x="{x0 + width:.1f}" y="{PAD_T}" '
+            f'width="{BREAK_PX}" height="{plot_h}"/>'
+        )
 
     clocks = [(x_of(t0), fmt_clock(t0)), (x_of(t1), fmt_clock(t1))]
     for start_ts, end_ts, x0, width in placed:
@@ -615,16 +655,17 @@ def _chart(rows: list[dict]) -> tuple[str, str]:
 
     breaks = []
     for (_, _, x0, width), (gap_start, gap_end) in zip(placed, gaps):
-        breaks.append((x0 + width + BREAK_PX / 2,
-                       f"⫽ 靜止 {fmt_secs(gap_end - gap_start)}"))
+        breaks.append(
+            (x0 + width + BREAK_PX / 2, f"⫽ 靜止 {fmt_secs(gap_end - gap_start)}")
+        )
     x_axis += place_labels(breaks, 96, PAD_T + plot_h + 40, "tick brk")
 
     base = f"{x_of(t1):.1f},{y_of(0):.1f} {PAD_L},{y_of(0):.1f}"
     svg = f"""<svg viewBox="0 0 {W} {H}" class="chart" id="chart">
-  {''.join(y_axis)}{''.join(x_axis)}
-  <polygon class="area-up" points="{' '.join(pts_up)} {base}"/>
-  <polygon class="area-rep" points="{' '.join(pts_rep)} {base}"/>
-  <polyline class="line-up" points="{' '.join(pts_up)}"/>
+  {"".join(y_axis)}{"".join(x_axis)}
+  <polygon class="area-up" points="{" ".join(pts_up)} {base}"/>
+  <polygon class="area-rep" points="{" ".join(pts_rep)} {base}"/>
+  <polyline class="line-up" points="{" ".join(pts_up)}"/>
   <line id="cursor" class="cursor" x1="0" y1="{PAD_T}" x2="0" y2="{PAD_T + plot_h}" style="display:none"/>
   <circle id="dotUp" class="dot up" r="4" style="display:none"/>
   <circle id="dotRep" class="dot rep" r="4" style="display:none"/>
@@ -821,17 +862,26 @@ def cache_boundary(sites: list[str]) -> str:
 
 
 def _kpi(value: str, label: str) -> str:
-    return f'<div class="kpi"><div class="n">{html.escape(value)}</div>' \
-           f'<div class="k">{html.escape(label)}</div></div>'
+    return (
+        f'<div class="kpi"><div class="n">{html.escape(value)}</div>'
+        f'<div class="k">{html.escape(label)}</div></div>'
+    )
 
 
-def _table(headers: list[tuple[str, bool]], rows: list[list[str]],
-           first_col_class: str = "", raw_cols: set[int] | None = None) -> str:
+def _table(
+    headers: list[tuple[str, bool]],
+    rows: list[list[str]],
+    first_col_class: str = "",
+    raw_cols: set[int] | None = None,
+) -> str:
     """raw_cols 裡的欄位不做逸出。只給本檔自己組出來的標記用（例如 ACCEPT/REJECT 的
     色塊），任何來自 capture 的字串一律走逸出那條路。"""
     head = "".join(
-        f'<th class="n">{html.escape(h)}</th>' if numeric else f"<th>{html.escape(h)}</th>"
-        for h, numeric in headers)
+        f'<th class="n">{html.escape(h)}</th>'
+        if numeric
+        else f"<th>{html.escape(h)}</th>"
+        for h, numeric in headers
+    )
     body = []
     for row in rows:
         cells = []
@@ -841,8 +891,9 @@ def _table(headers: list[tuple[str, bool]], rows: list[list[str]],
             body_cell = cell if (raw_cols and idx in raw_cols) else html.escape(cell)
             cells.append(f"<td{attr}>{body_cell}</td>")
         body.append("<tr>" + "".join(cells) + "</tr>")
-    return (f"<table><thead><tr>{head}</tr></thead>"
-            f"<tbody>{''.join(body)}</tbody></table>")
+    return (
+        f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
+    )
 
 
 PROTO_NAMES = {"0": "全部", "all": "全部", "1": "ICMP", "6": "TCP", "17": "UDP"}
@@ -891,8 +942,7 @@ def build_firewall_card(sidecars: dict) -> str:
             note = "這一場是完全開放，沒有防火牆規則可計數。"
         else:
             note = "這一場沒有防火牆計數。<b>是沒有量，不是沒有擋。</b>"
-        return ('<div class="card"><h2>這一場的邊界</h2>'
-                f'<p class="sub">{note}</p></div>')
+        return f'<div class="card"><h2>這一場的邊界</h2><p class="sub">{note}</p></div>'
 
     table_rows = []
     for chain in fw["chains"]:
@@ -900,89 +950,148 @@ def build_firewall_card(sidecars: dict) -> str:
             if not rule["packets"]:
                 continue
             tone = {"ACCEPT": "accept", "REJECT": "reject", "DROP": "reject"}.get(
-                rule["target"], "other")
+                rule["target"], "other"
+            )
             tag = f'<span class="tag {tone}">{html.escape(rule["target"])}</span>'
-            table_rows.append([chain["name"], tag, f'{rule["packets"]:,}',
-                               rule["bytes"], *split_rule(rule["detail"])])
-    table = _table([("鏈", False), ("處置", False), ("封包", True), ("bytes", True),
-                    ("協定", False), ("進", False), ("出", False),
-                    ("來源", False), ("目的地", False), ("條件／選項", False)],
-                   table_rows, raw_cols={1})
-    sub = (f'放行 {fw["allowed"]:,} 個封包，擋下 <b>{fw["blocked"]:,}</b> 個。'
-           f'被擋掉的連線不會出現在上面那張端點表裡。')
-    return ('<div class="card">\n  <h2>這一場的邊界</h2>\n'
-            f'  <p class="sub">{sub}</p>\n'
-            f'  <div class="wrap">{table}</div>\n</div>')
+            table_rows.append(
+                [
+                    chain["name"],
+                    tag,
+                    f"{rule['packets']:,}",
+                    rule["bytes"],
+                    *split_rule(rule["detail"]),
+                ]
+            )
+    table = _table(
+        [
+            ("鏈", False),
+            ("處置", False),
+            ("封包", True),
+            ("bytes", True),
+            ("協定", False),
+            ("進", False),
+            ("出", False),
+            ("來源", False),
+            ("目的地", False),
+            ("條件／選項", False),
+        ],
+        table_rows,
+        raw_cols={1},
+    )
+    sub = (
+        f"放行 {fw['allowed']:,} 個封包，擋下 <b>{fw['blocked']:,}</b> 個。"
+        f"被擋掉的連線不會出現在上面那張端點表裡。"
+    )
+    return (
+        '<div class="card">\n  <h2>這一場的邊界</h2>\n'
+        f'  <p class="sub">{sub}</p>\n'
+        f'  <div class="wrap">{table}</div>\n</div>'
+    )
 
 
-def build_page(name: str, summary: dict, rows: list[dict],
-               sidecars: dict | None = None) -> str:
+def build_page(
+    name: str, summary: dict, rows: list[dict], sidecars: dict | None = None
+) -> str:
     cap = summary["capture"]
     started = fmt_clock(cap["started"]) if cap["started"] else "—"
 
-    kpis = "".join([
-        _kpi(fmt_bytes(cap["up"]), "上傳"),
-        _kpi(fmt_bytes(cap["down"]), "下載"),
-        _kpi(str(cap["requests"]), "請求數"),
-        _kpi(fmt_secs(cap["wall"] - cap["idle"]), "有動靜"),
-    ])
+    kpis = "".join(
+        [
+            _kpi(fmt_bytes(cap["up"]), "上傳"),
+            _kpi(fmt_bytes(cap["down"]), "下載"),
+            _kpi(str(cap["requests"]), "請求數"),
+            _kpi(fmt_secs(cap["wall"] - cap["idle"]), "有動靜"),
+        ]
+    )
 
     endpoints = _table(
         [("端點", False), ("次", True), ("上行", True), ("下行", True)],
-        [[f'{e["host"]}{e["path"]}', str(e["count"]), fmt_bytes(e["up"]), fmt_bytes(e["down"])]
-         for e in summary["endpoints"]],
-        first_col_class="ep")
+        [
+            [
+                f"{e['host']}{e['path']}",
+                str(e["count"]),
+                fmt_bytes(e["up"]),
+                fmt_bytes(e["down"]),
+            ]
+            for e in summary["endpoints"]
+        ],
+        first_col_class="ep",
+    )
 
     call_rows = []
     for row in rows:
         if not row.get("model"):
             continue
         usage = row.get("usage") or {}
-        call_rows.append([
-            fmt_clock(row["ts"]) if row["ts"] else "—",
-            (row.get("model") or "").replace("claude-", ""),
-            fmt_bytes(row["up"]),
-            fmt_bytes(row.get("repeat", 0)),
-            cache_boundary(row.get("breakpoint_sites") or []),
-            f'{usage.get("cache_read_input_tokens", 0):,}',
-            f'{usage.get("cache_creation_input_tokens", 0):,}',
-            f'{usage.get("input_tokens", 0):,}',
-            f'{usage.get("output_tokens", 0):,}',
-        ])
-    calls = _table(
-        [("時間", False), ("模型", False), ("上行", True), ("其中既有", True),
-         ("快取存到哪", False),
-         ("cache 讀", True), ("cache 寫", True), ("新輸入", True), ("輸出", True)],
-        call_rows) if call_rows else '<p class="empty">這顆 capture 裡沒有模型呼叫。</p>'
+        call_rows.append(
+            [
+                fmt_clock(row["ts"]) if row["ts"] else "—",
+                (row.get("model") or "").replace("claude-", ""),
+                fmt_bytes(row["up"]),
+                fmt_bytes(row.get("repeat", 0)),
+                cache_boundary(row.get("breakpoint_sites") or []),
+                f"{usage.get('cache_read_input_tokens', 0):,}",
+                f"{usage.get('cache_creation_input_tokens', 0):,}",
+                f"{usage.get('input_tokens', 0):,}",
+                f"{usage.get('output_tokens', 0):,}",
+            ]
+        )
+    calls = (
+        _table(
+            [
+                ("時間", False),
+                ("模型", False),
+                ("上行", True),
+                ("其中既有", True),
+                ("快取存到哪", False),
+                ("cache 讀", True),
+                ("cache 寫", True),
+                ("新輸入", True),
+                ("輸出", True),
+            ],
+            call_rows,
+        )
+        if call_rows
+        else '<p class="empty">這顆 capture 裡沒有模型呼叫。</p>'
+    )
 
     info = (sidecars or {}).get("meta") or {}
 
     idle_note = ""
     if cap["gaps"]:
-        idle_note = (f'　時間軸斷了 {len(cap["gaps"])} 處：全場 {fmt_secs(cap["wall"])} 裡有 '
-                     f'{fmt_secs(cap["idle"])} 沒有任何請求。')
+        idle_note = (
+            f"　時間軸斷了 {len(cap['gaps'])} 處：全場 {fmt_secs(cap['wall'])} 裡有 "
+            f"{fmt_secs(cap['idle'])} 沒有任何請求。"
+        )
     # 只錄了部分 host 的話一定要講。不講的話這張表看起來就像「這一場連過的全部」，
     # 而它其實是「過濾器讓我看到的那些」。
     hosts = info.get("capture_hosts")
-    hosts_note = (f'本場只錄 {hosts}，其餘 host 不在此表。' if hosts
-                  else '這一場的錄製範圍沒有記錄，此表未必是全部連線。')
+    hosts_note = (
+        f"本場只錄 {hosts}，其餘 host 不在此表。"
+        if hosts
+        else "這一場的錄製範圍沒有記錄，此表未必是全部連線。"
+    )
 
-    compress_caveat = ('　請求有壓縮，這個比例是壓縮後 byte 的前綴比對，不等於內容重複率。'
-                       if cap["requests_compressed"] else '')
+    compress_caveat = (
+        "　請求有壓縮，這個比例是壓縮後 byte 的前綴比對，不等於內容重複率。"
+        if cap["requests_compressed"]
+        else ""
+    )
     ratio = cap["repeated_ratio"] * 100
     repeat_note = (
-        f'{fmt_bytes(cap["repeated"])}（{ratio:.1f}%）是同一條對話前一次就送過的。'
-        f'不是失敗重試，是協定要求每一次都把整段對話從頭附上。'
-        + idle_note + compress_caveat
+        f"{fmt_bytes(cap['repeated'])}（{ratio:.1f}%）是同一條對話前一次就送過的。"
+        f"不是失敗重試，是協定要求每一次都把整段對話從頭附上。"
+        + idle_note
+        + compress_caveat
     )
 
     if cap["requests_compressed"]:
         compression_note = (
-            f'{cap["requests_compressed"]} 次請求有壓縮，數字是壓縮後的量。'
+            f"{cap['requests_compressed']} 次請求有壓縮，數字是壓縮後的量。"
         )
     else:
         compression_note = (
-            '沒有任何一次請求壓縮過，所以這些數字可以直接跟網卡上的量對帳。'
+            "沒有任何一次請求壓縮過，所以這些數字可以直接跟網卡上的量對帳。"
         )
 
     meta_line = f"{name} · 起始 {started} · 共 {cap['requests']} 次請求"
@@ -992,40 +1101,50 @@ def build_page(name: str, summary: dict, rows: list[dict],
         meta_line += f" · session {info['session_id'][:8]}"
 
     svg, points = _chart(rows)
-    return (PAGE
-            .replace("__NAME__", html.escape(name))
-            .replace("__META__", html.escape(meta_line))
-            .replace("__KPIS__", kpis)
-            .replace("__CHART__", svg)
-            .replace("__POINTS__", points)
-            .replace("__HOSTS_NOTE__", html.escape(hosts_note))
-            .replace("__ENDPOINTS__", endpoints)
-            .replace("__CALLS__", calls)
-            .replace("__FIREWALL__", build_firewall_card(sidecars or {}))
-            .replace("__REPEAT_NOTE__", html.escape(repeat_note))
-            .replace("__COMPRESSION_NOTE__", html.escape(compression_note)))
+    return (
+        PAGE.replace("__NAME__", html.escape(name))
+        .replace("__META__", html.escape(meta_line))
+        .replace("__KPIS__", kpis)
+        .replace("__CHART__", svg)
+        .replace("__POINTS__", points)
+        .replace("__HOSTS_NOTE__", html.escape(hosts_note))
+        .replace("__ENDPOINTS__", endpoints)
+        .replace("__CALLS__", calls)
+        .replace("__FIREWALL__", build_firewall_card(sidecars or {}))
+        .replace("__REPEAT_NOTE__", html.escape(repeat_note))
+        .replace("__COMPRESSION_NOTE__", html.escape(compression_note))
+    )
 
 
 def print_terminal(summary: dict) -> None:
     cap = summary["capture"]
-    print(f"請求 {cap['requests']} 次 · 上傳 {fmt_bytes(cap['up'])} · "
-          f"下載 {fmt_bytes(cap['down'])} · 時長 {fmt_secs(cap['wall'])}")
-    print(f"其中既有內容（上一次就送過的）{fmt_bytes(cap['repeated'])}"
-          f"（{cap['repeated_ratio'] * 100:.1f}%）")
+    print(
+        f"請求 {cap['requests']} 次 · 上傳 {fmt_bytes(cap['up'])} · "
+        f"下載 {fmt_bytes(cap['down'])} · 時長 {fmt_secs(cap['wall'])}"
+    )
+    print(
+        f"其中既有內容（上一次就送過的）{fmt_bytes(cap['repeated'])}"
+        f"（{cap['repeated_ratio'] * 100:.1f}%）"
+    )
     print()
     for e in summary["endpoints"]:
-        print(f"  {e['count']:>4}  {fmt_bytes(e['up']):>9} ↑  "
-              f"{fmt_bytes(e['down']):>9} ↓  {e['host']}{e['path']}")
+        print(
+            f"  {e['count']:>4}  {fmt_bytes(e['up']):>9} ↑  "
+            f"{fmt_bytes(e['down']):>9} ↓  {e['host']}{e['path']}"
+        )
     for m in summary["models"]:
         cost = "無牌價" if not m["priced"] else f"${m['cost']:.2f}"
-        print(f"\n  {m['model']}：{m['calls']} 次 · cache 讀 {m['cache_read']:,} · "
-              f"寫 {m['cache_write']:,} · 輸出 {m['output']:,} · {cost}")
+        print(
+            f"\n  {m['model']}：{m['calls']} 次 · cache 讀 {m['cache_read']:,} · "
+            f"寫 {m['cache_write']:,} · 輸出 {m['output']:,} · {cost}"
+        )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="從 .mitm capture 算線上流量報表")
-    parser.add_argument("capture",
-                        help="一場的資料夾（~/ncr/mitm/<session-id>/），或直接指 .mitm")
+    parser.add_argument(
+        "capture", help="一場的資料夾（~/ncr/mitm/<session-id>/），或直接指 .mitm"
+    )
     parser.add_argument("--json", action="store_true", help="輸出 JSON 而非 HTML")
     parser.add_argument("--out", help="HTML 輸出路徑（預設與 capture 同名 .html）")
     parser.add_argument("--open", action="store_true", help="產生後開啟")
@@ -1038,7 +1157,9 @@ def main() -> None:
 
     rows = load_flows(str(path))
     if not rows:
-        raise SystemExit(f"{path} 裡沒有任何 flow。錄製那一場是不是被 fail-closed 跳過了？")
+        raise SystemExit(
+            f"{path} 裡沒有任何 flow。錄製那一場是不是被 fail-closed 跳過了？"
+        )
     annotate_repeat(rows)
     summary = summarize(rows)
 

@@ -31,7 +31,9 @@ COMPARISON_TOOLS = ["cubic-v2", "augment", "greptile-v4-1", "coderabbit", "claud
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--benchmark-data", required=True)
-    ap.add_argument("--candidates", required=True, help="upstream results/<model>/candidates.json")
+    ap.add_argument(
+        "--candidates", required=True, help="upstream results/<model>/candidates.json"
+    )
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()

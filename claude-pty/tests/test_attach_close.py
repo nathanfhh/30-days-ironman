@@ -11,6 +11,7 @@ dockerd 仍往那條沒人讀的連線灌容器輸出，208KB 緩衝一滿就把
 所以這裡驗的不是「close 有沒有被呼叫」，而是**底層 fd 有沒有真的關掉**——用 socketpair
 ＋真的 `socket.SocketIO` 複製 docker-py 7.2.0 的回傳形狀，斷言關完之後 fd 不可用。
 """
+
 import os
 import socket
 import sys
@@ -86,7 +87,7 @@ print("\n--- 邊界：重複呼叫、以及沒有 _sock 的物件都不可以拋
 sio, raw, peer = fake_attach_sock()
 close_attach(sio)
 try:
-    close_attach(sio)          # 第二次（reconciler 與請求路徑可能都收同一個）
+    close_attach(sio)  # 第二次（reconciler 與請求路徑可能都收同一個）
     check("重複 close_attach() 不拋錯", True)
 except Exception as e:  # noqa: BLE001
     check(f"重複 close_attach() 拋了 {type(e).__name__}", False)

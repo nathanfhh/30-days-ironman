@@ -186,7 +186,9 @@ def run_process(argv: list[str], cwd: Path) -> RunResult:
             check=False,
         )
     except FileNotFoundError:
-        return RunResult(None, "", "", f"{argv[0]} 未安裝（不在 PATH 上）", missing=True)
+        return RunResult(
+            None, "", "", f"{argv[0]} 未安裝（不在 PATH 上）", missing=True
+        )
     except subprocess.TimeoutExpired:
         return RunResult(
             None,
@@ -405,9 +407,18 @@ TRIVY_OK_EXIT_CODES = frozenset({0})
 # 不逐一枚舉——uv.lock、poetry.lock、yarn.lock、package-lock.json、
 # pnpm-lock.yaml 乃至未來的新 lockfile 都落在三個後綴裡。
 DEPENDENCY_MANIFESTS = (
-    "pyproject.toml", "requirements*.txt", "package.json", "Pipfile",
-    "go.mod", "go.sum", "Cargo.toml", "Gemfile", "composer.json",
-    "pom.xml", "build.gradle", "build.gradle.kts",
+    "pyproject.toml",
+    "requirements*.txt",
+    "package.json",
+    "Pipfile",
+    "go.mod",
+    "go.sum",
+    "Cargo.toml",
+    "Gemfile",
+    "composer.json",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
 )
 LOCKFILE_SUFFIXES = (".lock", "-lock.json", "-lock.yaml")
 
@@ -497,7 +508,8 @@ def run_trivy(root: Path, out_prefix: Path) -> dict[str, Any]:
     # 「安全掃描零命中」。
     if not find_dependency_manifests(root):
         file_count = sum(
-            1 for p in root.rglob("*")
+            1
+            for p in root.rglob("*")
             if p.is_file() and not any(part in SKIPPED_TREE_DIRS for part in p.parts)
         )
         notes.append(
@@ -628,7 +640,9 @@ def select_rule_dirs(extensions: set[str]) -> list[str]:
     return sorted(selected)
 
 
-def run_opengrep(root: Path, out_prefix: Path, diff_path: Path | None) -> dict[str, Any]:
+def run_opengrep(
+    root: Path, out_prefix: Path, diff_path: Path | None
+) -> dict[str, Any]:
     artifact = out_prefix.with_name(out_prefix.name + ".opengrep.json")
     notes: list[str] = []
 
@@ -731,7 +745,9 @@ def run_opengrep(root: Path, out_prefix: Path, diff_path: Path | None) -> dict[s
     # check_id is prefixed with the dotted form of the rules root
     # ("home.nathan.semgrep-rules.python.lang..."); strip it so the digest
     # carries the rule id a human would recognise.
-    prefix = ".".join(part for part in rules_root.resolve().parts if part not in ("/", ""))
+    prefix = ".".join(
+        part for part in rules_root.resolve().parts if part not in ("/", "")
+    )
 
     severity_counts: Counter[str] = Counter()
     entries: list[dict[str, Any]] = []
@@ -836,8 +852,10 @@ def ty_environment(root: Path) -> tuple[str, str]:
         if (candidate / "pyvenv.cfg").is_file():
             note = f"使用受審 repo 既有的虛擬環境 {candidate.name}/，第三方型別已解析。"
             if leaked:
-                note += (f"（呼叫端環境帶著 {'／'.join(leaked)}，已在執行掃描器時剝除，"
-                         f"否則 ty 會改用那一個而這個標籤會說謊。）")
+                note += (
+                    f"（呼叫端環境帶著 {'／'.join(leaked)}，已在執行掃描器時剝除，"
+                    f"否則 ty 會改用那一個而這個標籤會說謊。）"
+                )
             return "resolved", note
     return "bare", (
         "受審 repo 沒有可用的虛擬環境，ty 以 bare 模式執行："
@@ -882,7 +900,9 @@ def _partition(
     in_diff: list[dict[str, Any]] = []
     outside: list[dict[str, Any]] = []
     for entry in entries:
-        target = in_diff if line_in_diff(changed, entry["file"], entry["line"]) else outside
+        target = (
+            in_diff if line_in_diff(changed, entry["file"], entry["line"]) else outside
+        )
         target.append(entry)
     return in_diff, outside
 
@@ -976,7 +996,12 @@ def _run_ruff(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
             )
         )
     return (
-        {"status": "ok", "exit_code": result.exit_code, "skipped_reason": "", "notes": []},
+        {
+            "status": "ok",
+            "exit_code": result.exit_code,
+            "skipped_reason": "",
+            "notes": [],
+        },
         entries,
         raw,
     )
@@ -1029,7 +1054,9 @@ def _run_ty(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
         used_fallback = True
 
     if used_fallback:
-        notes.append("ty 不支援 --output-format json，已改用 concise 純文字輸出並解析。")
+        notes.append(
+            "ty 不支援 --output-format json，已改用 concise 純文字輸出並解析。"
+        )
         result = run_process(base + ["--output-format", "concise", str(root)], cwd=root)
         if result.failure:
             return (
@@ -1061,9 +1088,15 @@ def _run_ty(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
     entries: list[dict[str, Any]] = []
     if parsed_json is not None and not used_fallback:
         # Defensive: if a future ty gains JSON output, accept the obvious shape.
-        items = parsed_json if isinstance(parsed_json, list) else parsed_json.get("diagnostics", [])
+        items = (
+            parsed_json
+            if isinstance(parsed_json, list)
+            else parsed_json.get("diagnostics", [])
+        )
         for item in items:
-            rel = to_repo_relative(str(item.get("file") or item.get("filename") or ""), root)
+            rel = to_repo_relative(
+                str(item.get("file") or item.get("filename") or ""), root
+            )
             if is_excluded(rel):
                 continue
             entries.append(
@@ -1095,7 +1128,11 @@ def _run_ty(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
                     match.group("message"),
                 )
             )
-        raw_payload = {"format": "concise-text", "stdout": result.stdout, "stderr": result.stderr}
+        raw_payload = {
+            "format": "concise-text",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
 
     # In bare mode unresolved-import is an artefact of the environment, not a
     # property of the code. Left in, it buries the real diagnostics: on a
@@ -1107,7 +1144,9 @@ def _run_ty(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
     if mode == "bare":
         kept: list[dict[str, Any]] = []
         for entry in entries:
-            (suppressed if entry["rule"] == TY_UNRESOLVED_IMPORT_RULE else kept).append(entry)
+            (suppressed if entry["rule"] == TY_UNRESOLVED_IMPORT_RULE else kept).append(
+                entry
+            )
         entries = kept
         if suppressed:
             notes.append(
@@ -1166,7 +1205,10 @@ def _run_oxlint(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
     # scanner on every Python-only repository, which is most of them here.
     # Nothing to lint is not a failure and not a clean bill of health either:
     # it is `skipped`, with the reason stated.
-    if OXLINT_NO_FILES_MARKER in result.stderr or OXLINT_NO_FILES_MARKER in result.stdout:
+    if (
+        OXLINT_NO_FILES_MARKER in result.stderr
+        or OXLINT_NO_FILES_MARKER in result.stdout
+    ):
         return (
             {
                 "status": "skipped",
@@ -1226,7 +1268,12 @@ def _run_oxlint(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
             )
         )
     return (
-        {"status": "ok", "exit_code": result.exit_code, "skipped_reason": "", "notes": notes},
+        {
+            "status": "ok",
+            "exit_code": result.exit_code,
+            "skipped_reason": "",
+            "notes": notes,
+        },
         entries,
         raw,
     )
@@ -1253,7 +1300,9 @@ def run_lint(root: Path, out_prefix: Path, diff_path: Path | None) -> dict[str, 
     notes: list[str] = []
 
     if not attribute:
-        notes.append("未提供 --diff，無法區分本次變更與專案既有問題，以下全部列為未歸屬。")
+        notes.append(
+            "未提供 --diff，無法區分本次變更與專案既有問題，以下全部列為未歸屬。"
+        )
 
     for name, runner in runners:
         status_block, entries, raw = runner(root)

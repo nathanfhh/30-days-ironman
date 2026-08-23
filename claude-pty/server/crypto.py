@@ -17,6 +17,7 @@
   收一輪。那種呼叫端必須自己分辨三態（有值且可解／沒設／解不開），不是這個函式的事
   ——這裡維持「解不開就回 None」是對的，**但呼叫端要知道自己在問哪一個問題**。
 """
+
 import base64
 import enum
 
@@ -54,8 +55,7 @@ def _fernet(purpose: Purpose) -> Fernet:
     HKDF-SHA256 是微秒級的，而快取會讓「換掉 `SECRET_KEY` 之後的行為」變成必須重啟行程
     才驗得到——那正是這裡最需要測的一條。便宜的正確性換不便宜的可測性，划算。
     """
-    key = HKDF(algorithm=hashes.SHA256(), length=32,
-               salt=None, info=purpose.value).derive(config.SECRET_KEY.encode())
+    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=purpose.value).derive(config.SECRET_KEY.encode())
     return Fernet(base64.urlsafe_b64encode(key))
 
 

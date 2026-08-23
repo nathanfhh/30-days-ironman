@@ -45,9 +45,12 @@ def main() -> int:
         row = {
             "tool": tool,
             "ours_f1": ours[tool]["f1"],
-            "upstream_f1": {j: baseline[j][tool]["f1"] for j in judges if tool in baseline[j]},
+            "upstream_f1": {
+                j: baseline[j][tool]["f1"] for j in judges if tool in baseline[j]
+            },
             "upstream_spread": max(upstream_f1) - min(upstream_f1),
-            "ours_vs_upstream_mean": ours[tool]["f1"] - sum(upstream_f1) / len(upstream_f1),
+            "ours_vs_upstream_mean": ours[tool]["f1"]
+            - sum(upstream_f1) / len(upstream_f1),
         }
         rows.append(row)
 
@@ -65,7 +68,11 @@ def main() -> int:
     Path(args.out).write_text(json.dumps(rows, indent=2))
 
     short = {j: j.split("_")[-1][:14] for j in judges}
-    header = f"{'tool':<16}{'ours':>8}" + "".join(f"{short[j]:>16}" for j in judges) + f"{'spread':>9}{'delta':>8}"
+    header = (
+        f"{'tool':<16}{'ours':>8}"
+        + "".join(f"{short[j]:>16}" for j in judges)
+        + f"{'spread':>9}{'delta':>8}"
+    )
     print(header)
     print("-" * len(header))
     for r in rows:

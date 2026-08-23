@@ -11,6 +11,7 @@
   只讀 Content-Length 的 stub 會在 `git-upload-pack` 那一步收到空的請求本體，然後 clone
   會以一個看不懂的錯誤失敗。
 """
+
 import http.server
 import json
 import os
@@ -34,7 +35,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *a):
-        pass                       # stdout 留給啟動訊息
+        pass  # stdout 留給啟動訊息
 
     # --- 請求本體：Content-Length 與 chunked 都要會讀 ---------------------------
     def _read_body(self) -> bytes:
@@ -46,7 +47,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     break
                 size = int(size_line.split(b";")[0], 16)
                 if size == 0:
-                    self.rfile.readline()        # 收掉結尾的 CRLF
+                    self.rfile.readline()  # 收掉結尾的 CRLF
                     break
                 out += self.rfile.read(size)
                 self.rfile.readline()
@@ -64,20 +65,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _dispatch(self):
         parts = urllib.parse.urlsplit(self.path)
         body = self._read_body()
-        _record({
-            "method": self.command,
-            "path": parts.path,
-            "query": parts.query,
-            "body_len": len(body),
-            # 全部小寫化：標頭名稱大小寫不敏感，測試不該因為大小寫而假紅
-            "headers": {k.lower(): v for k, v in self.headers.items()},
-        })
+        _record(
+            {
+                "method": self.command,
+                "path": parts.path,
+                "query": parts.query,
+                "body_len": len(body),
+                # 全部小寫化：標頭名稱大小寫不敏感，測試不該因為大小寫而假紅
+                "headers": {k.lower(): v for k, v in self.headers.items()},
+            }
+        )
 
         if parts.path.startswith("/api/v4/"):
             return self._send(200, b'{"id":1,"username":"fake-gitlab"}')
 
-        if (parts.path.endswith("/info/refs")
-                or parts.path.endswith(("/git-upload-pack", "/git-receive-pack"))):
+        if parts.path.endswith("/info/refs") or parts.path.endswith(("/git-upload-pack", "/git-receive-pack")):
             return self._cgi(parts, body)
 
         self._send(404, b'{"error":"not found"}')
