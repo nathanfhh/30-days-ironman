@@ -46,13 +46,18 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     && rm -rf /var/lib/apt/lists/*
 # 先 depth=1 拉分支再 checkout 指定 commit：這樣既省頻寬，又不接受「分支現在指到哪」。
 # 抓不到那個 commit（被 force-push 蓋掉）就讓 build 直接失敗——那正是釘 SHA 要的行為。
-RUN git init /src && cd /src \
+# ⚠ 用 WORKDIR 而不是 `RUN cd`：後者是 Trivy 的 DS013，而且理由不只是風格——`cd` 的
+#   作用範圍只在那一行 RUN 之內，下一個 RUN 又回到根目錄，很容易寫出「看起來接續、
+#   其實沒有」的指令。
+WORKDIR /src
+RUN git init . \
     && git remote add origin "${TTYD_RUST_REPO}" \
     && git fetch --depth 1 origin "${TTYD_RUST_REF}" \
     && git checkout FETCH_HEAD
 # --locked：用 repo 裡的 Cargo.lock，不讓 build 期自己解析出別的版本組合。
 # 前端不用另外 build——build.rs 直接讀 C 版就有的 src/html.h（單一來源）。
-RUN cd /src/rust && cargo build --release --locked && /src/rust/target/release/ttyd --version
+WORKDIR /src/rust
+RUN cargo build --release --locked && /src/rust/target/release/ttyd --version
 # ⚠ 真 binary 的能力斷言（發表阻擋項 #17 的兌現）：控制平面靠 --title 把命令列擋在瀏覽器
 #   之外、靠 --auth-url 掛第二層授權。這三支旗標若哪天 fork 改掉，**build 當場失敗**，
 #   而不是等到執行時靜默少一層。這是「用真 binary 驗旗標真的被接受」，不是讀 --version。

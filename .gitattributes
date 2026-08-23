@@ -1,0 +1,8 @@
+# 第三方授權原文：**一個字元都不要動**，包含尾隨空白。
+#
+# SIL OFL 1.1 與 Font Awesome 的授權文字是逐字沿用上游的（THIRD_PARTY_NOTICES.md 也是
+# 這樣宣稱的）。OFL.txt 第 21 行上游本來就帶一個尾隨空白，而 `git diff --check` 會為此
+# 回非零——於是只剩兩條路：改掉授權原文，或者告訴 git 這一類檔案不做空白檢查。
+# 改原文會讓「未改寫」那句宣稱變成假的，所以選第二條。
+claude-pty/server/static/vendor/**/LICENSE.txt -whitespace
+claude-pty/server/static/vendor/**/OFL.txt      -whitespace

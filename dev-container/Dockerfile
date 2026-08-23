@@ -46,6 +46,12 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
     #   在這裡做一次安全更新，Trivy image scan 掃到的就是實際出貨的那一顆，
     #   不是「理論上 base 應該長什麼樣」。
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+    # ⚠ **刻意沒有 `--no-install-recommends`**（Trivy DS029，HIGH，已知並接受）。
+    #   2026-08-23 在乾淨的 ubuntu:24.04 上量過：加了它這一串會從 100 個套件降到 77 個，
+    #   少掉的 23 個裡有 `less`（git 的預設 pager）、`patch`、`openssl`、`xxd`、
+    #   `ca-certificates`、`nftables`。這顆容器裡住著一個會執行任意指令的 agent，
+    #   少一個常用工具的代價是「它某天做不到某件事」，而症狀不會指回這一行。
+    #   省下來的是 image 體積，不是攻擊面上的關鍵項目，換不過來。
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         curl git jq tzdata shellcheck vim openssh-client \
         sudo iptables ipset iproute2 dnsutils && \
@@ -140,10 +146,14 @@ RUN OPENGREP_VERSION=v1.26.0 && \
     chmod +x /home/nathan/.local/bin/opengrep && \
     opengrep --version
 
-# mitmproxy：錄本場 Claude Code ↔ api.anthropic.com 的 L7 流量（entrypoint 選單開關，預設不錄）。
+# mitmproxy：錄本場 Claude Code 及其子行程的 L7 流量（entrypoint 選單開關）。
+# ⚠ 兩層預設不一樣：**總預設是不錄**；使用者選了要錄之後，**產品預設是全錄**
+#   （只錄模型 API 是選單裡的另一個選項）。addon 自己的預設清單則只有 api.anthropic.com，
+#   那是它單獨使用時的行為，不是這裡跑起來的樣子。
 # 走 explicit proxy（HTTPS_PROXY 環境變數）而不是 transparent proxy，所以不需要 iptables
-# REDIRECT 那一套：proxy 綁 loopback（firewall 無條件放行 lo），上游是白名單裡的
-# api.anthropic.com——跟限制模式天生相容，零 firewall 改動。
+# REDIRECT 那一套：proxy 綁 loopback（firewall 無條件放行 lo）——跟限制模式天生相容，
+# 零 firewall 改動。代價寫在 entrypoint.sh 檔頭：涵蓋範圍是「那一場 CLI 及其子行程」，
+# 而且子行程只要明講不要 proxy（例如 `curl --noproxy '*'`）就繞得開。
 # pin 版本：.mitm 的檔案格式會隨大版本破壞相容，釘住才能保證舊的 capture 讀得回、
 # addon 的行為不飄。查最新版：https://pypi.org/project/mitmproxy/
 # ⚠ 它帶進來的 msgpack 1.1.2 有 GHSA-6v7p-g79w-8964（HIGH）。試過用
@@ -168,6 +178,11 @@ ENV CODEGRAPH_TELEMETRY=0 \
 RUN curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh && \
     codegraph --version
 
+# ⚠ `SSH_AUTH_SOCK` 是 Trivy DS031（CRITICAL，「secret 出現在 ENV」）。**這是誤判，已知並接受**：
+#   它的值是一個 **socket 路徑**，不是憑證。整條 agent 轉發的設計就建立在「交出去的是簽章
+#   的能力、私鑰留在 host」上（見 dev-container/README 的 ssh-agent 一節）。路徑本身沒有
+#   祕密可洩漏，而且 socket 不掛進來的時候那個路徑根本不存在。
+#   規則認的是變數名稱裡有沒有 AUTH/TOKEN/KEY 這類字樣，認不出值是什麼。
 ENV TZ=Asia/Taipei \
     FORCE_COLOR=1 \
     TERM=xterm-256color \
