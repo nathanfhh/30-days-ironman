@@ -233,7 +233,7 @@ try:
         check("管理員看得到帳號清單", page.query_selector("#roster-body") is not None)
         page.click("#pw-btn")
         # 操作結果以右上角 toast 呈現。改密碼的成功文案是「請重新登入」——因為 D 階段起
-        # 改密碼＝這個帳號連著的東西全部斷掉，前端跟著在 1200ms 後送回登入頁。
+        # 改密碼＝這個帳號的登入狀態與互動終端全部斷掉，前端跟著在 1200ms 後送回登入頁。
         page.wait_for_selector(".toast[data-level='success']", timeout=8000)
         check("顯示成功 toast（文案叫人重新登入）", "請重新登入" in page.inner_text(".toast__title"))
         check("toast 有倒數進度條（不需使用者手動關）", page.query_selector(".toast__bar") is not None)
@@ -245,7 +245,7 @@ try:
             pass
         check("新密碼實際生效", pw_ok)
 
-        print("== 🔴 改密碼＝這個帳號連著的東西全部斷掉，包含操作中的這一台 ==")
+        print("== 🔴 改密碼＝登入狀態與互動終端全部斷掉，包含操作中的這一台 ==")
         # D 階段起**沒有「這一台除外」的特例**。改密碼後本機也被登出、送回登入頁；
         # 改密碼前複製走的舊 cookie 當然也失效。兩邊都驗——別台用改密碼**前**存下的
         # cookie（當下這張已被清掉，拿它驗會驗到一個必然失效的東西，那是代理指標）。

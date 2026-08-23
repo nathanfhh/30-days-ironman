@@ -491,7 +491,7 @@ def _await_gone(pid: int, proc: "psutil.Process | None", timeout: float) -> bool
 
 
 def _kill(pid: int | None) -> bool:
-    """收掉這顆 ttyd。**回傳「這個 pid 現在確定不會再服務了」**。
+    """收掉這顆 ttyd。**回傳「這個 pid 上原本那個程序已經不在了」**。
 
     ⚠ 以前這裡整段吞掉例外、也不回報。於是 `close_views` 對一個 `PermissionError` 的
       ttyd 照樣刪掉 DB 那一列並計入「已收」——程序還活著、記錄沒了、之後再也沒有人會
@@ -507,12 +507,26 @@ def _kill(pid: int | None) -> bool:
 
     ⚠ 這條路徑跑在「按下改密碼」的同步請求裡，所以兩個等待值都必須短（預設 3＋2 秒）。
       它們是**上限不是延遲**：ttyd 正常收到 SIGTERM 就走，等待迴圈第一輪就結束。
+
+    ⚠ **psutil 的身分綁定保護的是「等待判斷」，不是「訊號投遞」。** 這兩件事要分開講，
+      因為把它講成同一件會變成新的過滿宣稱：
+        · 保護到的：送完訊號之後每一次「它還在嗎」，問的都是同一個程序。號碼被回收時
+          `is_running()` 會回 False 而不是讓我們空等到逾時、然後把 SIGKILL 送給接手的人。
+        · **沒有保護到的**：`_is_our_ttyd()` 通過之後、`os.kill()` 送出去之前，那個程序
+          仍有可能已經退出而號碼被別人接手。`psutil.Process` 不會讓 `os.kill` 變成原子的。
+          窗口是兩行 Python，而且要撞上必須「剛好在這幾微秒退出」加「號碼剛好被重用」，
+          但它確實存在，代價是誤殺容器裡的另一個程序。
+      要真的關掉它，Linux 上的做法是 `os.pidfd_open()` 拿到一個綁死那個程序的 handle、
+      重驗身分之後才 `signal.pidfd_send_signal()`。**這裡刻意沒有做**：pidfd 只有 Linux 有，
+      而開發與測試都在 macOS 上跑，等於在收終端這條路上放一段本機永遠不會被執行到的分支。
+      一段沒被跑過的殺程序邏輯，比一個寫下來的窄競態危險。要做的話，前提是測試也搬到 Linux。
     """
     if not pid:
         return True  # 沒有 pid＝沒有東西要收
     if not _is_our_ttyd(pid):
         return True  # 不是我們的 ttyd（已退出、號碼被回收）＝沒事
     # 先綁住身分再送訊號：之後每一次「它還在嗎」問的都是這一個程序，不是這個號碼。
+    # （這一步保護的是**等待**，不是訊號投遞本身，見上面那段。）
     proc = None
     if psutil is not None:
         try:

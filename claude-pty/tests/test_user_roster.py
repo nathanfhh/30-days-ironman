@@ -250,7 +250,7 @@ for bad in (123, True, ["a"], {"a": 1}, None):
     r = app.test_client().post("/api/auth/login", json={"username": bad, "password": "x"})
     check(f"login username={bad!r} → 400", r.status_code == 400)
 
-print("== 改自己的密碼＝全部斷掉，包含這一台 ==")
+print("== 改自己的密碼＝登入狀態與終端全部斷掉，包含這一台 ==")
 # 換密碼會遞增 password_version，所有既有 cookie 失效——**不為按下送出的這一台留特例**。
 # 例外換到的只是少按幾個鍵，卻讓「全部失效」變成說一套做一套。
 me = app.test_client()
@@ -259,7 +259,7 @@ me.post("/api/auth/login", json={"username": "selfpw", "password": PW})
 check("改之前是登入狀態", me.get("/api/auth/me").status_code == 200)
 r = me.post("/api/users/me/password", json={"old_password": PW, "new_password": PW + "x"})
 check("改密碼 → 204", r.status_code == 204)
-# 🔴 改密碼＝這個帳號現在連著的東西全部斷掉，**包含按下送出的這一台**。
+# 🔴 改密碼＝這個帳號現在的登入狀態與互動終端全部斷掉，**包含按下送出的這一台**。
 check("🔴 改完這一台就登出了（API 回 401）", me.get("/api/auth/me").status_code == 401)
 check("🔴 網頁也被送回登入頁", me.get("/").status_code in (302, 401))
 other = app.test_client()

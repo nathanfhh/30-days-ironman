@@ -199,17 +199,20 @@ check("新密碼可登入", auth.authenticate("alice", "alice-new-password")["id
 thief = app.test_client()
 thief.set_cookie("session", stolen, domain="localhost")
 check("改密碼後，先前簽發的那張 cookie 重播回去 → 401（review H4）", thief.get("/api/auth/me").status_code == 401)
-# 🔴 **按下送出的這一台也一樣被踢下線，沒有特例。** 改密碼的語意是「這個帳號現在
-#    連著的東西全部斷掉」；留一個例外就讓那句話變成說一套做一套，而它換到的只是
-#    少按幾個鍵。
+# 🔴 **按下送出的這一台也一樣被踢下線，沒有特例。** 改密碼的語意是「這個帳號現在的
+#    登入狀態與互動終端全部斷掉」；留一個例外就讓那句話變成說一套做一套，而它換到的
+#    只是少按幾個鍵。
 check("🔴 按下送出的這一台也被登出（不留特例）", c.get("/api/auth/me").status_code == 401)
 c.post("/api/auth/login", json={"username": "alice", "password": "alice-new-password"})
 check("以新密碼重新登入後恢復", c.get("/api/auth/me").status_code == 200)
 
 print("== 退場＝管理員改掉他的密碼（沒有「停用」這個狀態）==")
-# 停用能做到的三件事，改密碼全部做得到：登不進來（他不知道新密碼）、既有 cookie 全滅
-# （版號遞增）、開著的終端被切（呼叫端收 view）。可逆性也還在：把新密碼告訴他。
-# 這一段驗的就是這個等價性——它是拔掉 is_active 的前提，不成立就不能拔。
+# 改密碼做得到的三件事：登不進來（他不知道新密碼）、既有 cookie 全滅（版號遞增）、
+# 開著的終端被切（呼叫端收 view）。可逆性也還在：把新密碼告訴他。
+# ⚠ **這三件不等於「停用」，這套系統沒有那個狀態。** 他的容器、背景工作、GitLab PAT 與
+#   per-user proxy 都不會因此停止，收終端也可能失敗（會回報）。所以這一段驗的是
+#   **上面那三件各自成立**，不是驗「改密碼與停用等價」，後者是已經被收回的宣稱
+#   （見 auth.py 尾段與 ADR 0010 的四條缺口）。
 bob_id = next(u["id"] for u in ca.get("/api/users").get_json()["users"] if u["username"] == "bob")
 cb = app.test_client()
 check(
@@ -452,7 +455,8 @@ try:
     check("改自己的密碼成功", r.status_code == 204)
     # alice 名下有 renametest01（上一段建的），所以這裡預期收到它。
     check("→ 也要收掉終端（換密碼的理由通常就是懷疑被盜）", _closed == ["renametest01"])
-    # 🔴 **沒有「這一台除外」的特例。** 改密碼＝這個帳號現在連著的東西全部斷掉。
+    # 🔴 **沒有「這一台除外」的特例。** 改密碼＝這個帳號現在的登入狀態與互動終端全部斷掉
+    #    （容器與背景工作不在內，見 ADR 0010 的四條缺口）。
     #    先前這裡是「操作中的這一台不被登出（cookie 版本有續上）」——那個例外換到的
     #    只是少按幾個鍵，卻讓「全部失效」這句話變成說一套做一套。
     check("🔴 操作中的這一台也被登出（不留特例）", cme3.get("/api/auth/me").status_code == 401)
