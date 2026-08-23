@@ -266,7 +266,7 @@
         <mxCell id="devc-highlevel_q2" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;誰答應的&lt;/b&gt;" vertex="1">
           <mxGeometry height="26" width="340" x="776" y="194" as="geometry" />
         </mxCell>
-        <mxCell id="devc-highlevel_b2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="白名單只有模型 API。&lt;br&gt;限制或開放，每一場由坐在鍵盤前的人現場選&lt;br&gt;不是設定檔的預設值替他決定。" vertex="1">
+        <mxCell id="devc-highlevel_b2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="一般 TCP 的白名單只有模型 API；&lt;font color=&quot;#b91c1c&quot;&gt;DNS 另通&lt;/font&gt;（見拓撲頁）。&lt;br&gt;限制或開放，每一場由坐在鍵盤前的人現場選&lt;br&gt;不是設定檔的預設值替他決定。" vertex="1">
           <mxGeometry height="150" width="340" x="776" y="226" as="geometry" />
         </mxCell>
         <mxCell id="devc-highlevel_a2" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
