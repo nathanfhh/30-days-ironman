@@ -17,8 +17,44 @@ jobs:
       # Version pinned so a ruff release can't flip this gate red on its own;
       # config lives in pyproject.toml (root + claude-pty), resolved per directory.
       - run: uvx ruff@0.16.3 check .
+      # format 這道閘**只收 tracked 的 .py**，不是 `format --check .`。
+      # ⚠ 理由具體：ruff 0.16 會連 Markdown 圍欄裡的程式碼一起重排，而
+      #   `benchmarks/code-review-bench/data/reviews/*/report.md` 那 171 個追蹤檔是
+      #   benchmark 的**原始證據**——為了一道格式閘去改寫自己正在教讀者重算的東西，
+      #   方向是反的。把範圍寫死在這裡，比在 pyproject 加一串 exclude 好懂。
+      # ⚠ 這道閘是 2026-08-23 補的，補的當下就抓到 8 支從來沒被 format 過的 .py
+      #   （crypto.py、leases.py、wire_report.py 等）。上一輪的 format 宣告過範圍，
+      #   但沒有機制保證它跑完——這就是那個機制。
+      - run: git ls-files '*.py' | xargs uvx ruff@0.16.3 format --check
       - run: uv sync --locked
       - run: uv run pytest
+
+  deploy-image:
+    # ⚠ 這個 job 存在的理由與 dev-container 那個一樣：**沒有被 CI build 過的 Dockerfile
+    #   等於沒有被驗過**。deploy/Dockerfile 那條「uv lock --check → export 帶雜湊 →
+    #   pip --require-hashes」的鏈是上一輪加的，但當時只在開發機上跑過一次；lockfile 與
+    #   pyproject 之後任何一次分岔，在這裡才會當場紅。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: build 控制平面 image（frozen + hash-verified）
+        working-directory: claude-pty
+        run: docker build -f deploy/Dockerfile -t claude-pty-control:ci .
+      # image 裡落地的是哪一組版本，要對得回 lockfile。只驗「build 成功」不夠：
+      # `--require-hashes` 保證裝的東西沒被掉包，但保證不了它跟 uv.lock 講的是同一組。
+      - name: 落地版本必須對得回 uv.lock
+        working-directory: claude-pty
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint cat claude-pty-control:ci \
+            /app/installed-requirements.txt > /tmp/installed.txt
+          pip install --quiet uv==0.7.3
+          uv export --frozen --no-dev --extra server --group build --no-emit-project \
+            -o /tmp/locked.txt
+          python3 deploy/verify_locked_runtime.py /tmp/installed.txt /tmp/locked.txt
 
   claude-pty:
     # quick 模式：跳過所有會真的起容器的整合測試，不需要 image，約一分鐘。
