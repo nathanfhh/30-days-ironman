@@ -68,6 +68,30 @@ finally:
     config.SPACE_SELF = _old
     os.chmod(LOCKED, 0o700)
 
+print("== 🔴 W_OK 為真但實際建不了東西的那一格 ==")
+# `os.access(W_OK)` 對「有 w 沒有 x」的目錄回 True，但在裡面 mkdir 會 EACCES。
+# 只問 W_OK 的版本在這一格是綠的，而每一次建 session 都會失敗。
+NOEXEC = os.path.join(TMP, "noexec")
+os.makedirs(NOEXEC, exist_ok=True)
+os.chmod(NOEXEC, 0o600)  # rw- ：可寫、不可進入
+_old = config.SPACE_SELF
+config.SPACE_SELF = NOEXEC
+try:
+    check("先確認情境成立：os.access(W_OK) 說可寫", os.access(NOEXEC, os.W_OK) is True)
+    check("而且 X_OK 是 False（所以建不了東西）", os.access(NOEXEC, os.X_OK) is False)
+    probs, fatal = sessions.preflight()
+    check("🔴 preflight 抓得到（探測真的去建了一次）", any(NEEDLE in f for f in fatal))
+finally:
+    config.SPACE_SELF = _old
+    os.chmod(NOEXEC, 0o700)
+
+print("== 探測不可以留下殘留 ==")
+BEFORE = set(os.listdir(TMP))
+sessions.preflight()
+sessions.preflight()
+leftovers = sorted(n for n in set(os.listdir(TMP)) - BEFORE if n.startswith(".preflight-"))
+check(f"跑兩次之後沒有 .preflight-* 殘留（找到 {leftovers}）", not leftovers)
+
 print("== 🔴 app.py 拿到非空 fatal 真的會停下來 ==")
 # ⚠ 這一條不能用「跑起來看看」測：那要真的 import app，會連 DB、起 Flask、動到正式環境。
 #   改成讀原始碼的結構——問的是「fatal 非空的分支裡有沒有 SystemExit」，不是字串比對。

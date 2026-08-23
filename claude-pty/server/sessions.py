@@ -941,8 +941,29 @@ def preflight() -> tuple[list[str], list[str]]:
     if config.MOUNTS:
         try:
             os.makedirs(config.SPACE_SELF, mode=0o700, exist_ok=True)
-            if not os.access(config.SPACE_SELF, os.W_OK):
-                raise PermissionError(config.SPACE_SELF)
+            # ⚠ **不要只問 `os.access(W_OK)`。** 它有兩個具體的失效方式：
+            #   · 建立目錄項目需要的是 `W_OK|X_OK`，少了 X_OK 的目錄 W_OK 仍為真，
+            #     而 `mkdir` 會 EACCES；
+            #   · `os.access` 用的是 **real** uid/gid，而控制平面在容器裡以 APP_UID 執行，
+            #     兩者不同時它回答的是另一個身分的問題。
+            #   問「現在這個行程能不能在這裡建東西」的唯一誠實方法，是去建一個然後刪掉。
+            #   每次啟動寫一次的代價可以忽略，而它換到的是這道 fatal 真的驗過了一件事。
+            _probe = os.path.join(config.SPACE_SELF, f".preflight-{os.getpid()}-{uuid.uuid4().hex}")
+            try:
+                os.mkdir(_probe, 0o700)
+            finally:
+                # 一定要清掉：這是探測不是狀態。用 rmdir 而不是 rmtree，探測目錄是空的，
+                # 真要有東西在裡面代表撞名了，那時候寧可留著讓人看見也不要遞迴刪。
+                with suppress(OSError):
+                    os.rmdir(_probe)
+                # ⚠ 上面那個 finally 涵蓋不了「行程在 mkdir 與 rmdir 之間被 SIGKILL」。
+                #   那時候會留下一顆空目錄，而且每被硬砍一次就多一顆。順手掃掉前幾次的
+                #   殘骸，這道探測才不會自己變成它要驗的那個目錄裡的垃圾。
+                with suppress(OSError):
+                    for _stale in os.listdir(config.SPACE_SELF):
+                        if _stale.startswith(".preflight-") and _stale != os.path.basename(_probe):
+                            with suppress(OSError):
+                                os.rmdir(os.path.join(config.SPACE_SELF, _stale))
         except OSError as e:
             # **致命**，理由跟隔壁的 HOST_REPO_ROOT 一模一樣：這個設定錯了，**每一次**建
             # session 都會失敗。它原本只進 `problems`，於是服務以健康的樣子起來、首頁正常、

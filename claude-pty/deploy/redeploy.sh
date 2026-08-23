@@ -178,8 +178,11 @@ if [ "${BUILD_SESSION_IMAGE}" = "1" ]; then
 fi
 if ! docker image inspect "${SESSION_IMAGE}" >/dev/null 2>&1; then
   echo "✗ 找不到 session image「${SESSION_IMAGE}」。控制平面起得來，但一按「建立 session」就會失敗。" >&2
+  # ⚠ 提示裡的指令**必須帶上同一個 tag**。裸 `./build.sh` 會 build 成它自己的預設
+  #   （ncr-dev-container），於是照著提示做完，這裡檢查的還是找不到那一顆：人照著訊息
+  #   做了、訊息還是同一句，那比沒有提示更難查。
   echo "  先 build 它：" >&2
-  echo "    (cd $(cd ../../dev-container && pwd) && ./build.sh)" >&2
+  echo "    (cd $(cd ../../dev-container && pwd) && NCR_IMAGE=\"${SESSION_IMAGE}\" ./build.sh)" >&2
   echo "  或讓這支腳本順便做（會跑好幾分鐘）：" >&2
   echo "    $0 --build-session-image" >&2
   echo "  真的要在沒有 session image 的情況下先起控制平面（只改 nginx/前端時）：" >&2
