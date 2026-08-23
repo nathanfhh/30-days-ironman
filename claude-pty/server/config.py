@@ -823,6 +823,17 @@ SECRET_KEY = _load_or_create_secret()
 # 對外經 nginx 上 TLS 時應設 CLAUDE_PTY_COOKIE_SECURE=1。
 COOKIE_SECURE = os.environ.get("CLAUDE_PTY_COOKIE_SECURE", "0") == "1"
 
+# nginx 對外綁在哪個位址（由 compose 傳進來，見 deploy/docker-compose.yml）。
+# **只給啟動自檢判斷「這個站台從機器外面連不連得到」用，不參與任何授權決定。**
+# 空字串＝不知道（不是經 compose 起的），那時一律當成「連得到」——查不到不等於通過。
+BIND_ADDR = os.environ.get("CLAUDE_PTY_BIND_ADDR", "").strip()
+
+
+def entry_is_loopback_only() -> bool:
+    """入口是不是只有本機連得到。不知道就回 False（往保守那側倒）。"""
+    return BIND_ADDR in ("127.0.0.1", "::1", "localhost")
+
+
 # 是否位於 nginx 之後。決定管理畫面「開啟終端」要用單一入口路徑（/session/<id>/）
 # 還是 loopback 直連位址（開發時無 nginx）。部署經 nginx 時設 CLAUDE_PTY_BEHIND_PROXY=1。
 BEHIND_PROXY = os.environ.get("CLAUDE_PTY_BEHIND_PROXY", "0") == "1"

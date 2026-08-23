@@ -179,15 +179,27 @@ print("== 閘 3b：檔案本身被搶先種成連結（O_NOFOLLOW 這一層）==
 # 那樣測試在修復前後都會過，等於沒測到 O_NOFOLLOW。所以先算出這一秒的落檔名。
 _victim = os.path.join(TMP, "victim.txt")
 io.open(_victim, "w").write("original")
-_expect = f"{__import__('datetime').datetime.now():%Y%m%d-%H%M%S}-planted.png"
-_planted = os.path.join(_uploads, _expect)
-os.symlink(_victim, _planted)
+# ⚠ 這一秒**與下一秒**都要種。只種「現在這一秒」的話，算完檔名到 send() 之間跨秒
+#   就撞不到，三條 check 會空洞地通過——那等於把 F-10 抓到的假綠燈從「必然」變成
+#   「機率性」，測試永遠不會紅，只是偶爾沒測到 O_EXCL 與 O_NOFOLLOW 那一層。
+_dt_mod = __import__("datetime")
+_now = _dt_mod.datetime.now()
+_names = [f"{(_now + _dt_mod.timedelta(seconds=k)):%Y%m%d-%H%M%S}-planted.png" for k in (0, 1)]
+for _nm in _names:
+    os.symlink(_victim, os.path.join(_uploads, _nm))
 r = send(ca, "sess-alice", "planted.png", b"overwritten")
 check("種好的連結沒有被跟過去（受害檔內容不變）", io.open(_victim).read() == "original")
 check("上傳本身仍然成功（O_EXCL 撞名之後換一個序號落地）", r.status_code == 201)
-check("落地的不是那條連結", r.status_code == 201 and r.get_json()["name"] != _expect)
-if os.path.islink(_planted):
-    os.unlink(_planted)
+_landed = r.get_json()["name"] if r.status_code == 201 else ""
+check("而且真的撞到了那個名字（不是因為跨秒而閃過）", _landed not in _names and _landed.endswith(".png"))
+check(
+    "落地的檔案是真的檔案，不是那條連結",
+    os.path.isfile(os.path.join(_uploads, _landed)) and not os.path.islink(os.path.join(_uploads, _landed)),
+)
+for _nm in _names:
+    _pp = os.path.join(_uploads, _nm)
+    if os.path.islink(_pp):
+        os.unlink(_pp)
 
 print("== 閘 3b：uploads/ 被換成一般檔案 ==")
 if os.path.isdir(_uploads) and not os.path.islink(_uploads):

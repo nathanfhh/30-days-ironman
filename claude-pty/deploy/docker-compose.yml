@@ -155,6 +155,11 @@ services:
       CLAUDE_PTY_TTYD_HOST: control
       CLAUDE_PTY_BEHIND_PROXY: "1"
       CLAUDE_PTY_CONTROL_HOST: "0.0.0.0"
+      # ⚠ 傳進來**只為了讓啟動自檢講實話**，控制平面不拿它做任何決定。
+      #   nginx 綁哪裡決定了「這個站台從機器外面連不連得到」，而那件事只有 compose
+      #   知道；沒有它的話 COOKIE_SECURE 那道提醒對「只綁 loopback 的本機測試」也會喊，
+      #   每次啟動都喊一次的提醒最後就沒有人在看了。
+      CLAUDE_PTY_BIND_ADDR: ${CLAUDE_PTY_BIND_ADDR:-127.0.0.1}
       # session 列表每頁筆數（前端以後端回報的 limit 為準）
       CLAUDE_PTY_PAGE_SIZE: ${CLAUDE_PTY_PAGE_SIZE:-10}
       # SSH agent 轉發（opt-in，預設關；ADR 0011）。值是 **host 上** agent socket 的路徑，

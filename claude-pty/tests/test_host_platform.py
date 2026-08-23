@@ -179,5 +179,33 @@ check("🔴 sessions.py 的程式碼不再用 sys.platform 判斷 host", not any
 check("preflight 走的是 config.host_is_linux()", "config.host_is_linux()" in src)
 
 __import__("shutil").rmtree(TMP, ignore_errors=True)
+print("== COOKIE_SECURE 提醒只在入口真的對外時才喊 ==")
+# 以前不分情況都喊，於是本機開發每次啟動都收到一次——每次都喊的提醒，等到真的該喊
+# 那次就沒有人在看了。判準是 nginx 綁在哪，而那件事只有 compose 知道。
+_old_bind = config.BIND_ADDR
+_old_behind = config.BEHIND_PROXY
+_old_secure = config.COOKIE_SECURE
+try:
+    config.BEHIND_PROXY = True
+    config.COOKIE_SECURE = False
+    for addr, should_warn, why in (
+        ("127.0.0.1", False, "只綁 loopback＝機器外面連不到，那個情境不存在"),
+        ("::1", False, "IPv6 loopback 同理"),
+        ("0.0.0.0", True, "綁全介面＝同網段連得到，要喊"),
+        ("192.168.1.10", True, "綁實體位址，要喊"),
+        ("", True, "不知道就當成連得到——查不到不等於通過"),
+    ):
+        config.BIND_ADDR = addr
+        hit = any("COOKIE_SECURE=0" in p for p in sessions.preflight())
+        check(f"bind={addr or '（未知）'} → {'喊' if should_warn else '不喊'}（{why}）", hit is should_warn)
+    # COOKIE_SECURE=1 時任何位址都不該喊
+    config.COOKIE_SECURE = True
+    config.BIND_ADDR = "0.0.0.0"
+    check("設了 COOKIE_SECURE=1 之後就不喊了", not any("COOKIE_SECURE=0" in p for p in sessions.preflight()))
+finally:
+    config.BIND_ADDR = _old_bind
+    config.BEHIND_PROXY = _old_behind
+    config.COOKIE_SECURE = _old_secure
+
 print(f"\n{'done' if _fails == 0 else f'{_fails} FAILED'}")
 sys.exit(1 if _fails else 0)

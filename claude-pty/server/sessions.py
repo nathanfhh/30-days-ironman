@@ -995,11 +995,17 @@ def preflight() -> list[str]:
                 f"建立 session 會直接失敗（bind 來源不存在）。agent 沒起來？"
                 f"socket 路徑每次登入可能不同，請確認 `echo $SSH_AUTH_SOCK`。"
             )
-    if config.BEHIND_PROXY and not config.COOKIE_SECURE:
+    # ⚠ **只綁 loopback 時不喊。** 這道提醒防的是「cookie 走未加密網路被側錄重放」，
+    #   而入口只有本機連得到時那個情境不存在。以前不分情況都喊，於是本機開發每次啟動
+    #   都收到一次——每次都喊的提醒，等到真的該喊那次就沒有人在看了（那正是這一整輪
+    #   在修的同一種病：訊號與事實對不上）。
+    #   查不到 bind 位址時仍然喊：不知道不等於安全。
+    if config.BEHIND_PROXY and not config.COOKIE_SECURE and not config.entry_is_loopback_only():
         problems.append(
-            "BEHIND_PROXY=1 但 COOKIE_SECURE=0：登入 cookie 不帶 Secure，若該入口是 HTTP "
-            "或經未加密網路，cookie 可被側錄重放（review H6）。上 TLS 後請設 "
-            "CLAUDE_PTY_COOKIE_SECURE=1；僅本機 loopback 測試可忽略此提醒。"
+            f"BEHIND_PROXY=1 但 COOKIE_SECURE=0，而入口綁在 "
+            f"{config.BIND_ADDR or '（未知，不是經 compose 起的）'}：登入 cookie 不帶 "
+            f"Secure，若該入口是 HTTP 或經未加密網路，cookie 可被側錄重放（review H6）。"
+            f"上 TLS 後請設 CLAUDE_PTY_COOKIE_SECURE=1。"
         )
     # 自訂 CA（內部憑證簽的 GitLab）。**填了卻找不到要在這裡喊。**
     #

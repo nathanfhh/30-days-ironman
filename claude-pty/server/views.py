@@ -123,8 +123,8 @@ def close_views(session_id: str) -> int:
     return closed
 
 
-def close_user_views(user_id: int) -> int:
-    """收掉某位使用者**所有** session 上開著的終端。回傳收掉幾個。
+def close_user_views(user_id: int) -> tuple[int, int]:
+    """收掉某位使用者開著的終端。回傳 `(收掉幾個, 失敗幾場)`。
 
     ⚠ **撤銷存取權時，收掉 cookie / token 是不夠的。** 那兩者要到下一次 HTTP 請求才會被
       gate 擋下，而已經升級完成的 ttyd WebSocket 不會再走 nginx 的 auth_request——連線
@@ -147,8 +147,14 @@ def close_user_views(user_id: int) -> int:
         2. view 的 `actor_user_id` 是他          → 收（他開在別人 session 上的那些）
         3. **他是 admin → 全部都收**
 
-      第 3 條是給這個欄位加上去之前就存在的舊列用的。NULL 的意思是「不知道是誰開的」，
-      而**只有 admin 開得了別人的 session**，所以未知的開啟者有可能就是他。收錯的代價
+      第 3 條有兩個理由，缺一條就會漏收：
+        · `actor_user_id` **只記得建立那一列的人**。`views.session_id` 是 UNIQUE、一場
+          只有一個 view，而 `open_view` 對已經活著的 view 是直接沿用、不改 actor。
+          於是「擁有者先開了自己的終端、admin 之後去看同一場」這個很常見的順序底下，
+          那一列的 actor 是擁有者——只比對 actor 的話，收不到 admin 正在看的那個畫面。
+        · 這個欄位是後來才加的，之前的舊列一律是 NULL（不知道是誰開的）。
+      而 admin 本來就開得了任何一場，所以「他可能正在看哪些」的誠實答案就是「全部」。
+      收錯的代價
       幾乎是零（ADR 0003 不重播，重開網頁就長一個新的），漏收的代價是一個剛被收掉存取權
       的人手上還有一個能打字的 shell。往保守那一側倒。
 

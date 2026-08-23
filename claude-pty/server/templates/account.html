@@ -372,15 +372,27 @@
       //   跳轉更難懂（畫面看起來還在，按什麼都失敗）。
       // ⚠ **不要無條件宣稱終端都收掉了。** 後端在收不乾淨時回 200 加實情（不是 204），
       //   而那正是這一整條線在買的東西——在這裡丟掉的話，畫面又變回「看起來都好」。
+      // ⚠ 失敗時要**多留一點時間讓人讀完**再跳。1.2 秒足夠讀「請重新登入」，
+      //   不足以讀完「有終端沒收掉、那些連線還可以打字」——而後者正是這一整條線
+      //   在買的東西，被跳轉洗掉就等於沒講。跳轉本身不能省：留在這一頁按什麼都會 401。
+      // ⚠ **先把表單清空。** `submitting()` 的 finally 會在這裡把送出鈕還原成可按，
+      //   而密碼改掉的那一刻本頁 cookie 已經失效——在跳轉之前再按一次，api() 收到 401
+      //   會立刻 location.href="/login"，把剛剛那個警告洗掉。warning 路徑刻意等 7 秒
+      //   就是為了讓人讀完，被自己的另一隻手撤銷就白等了。清空舊密碼欄位之後
+      //   validatePw() 會把按鈕鎖起來，不必動 submitting 的通用邏輯。
+      oldPw.value = ""; newPw.value = ""; confirmPw.value = ""; validatePw();
+      let wait = 1200;
       if (r && r.views_failed) {
+        wait = 7000;
         toast("密碼已更改，但終端沒有收乾淨", "warning",
               { body: "所有裝置的登入已失效，但有終端沒收掉；那些連線在收掉之前仍然可以打字。"
-                      + "重新登入之後把它們關掉，或直接終止那幾場 session。" });
+                      + "重新登入之後把它們關掉，或直接終止那幾場 session。",
+                duration: wait, pausable: false });
       } else {
         toast("密碼已更改，請重新登入", "success",
               { body: "所有裝置的登入與開著的終端都已失效；容器不受影響，重新登入即可接回" });
       }
-      setTimeout(() => { location.href = "/login"; }, 1200);
+      setTimeout(() => { location.href = "/login"; }, wait);
     } catch (ex) { toastError("更新密碼", ex); }
   }));
 
@@ -487,9 +499,10 @@
           const r = await api(`/api/users/${id}/password`, { method: "POST", body: { new_password: pw } });
           // ⚠ 同上：這條是「讓某個人退場」最常走的路，收不乾淨更不能報成功。
           if (r && r.views_failed) {
+            // 這條不跳頁，所以可以 hover 暫停補讀；但訊息比 success 長，時間要給足。
             toast(`已重設 ${name} 的密碼，但終端沒有收乾淨`, "warning",
                   { body: "他的登入已經失效，但有終端沒收掉；那些連線在收掉之前仍然可以打字。"
-                          + "請再按一次，或直接終止他那幾場 session。" });
+                          + "請再按一次，或直接終止他那幾場 session。", duration: 9000 });
           } else {
             toast(`已重設 ${name} 的密碼`, "success",
                   { body: "他既有的登入與開著的終端都已立刻失效" });

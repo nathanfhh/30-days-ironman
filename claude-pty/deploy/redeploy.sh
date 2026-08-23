@@ -53,6 +53,13 @@ case "${1:-}" in
   "")         ;;
   *)          echo "不認得的參數：${1}（只收 --no-build / --force / --build-session-image）" >&2; exit 2 ;;
 esac
+# ⚠ 這支只收一個參數。多打的會被 case 靜靜忽略——而「我明明帶了 --build-session-image」
+#   卻沒有 build，是最難查的那種。講出來。
+if [ "$#" -gt 1 ]; then
+  echo "✗ 只收一個參數，但收到 $# 個：$*" >&2
+  echo "  要同時做兩件事請分兩次跑，或先 ../../dev-container/build.sh 再跑這支。" >&2
+  exit 2
+fi
 
 # 這一版是哪個 commit——烘進 image 供頁尾顯示。
 # ⚠ **只能在這裡算。** 程式是 COPY 進 image 的，`.git` 不在 build context 裡（context 是
@@ -182,7 +189,9 @@ if [ "${CLAUDE_PTY_HOST_PLATFORM}" = "Linux" ]; then
   IMG_UID="$(docker image inspect -f '{{index .Config.Labels "ncr.uid"}}' \
              "${SESSION_IMAGE}" 2>/dev/null || true)"
   MY_UID="$(id -u)"
-  APP_UID_EFF="${APP_UID:-$(sed -n 's/^[[:space:]]*APP_UID=//p' .env 2>/dev/null | tail -1 || true)}"
+  # ⚠ 跟上面的 CLAUDE_PTY_SPACE 一樣要剝引號：`.env` 寫 APP_UID="1000" 時 compose
+  #   會剝掉照常運作，這裡沒剝就會判定 uid 沒對齊而 exit 1，訊息還把帶引號的值印出來。
+  APP_UID_EFF="${APP_UID:-$(sed -n 's/^[[:space:]]*APP_UID=//p' .env 2>/dev/null | tail -1 | tr -d '"'\''' || true)}"
   if [ -z "${IMG_UID}" ] || [ "${IMG_UID}" = "<no value>" ]; then
     # 走到這裡代表 image 在（上面那道已經確認過），但沒有 ncr.uid 標記——加上那個
     # 標記之前 build 的舊 image。不擋，但要講清楚它沒被驗過。
