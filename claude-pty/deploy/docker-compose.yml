@@ -141,6 +141,11 @@ services:
       # 自己 mkdir 用的可以不同），而不是因為這裡真的會不一樣。
       CLAUDE_PTY_SPACE: ${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}
       CLAUDE_PTY_SPACE_SELF: ${CLAUDE_PTY_SPACE:-${HOME}/claude-pty-space}
+      # session 容器要用哪一顆 image。**兩隻服務都要，而且必須與 redeploy.sh 的
+      # SESSION_IMAGE 同源**：這個變數原本沒有傳進來，於是 redeploy 用 CLAUDE_PTY_IMAGE
+      # 做 preflight、build.sh 用它自己的預設、控制平面又用 config.py 的預設——設了自訂
+      # tag 的人會得到「檢查一顆、build 另一顆、實際開場用第三顆」，而且三步都不報錯。
+      CLAUDE_PTY_IMAGE: ${CLAUDE_PTY_IMAGE:-ncr-dev-container}
       # host 的作業系統（`uname -s`）。**只有 control 需要**——preflight 只在它裡面跑
       # （reconciler 的 main() 只做 init_db）。
       # ⚠ 控制平面在容器裡問不到這件事：`sys.platform` 永遠是 linux，講的是容器不是 host。
@@ -220,6 +225,9 @@ services:
       CLAUDE_PTY_SELF_REPO_ROOT: ${HOST_REPO_ROOT:-/repo}
       CLAUDE_PTY_DB_PATH: /data/claude-pty.db
       CLAUDE_PTY_SECRET_KEY: ${CLAUDE_PTY_SECRET_KEY:?同上}
+      # ⚠ 與 control 同值。reconciler 也讀 config.IMAGE（trivy DB 預熱、image 建立時間），
+      #   只給一邊的話兩隻服務會對著不同的 image 做判斷。
+      CLAUDE_PTY_IMAGE: ${CLAUDE_PTY_IMAGE:-ncr-dev-container}
     # ⚠ 預設的 json-file driver **沒有大小上限**。control 每個請求一行 access log、
     #   nginx 也有、reconciler 每 30 秒一輪，三者都 restart: unless-stopped——磁碟被吃滿時
     #   的症狀是 SQLite 寫入失敗，那個症狀完全指不到 log 檔（審查 F-017）。

@@ -124,6 +124,52 @@ r = run("--nope")
 check("未知參數 → exit 2", r.returncode == 2)
 check("錯誤訊息列得出收哪些", "--build-session-image" in (r.stdout + r.stderr))
 
+print("== 🔴 CLAUDE_PTY_IMAGE 要一路串到底（檢查、build、部署同一顆）==")
+# 這一格原本是破的：redeploy 用 CLAUDE_PTY_IMAGE 做 preflight，但呼叫 build.sh 時沒把 tag
+# 帶過去（build.sh 有自己的預設），compose 也沒把它傳給 control——於是設了自訂 tag 的人
+# 得到「檢查 A、build B、部署 C」，**而且三步都成功**。
+_src = open(SH, encoding="utf-8").read()
+check(
+    "🔴 呼叫 build.sh 時帶上 NCR_IMAGE（不是裸呼叫）",
+    'NCR_IMAGE="${SESSION_IMAGE}" ../../dev-container/build.sh' in _src,
+)
+_bs = open(os.path.join(os.path.dirname(os.path.dirname(HERE)), "dev-container", "build.sh"), encoding="utf-8").read()
+check("build.sh 收的就是 NCR_IMAGE 這個名字", 'IMAGE="${NCR_IMAGE:-' in _bs)
+
+# compose 那一段用真的解析驗，不用讀字串：問 docker compose「control 與 reconciler 實際
+# 會拿到什麼」。這需要 docker CLI（不需要 daemon）。
+_dep = os.path.dirname(SH)
+_cfg = subprocess.run(
+    ["docker", "compose", "-f", "docker-compose.yml", "config"],
+    capture_output=True,
+    text=True,
+    cwd=_dep,
+    env=dict(
+        os.environ,
+        CLAUDE_PTY_IMAGE="ncr-tag-threading-probe",
+        CLAUDE_PTY_SECRET_KEY="x",
+        HOST_REPO_ROOT="/tmp",
+        HOME=TMP,
+        PATH=os.environ.get("PATH", ""),  # 這一句要真的 docker CLI，不能用上面的 stub
+    ),
+    timeout=60,
+)
+if _cfg.returncode != 0:
+    check("docker compose config 跑得起來（跑不起來就驗不了這一條）", False)
+else:
+    _n = _cfg.stdout.count("CLAUDE_PTY_IMAGE: ncr-tag-threading-probe")
+    check("🔴 control 與 reconciler **都**拿得到同一個 tag（兩處）", _n == 2)
+
+# 三個預設值必須是同一個字串，否則「都沒設」時三邊還是會分岔。
+_conf = open(os.path.join(os.path.dirname(HERE), "server", "config.py"), encoding="utf-8").read()
+check(
+    "🔴 三邊的預設 tag 相同（config.py／build.sh／compose）",
+    'os.environ.get("CLAUDE_PTY_IMAGE", "ncr-dev-container")' in _conf
+    and "NCR_IMAGE:-ncr-dev-container" in _bs
+    and "CLAUDE_PTY_IMAGE:-ncr-dev-container"
+    in open(os.path.join(_dep, "docker-compose.yml"), encoding="utf-8").read(),
+)
+
 print("== 測試自己不可以碰到真實環境 ==")
 # ⚠ 這一組守的是「測試不會動到跑測試的人」。斷言不能寫成「真實家目錄裡沒有那個目錄」
 #   ——它本來就可能存在（開發機上有真的部署），那樣分不出「本來就有」與「我建的」。

@@ -170,7 +170,11 @@ if [ "${BUILD_SESSION_IMAGE}" = "1" ]; then
   echo "🔨 build session image「${SESSION_IMAGE}」（--build-session-image）…"
   # ⚠ build 失敗就停：帶了這個旗標代表你要的是一套能開場的部署，
   #   而不是「控制平面起來了但開不了場」。
-  ../../dev-container/build.sh
+  # ⚠ **tag 必須帶過去。** 這一行原本是裸呼叫，而 build.sh 自己的預設是
+  #   `ncr-dev-container`——於是設了 CLAUDE_PTY_IMAGE=my-tag 的人會拿到
+  #   「檢查 my-tag、build ncr-dev-container、部署 ncr-dev-container」：三個步驟各自
+  #   看著不同的 image，而且每一步都成功。
+  NCR_IMAGE="${SESSION_IMAGE}" ../../dev-container/build.sh
 fi
 if ! docker image inspect "${SESSION_IMAGE}" >/dev/null 2>&1; then
   echo "✗ 找不到 session image「${SESSION_IMAGE}」。控制平面起得來，但一按「建立 session」就會失敗。" >&2
