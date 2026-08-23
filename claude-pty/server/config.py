@@ -709,6 +709,20 @@ VIEW_CLAIM_GRACE = int(os.environ.get("CLAUDE_PTY_VIEW_CLAIM_GRACE", "30"))
 #   這支是漏網的那一個）。
 VIEW_PEER_WAIT = float(os.environ.get("CLAUDE_PTY_VIEW_PEER_WAIT", "6"))
 
+# 收終端時等 ttyd **真的退出**的兩個上限（views._kill）。
+#
+# ⚠ 這兩個值存在的理由是一個曾經寫錯的等式：`_kill` 以前送完 SIGTERM 就回報成功，而
+#   「訊號送出去了」跟「它停了」是兩件事。ttyd 卡在不可中斷的 I/O、或被 stop 住的時候，
+#   API 會回「已收」、DB 那一列被刪掉，而那個 WebSocket 還連著——切存取權的動作最不能
+#   有的失效方式，就是它在失敗時看起來成功。
+#
+# TERM：ttyd 收到 SIGTERM 會關掉 WebSocket、讓子行程收 SIGHUP，正常是毫秒級的事。
+#       這個值是留給不正常的那些，逾時就升級 SIGKILL。
+VIEW_TERM_GRACE = float(os.environ.get("CLAUDE_PTY_VIEW_TERM_GRACE", "3"))
+# KILL：SIGKILL 擋不掉，所以等這麼久還在行程表上，只可能是卡在 D state。那時候唯一
+#       誠實的答案是回報失敗，讓那一列留著給 reconciler，而不是假裝收掉了。
+VIEW_KILL_GRACE = float(os.environ.get("CLAUDE_PTY_VIEW_KILL_GRACE", "2"))
+
 # ADR 0002 的 Ctrl+P 陷阱：docker attach CLI 預設 detach 序列會扣住 Ctrl+P，必改。
 DETACH_KEYS = "ctrl-x,ctrl-x"
 

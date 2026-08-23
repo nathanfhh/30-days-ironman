@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import signal
 import socket
 import subprocess
 import time
@@ -449,24 +450,93 @@ def _is_our_ttyd(pid: int | None) -> bool:
     return bool(argv) and os.path.basename(argv[0]) in _OUR_TTYD_NAMES
 
 
+def _gone(pid: int, proc: "psutil.Process | None") -> bool:
+    """這個 pid 上「原本那個程序」是不是已經不在了。
+
+    ⚠ 問的是**原本那個**，不是「這個號碼上現在有沒有東西」。PID 會被回收，等待期間
+      剛好有人接手同一個號碼的話，只看存在性會永遠等下去（或更糟：等到逾時，然後把
+      SIGKILL 送給一個無關的程序）。psutil 的 `Process` 記著 create_time，`is_running()`
+      比對得出「號碼還在但已經換人」，這是這裡用它而不用 `os.kill(pid, 0)` 的唯一理由。
+
+    沒有 psutil 時退回存在性探測。它認不出號碼被回收，但**仍然比舊行為誠實**：
+    舊行為是連問都不問就回報收掉了。
+    """
+    if proc is not None:
+        try:
+            if not proc.is_running():
+                return True
+            # zombie＝已經死了、只是還沒被 init reap。對「它還會不會服務」而言就是不在了。
+            return proc.status() == psutil.STATUS_ZOMBIE
+        except psutil.NoSuchProcess:
+            return True
+        except (psutil.AccessDenied, OSError):
+            return False  # 問不到＝不能宣告它走了
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
+def _await_gone(pid: int, proc: "psutil.Process | None", timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while True:
+        if _gone(pid, proc):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+
+
 def _kill(pid: int | None) -> bool:
-    """送 SIGTERM。**回傳「這個 pid 現在確定不會再服務了」**。
+    """收掉這顆 ttyd。**回傳「這個 pid 現在確定不會再服務了」**。
 
     ⚠ 以前這裡整段吞掉例外、也不回報。於是 `close_views` 對一個 `PermissionError` 的
       ttyd 照樣刪掉 DB 那一列並計入「已收」——程序還活著、記錄沒了、之後再也沒有人會
       去收它。切存取權的動作不可以安靜地失敗，所以失敗要說得出來。
+
+    ⚠ **而只送 SIGTERM 就回報成功，是同一個錯換一個位置。**「訊號送出去了」跟「它停了」
+      是兩件事：ttyd 忽略 SIGTERM、卡在不可中斷的 I/O、或正被 SIGSTOP 停住的時候，
+      `os.kill` 一樣不拋例外。舊版於是回 True，`close_views` 刪掉唯一那一列，而那個
+      WebSocket 還連著——**收存取權的動作看起來成功、實際上沒有**，比失敗更糟，因為
+      沒有人會再去看它。所以這裡要等到它真的從行程表上消失才算數：
+
+        SIGTERM → 等 VIEW_TERM_GRACE → 還在就 SIGKILL → 等 VIEW_KILL_GRACE → 還在就回 False
+
+    ⚠ 這條路徑跑在「按下改密碼」的同步請求裡，所以兩個等待值都必須短（預設 3＋2 秒）。
+      它們是**上限不是延遲**：ttyd 正常收到 SIGTERM 就走，等待迴圈第一輪就結束。
     """
     if not pid:
         return True  # 沒有 pid＝沒有東西要收
     if not _is_our_ttyd(pid):
         return True  # 不是我們的 ttyd（已退出、號碼被回收）＝沒事
+    # 先綁住身分再送訊號：之後每一次「它還在嗎」問的都是這一個程序，不是這個號碼。
+    proc = None
+    if psutil is not None:
+        try:
+            proc = psutil.Process(pid)
+        except psutil.NoSuchProcess:
+            return True
+        except (psutil.AccessDenied, OSError):
+            proc = None  # 問不到身分，退回存在性探測（見 _gone）
     try:
-        os.kill(pid, 15)  # SIGTERM；不需 wait——它不是我們的子程序，由 init reap
+        os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
         return True  # 它剛好自己退了，結果一樣
     except (PermissionError, OSError):
         return False  # 送不出去：它可能還活著，不可以當成收掉了
-    return True
+    if _await_gone(pid, proc, config.VIEW_TERM_GRACE):
+        return True
+    # 沒走。升級——SIGKILL 是核心直接處理的，程序沒有機會忽略它。
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return True
+    except (PermissionError, OSError):
+        return False
+    return _await_gone(pid, proc, config.VIEW_KILL_GRACE)
 
 
 def _process_alive(pid: int | None) -> bool:
