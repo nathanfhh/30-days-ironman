@@ -10,6 +10,17 @@ build 時指定的那台 GitLab。
 
 **DNS（53）是放行的**，因為白名單本身要靠網域解析才成立。
 
+但要注意這條規則實際承擔的東西比字面上少。容器接到**自建 network** 時，`/etc/resolv.conf`
+指向 `127.0.0.11`，查詢走 loopback 交給 Docker daemon 轉發，nat 表的 DNAT 又跑在 filter 之前，
+所以封包到 `OUTPUT` 鏈時目的埠已經不是 53。實測（alpine，自建 bridge network）：
+
+```
+iptables -I OUTPUT 1 -p udp --dport 53 -j REJECT   →  解析成功，該規則計數器 0 packets
+iptables -I OUTPUT 1 -d 127.0.0.11    -j REJECT   →  解析 refused，計數器 1 packet 80 bytes
+```
+
+`--dport 53` 那條只在「接 Docker 預設 bridge、`resolv.conf` 指向外部 resolver」時才會被走到。
+
 由此得到一個必須講清楚的性質：
 
 > DNS 的查詢名稱是一條出境通道。把資料編進 query name 送出去
@@ -26,6 +37,10 @@ build 時指定的那台 GitLab。
 ### 路 A：啟動時解析完 allowlist，然後封掉 UDP/TCP 53
 
 agent 起來之前先把白名單網域解析成 IP 寫進規則，接著把 53 一起關掉。
+
+- **先決條件（第一節那個實測）**：在自建 network 上，「把 53 關掉」不能寫成 `--dport 53`，
+  那條規則不會被走到。要擋的是往 `127.0.0.11` 的流量，或是直接換掉 `/etc/resolv.conf`。
+  這是這條路最容易寫成半套的地方：規則加了、看起來對、一個封包都沒攔到。
 
 - **好處**：改動小，就在既有的 `init-firewall.sh` 裡多兩步，不引入新元件。
 - **CNAME**：要遞迴解析到底並把鏈上每一段的 A/AAAA 都收進來，只解析最終答案會漏。
