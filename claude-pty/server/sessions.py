@@ -944,10 +944,15 @@ def preflight() -> tuple[list[str], list[str]]:
             if not os.access(config.SPACE_SELF, os.W_OK):
                 raise PermissionError(config.SPACE_SELF)
         except OSError as e:
-            problems.append(
+            # **致命**，理由跟隔壁的 HOST_REPO_ROOT 一模一樣：這個設定錯了，**每一次**建
+            # session 都會失敗。它原本只進 `problems`，於是服務以健康的樣子起來、首頁正常、
+            # 直到有人按下「建立 session」才炸——而那時錯誤是 provision 拋出來的 OSError，
+            # 指不回這裡。同一句話在這個檔案裡已經寫過一次（「只印警告不停下等於沒有」），
+            # 這一格是漏掉的那個。
+            fatal.append(
                 f"per-user 狀態空間不可寫（{config.SPACE_SELF}）：{e}。"
                 f"每個 session 的 ~/.claude 都住在這底下（ADR 0014），"
-                f"不能寫就一個 session 都建不起來。容器化部署請確認該路徑已掛進控制平面"
+                f"**現在這樣一個 session 都建不起來**。容器化部署請確認該路徑已掛進控制平面"
                 f"且擁有者是 APP_UID，並以 CLAUDE_PTY_SPACE_SELF 指明容器內看到的路徑。"
             )
         # 控制平面建目錄用的是**它自己**的 uid，session 容器裡的寫入者則是 nathan
