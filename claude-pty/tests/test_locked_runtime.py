@@ -116,6 +116,9 @@ installed_body = {
     # 用 `pip install git+https://...` 之類的方式塞進來的東西，落地的形狀是 `name @ url`，
     # 沒有 `==`。它一樣繞過了 lockfile，一樣要紅。
     "unpinned_intruder": GOOD + "sneaky @ git+https://example.com/sneaky.git\n",
+    # 必要套件從 `name==版本` 被換成 direct reference。人在、名字對，但版本驗不了。
+    # 這一格是第二版自己造出來的洞（missing 的計算把整袋 unpinned 都扣掉），實測 exit 0。
+    "required_became_unpinned": GOOD.replace("Flask==3.1.3", "Flask @ file:///tmp/flask"),
 }
 
 print("== 對的輸入要過 ==")
@@ -131,6 +134,10 @@ check("image 清單是空的 → 非 0（讀不到不等於通過）", run("empt
 check(
     "🔴 未釘版本的入侵者（`name @ url`）也要紅，不可以因為沒有 `==` 就被跳過",
     run("unpinned_intruder") != 0,
+)
+check(
+    "🔴 必要套件被換成 direct reference（人在但版本驗不了）也要紅",
+    run("required_became_unpinned") != 0,
 )
 
 print("== 合法缺席不可以誤報 ==")

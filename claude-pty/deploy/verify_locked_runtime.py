@@ -18,11 +18,21 @@
   正確的做法不是放寬比對，是**把「本來就不該在」講清楚**：用 marker 算出哪些該在，
   用一份寫得出名字的清單交代哪些被刻意移除，剩下的一個都不准少。
 
-三類判定，任何一類不成立就 exit 1：
+四類判定，任何一類不成立就 exit 1：
 
   1. **少了**：marker 成立、又不在 BUILD_ONLY 裡的套件，image 裡必須有
-  2. **版本不同**：兩邊都有但版本對不上
-  3. **多了**：image 裡有、而 lockfile 的 runtime 集合沒有的
+  2. **沒有釘版本**：該有的套件在，但形狀是 `name @ url` 而不是 `name==版本`
+  3. **版本不同**：兩邊都有但版本對不上
+  4. **多了**：image 裡有、而 lockfile 的 runtime 集合沒有的
+
+⚠ **第 2 類是這支第二版自己造出來的洞，Codex 複驗抓到的。** 那一版為了不讓專案本身
+  （`claude-pty @ file:///app`）被誤判成缺漏，在「少了」的計算裡直接把整袋未釘版本扣掉：
+  `set(required) - set(installed) - unpinned`。於是把 `Flask==3.1.3` 換成
+  `Flask @ file:///tmp/flask` 之後，它既不算少（被 unpinned 扣掉）也不算多（flask 在
+  lockfile 裡），實測 exit 0。**修一個假綠的時候造出一個更窄的假綠**，形狀完全一樣：
+  把「合法的例外」與「該抓的情況」用同一個減法壓成一件事。
+  現在專案本身靠 `ALLOWED_EXTRA` 這個寫得出名字的清單放行，而任何**該釘版本卻沒釘**的
+  必要套件單獨成一類：版本驗不了就是驗不了，不能因為它「人在」就算過。
 
 第 3 類為什麼也要紅：這顆 image 的相依應該**完全**由 lockfile 決定。多出來的東西代表有一條
 繞過 lockfile 的安裝路徑（Dockerfile 手動 `pip install`、某個套件的 post-install），而那條
@@ -133,7 +143,12 @@ def main(argv: list[str]) -> int:
 
     required = {k: v for k, v in on.items() if k not in BUILD_ONLY}
 
+    # ⚠ `- unpinned` 是刻意留著的：它讓「以 direct reference 出現」不會被算成兩次錯
+    #   （既少了又沒釘版本）。真正抓它的是下面那一類，不是把它默默放行。
     missing = sorted(set(required) - set(installed) - unpinned)
+    # 該有、人也在，但形狀是 `name @ url`：版本驗不了，等同沒有比對過。
+    # ALLOWED_EXTRA 裡的（專案自己）不在 required 裡，所以不會落到這一類。
+    unpinned_required = sorted((set(required) & unpinned) - ALLOWED_EXTRA)
     mismatch = sorted(
         (k, installed[k], required[k]) for k in set(required) & set(installed) if installed[k] != required[k]
     )
@@ -141,6 +156,11 @@ def main(argv: list[str]) -> int:
 
     for k in missing:
         print(f"::error::少了 {k}=={required[k]}：lockfile 說該裝（marker 成立、也不是 build 工具），image 裡沒有")
+    for k in unpinned_required:
+        print(
+            f"::error::{k} 沒有釘版本：lockfile 說該裝 {required[k]}，但 image 裡它是 `{k} @ ...` 這種"
+            f" direct reference，版本驗不了。它是從 lockfile 以外的地方裝進來的"
+        )
     for k, got, want in mismatch:
         print(f"::error::{k}：image 裡是 {got}，uv.lock 說 {want}")
     for k in extra:
@@ -156,7 +176,7 @@ def main(argv: list[str]) -> int:
     )
     tail = f"、{len(unpinned)} 個未釘版本（{', '.join(sorted(unpinned))}）" if unpinned else ""
     print(f"image 內 {len(installed)} 個釘版本{tail}")
-    bad = len(missing) + len(mismatch) + len(extra)
+    bad = len(missing) + len(unpinned_required) + len(mismatch) + len(extra)
     print("全部對得上" if not bad else f"{bad} 項不符")
     return 1 if bad else 0
 
