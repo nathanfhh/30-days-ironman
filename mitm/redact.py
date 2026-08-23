@@ -136,10 +136,11 @@ QUERY_SECRET = re.compile(
 def redact_query(path: str) -> str:
     """URL 的 query string 也可能帶憑證。
 
-    預設只錄模型 API，憑證都在 header 裡，query 乾淨。但 capture_hosts 是可調的，
-    手動錄製更可以指到任何地方——OAuth 的 `code=`、`access_token=` 就在網址上，
-    而網址會原樣寫進 .mitm。這一層跟自由文字那層一樣是盡力而為，認的是常見的
-    參數名稱。
+    ⚠ 這裡有**兩層不同的預設**，講的時候要分開：這支 addon 單獨使用時的預設是
+    `capture_hosts=api.anthropic.com`（憑證都在 header 裡，query 乾淨）；而 dev-container
+    的 entrypoint **選了要錄之後傳的是空字串，也就是全錄**。所以實際跑起來的產品預設
+    是「什麼 host 都收」，query 一定會帶到 OAuth 的 `code=`、`access_token=` 那類東西，
+    而網址會原樣寫進 .mitm。這一層跟自由文字那層一樣是盡力而為，認的是常見的參數名稱。
     """
     return QUERY_SECRET.sub(r"\1" + REDACTED, path)
 

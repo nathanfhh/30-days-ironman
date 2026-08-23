@@ -277,6 +277,7 @@ addon 不在就整場不錄，而不是退回錄未脫敏的原始流量。
 網路能力：
   1 = 限制（白名單） — 一般 TCP 出站收斂到 api.anthropic.com、直連的 docker 網段
                        （gitlab-proxy），SSH 22 只通 build 時指定的那台 GitLab（預設）
+                       ⚠ DNS 不在這道牆裡：查詢名稱仍出得去，這不是 DLP
   2 = 完全開放       — 不套用任何 iptables 規則
 ```
 
@@ -297,15 +298,19 @@ addon 不在就整場不錄，而不是退回錄未脫敏的原始流量。
 
 | | 官方版 | 這一份 |
 |---|---|---|
-| 白名單 | GitHub 全 IP 段 + `registry.npmjs.org` + sentry + statsig + VSCode marketplace + `api.anthropic.com` | 只有 `api.anthropic.com` |
+| 白名單（一般 TCP/HTTP(S)） | GitHub 全 IP 段 + `registry.npmjs.org` + sentry + statsig + VSCode marketplace + `api.anthropic.com` | 只有 `api.anthropic.com` |
 | SSH 22 | 放行到任何主機 | 只放行 `dig` 解出來的那台 GitLab |
 | 直連網段 | 從 default route 推一個 `/24` | 讀 `ip route` 列出實際的直連網段 |
 | 驗證 | `example.com` 不通 + `api.github.com` 通 | `example.com` 不通 + **每一個**白名單網域都要通 |
 | 開關 | 沒有，一律套用 | 啟動時由人選，`NCR_NET=restricted\|unrestricted` 可跳過選單 |
 
 官方那份的目標是「讓 devcontainer 還能開發」，所以 GitHub、npm、VSCode 全部放行；
-這一份的目標是「讓 agent 只能做審查」，所以預設只通模型 API。放行 `registry.npmjs.org`
-就等於 agent 能在牆內 `npm install`，而工具版本 pin 在 Dockerfile 裡是為了讓報告可重現。
+這一份的目標是「讓 agent 只能做審查」，所以**一般 TCP/HTTP(S)** 的出站預設只通模型 API。
+放行 `registry.npmjs.org` 就等於 agent 能在牆內 `npm install`，而工具版本 pin 在 Dockerfile
+裡是為了讓報告可重現。
+
+⚠ **收斂不等於掐斷，這道牆不是 DLP。** DNS 是放行的（白名單本身要靠網域解析才成立），
+而查詢名稱本身就是一條出境通道；限制與可行的加固路徑寫在 `../docs/dns-egress-notes.md`。
 
 ### 三個容易寫錯的地方
 

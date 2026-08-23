@@ -8,8 +8,13 @@
 
 ## 背景
 
-`gitlab-proxy/` 那顆獨立代理解掉了「憑證不進 agent 的 session」：一顆 nginx 擋在 GitLab
-前面，PAT 只存在於代理裡，session 裡的東西裸打、由代理蓋章。單人單機用它就夠了。
+`gitlab-proxy/` 那顆獨立代理解掉了「**GitLab API 呼叫的** token 不進 agent 的 session」：
+一顆 nginx 擋在 GitLab 前面，PAT 只存在於代理裡，session 裡的東西裸打 API、由代理蓋章。
+單人單機用它就夠了。
+
+⚠ **只有 API 那一半。** 那顆獨立代理不含 git smart HTTP，所以 clone／fetch／push 不走它，
+是另一條要自己處理的傳輸路徑（只有搬進 claude-pty 之後的 per-user 代理才把那一段包進來，
+見下）。這句話原本寫成無條件的「憑證不進 session」，而那是過滿的。
 
 搬進 claude-pty 之後多了一個它沒有的問題：**這裡有很多人，每個人是不同的 GitLab 身分。**
 一顆共用的代理等於所有人共用一把 PAT——誰做的操作在 GitLab 上都記成同一個人，而且任何

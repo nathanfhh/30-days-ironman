@@ -20,8 +20,11 @@ against each golden comment, count TP / FP / FN.
 
 We do three things with it:
 
-1. **Run `nathan-code-review` on a subset** and score it with that pipeline, so
+1. **Run `nathan-code-review` on all 50 PRs** and score it with that pipeline, so
    the number sits on the same axis as the published leaderboard.
+   (The committed `data/manifest.json` is the full 50. `build_manifest.py` applies a
+   per-repo quota *by default* and needs `--full` to reproduce it: see "Reproducing"
+   below. Everything reported here is the full 50, not the quota subset.)
 2. **Re-judge five comparison tools on the same PRs with the same judge**, so the
    comparison is not confounded by which judge model produced which leaderboard.
 3. **Audit the ground truth.** Every candidate the judge matched to nothing, and
@@ -55,7 +58,7 @@ one is pinned down explicitly:
 | Risk | What holds it down |
 |---|---|
 | Reviewing a different diff than the tools did | The diff is the `base..head` of *the same fork PR* every tool reviewed, pulled from `code-review-benchmark/<repo>__<project>__augment__PR<n>__<date>`, not the upstream PR |
-| Picking flattering PRs | Selection is fixed in `build_manifest.py` before any golden comment is read: all 10 Python PRs, then the two lowest PR numbers per other repo |
+| Picking flattering PRs | No per-repo selection was applied: the committed manifest is every upstream PR that has an `augment` fork to review, all 50 (`build_manifest.py --full`). The quota in that script is its **default** when `--full` is omitted (both Python repos uncapped, two lowest PR numbers per other repo, 19 PRs — kept beside it as `data/manifest.19.json`); the numbers reported here do **not** use it. Selection is fixed in code before any golden comment is read either way |
 | Peeking at the answers | Review agents are barred from `data/` beyond their own diff and output dir, and from the network |
 | A judge that likes our phrasing | One judge prompt, one judge model, every tool. Judges never learn which tool is ours and never read the diff |
 | Correcting only our own false positives | The verifier rules on every tool's unmatched candidates and on the golden comments, in one shuffled anonymous pool per PR |

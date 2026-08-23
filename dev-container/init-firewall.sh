@@ -10,8 +10,12 @@ IFS=$'\n\t'
 # 最容易漏、漏了最難查的地方。其餘的白名單內容、SSH 收斂、驗證方式都改過，理由寫在各段。
 #
 # 官方那份的目標是「讓 devcontainer 還能開發」，所以 GitHub 全網段、npm registry、
-# VSCode marketplace 都放行；這份的目標是「讓 agent 只能做審查」，所以預設只通模型 API。
-# 差別不在誰比較嚴，在**預設值想達成什麼**。
+# VSCode marketplace 都放行；這份的目標是「讓 agent 只能做審查」，所以**一般 TCP/HTTP(S)**
+# 的出站預設只通模型 API。差別不在誰比較嚴，在**預設值想達成什麼**。
+#
+# ⚠ 「只通模型 API」講的是那一類流量，不是「什麼都出不去」。第 4 節的 DNS 是地基，
+#   而 DNS 的查詢名稱本身就是一條出境通道（`docs/dns-egress-notes.md`）。這道牆
+#   **不是 DLP**，它擋的是直來直往的連線，擋不住刻意編碼的低頻外送。
 #
 # 需要 --cap-add=NET_ADMIN（run wrapper 已帶）。由 entrypoint.sh 以 sudo 呼叫，
 # 而 sudoers 只允許**無參數**的呼叫——原因見 Dockerfile 裡那段註解。

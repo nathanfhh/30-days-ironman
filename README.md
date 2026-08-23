@@ -12,8 +12,11 @@
 ![專案架構圖：使用者→claude-pty 控制平面→每場 session 一顆容器→經 iptables／GitLab 代理／MITM 連外；OpenTelemetry 與 Jaeger 觀測](docs/architecture-overview.webp)
 
 左到右：使用者（瀏覽器，或本機 Claude Code 直接跑）→ claude-pty 控制平面 → 每場 session 一顆可拋棄的容器，
-裡面跑 Claude Code、skill、subagents 與掃描器 → 出站一律過 iptables 白名單，GitLab 走代理、LLM 走 MITM 側錄
-→ 觀測落到 OpenTelemetry／Jaeger 與場次報表。橘色虛線框是安全邊界。
+裡面跑 Claude Code、skill、subagents 與掃描器 → 一般 TCP／HTTP(S) 出站由 iptables 白名單收斂，GitLab 走代理、
+LLM 走 MITM 側錄 → 觀測落到 OpenTelemetry／Jaeger 與場次報表。橘色虛線框是安全邊界。
+
+⚠ 那道邊界的**範圍有兩個具體的缺口，都是設計上接受的**，不是還沒做完：DNS 查詢名稱仍然出得去
+（`docs/dns-egress-notes.md`），而 MITM 側錄涵蓋的是**那一場 CLI 及其子行程**，不是整顆容器。
 
 ## 跟著連載讀
 
@@ -24,7 +27,7 @@
 | Day 3–13 | 把判準萃取成一份 skill，並替它建行為回歸測試 | `skills/nathan-code-review/`、`tests/` |
 | Day 14–15 | 拿 50 個真實 PR 的外部 benchmark 量它，然後懷疑那個分數 | `benchmarks/code-review-bench/` |
 | Day 17、19–20 | 可拋棄的容器、憑證怎麼借進來、網路邊界畫在哪 | `dev-container/` |
-| Day 18 | 讓憑證不進 session 的那顆代理 | `gitlab-proxy/` |
+| Day 18 | 讓 GitLab **API token** 不進 session 的那顆代理（clone/fetch/push 走的是另一條路） | `gitlab-proxy/` |
 | Day 21 | 一場審查的時間與成本歸因 | `opentelemetry/` |
 | Day 22–23 | 線上實際流過什麼，以及為什麼看得到 | `mitm/` |
 | Day 24–25、27–29 | 把整套搬到瀏覽器後面 | `claude-pty/` |

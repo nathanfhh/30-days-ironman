@@ -52,6 +52,12 @@ fi
 #   - ⚠ 「全部」的範圍是**這一場 CLI 及其子行程**，不是這顆容器：proxy 靠環境變數交出去，
 #     而環境變數只往下傳。`docker exec` 另外開的行程繼承的是 PID 1 那份（還沒 export），
 #     所以不經過 mitm、也不會被錄到。要涵蓋它們得改用 iptables 透明轉址。
+#     ⚠ 反過來說，**在**這棵樹底下的東西確實錄得到：CLI 的 Bash tool 跑的 curl／git／
+#       python requests 都是它的子行程，環境變數一路傳下去（2026-08-23 實測，
+#       第三顆容器裡 mitmdump + capture_addon 全錄，子行程的 curl 有進 .mitm）。
+#     ⚠ 但**子行程只要自己不要 proxy 就繞得開**：`curl --noproxy '*'` 同一棵樹底下
+#       照樣出得去而且不留紀錄（同一次實測）。這是環境變數這個機制的本質，不是設定漏了。
+#       限制模式下第二道牆會接住它（白名單只放行模型 API）；完全開放模式下沒有人接。
 #     選了什麼會寫進 meta.json，報表據此揭露——端點表看起來像「連過的全部」，
 #     實際上是「過濾器讓我看到的那些」，不記下來讀報表的人分不出這兩件事。
 #
@@ -378,8 +384,9 @@ run_cli() {
 
 echo ""
 echo "網路能力："
-echo "  1 = 限制（白名單） — 只通 api.anthropic.com、直連的 docker 網段（gitlab-proxy），"
-echo "                       SSH 22 只通 build 時指定的那台 GitLab（預設）"
+echo "  1 = 限制（白名單） — 一般 TCP 出站收斂到 api.anthropic.com、直連的 docker 網段"
+echo "                       （gitlab-proxy），SSH 22 只通 build 時指定的那台 GitLab（預設）"
+echo "                       ⚠ DNS 不在這道牆裡：查詢名稱仍出得去，這不是 DLP"
 echo "  2 = 完全開放       — 不套用任何 iptables 規則"
 echo ""
 
