@@ -11,7 +11,7 @@ telemetry-report.py（同資料夾）管時間與 token（來源是 Jaeger 的 t
     uv run opentelemetry/cost-report.py <session.jsonl 或其目錄>  # 指定 session（目錄也可給含多場的專案目錄，取最新）
 
 角色的認法：session 目錄下 subagents/<agent-id>.meta.json 的 agentType 欄位，
-對上同名 .jsonl 的 usage。主對話檔算主線程。
+對上同名 .jsonl 的 usage。主對話檔算主 agent。
 
 去重規則（重要，算錯就是這裡）：streaming 期間同一則訊息會寫進多行、output_tokens
 遞增，同一個 (requestId, message.id) 要取「最終值」——取第一行會少算好幾倍。
@@ -54,6 +54,15 @@ LITELLM_URL = (
 )
 LITELLM_CACHE = os.path.expanduser("~/.cache/ncr-litellm-prices.json")
 LITELLM_TTL = 24 * 3600  # 快取多久算新鮮；過期就重抓，抓不到照樣用舊的
+
+# 主要 AI agent 在報表裡的顯示名稱，同時**也是聚合用的 key**。
+# ⚠ 這是一個常數而不是散落的字面值，因為它同時是顯示名稱與 join key：
+#   `session-report.py` 拿 trace 算出來的角色（`role_of` 的 fallback）去對 transcript
+#   算出來的角色（`role_files` 的 key），兩邊只要有一邊沒改到，同一個角色就會裂成兩列，
+#   而且不會有任何錯誤訊息。`session-report.py` 直接引用這一份（它本來就載入本模組）。
+# ⚠ 2026-08-24 改名（沿革見該次 commit）。舊名借用了作業系統的 thread 說法，但這裡指的
+#   是主要的那個 AI agent，台灣讀者在這個語境也不會用那個詞。
+MAIN_ROLE = "主 agent"
 
 # {模型字串前綴: (input, output) per MTok}。**這是 fallback，不是真相**——連不到上游
 # （離線、GitHub 掛掉、公司網路擋住）時才會用到，報表會標明。cache 費率由 input 派生。
@@ -283,7 +292,7 @@ def main() -> None:
 
     # 角色 → 該角色的 jsonl 清單。新格式 subagents/ 每個 agent 一份 + meta 標身分；
     # 沒有 subagents/ 的舊格式只有主檔，只能算 session 總額（如實印出，不硬拆）。
-    roles: dict[str, list[str]] = {"主線程": [main_jsonl]}
+    roles: dict[str, list[str]] = {MAIN_ROLE: [main_jsonl]}
     sub_dir = os.path.join(session_dir, "subagents") if session_dir else ""
     if sub_dir and os.path.isdir(sub_dir):
         for meta_path in sorted(glob.glob(os.path.join(sub_dir, "*.meta.json"))):

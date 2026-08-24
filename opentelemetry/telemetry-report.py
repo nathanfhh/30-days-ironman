@@ -10,7 +10,7 @@
     uv run opentelemetry/telemetry-report.py --file a.json b.json  # 離線：直接餵 query API 的 JSON
 
 角色的認法：派遣 span（tool_name = Task/Agent）帶著 subagent_type 標籤，其餘 span 沿
-CHILD_OF 父子鏈往上走、撞到哪個派遣 span 就屬於哪個角色；走不到派遣 span 的屬於主線程。
+CHILD_OF 父子鏈往上走、撞到哪個派遣 span 就屬於哪個角色；走不到派遣 span 的屬於主 agent。
 不能只看 span 上的 agent_id——實測派遣 span 自帶的 agent_id 會指錯人，父子鏈才可靠。
 
 錢不在這裡：trace 記的是 token 不是帳單。精確的每角色成本改從 transcript 算
@@ -29,6 +29,12 @@ import urllib.request
 from collections import defaultdict
 
 DISPATCH_TOOLS = {"Task", "Agent"}
+
+# 主要 AI agent 的顯示名稱，同時是聚合用的 key。
+# ⚠ 這支刻意不 import 另外兩支（它只吃 Jaeger、是獨立的 CLI），所以這裡是各自一份。
+#   代價是要人記得同步：**這個字串必須與 `cost-report.py` 的 `MAIN_ROLE` 逐字相同**，
+#   否則同一場 session 在三份報表裡會出現兩個名字。
+MAIN_ROLE = "主 agent"
 
 
 def fetch_traces(base: str, service: str, lookback_h: int, limit: int) -> list[dict]:
@@ -102,14 +108,14 @@ def rpad(s: str, width: int) -> str:
 
 
 def role_of(span: dict, spans: dict, dispatch: dict) -> str:
-    """沿父子鏈往上找派遣 span；找不到就是主線程。"""
+    """沿父子鏈往上找派遣 span；找不到就是主 agent。"""
     p, seen = span.get("_parent"), set()
     while p and p in spans and p not in seen:
         seen.add(p)
         if p in dispatch:
             return dispatch[p].get("subagent_type") or "（未標名的 subagent）"
         p = spans[p]["_parent"]
-    return "主線程"
+    return MAIN_ROLE
 
 
 def report(spans: dict, resources: dict, session_prefix: str | None) -> None:

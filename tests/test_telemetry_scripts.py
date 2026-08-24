@@ -87,7 +87,7 @@ def sample_trace():
     common = {"session.id": SESSION}
     return make_trace(
         [
-            # 主線程自己的一次 LLM 請求
+            # 主 agent 自己的一次 LLM 請求
             span(
                 "s-main",
                 0,
@@ -156,9 +156,9 @@ def test_role_walks_parent_chain_not_agent_id(tr):
         for k, v in spans.items()
         if v.get("span.type") == "tool" and v.get("tool_name") in tr.DISPATCH_TOOLS
     }
-    # 隔一層也要認得回來；orphan 歸主線程
+    # 隔一層也要認得回來；orphan 歸主 agent
     assert tr.role_of(spans["s-child-llm"], spans, dispatch) == "ncr-scan-lint"
-    assert tr.role_of(spans["s-main"], spans, dispatch) == "主線程"
+    assert tr.role_of(spans["s-main"], spans, dispatch) == "主 agent"
 
 
 def test_report_aggregates_per_role(tr, capsys):
@@ -169,8 +169,8 @@ def test_report_aggregates_per_role(tr, capsys):
     # 子代理：LLM 2 秒、輸出 100、cache 讀 1,000
     lint = next(line for line in out.splitlines() if line.startswith("ncr-scan-lint"))
     assert "2s" in lint and "100" in lint and "1,000" in lint
-    # 主線程：LLM 1 秒、輸出 50
-    main = next(line for line in out.splitlines() if line.startswith("主線程"))
+    # 主 agent：LLM 1 秒、輸出 50
+    main = next(line for line in out.splitlines() if line.startswith("主 agent"))
     assert "1s" in main and "50" in main
 
 
@@ -276,7 +276,7 @@ def test_main_attributes_roles_from_subagent_meta(cost, tmp_path, monkeypatch, c
     )
     cost.main()
     out = capsys.readouterr().out
-    assert "ncr-scan-lint" in out and "主線程" in out
+    assert "ncr-scan-lint" in out and "主 agent" in out
     assert "總成本" in out and "無牌價" not in out
 
 
@@ -406,7 +406,7 @@ def test_collect_roles_attributes_by_parent_chain_and_charts_input_tokens(sr):
         },
     }
     agg, chart = sr.collect_roles(spans)
-    assert set(agg) == {"主線程", "ncr-scan-lint"}
+    assert set(agg) == {"主 agent", "ncr-scan-lint"}
     assert agg["ncr-scan-lint"]["llm_us"] == 30
     lint_span = next(c for c in chart if c["role"] == "ncr-scan-lint")
     assert lint_span["in"] == 7 and lint_span["cr"] == 100  # tooltip 命中率分母要有輸入
@@ -462,7 +462,7 @@ def test_find_report_json_accepts_null_mr_and_skips_broken_files(sr, tmp_path):
 
 def test_build_page_survives_null_mr_and_escapes_script_close(sr):
     agg = {
-        "主線程": {"first": 0, "last": 60_000_000, "llm_us": 1_000_000},
+        "主 agent": {"first": 0, "last": 60_000_000, "llm_us": 1_000_000},
         "x</script>y": {"first": 0, "last": 30_000_000, "llm_us": 0},
     }
     chart = [
@@ -493,9 +493,9 @@ def test_build_page_survives_null_mr_and_escapes_script_close(sr):
 
 
 def test_build_page_lists_transcript_only_roles_and_counts_their_cost(sr):
-    agg = {"主線程": {"first": 0, "last": 60_000_000, "llm_us": 0}}
+    agg = {"主 agent": {"first": 0, "last": 60_000_000, "llm_us": 0}}
     tokens = {
-        "主線程": {
+        "主 agent": {
             "in": 1,
             "out": 1,
             "cr": 0,
@@ -515,6 +515,78 @@ def test_build_page_lists_transcript_only_roles_and_counts_their_cost(sr):
     page = sr.build_page("sid12345", agg, [], [], tokens, None)
     assert "trace 未拍到" in page and "ncr-scan-lint" in page
     assert "$100.00" in page  # 總成本卡含 transcript-only 角色，不靜默少算
+
+
+# ------------------------------------------------- 主要角色的名字（2026-08-24 改名）
+#
+# 舊名借用了作業系統 thread 的說法，但那不是 thread，是主要的那個 AI agent。
+# 這一組守的不是「字面上改到了」，是**改名不會把一個角色劈成兩個**：
+# 這個字串同時是顯示名稱與 join key，trace 那側來自 `role_of()` 的 fallback，
+# transcript 那側來自 `role_files` 的 key。少改一邊不會有錯誤訊息，只會在報表上多一列。
+
+
+def test_main_role_name_is_pinned_and_shared_across_scripts(tr, cost, sr):
+    # 🔴 常數要釘住字面值。只斷言「等於那個常數」的話，把常數改成任何垃圾都照樣綠。
+    assert cost.MAIN_ROLE == "主 agent"
+    assert tr.MAIN_ROLE == "主 agent"
+    assert sr.MAIN_ROLE == "主 agent"
+    # session-report 直接引用它自己載入的 cost-report 那一份（`MAIN_ROLE = costmod.MAIN_ROLE`），
+    # 讓「trace 側與 transcript 側一定同字」是結構事實而不是要人記得的紀律。
+    # ⚠ 比的是 `sr` 內部那一份，不是 `cost` fixture 那一份：兩個 fixture 各自 exec 了一次
+    #   cost-report.py，是兩個獨立的 module 物件，字串也是兩個物件。跨 fixture 用 `is`
+    #   一定失敗，而那個失敗跟「有沒有共用」無關。（第一版就是這樣寫錯的。）
+    assert sr.MAIN_ROLE is sr.costmod.MAIN_ROLE
+
+
+def test_session_report_joins_trace_and_transcript_into_one_main_role(sr, cost):
+    # 🔴 這一條是改名真正的風險所在：trace 側與 transcript 側各自算出主要角色，
+    #    只要兩邊的 key 不同字，同一個角色就會裂成兩列（一列有時間沒成本、
+    #    一列有成本沒時間），而且沒有任何錯誤。
+    agg = {
+        sr.MAIN_ROLE: {"first": 0, "last": 60_000_000, "llm_us": 1_000_000},
+        "ncr-scan-lint": {"first": 0, "last": 10_000_000, "llm_us": 500_000},
+    }
+    tokens = {
+        cost.MAIN_ROLE: {
+            "in": 1,
+            "out": 1,
+            "cr": 0,
+            "cw": 0,
+            "cost": 1.0,
+            "model": "fable-5",
+        },
+        "ncr-scan-lint": {
+            "in": 9,
+            "out": 9,
+            "cr": 0,
+            "cw": 0,
+            "cost": 2.0,
+            "model": "sonnet-5",
+        },
+    }
+    page = sr.build_page("sid12345", agg, [], [], tokens, None)
+    # 只有一個主要角色，而且沒有任何 transcript-only 的殘留角色
+    assert page.count(">主 agent<") == 1, (
+        "主要角色在報表裡出現不只一次＝兩側 key 不同字"
+    )
+    assert "trace 未拍到" not in page
+    # 摘要那句要用新名字
+    assert "主 agent與 1 個 subagent" in page
+
+
+def test_session_report_orders_main_role_before_subagents(sr):
+    # 主要角色排最前面，與它的時長無關：這裡故意讓 subagent 的時長遠大於主要角色。
+    agg = {
+        "z-subagent": {"first": 0, "last": 90_000_000, "llm_us": 0},
+        sr.MAIN_ROLE: {"first": 0, "last": 1_000_000, "llm_us": 0},
+        "a-subagent": {"first": 0, "last": 60_000_000, "llm_us": 0},
+    }
+    order = sorted(
+        agg, key=lambda r: (r != sr.MAIN_ROLE, -(agg[r]["last"] - agg[r]["first"]))
+    )
+    assert order[0] == sr.MAIN_ROLE
+    # 其餘仍按時長遞減，改名不該動到既有排序規則
+    assert order[1:] == ["z-subagent", "a-subagent"]
 
 
 # ------------------------------------------------- 費率來源（LiteLLM 上游 vs 快照）

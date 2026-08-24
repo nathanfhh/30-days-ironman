@@ -44,6 +44,14 @@ _spec.loader.exec_module(costmod)
 
 DISPATCH_TOOLS = {"Task", "Agent"}
 
+# 主要 AI agent 的顯示名稱。**直接引用 cost-report 那一份，不要在這裡另寫字面值。**
+# ⚠ 理由不是潔癖：這支是唯一同時吃 trace 與 transcript 的報表，而它靠這個字串把兩邊
+#   的角色 join 起來。trace 那側是 `role_of()` 的 fallback，transcript 那側是
+#   `role_files` 的 key。兩邊只要有一邊沒改到，同一個角色就會在報表裡裂成兩列
+#   （一列有時間沒成本、一列有成本沒時間），而且不會有任何錯誤訊息。
+#   共用同一個物件是唯一能讓「兩邊一定相同」成為結構事實而不是紀律的做法。
+MAIN_ROLE = costmod.MAIN_ROLE
+
 
 # --------------------------------------------------------------------------
 # 資料收集
@@ -102,7 +110,7 @@ def role_of(span: dict, spans: dict, dispatch: dict) -> str:
         if p in dispatch:
             return dispatch[p].get("subagent_type") or "（未標名的 subagent）"
         p = spans[p]["_parent"]
-    return "主線程"
+    return MAIN_ROLE
 
 
 def collect_roles(spans: dict) -> tuple[dict, list[dict]]:
@@ -168,7 +176,7 @@ def collect_transcript(sid: str) -> dict:
         return {}
     main_jsonl = hits[0]
     base = os.path.splitext(main_jsonl)[0]
-    role_files = {"主線程": [main_jsonl]}
+    role_files = {MAIN_ROLE: [main_jsonl]}
     for mp in glob.glob(os.path.join(base, "subagents", "*.meta.json")):
         with open(mp) as f:
             meta = json.load(f)
@@ -360,7 +368,7 @@ def build_page(
     gap_total_min = sum(g1 - g0 for g0, g1 in gaps) / 60e6
 
     order = sorted(
-        agg, key=lambda r: (r != "主線程", -(agg[r]["last"] - agg[r]["first"]))
+        agg, key=lambda r: (r != MAIN_ROLE, -(agg[r]["last"] - agg[r]["first"]))
     )
     palette_pool = [
         "#0f766e",
@@ -439,7 +447,7 @@ def build_page(
     facts = v_card + (
         f'<div class="fact"><span>活動時間（trace，扣除 {gap_total_min:.0f} 分空窗）</span>'
         f"<b>{int(active_s // 60)} 分 {int(active_s % 60):02d} 秒</b>"
-        f"<span>主線程與 {len(order) - 1} 個 subagent{extra_note}</span></div>"
+        f"<span>{MAIN_ROLE}與 {len(order) - 1} 個 subagent{extra_note}</span></div>"
         f'<div class="fact"><span>總成本（transcript）</span>'
         f"<b>{f'${total_cost:.2f}' if cost_known else '—'}</b><span>usage × 產表當下牌價</span></div>"
     )
