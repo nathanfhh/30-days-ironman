@@ -286,9 +286,7 @@ try:
 
     with db.session_scope() as s:
         s.get(SessionRow, fresh["id"]).ready_at = None
-    # 沒有注入 API 了，直接對 PTY 寫一行（attached 是就緒偵測本來就在用的讀寫通道）
-    with mgr.attached(fresh["id"]) as raw:
-        raw.sendall(f"echo {DRIVER_MARKER}\r".encode())
+    # 沒有注入 API 了，直接對 PTY 寫一行（attached 是就緒偵測本來就在用的讀寫通道）。
     # ⚠ **不可以「sleep 一次就斷言」。** 從對 PTY 寫入到 `c.logs()` 讀得到，中間是一條
     #   非同步管線：PTY → 容器內 shell 回顯 → 容器 stdout → docker 的 json-file log
     #   driver → API 讀回。固定 sleep 等於在賭那條管線在 N 秒內跑完，而 CI 的負載是
@@ -296,9 +294,19 @@ try:
     #   ——那正是讓所有人開始忽略 CI 的那種失敗。
     #   （2026-08-22 實際踩到：同一個 commit 重跑就過，程式碼一個字都沒改。）
     # 改成輪詢到成立或逾時：**慢**不會變成**紅**，而真的壞掉仍然會在逾時後紅。
+    #
+    # ⚠ **連「寫」也要在輪詢圈內重送，不能只輪詢「讀」。** 上一版只把讀側改成輪詢，
+    #   寫側仍是圈外一次性的 sendall——而那一行是會丟的：`attached()` 在 sendall 之後
+    #   立刻關 socket，bytes 進了本機 kernel buffer 不代表 dockerd 的 attach copier
+    #   已經把它轉進容器 PTY，高負載下它可能先看到連線斷。寫丟了，讀側輪詢多久都是 0。
+    #   （2026-08-24 public CI 實際踩到：同一個 tree 在另一個 repo 的 CI 是綠的，
+    #   這裡紅在 stats 0，正是「寫丟了」的樣子。）重送無害：ready 的蓋章是單調的
+    #   （stamp_ready_if_first 只有第一次寫得進去），marker 重複出現在 log 裡也無妨。
     stats = {}
     _deadline = time.time() + 15
     while True:
+        with mgr.attached(fresh["id"]) as raw:
+            raw.sendall(f"echo {DRIVER_MARKER}\r".encode())
         stats = reconciler.reconcile_once(SAFE)
         if stats.get("ready_stamped") or time.time() >= _deadline:
             break
