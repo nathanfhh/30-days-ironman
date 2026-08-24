@@ -31,7 +31,7 @@ LLM 走 MITM 側錄 → 觀測落到 OpenTelemetry／Jaeger 與場次報表。�
 | Day 21 | 一場審查的時間與成本歸因 | `opentelemetry/` |
 | Day 22–23 | 線上實際流過什麼，以及為什麼看得到 | `mitm/` |
 | Day 24–25、27–29 | 把整套搬到瀏覽器後面 | `claude-pty/` |
-| Day 26 | 為了一個旗標重寫 ttyd，然後確認自己沒改壞 | [`nathanfhh/ttyd`](https://github.com/nathanfhh/ttyd)（Rust 版在 `rust/`）與 `claude-pty/` |
+| Day 26 | 為了一個旗標重寫 ttyd，然後確認自己沒改壞 | [`nathanfhh/ttyd`](https://github.com/nathanfhh/ttyd)（Rust 版在 `rust/`，8,273 行、223 個測試）與 `claude-pty/` |
 
 Day 1–2（為什麼做這件事）、Day 16（規則什麼時候該拿掉）與 Day 30（收束）沒有列在上面，
 因為那幾天講的是判斷，沒有對應的程式產出物。
@@ -50,6 +50,12 @@ opentelemetry/          觀測：Jaeger compose 與三支報表腳本（時間�
 tests/                  腳本的單元測試與 skill 的行為回歸 test case
 benchmarks/             code-review-bench：50 個真實 PR 的評測資料集與計分 harness
 ```
+
+**有一塊不在這個 repo 裡**：[`nathanfhh/ttyd`](https://github.com/nathanfhh/ttyd) 是 ttyd 的 fork，
+`rust/` 底下是整支 server 的 Rust 重寫（8,273 行、223 個測試），命令列、HTTP 介面與 `tty` WebSocket
+協定都與 C 版相容，多出來的是 forward authentication（`--auth-url`，讓 nginx `auth_request` 那一類的
+外部驗證能保護終端）與 `--title`。`claude-pty/` 跑的就是這一版。它另開 repo 是因為要跟上游的
+歷史接在一起，不是因為它不屬於這三十天。
 
 **只想試 skill 的話，`install.sh` 裝完就能用，其餘全部是選配的。** 它們處理的是
 另一個問題——**當你要把這套流程交給 AI Agent 自己跑，該給它多少權限、以及你怎麼
