@@ -1210,9 +1210,23 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
    *   prefers-reduced-motion、慢機器、或哪天有人調長動畫都會換一個結果。
    */
   const SETTLE_MS = 150;
+  /* 只等「滑入」那一個過渡，其餘一律忽略。
+   *
+   * ⚠ `getAnimations()` 回的是這個元素上**所有**的動畫。哪天有人在面板上加一個
+   *   `animation: … infinite`（呼吸燈、載入中的脈動、無限旋轉的圖示都算），它的
+   *   `finished` **永遠不會 resolve**，於是 /resize 從此再也送不出去。症狀會是
+   *   「PTY 尺寸完全不同步了」，而肇因是一條看起來與尺寸毫不相干的 CSS 裝飾。
+   * ⚠ `transitionProperty` 只有 CSSTransition 有（CSSAnimation 給的是 animationName），
+   *   所以光看它就分得出來；`instanceof` 只是再確認一次，取不到那個全域就不強求。
+   * ⚠ 同一條規矩在 close() 那邊已經有先例：它的 transitionend 也是濾
+   *   `propertyName === "transform"`，理由同樣是「別的過渡不算數」。
+   */
+  const isSlide = (a) =>
+    a.transitionProperty === "transform"
+    && (typeof CSSTransition === "undefined" || a instanceof CSSTransition);
   const drawerSettled = () => {
     const panel = wrap.querySelector(".drawer__panel");
-    const anims = panel?.getAnimations?.() ?? [];
+    const anims = (panel?.getAnimations?.() ?? []).filter(isSlide);
     // 沒有動畫在跑（reduced-motion，或早就跑完了）＝已經停定，Promise.all([]) 立刻 resolve。
     // ⚠ 要 .catch：動畫被取消時 finished 會 reject（連點兩次、抽屜當場被關掉），
     //   而「不必再等了」正是那時候該有的結論，不是一個未處理的例外。
