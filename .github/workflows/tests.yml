@@ -47,6 +47,18 @@ jobs:
       - name: build 控制平面 image（frozen + hash-verified）
         working-directory: claude-pty
         run: docker build -f deploy/Dockerfile -t claude-pty-control:ci .
+      # ⚠ `--target nginx` 那一階段**不會**被上面那次 build 帶到（buildkit 只 build 目標
+      #   依賴到的 stage），所以要單獨來一次。它守的是「Vue 版的產物真的進得了 nginx image」
+      #   ——沒有它的話，正式站切到 vue 才會發現整站 404，而那看起來像路由壞掉。
+      - name: build nginx image（Vue 版產物要跟著 image 走版本）
+        working-directory: claude-pty
+        run: |
+          set -euo pipefail
+          docker build -f deploy/Dockerfile --target nginx -t claude-pty-nginx:ci .
+          docker run --rm --entrypoint sh claude-pty-nginx:ci -c \
+            'test -f /usr/share/nginx/html/index.html && ls /usr/share/nginx/html/assets | head -5'
+      - name: 控制平面 image 裡也要有同一份 dist（dev 與 e2e 走 Flask 那條路）
+        run: docker run --rm --entrypoint sh claude-pty-control:ci -c 'test -f /app/server/static/dist/index.html'
       # image 裡落地的是哪一組版本，要對得回 lockfile。只驗「build 成功」不夠：
       # `--require-hashes` 保證裝的東西沒被掉包，但保證不了它跟 uv.lock 講的是同一組。
       - name: 落地版本必須對得回 uv.lock
@@ -82,11 +94,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      # app.js 的語法檢查要 node；沒有的話 run-all.sh 會跳過它並講出來，但那一關壞掉時
-      # 症狀是「每支瀏覽器測試都停在登入逾時」，不該讓它在 CI 上缺席。
+      # node 在這個 job 裡管兩件事：
+      #   1. app.js 的語法檢查（那一關壞掉時症狀是「每支瀏覽器測試都停在登入逾時」）；
+      #   2. **Vue 版前端的六關**（npm ci / oxlint / prettier / vue-tsc / vitest / vite build）。
+      # 沒有它的話 run-all.sh 會把兩者都跳過並講出來，而下面那道「跳過上限」的 gate 只管
+      # `--all` 那個 job——所以這裡一定要裝。
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
+          cache-dependency-path: claude-pty/frontend/package-lock.json
       - run: ./tests/run-all.sh
         working-directory: claude-pty
 
@@ -99,9 +116,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      # 這個 job 跑 `run-all.sh --all`，前端那六關也在裡面（見 claude-pty job 的說明）。
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
+          cache-dependency-path: claude-pty/frontend/package-lock.json
       # ⚠ install: true 把 `docker build` 換成 buildx，build.sh 才吃得到 --cache-from。
       #   不改用 build-push-action，是因為「Linux 才帶 NCR_UID」那段判斷只寫在 build.sh
       #   裡；重寫一份等於讓兩條路分家，而分家的那天不會有人發現。

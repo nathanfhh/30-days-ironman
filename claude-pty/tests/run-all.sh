@@ -219,6 +219,45 @@ else
   skipped+=("app.js 語法檢查（host 上沒有 node）")
 fi
 
+# --- 前端（Vue 版）的工具鏈 ---------------------------------------------------
+#
+# 六關，順序是「便宜的先擋」：安裝 → lint → 格式 → 型別 → 單元測試（含覆蓋率門檻）→ build。
+#
+# ⚠ 為什麼 build 也要跑：型別過得了不代表打包得出來（outDir 寫錯、import 到 root 外面沒放行、
+#   CSS 原檔被搬走），而那些只有 `vite build` 會紅。產物不進版控，所以「沒有人 build 過」
+#   這件事在部署之前不會有任何跡象。
+# ⚠ `npm ci` 不是 `npm install`：ci 只照 lockfile 裝，裝不出來就直接失敗（同 deploy/Dockerfile）。
+# ⚠ 沒有 node/npm 就整段跳過**並講出來**——不可以靜靜不驗（同上面 app.js 語法檢查的做法）。
+front_gate() {          # front_gate <說明> <指令...>
+  local label="$1"; shift
+  printf '\n\033[1m== %s\033[0m\n' "${label}"
+  if (cd frontend && "$@"); then
+    echo "  PASS  ${label}"
+  else
+    fails=$((fails + 1))
+    echo "   ↑ ${label} 失敗"
+  fi
+}
+
+if [ ! -d frontend ]; then
+  skipped+=("前端工具鏈（沒有 frontend/ 目錄）")
+elif [ "${want_e2e}" -eq 2 ]; then
+  skipped+=("前端工具鏈（--e2e 只跑瀏覽器測試）")
+elif ! command -v npm >/dev/null 2>&1; then
+  skipped+=("前端工具鏈（host 上沒有 npm，裝 node 24）")
+elif [ ! -f frontend/package-lock.json ]; then
+  # lockfile 不見了不是「環境沒裝」，是 repo 壞了——這條要紅，不是跳過。
+  fails=$((fails + 1))
+  echo "   ↑ frontend/package-lock.json 不見了：npm ci 沒有它就跑不了，而 npm install 會自己挑版本"
+else
+  front_gate "前端相依（npm ci）" npm ci --no-audit --no-fund
+  front_gate "前端 lint（oxlint）" npm run --silent lint
+  front_gate "前端格式（prettier --check）" npm run --silent format:check
+  front_gate "前端型別（vue-tsc）" npm run --silent typecheck
+  front_gate "前端單元測試（vitest，行覆蓋率門檻 70%）" npm run --silent test:coverage
+  front_gate "前端 build（vite）" npm run --silent build
+fi
+
 for f in tests/test_*.py tests/e2e_*.py; do
   run_one "${f}"
 done
