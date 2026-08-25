@@ -5,7 +5,7 @@
 
 `is_stale_half_built` 是這個判準的**唯一一份**，而在這支測試之前**沒有任何測試碰過它**
 （審查 F-006：全樹 grep 只出現在 server/，兩個呼叫端各一次）。它守的事故寫在
-`sessions._ensure_user_proxy` 的註解裡：
+`user_proxy.ensure_user_proxy` 的註解裡：
 
   停在 `created` 的代理有兩種來源，外觀完全一樣——
     · `create_container` 完成但 `put_archive` 還沒跑 → `/etc/nginx` 還是 **image 的預設**
@@ -63,7 +63,7 @@ GRACE = config.ORPHAN_GRACE
 
 print(f"== 只有 created 才是候選（ORPHAN_GRACE={GRACE}s）==")
 # ⚠ 其他狀態一律 False——這條擋的是「把判準拿去問一顆正在服務的 running 代理」。
-#   `_ensure_user_proxy` 與 `_converge_proxies` 都是在 created 分支裡才呼叫它，但判準
+#   `ensure_user_proxy` 與 `_converge_proxies` 都是在 created 分支裡才呼叫它，但判準
 #   自己要能站得住：它是共用的，而共用的東西遲早會被在別的分支呼叫。
 for st in ("running", "exited", "restarting", "paused", "dead", "removing"):
     check(f"status={st} → 不是半成品（不管多舊）", is_stale_half_built(_C(st, created_ago=GRACE * 10)) is False)

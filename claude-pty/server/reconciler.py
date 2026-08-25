@@ -304,7 +304,7 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated, leading
                 # ⚠ **收之前再問一次。** `active` 是輪初算的，而這個迴圈可能跑很久——卡住的
                 #   容器每顆吃滿 DOCKER_TIMEOUT，這正是上面那段為租約逐顆重查的同一個理由，
                 #   只是那個論證沒有套用到這個集合上（審查 F-034）。窗口內若有人開了新
-                #   session（`_ensure_user_proxy` 看到既有 running 代理、指紋相符就直接用），
+                #   session（`ensure_user_proxy` 看到既有 running 代理、指紋相符就直接用），
                 #   這裡會把正在服務他的代理收掉；而 `seen` 已經含這個 uid，補建迴圈跑的是
                 #   `active - seen`，要等下一輪。症狀是畫面說「本場可用」而 git 全掛一個
                 #   對帳週期——那一欄刻意不可變，不會回頭改。成本只是一筆小查詢。
@@ -334,7 +334,7 @@ def _converge_proxies(client: docker.DockerClient, live: dict, isolated, leading
                 # `/_state` 會 404、`running_state` 永遠回 None，而「問不到就別亂動」那條
                 # 規則會讓它**永遠卡在這裡**。
                 # ⚠ 所以夠舊的 created 一律當半成品收掉，交給補建路徑重來一次。判準與
-                #   `sessions._ensure_user_proxy` 共用同一支，還新就別碰（那是別人正在建）。
+                #   `user_proxy.ensure_user_proxy` 共用同一支，還新就別碰（那是別人正在建）。
                 # ⚠ 補的是**下一輪**，不是這一輪：上面已經 `seen.add(uid)`，而補建迴圈跑的
                 #   是 `active - seen`。所以收掉到補回來之間有一個 RECONCILE_INTERVAL 的
                 #   空窗。不改成本輪就補是刻意的——那要嘛得在迴圈中途改 `seen`（邊走邊改

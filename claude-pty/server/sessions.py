@@ -22,8 +22,7 @@ from dataclasses import replace
 import docker
 from sqlalchemy.exc import IntegrityError
 
-from . import config, gitlab_proxy, trivy_db, user_proxy
-from . import auth as auth_mod
+from . import config, trivy_db, user_proxy
 from .db import session_scope
 from .models import (
     END_TERMINATED,
@@ -55,6 +54,10 @@ from .query import (  # noqa: F401
     QueryMixin,
     _is_creating_within_grace,
     _is_ready,
+    age_seconds,
+    is_stale_half_built,
+    parse_docker_time,
+    stamp_ready_if_first,
     _history_to_dict,
     _last_known_state,
     _ready_from_row,
@@ -74,28 +77,6 @@ from .run_kwargs import (  # noqa: F401
     _stored_profile,
     build_run_kwargs,
 )
-
-
-def stamp_ready_if_first(s, sid: str) -> int:
-    """把 `ready_at` 蓋成現在，**只有第一次寫得進去**。回傳影響的列數。
-
-    就緒是單調的：`WHERE ready_at IS NULL` 讓「檢查」與「寫入」在同一句 SQL 裡完成
-    ——分成先讀再寫的話，兩個觀察者同時看到 NULL 就會各寫一次，後 commit 的覆蓋先偵測到
-    的時間，量出來的啟動耗時反而變長。session 已被歸檔時這句是影響 0 列，不是錯誤。
-
-    ⚠ **兩個觀察者是真的存在的**，這也是這支要獨立出來的原因：前台在偵測到的當下蓋
-      （`SessionManager._stamp_ready`），reconciler 是背景補漏（`_stamp_ready_backstop`，
-      給背景執行緒死掉的那些）。兩邊本來各寫一份一模一樣的 UPDATE，只要有一邊加了伴生
-      欄位而另一邊沒跟，同一個 session 會因為「是誰先蓋的」而有不同的資料。
-
-    ⚠ 收 `s` 而不是自己開 `session_scope`：reconciler 是在**一筆**交易裡連續蓋很多個
-      sid 並累加列數，自己開 scope 會把那筆交易拆成 N 筆。交易邊界屬於呼叫端。
-    """
-    return (
-        s.query(SessionRow)
-        .filter(SessionRow.id == sid, SessionRow.ready_at.is_(None))
-        .update({SessionRow.ready_at: utcnow()}, synchronize_session=False)
-    )
 
 
 def archive(sids, reason: str, actor: dict | None = None) -> int:
@@ -176,76 +157,6 @@ def _slugify(name: str | None) -> str:
         return ""
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", name.strip()).strip("-").lower()
     return slug[: config.NAME_SLUG_MAX]
-
-
-def parse_docker_time(raw: str | None) -> _dt.datetime | None:
-    """docker 的 RFC3339 時間戳 → aware datetime；解不出來回 None。
-
-    ⚠ **這是唯一一份。** 曾經有兩份：這裡，以及 reconciler 自己那一份時間戳解析（後來收斂
-      成共用這支，那個名字已經不在了）。而兩份**已經漂移過**——reconciler 那一份只認 `"+"`
-      來判斷有沒有時區偏移，於是 `-05:00` 會落到 else 分支被當成 UTC，整整差掉時差。
-      目前不可達（daemon 一律回 `Z`），但 `_remove_orphans` 的寬限期就是靠它算的，而解析
-      失敗的 fallback 是「很舊」——真的錯起來會**安靜地提早把還在建立中的容器當孤兒刪掉**。
-      要再寫第二份解析之前先想清楚這一段。
-
-    兩個必須處理的細節：
-      - docker 給的是**奈秒**精度（`2026-07-26T02:57:51.828567844Z`），而 `fromisoformat`
-        只吃到微秒（6 位），多的要先截掉，否則整段 ValueError。
-      - 時區偏移正負都有可能，不能只認 `+`。
-    """
-    m = re.match(r"^(.*?T[\d:]+)(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$", raw or "")
-    if not m:
-        return None
-    frac = f".{m.group(2)[:6]}" if m.group(2) else ""
-    tz = m.group(3) or "+00:00"
-    try:
-        return _dt.datetime.fromisoformat(f"{m.group(1)}{frac}{'+00:00' if tz == 'Z' else tz}")
-    except ValueError:
-        return None
-
-
-def age_seconds(iso_ts: str) -> float:
-    """docker 物件（container / network）建立至今幾秒。
-
-    ⚠ 住在這裡而不是 reconciler：reconciler 用它判斷孤兒的寬限期、`_ensure_user_proxy`
-      用它分辨「別的 worker 正在建」與「上次建到一半留下的」，而 reconciler 已經 import
-      sessions，放那邊就得反向 import。
-
-    ⚠ 解析失敗回 `inf`（＝很舊）。呼叫端一律是「夠舊才動它」，所以這個 fallback 的錯誤
-      方向是**提早把還在建立中的容器當成半成品刪掉**，而且不會有任何錯誤訊息。它之所以
-      還可以接受，只因為解析是**唯一一份**（`parse_docker_time`）且涵蓋 daemon 實際會給的
-      格式；曾經有第二份漂掉的實作，那才是真正的風險（見 `parse_docker_time` 的說明）。
-    """
-    if not iso_ts:
-        return 0.0
-    parsed = parse_docker_time(iso_ts)
-    if parsed is None:
-        return float("inf")
-    return (utcnow() - parsed).total_seconds()
-
-
-def is_stale_half_built(container) -> bool:
-    """這顆 `created` 的代理容器是不是「上次建到一半留下的」，而不是「別人正在建」。
-
-    `created` 有兩種來源、外觀完全一樣：`create_container` 完成但 `put_archive` 還沒跑
-    （`/etc/nginx` 還是 image 的預設設定），或 `put_archive` 完成但 `start` 還沒跑。
-    分不出來，所以一律當半成品收掉重建——**但只有夠舊的才收**。還新的話那是別的 worker
-    正在建（同一時間兩場 session 是常態），碰它就是把人家建到一半的容器刪掉。
-
-    ⚠ **判準只有這一份。** 兩個地方會問這個問題，而且問的是同一件事：
-      `sessions._ensure_user_proxy`（建 session 時撞到）與 `reconciler._converge_proxies`
-      （背景巡邏撞到）。各寫一份的話，只要有一邊加了條件而另一邊沒跟，同一顆容器會被
-      兩條路做出相反的結論。
-
-    ⚠ **只抽判準，不抽時序**：sessions 收掉之後**當場**重建，reconciler 是**下一輪**才補。
-      那個差異是刻意的，見 reconciler 那段的說明，不要一起收斂。
-
-    ⚠ 住在 sessions.py 是因為它依賴 `age_seconds`，而 `user_proxy` **不能** import
-      sessions（sessions 在模組層 import user_proxy，反向會是循環）。
-    """
-    if container.status != "created":
-        return False
-    return age_seconds(container.attrs.get("Created", "")) >= config.ORPHAN_GRACE
 
 
 # ⚠ 這裡曾經有 `_require_credentials_mountpoint()`：憑證以前是以檔案**掛**進容器的，
@@ -344,7 +255,7 @@ class SessionManager(AttachMixin, QueryMixin):
         # ⚠ 代價是：配額已滿的人也會先建出網路。無害（他有 session 在跑，網路本來就該在），
         #   真的變成孤兒時 reconciler 過了寬限期會收掉。
         user_net_name = user_proxy.network_name(user_id)
-        self._ensure_user_network(user_id)
+        user_proxy.ensure_user_network(self._docker, user_id)
 
         # telemetry：**在這裡判斷 trace 送不送得到，並據此決定送不送 + 座標記什麼**。
         # 送不到就降級——不設 OTEL env（下面傳給 build_run_kwargs 的 profile 關掉 telemetry），
@@ -432,7 +343,7 @@ class SessionManager(AttachMixin, QueryMixin):
             # 沒設 PAT 的人**不建代理**（但網路照建、session 照開）：建一顆沒憑證的代理
             # 只會把錯誤從「連不到」變成 401，而 401 更難懂（使用者會以為 token 錯了，
             # 其實是根本沒設）。
-            has_proxy = self._ensure_user_proxy(user_id)
+            has_proxy = user_proxy.ensure_user_proxy(self._docker, user_id)
 
             # ADR 0001：`docker run -dit`，PID 1 為目標互動程式，PTY 由 dockerd 持有。
             #
@@ -529,124 +440,6 @@ class SessionManager(AttachMixin, QueryMixin):
         threading.Thread(target=self._await_ready, args=(sid,), daemon=True).start()
 
         return self.status(sid)
-
-    def _ensure_user_network(self, user_id: int):
-        """確保這個使用者的網路存在。**建不出來就讓 session 開不起來。**
-
-        ⚠ **這一支與 `_ensure_user_proxy` 的失敗語意刻意相反，不要「順手統一」。**
-          代理不在＝這場少一個功能（降級照開）；網路不在＝這場**沒有地方可以待**。
-          唯一的替代方案是把他塞進一張共用的網，而那會無聲地取消掉整個隔離設計
-          （ADR 0016：任何情況下都不得退回共用網路）。所以這裡拋，那裡不拋。
-
-        ⚠ 位址池滿要講**人聽得懂的下一步**，不要把 docker 的原文丟出去
-          （`all predefined address pools have been fully subnetted` 對使用者毫無意義）。
-          人數上限講**約略值**：真正的數字取決於這台機器上還有多少別的 compose 專案，
-          講死了就會變成一個比機制還準確的宣稱。
-        """
-        try:
-            return user_proxy.ensure_network(self._docker, user_id)
-        except user_proxy.PoolExhausted as e:
-            print(f"[claude-pty] ⚠ {e}", flush=True)
-            raise SessionError(
-                "這台機器的 docker 位址池用完了，開不了新的 session。"
-                "目前每位使用者佔一張網路，預設上限大約是同時 26 人在線。"
-                "請關掉沒在用的 session，或請管理員在 daemon.json 調整 "
-                "default-address-pools（做法見 README）。"
-            ) from e
-        except Exception as e:
-            # 其他失敗（daemon 不回應、label 衝突…）同樣是開不了場，但原因不明確——
-            # 只講型別，不把可能夾帶設定內容的原始訊息端到畫面上。
-            raise SessionError(
-                f"建立你的 session 網路失敗（{type(e).__name__}），這場開不起來。"
-                f"稍後再試一次；持續失敗請找管理員看控制平面的 log。"
-            ) from e
-
-    def _ensure_user_proxy(self, user_id: int) -> bool:
-        """確保這個使用者的 GitLab 代理就位。回傳「網路上現在有沒有一顆代理」。
-
-        **網路不歸這裡管**（`_ensure_user_network` 在交易之前就建好了，而且它是無條件的）。
-        這一支只負責網路上的那顆 nginx。
-
-        ⚠ **任何失敗都只警告，不往上拋。** GitLab 不通是「這場少一個功能」，不是「這場
-          沒用」——為了它讓整個 session 開不起來是錯的取捨。失敗的原因多半是外部的
-          （image 沒拉到、GitLab 的主機名解不開讓 nginx 拒絕啟動）。
-          ⚠ 與 `_ensure_user_network` 的相反語意是刻意的，見那支的說明。
-        ⚠ 代理已經在跑但設定過期時**熱重載**，不重建：重建會斷掉這個使用者**其他** session
-          正在進行的 git 操作。
-        ⚠ 失敗時要**確保沒有留下半顆**：`create` 成功但 `start` 失敗會留下一顆 `created`
-          狀態、且設定裡已經有 PAT 的容器。
-        """
-        if not config.gitlab_enabled():
-            return False  # 部署者沒設 GitLab 主機＝整個功能關閉
-        if auth_mod.gitlab_pat_state(user_id) != "ok":
-            return False
-        pat = auth_mod.gitlab_pat(user_id)
-        if not pat:
-            return False  # 三態與明文之間的競態（剛好被清掉），視同沒設
-        # 「本次呼叫親手建出來的那一顆」——補償只清得掉它，見下面 except 那段。
-        mine: str | None = None
-        try:
-            existing = user_proxy.find(self._docker, user_id)
-            if existing is None:
-                cid, won = user_proxy.create_or_adopt(self._docker, user_id, pat)
-                mine = cid if won else None  # 撞名撿到別人的 → 不是我的，別記
-            elif existing.status == "created":
-                # ⚠ **`created` 不可以直接 start。** 它有兩種來源，而外觀完全一樣：
-                #   · `create_container` 完成、`put_archive` 還沒跑 → `/etc/nginx` 是
-                #     **image 的預設設定**
-                #   · `put_archive` 完成、`start` 還沒跑 → 設定是對的
-                #   start 第一種的後果是**永久的殭屍**：nginx 用預設設定開在 80，容器狀態
-                #   變成 `running` 看起來很健康，但 `gitlab-proxy:5678` 連不上；而
-                #   reconciler 此後只會走 running 分支、`/_state` 問不到，依「問不到就別
-                #   亂動」永遠不修。要等這個人**下次再開一場**才會被救回來。
-                #
-                # ⚠ 判準與 reconciler 共用同一支（`is_stale_half_built`）：**夠舊**才當
-                #   半成品收掉重建。還新的話那是**別的 worker 正在建**（同一時間兩場
-                #   session 是常態），碰它就是把人家建到一半的容器刪掉——那正是
-                #   `create_or_adopt` 吸收 409 要防的事，在這裡自己再造一次就沒有意義了。
-                if is_stale_half_built(existing):
-                    user_proxy.remove(self._docker, user_id)
-                    cid, won = user_proxy.create_or_adopt(self._docker, user_id, pat)
-                    mine = cid if won else None
-            elif existing.status != "running":
-                # exited：設定已經在它裡面，直接 start——不必再碰 PAT。
-                self._docker.api.start(existing.id)
-            elif not user_proxy.ca_mount_matches(existing):
-                # ⚠ **自訂 CA 換了就只能重建**：CA 是 bind mount，而掛載是建立容器時決定
-                #   的，熱重載換不掉。這裡若退回走下面那條 reload，送進去的新 conf 會指向
-                #   一個**沒有掛進來**的路徑，`nginx -t` 當場不過、每一輪重試一次，而代理
-                #   看起來完全健康——正是這個功能要避免的那種安靜失敗。
-                # ⚠ 這裡**當場重建**，reconciler 那條是**下一輪**才補。差異是刻意的，
-                #   同 `is_stale_half_built` 那組的取捨：這條路上有人正在等他的 session。
-                user_proxy.remove(self._docker, user_id)
-                cid, won = user_proxy.create_or_adopt(self._docker, user_id, pat)
-                mine = cid if won else None
-            elif user_proxy.running_state(self._docker, user_id) != gitlab_proxy.fingerprint(pat):
-                user_proxy.reload(self._docker, user_id, pat)
-            return True
-        except Exception as e:  # noqa: BLE001 — 見 docstring：一律降級不中斷
-            # ⚠ 例外訊息可能夾帶設定內容（因而夾帶 PAT）——只印型別。
-            print(
-                f"[claude-pty] ⚠ 使用者 {user_id} 的 GitLab 代理無法就緒"
-                f"（{type(e).__name__}）：新開的 session 沒有 git / API 代理",
-                flush=True,
-            )
-            with suppress(Exception):
-                # ⚠ 「半顆」的判準是**「是不是我這次建的」**，不是「問不問得到 /_state」，
-                #   也不是年齡。
-                #   · 用 `/_state` 問不到當判準 → 會把「健康的 running 代理、但 exec 剛好
-                #     失敗」也算進去，而觸發這條補償的例外（daemon 抖動）與 exec 失敗高度
-                #     相關。那樣會 force-remove 一顆正在服務**這個人其他 session** 的代理。
-                #   · 用年齡當判準 → **自己**留下的半顆要等滿 ORPHAN_GRACE 才被 reconciler
-                #     收，而且擋不住「另一個 worker 正在建、還停在 created」那顆。
-                #   「是不是我建的」既精確又即時。
-                # ⚠ `create_or_adopt` 內部失敗（put_archive／start）會自己收乾淨，所以那條
-                #   路徑不靠這裡——這裡守的是「建好之後、回到這裡之前」才出事的情況。
-                if mine is not None:
-                    half = user_proxy.find(self._docker, user_id)
-                    if half is not None and half.id == mine and half.status != "running":
-                        user_proxy.remove(self._docker, user_id)
-            return False
 
     def wait_ready(self, sid: str, timeout: float | None = None) -> bool:
         """等到 TUI 可以吃按鍵為止。兩段式，取代先前的固定延遲：

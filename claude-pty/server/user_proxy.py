@@ -45,6 +45,9 @@ from contextlib import suppress
 import docker
 
 from . import config, gitlab_proxy
+from . import auth as auth_mod
+from .errors import SessionError
+from .query import is_stale_half_built
 
 
 def network_name(user_id: int) -> str:
@@ -419,11 +422,11 @@ def create_or_adopt(client: docker.DockerClient, user_id: int, pat: str) -> tupl
         )
     except docker.errors.APIError as e:
         # ⚠ **名稱衝突＝另一個 worker 搶先建好了**，與 `ensure_network` 那邊的
-        #   `already exists` 是同一類競態（多個 web worker 會同時走 `_ensure_user_proxy`；
+        #   `already exists` 是同一類競態（多個 web worker 會同時走 `ensure_user_proxy`；
         #   使用者剛設好 PAT 就連開兩場是最容易撞上的時機）。
         #
         #   不接的後果不是「這場沒有代理」而已，而是**敗方會把勝方的代理刪掉**：例外會
-        #   冒到 `sessions._ensure_user_proxy` 的補償，那裡若以狀態當判準，勝方那顆此刻
+        #   冒到 `ensure_user_proxy` 的補償，那裡若以狀態當判準，勝方那顆此刻
         #   正停在 `created`（還沒 `put_archive`／`start`），於是被 force-remove。
         #   兩場都拿不到 GitLab，要等 reconciler 下一輪才補回來。
         #
@@ -489,7 +492,7 @@ def reload(client: docker.DockerClient, user_id: int, pat: str) -> bool:
 
     ⚠ **驗證要在蓋上去之前，不可以先寫再驗。** 先寫的話，`-t` 失敗時磁碟上留的是一份
       **沒通過驗證**的 `nginx.conf`——這顆容器現在還活著沒事（跑的是記憶體裡的舊設定），
-      但只要它之後被停掉再啟動（reconciler 與 `_ensure_user_proxy` 都有「exited → 直接
+      但只要它之後被停掉再啟動（reconciler 與 `ensure_user_proxy` 都有「exited → 直接
       start，設定已經在它裡面」這條捷徑），就會拿那份壞設定冷啟動而起不來。
       **「壞設定弄不死它」只在 HUP 這條路成立，冷啟動不成立。**
       失敗側是真實路徑不是假想：主機名解不出來時 `-t` 會回
@@ -523,3 +526,127 @@ def reload(client: docker.DockerClient, user_id: int, pat: str) -> bool:
     # 換掉檔案不會讓它讀到舊 inode。
     client.api.kill(c.id, signal="HUP")
     return True
+
+
+# ---- 以下兩支 2026-08-25 從 sessions.SessionManager 搬來：它們操作的是 per-user 網路與代理，
+#      本來就該住在這裡。呼叫端傳 docker client 進來。
+
+
+def ensure_user_network(client: docker.DockerClient, user_id: int):
+    """確保這個使用者的網路存在。**建不出來就讓 session 開不起來。**
+
+    ⚠ **這一支與 `ensure_user_proxy` 的失敗語意刻意相反，不要「順手統一」。**
+      代理不在＝這場少一個功能（降級照開）；網路不在＝這場**沒有地方可以待**。
+      唯一的替代方案是把他塞進一張共用的網，而那會無聲地取消掉整個隔離設計
+      （ADR 0016：任何情況下都不得退回共用網路）。所以這裡拋，那裡不拋。
+
+    ⚠ 位址池滿要講**人聽得懂的下一步**，不要把 docker 的原文丟出去
+      （`all predefined address pools have been fully subnetted` 對使用者毫無意義）。
+      人數上限講**約略值**：真正的數字取決於這台機器上還有多少別的 compose 專案，
+      講死了就會變成一個比機制還準確的宣稱。
+    """
+    try:
+        return ensure_network(client, user_id)
+    except PoolExhausted as e:
+        print(f"[claude-pty] ⚠ {e}", flush=True)
+        raise SessionError(
+            "這台機器的 docker 位址池用完了，開不了新的 session。"
+            "目前每位使用者佔一張網路，預設上限大約是同時 26 人在線。"
+            "請關掉沒在用的 session，或請管理員在 daemon.json 調整 "
+            "default-address-pools（做法見 README）。"
+        ) from e
+    except Exception as e:
+        # 其他失敗（daemon 不回應、label 衝突…）同樣是開不了場，但原因不明確——
+        # 只講型別，不把可能夾帶設定內容的原始訊息端到畫面上。
+        raise SessionError(
+            f"建立你的 session 網路失敗（{type(e).__name__}），這場開不起來。"
+            f"稍後再試一次；持續失敗請找管理員看控制平面的 log。"
+        ) from e
+
+
+def ensure_user_proxy(client: docker.DockerClient, user_id: int) -> bool:
+    """確保這個使用者的 GitLab 代理就位。回傳「網路上現在有沒有一顆代理」。
+
+    **網路不歸這裡管**（`ensure_user_network` 在交易之前就建好了，而且它是無條件的）。
+    這一支只負責網路上的那顆 nginx。
+
+    ⚠ **任何失敗都只警告，不往上拋。** GitLab 不通是「這場少一個功能」，不是「這場
+      沒用」——為了它讓整個 session 開不起來是錯的取捨。失敗的原因多半是外部的
+      （image 沒拉到、GitLab 的主機名解不開讓 nginx 拒絕啟動）。
+      ⚠ 與 `ensure_user_network` 的相反語意是刻意的，見那支的說明。
+    ⚠ 代理已經在跑但設定過期時**熱重載**，不重建：重建會斷掉這個使用者**其他** session
+      正在進行的 git 操作。
+    ⚠ 失敗時要**確保沒有留下半顆**：`create` 成功但 `start` 失敗會留下一顆 `created`
+      狀態、且設定裡已經有 PAT 的容器。
+    """
+    if not config.gitlab_enabled():
+        return False  # 部署者沒設 GitLab 主機＝整個功能關閉
+    if auth_mod.gitlab_pat_state(user_id) != "ok":
+        return False
+    pat = auth_mod.gitlab_pat(user_id)
+    if not pat:
+        return False  # 三態與明文之間的競態（剛好被清掉），視同沒設
+    # 「本次呼叫親手建出來的那一顆」——補償只清得掉它，見下面 except 那段。
+    mine: str | None = None
+    try:
+        existing = find(client, user_id)
+        if existing is None:
+            cid, won = create_or_adopt(client, user_id, pat)
+            mine = cid if won else None  # 撞名撿到別人的 → 不是我的，別記
+        elif existing.status == "created":
+            # ⚠ **`created` 不可以直接 start。** 它有兩種來源，而外觀完全一樣：
+            #   · `create_container` 完成、`put_archive` 還沒跑 → `/etc/nginx` 是
+            #     **image 的預設設定**
+            #   · `put_archive` 完成、`start` 還沒跑 → 設定是對的
+            #   start 第一種的後果是**永久的殭屍**：nginx 用預設設定開在 80，容器狀態
+            #   變成 `running` 看起來很健康，但 `gitlab-proxy:5678` 連不上；而
+            #   reconciler 此後只會走 running 分支、`/_state` 問不到，依「問不到就別
+            #   亂動」永遠不修。要等這個人**下次再開一場**才會被救回來。
+            #
+            # ⚠ 判準與 reconciler 共用同一支（`is_stale_half_built`）：**夠舊**才當
+            #   半成品收掉重建。還新的話那是**別的 worker 正在建**（同一時間兩場
+            #   session 是常態），碰它就是把人家建到一半的容器刪掉——那正是
+            #   `create_or_adopt` 吸收 409 要防的事，在這裡自己再造一次就沒有意義了。
+            if is_stale_half_built(existing):
+                remove(client, user_id)
+                cid, won = create_or_adopt(client, user_id, pat)
+                mine = cid if won else None
+        elif existing.status != "running":
+            # exited：設定已經在它裡面，直接 start——不必再碰 PAT。
+            client.api.start(existing.id)
+        elif not ca_mount_matches(existing):
+            # ⚠ **自訂 CA 換了就只能重建**：CA 是 bind mount，而掛載是建立容器時決定
+            #   的，熱重載換不掉。這裡若退回走下面那條 reload，送進去的新 conf 會指向
+            #   一個**沒有掛進來**的路徑，`nginx -t` 當場不過、每一輪重試一次，而代理
+            #   看起來完全健康——正是這個功能要避免的那種安靜失敗。
+            # ⚠ 這裡**當場重建**，reconciler 那條是**下一輪**才補。差異是刻意的，
+            #   同 `is_stale_half_built` 那組的取捨：這條路上有人正在等他的 session。
+            remove(client, user_id)
+            cid, won = create_or_adopt(client, user_id, pat)
+            mine = cid if won else None
+        elif running_state(client, user_id) != gitlab_proxy.fingerprint(pat):
+            reload(client, user_id, pat)
+        return True
+    except Exception as e:  # noqa: BLE001 — 見 docstring：一律降級不中斷
+        # ⚠ 例外訊息可能夾帶設定內容（因而夾帶 PAT）——只印型別。
+        print(
+            f"[claude-pty] ⚠ 使用者 {user_id} 的 GitLab 代理無法就緒"
+            f"（{type(e).__name__}）：新開的 session 沒有 git / API 代理",
+            flush=True,
+        )
+        with suppress(Exception):
+            # ⚠ 「半顆」的判準是**「是不是我這次建的」**，不是「問不問得到 /_state」，
+            #   也不是年齡。
+            #   · 用 `/_state` 問不到當判準 → 會把「健康的 running 代理、但 exec 剛好
+            #     失敗」也算進去，而觸發這條補償的例外（daemon 抖動）與 exec 失敗高度
+            #     相關。那樣會 force-remove 一顆正在服務**這個人其他 session** 的代理。
+            #   · 用年齡當判準 → **自己**留下的半顆要等滿 ORPHAN_GRACE 才被 reconciler
+            #     收，而且擋不住「另一個 worker 正在建、還停在 created」那顆。
+            #   「是不是我建的」既精確又即時。
+            # ⚠ `create_or_adopt` 內部失敗（put_archive／start）會自己收乾淨，所以那條
+            #   路徑不靠這裡——這裡守的是「建好之後、回到這裡之前」才出事的情況。
+            if mine is not None:
+                half = find(client, user_id)
+                if half is not None and half.id == mine and half.status != "running":
+                    remove(client, user_id)
+        return False

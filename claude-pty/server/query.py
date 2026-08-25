@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+import re
 from contextlib import suppress
 from dataclasses import dataclass
 
@@ -19,6 +20,98 @@ from .db import session_scope
 from .errors import SessionNotFound
 from .models import STATUS_CREATING, SessionHistory, utcnow
 from .models import Session as SessionRow
+
+
+def stamp_ready_if_first(s, sid: str) -> int:
+    """把 `ready_at` 蓋成現在，**只有第一次寫得進去**。回傳影響的列數。
+
+    就緒是單調的：`WHERE ready_at IS NULL` 讓「檢查」與「寫入」在同一句 SQL 裡完成
+    ——分成先讀再寫的話，兩個觀察者同時看到 NULL 就會各寫一次，後 commit 的覆蓋先偵測到
+    的時間，量出來的啟動耗時反而變長。session 已被歸檔時這句是影響 0 列，不是錯誤。
+
+    ⚠ **兩個觀察者是真的存在的**，這也是這支要獨立出來的原因：前台在偵測到的當下蓋
+      （`SessionManager._stamp_ready`），reconciler 是背景補漏（`_stamp_ready_backstop`，
+      給背景執行緒死掉的那些）。兩邊本來各寫一份一模一樣的 UPDATE，只要有一邊加了伴生
+      欄位而另一邊沒跟，同一個 session 會因為「是誰先蓋的」而有不同的資料。
+
+    ⚠ 收 `s` 而不是自己開 `session_scope`：reconciler 是在**一筆**交易裡連續蓋很多個
+      sid 並累加列數，自己開 scope 會把那筆交易拆成 N 筆。交易邊界屬於呼叫端。
+    """
+    return (
+        s.query(SessionRow)
+        .filter(SessionRow.id == sid, SessionRow.ready_at.is_(None))
+        .update({SessionRow.ready_at: utcnow()}, synchronize_session=False)
+    )
+
+
+def parse_docker_time(raw: str | None) -> _dt.datetime | None:
+    """docker 的 RFC3339 時間戳 → aware datetime；解不出來回 None。
+
+    ⚠ **這是唯一一份。** 曾經有兩份：這裡，以及 reconciler 自己那一份時間戳解析（後來收斂
+      成共用這支，那個名字已經不在了）。而兩份**已經漂移過**——reconciler 那一份只認 `"+"`
+      來判斷有沒有時區偏移，於是 `-05:00` 會落到 else 分支被當成 UTC，整整差掉時差。
+      目前不可達（daemon 一律回 `Z`），但 `_remove_orphans` 的寬限期就是靠它算的，而解析
+      失敗的 fallback 是「很舊」——真的錯起來會**安靜地提早把還在建立中的容器當孤兒刪掉**。
+      要再寫第二份解析之前先想清楚這一段。
+
+    兩個必須處理的細節：
+      - docker 給的是**奈秒**精度（`2026-07-26T02:57:51.828567844Z`），而 `fromisoformat`
+        只吃到微秒（6 位），多的要先截掉，否則整段 ValueError。
+      - 時區偏移正負都有可能，不能只認 `+`。
+    """
+    m = re.match(r"^(.*?T[\d:]+)(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$", raw or "")
+    if not m:
+        return None
+    frac = f".{m.group(2)[:6]}" if m.group(2) else ""
+    tz = m.group(3) or "+00:00"
+    try:
+        return _dt.datetime.fromisoformat(f"{m.group(1)}{frac}{'+00:00' if tz == 'Z' else tz}")
+    except ValueError:
+        return None
+
+
+def age_seconds(iso_ts: str) -> float:
+    """docker 物件（container / network）建立至今幾秒。
+
+    ⚠ 住在這裡而不是 reconciler：reconciler 用它判斷孤兒的寬限期、`ensure_user_proxy`
+      用它分辨「別的 worker 正在建」與「上次建到一半留下的」，而 reconciler 已經 import
+      sessions，放那邊就得反向 import。
+
+    ⚠ 解析失敗回 `inf`（＝很舊）。呼叫端一律是「夠舊才動它」，所以這個 fallback 的錯誤
+      方向是**提早把還在建立中的容器當成半成品刪掉**，而且不會有任何錯誤訊息。它之所以
+      還可以接受，只因為解析是**唯一一份**（`parse_docker_time`）且涵蓋 daemon 實際會給的
+      格式；曾經有第二份漂掉的實作，那才是真正的風險（見 `parse_docker_time` 的說明）。
+    """
+    if not iso_ts:
+        return 0.0
+    parsed = parse_docker_time(iso_ts)
+    if parsed is None:
+        return float("inf")
+    return (utcnow() - parsed).total_seconds()
+
+
+def is_stale_half_built(container) -> bool:
+    """這顆 `created` 的代理容器是不是「上次建到一半留下的」，而不是「別人正在建」。
+
+    `created` 有兩種來源、外觀完全一樣：`create_container` 完成但 `put_archive` 還沒跑
+    （`/etc/nginx` 還是 image 的預設設定），或 `put_archive` 完成但 `start` 還沒跑。
+    分不出來，所以一律當半成品收掉重建——**但只有夠舊的才收**。還新的話那是別的 worker
+    正在建（同一時間兩場 session 是常態），碰它就是把人家建到一半的容器刪掉。
+
+    ⚠ **判準只有這一份。** 兩個地方會問這個問題，而且問的是同一件事：
+      `user_proxy.ensure_user_proxy`（建 session 時撞到）與 `reconciler._converge_proxies`
+      （背景巡邏撞到）。各寫一份的話，只要有一邊加了條件而另一邊沒跟，同一顆容器會被
+      兩條路做出相反的結論。
+
+    ⚠ **只抽判準，不抽時序**：sessions 收掉之後**當場**重建，reconciler 是**下一輪**才補。
+      那個差異是刻意的，見 reconciler 那段的說明，不要一起收斂。
+
+    ⚠ 2026-08-25 從 sessions.py 搬到這裡：它依賴 `age_seconds`（同檔），而 `user_proxy`
+      現在直接 import 本模組，不再經過 sessions（那條路會循環）。
+    """
+    if container.status != "created":
+        return False
+    return age_seconds(container.attrs.get("Created", "")) >= config.ORPHAN_GRACE
 
 
 def _is_ready(logs: bytes) -> bool:
