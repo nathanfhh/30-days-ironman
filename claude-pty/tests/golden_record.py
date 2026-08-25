@@ -56,6 +56,8 @@ def record_into(root: str) -> list[str]:
 
                 aria = page.locator("body").aria_snapshot()
                 _write(os.path.join(out, f"aria.{vp}.txt"), aria.rstrip("\n") + "\n", written, root)
+                # aria 記不到的那一整類合約屬性（見 golden_scenes.DOM_ATTRS 的說明）
+                _write(os.path.join(out, f"dom.{vp}.txt"), G.dom_text(page), written, root)
 
                 if vp == G.SHOT_VIEWPORT:
                     _write(os.path.join(out, "network.txt"), G.network_text(reqs, BASE), written, root)

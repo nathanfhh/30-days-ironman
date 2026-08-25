@@ -13,6 +13,9 @@
 
   · **aria 快照**：結構與可及名稱。按鈕變成 div、標籤掉了、順序換了都會現形。
     兩個視口各一份，media query 之後的結構也守得住。
+  · **DOM 合約屬性**：`data-testid`／`data-act`／`data-tone`／`data-kind` 那一整類。
+    aria 一個字都不記它們（實測），而它們正是 e2e 的抓手、事件委派的分派鍵、狀態的
+    真相來源。白名單見 `golden_scenes.DOM_ATTRS`，**不記 class、不記完整 HTML**。
   · **網路序列**：文件與 API 的呼叫順序。多打一發、少打一發、換了端點都看得到。
   · **截圖**：看起來還不還是同一個東西。
 
@@ -32,7 +35,7 @@
 ⚠ 尺寸不同一律是失敗，不做縮放後再比：版面高度變了正是要抓的事，縮放會把它抹平成
   一片模糊的小差異，然後落在閾值以內。
 
-⚠ aria 與網路是**逐字**比對，沒有閾值。它們是文字，沒有反鋸齒問題，給了容忍額度就等於
+⚠ aria、DOM 與網路都是**逐字**比對，沒有閾值。它們是文字，沒有反鋸齒問題，給了容忍額度就等於
   給了「悄悄改掉一個標籤」的空間。
 
 ## 紅了怎麼辦
@@ -147,6 +150,11 @@ try:
                 got = page.locator("body").aria_snapshot().rstrip("\n") + "\n"
                 if not check(f"aria 樹一致（{vp}）", want == got):
                     print(f"        {text_diff_hint(want, got)}")
+
+                want_dom = open(os.path.join(d, f"dom.{vp}.txt"), encoding="utf-8").read()
+                got_dom = G.dom_text(page)
+                if not check(f"DOM 合約屬性一致（{vp}）", want_dom == got_dom):
+                    print(f"        {text_diff_hint(want_dom, got_dom)}")
 
                 if vp == G.SHOT_VIEWPORT:
                     want_net = open(os.path.join(d, "network.txt"), encoding="utf-8").read()

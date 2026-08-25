@@ -369,3 +369,61 @@ unrestricted、GitLab 三態、一個刻意超長會被截斷的名字。全部�
 
 `golden_record.py` 與 `golden_scenes.py` 都**不是測試**（一條斷言都沒有），所以 run-all.sh
 是逐一列名 `tests/golden_check.py`，不靠 glob；被 glob 撿走只會空跑。
+
+### 階段 2 補：DOM 合約屬性的第三種快照
+
+aria 樹只記 role 與可及名稱。實測一下就知道缺口有多大：整份 golden 的 aria 檔案裡
+`data-act` 與 `class` **一個字都沒有**，而模板加 `app.js` 裡光 `data-testid` 就 115 處、
+`data-act` 28 處、`data-tone` 15 處。aria 蓋到的 role／aria-* 只有 61 處。
+
+蓋不到的那些正好是**合約型**的：`data-testid` 是 e2e 的抓手、`data-act` 是 app.js 事件
+委派的分派鍵、`data-tone`／`data-kind`／`data-state`／`data-stale` 是狀態的真相來源
+（1b 那一刀才剛把測試從 class 搬到它們身上）。
+
+所以每場再加一份 `dom.<vp>.txt`：帶白名單屬性的元素，一行一個，依 DOM 順序，逐字比對
+不設閾值。長這樣：
+
+```
+a testid=cred-badge state=bad tip="在 host 上執行 `claude setup-token`…"
+span testid=chip-mark tone=accent kind=capture tip=流量錄製：開
+button testid=range-day day=2026-08-25 edge=true
+```
+
+#### 白名單怎麼定的
+
+**只記白名單，不記 class 也不記完整 HTML。** 記整棵 DOM 的話，Vue 版多包一層 wrapper
+就會整份紅，而那種 golden 一週內就會被停用；停用之後連原本守得住的那些也一起沒了。
+白名單讓「多一層 div」無聲、「少一個 data-act」出聲。
+
+排除項也寫進註解，否則看起來像漏掉：
+
+- **動畫與過場的暫態**（`data-shown`／`data-closing`／`data-swap`／`data-animate`／
+  `data-loading`／`data-pausable`）：畫面停定之後不保證是同一個值，記了就是自找不穩定。
+- **內容或設定的回音**（`data-label`／`data-name`／`data-container`／`data-persist-path`／
+  `data-cli`／`data-behind-proxy`／`data-sid`）：可見的部分 aria 與截圖已經蓋著了。
+- **`disabled`／`aria-expanded`／`aria-selected`**：aria 快照**已經記了**（實測數到
+  `[disabled]` 28 個、`[expanded]` 3 個、`[selected]` 8 個）。同一個事實兩個來源比一個
+  更糟：改動時兩邊都要更新，而只更新一邊沒有人會發現。
+
+兩個**刻意加進去**的，理由與上面對稱：
+
+- **`aria-checked`**：實測 aria 快照裡 `[checked]` 是 **0 個**。三顆開關用的是
+  `role=switch`，Playwright 沒把勾選狀態畫進去。那是真的缺口，不是重複。
+- **`hidden`**：它區分得出「沒有渲染」與「渲染了但藏起來」。Vue 版把 `v-if` 寫成
+  `v-show`（或反過來）正是這個差別，而 aria 只看得到前者。
+- **`data-tip`**：滑過去才看得到，所以截圖蓋不到；不是 aria 名稱，所以 aria 也蓋不到。
+  它一旦悄悄消失，沒有任何一道防線會出聲。
+
+#### 驗收
+
+- 24 個新檔案、2930 行、180 KB。golden 整體從 48 檔 3.9 MB 變成 **72 檔 4.1 MB**。
+- `--verify` 連錄兩次（中間重 seed）：**72 個檔案逐位一致**。
+- 跨行程 `golden_check`：**72 條全 PASS**。
+- **變異測試**：把 `chips()` 裡兩處 `kind="gitlab"` 打成 `"gitlabb"`，
+  結果是 **14 條紅、全部都是「DOM 合約屬性一致」**（七個有 session 列的場景 × 兩個視口），
+  aria、網路、截圖一條都沒紅。這正是要的形狀：那顆 chip 顏色沒變、可及名稱沒變，
+  只有合約欄位錯了，而**現在有人會出聲**。
+- `run-all.sh quick` 38 支 0 失敗、跳過清單與基線逐字相同；`--e2e` 9 支全綠。
+
+錄製端**沒有加任何新的釘死項**：這些屬性本來就是決定性的（`data-day` 靠已經釘死的
+瀏覽器時鐘，`data-tone`／`kind`／`state` 靠已經釘死的 seed）。
