@@ -148,6 +148,21 @@ function close(): void {
 }
 
 function pick(value: string, origin: PickerOrigin | null): void {
+  /* ⚠ 游標要跟著落到選中的那一格。
+   *
+   * `data-active` 是照 `active`（鍵盤游標）畫的，而 `active` 只在展開與方向鍵時才動——
+   * 用滑鼠選完之後它還停在展開當下的那一列，於是收起來的那份 DOM 上，「游標」指著舊的
+   * 選項。畫面上完全看不出來（按鈕的文字是另外畫的，它是對的），但那份 DOM 就是下一次
+   * 展開的第一幀，而螢幕閱讀器唸的也是它。
+   * legacy 在 962a9b2 修的是同一個 bug（`pick()` 裡就地改屬性），golden 已往正確那邊重錄。
+   *
+   * ⚠ 用 `visible` 的索引，不是 `options` 的：畫面上畫的是 `visible`（搜尋過濾後的那份），
+   *   拿全清單的索引去比會在有搜尋字串時指到別的一列。
+   */
+  active.value = Math.max(
+    0,
+    visible.value.findIndex((o) => o.value === value),
+  );
   close();
   if (value !== props.modelValue) emit("update:modelValue", value);
   // detail 帶上點擊座標：主題切換的同心圓過渡需要圓心
@@ -198,11 +213,16 @@ function onSearchKeydown(e: KeyboardEvent): void {
   e.stopPropagation();
 }
 
-// 清單換了一批時把 active 歸零：舊索引指的很可能是另一個東西。
+/* 清單換了一批時（例如 /api/catalog 回來、模型清單整份換掉），舊的索引指的很可能是另一個
+   東西。落到「目前選中的那一個」而不是第一個——歸零的話 `data-active` 會跑到清單頭上，
+   而那一格通常不是選中的那一格。 */
 watch(
   () => props.options,
   () => {
-    active.value = 0;
+    active.value = Math.max(
+      0,
+      props.options.findIndex((o) => o.value === props.modelValue),
+    );
   },
 );
 
