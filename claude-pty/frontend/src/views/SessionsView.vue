@@ -43,9 +43,6 @@ const error = ref<string | null>(null);
 const swapping = ref(false);
 const listUpdated = ref("");
 const filtersOpen = ref(false);
-/** 使用者動過那顆篩選鍵沒有。只影響 `#filter-bar` 要不要寫 `inert`——舊版是「點過才寫」，
- *  見 FilterBar 裡的說明。 */
-const filtersToggled = ref(false);
 /** 正在進行中的那一顆列動作（`<act>-<id>`）。舊版是直接動那顆按鈕的 `disabled`，並在
  *  `finally` 還原——**而使用者確認的對話框就在那中間**，所以「對話框開著時那顆鍵是停用的」
  *  是真的行為，不是實作細節（它在 aria 樹裡看得到，golden 對得出來）。 */
@@ -281,11 +278,7 @@ let timer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   // 一進來就有條件（從書籤或分享的連結進來）的話，把篩選列展開——收合著會讓人
   // 以為看到的是全部
-  // 舊版是直接 `filterToggle.click()`，所以那一下等同「使用者點過」（inert 會被寫上）。
-  if (activeCount.value) {
-    filtersOpen.value = true;
-    filtersToggled.value = true;
-  }
+  if (activeCount.value) filtersOpen.value = true;
   void refresh();
   // 狀態會漂移（container 自行結束），定期對齊。auto=true 讓它在使用者正操作列表時讓路。
   timer = setInterval(() => void refresh(false, true), 15000);
@@ -349,7 +342,7 @@ watch(showHistory, () => {
             aria-controls="filter-bar"
             data-testid="filter-toggle"
             :data-active="activeCount ? '1' : ''"
-            @click="((filtersOpen = !filtersOpen), (filtersToggled = true))"
+            @click="filtersOpen = !filtersOpen"
           >
             <i class="fa-solid fa-filter"></i> 篩選<span id="filter-count">{{
               activeCount ? ` · ${activeCount}` : ""
@@ -364,7 +357,7 @@ watch(showHistory, () => {
         </div>
       </div>
 
-      <FilterBar :open="filtersOpen" :toggled="filtersToggled" @changed="onFiltersChanged" />
+      <FilterBar :open="filtersOpen" @changed="onFiltersChanged" />
 
       <ManifestList
         :rows="rows"
@@ -400,7 +393,7 @@ watch(showHistory, () => {
       :label="drawer.label"
       :path="drawer.path"
       :flavor="drawer.flavor"
-      @close="(console.log('DBG parent close'), (drawer = null))"
+      @close="drawer = null"
     />
   </AppShell>
 </template>

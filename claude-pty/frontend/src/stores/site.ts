@@ -89,9 +89,9 @@ interface PublicBootstrap {
 }
 
 interface AccountBootstrap {
-  /** 這一版才有：形狀與 `/api/auth/me` 的 `user` 相同，是同一個來源。
-   *  舊的後端沒有這個欄位，`loadIdentity()` 會退回去問 `/api/auth/me` 並喊一聲（見那裡）。 */
-  user?: User;
+  /** 形狀與 `/api/auth/me` 的 `user` 相同，是同一個來源（見 server/app.py 的
+   *  `account_bootstrap`）。冷載入靠它，所以這一頁不必再問一次「我是誰」。 */
+  user: User;
   default_cli: string;
   credentials: Credentials;
   limits: { name_max: number; username_max: number; min_password_length: number };
@@ -117,32 +117,14 @@ export const useSiteStore = defineStore("site", () => {
     identityLoaded.value = true;
   }
 
-  /** 我是誰。401 由 api() 統一導回登入頁，這裡只負責把身分放好。
+  /** 我是誰。**冷載入時這是唯一的那一發**——身分與這個帳號的處境同一條回應。
    *
-   * ⚠ 拿到身分就順手把 `/api/account/bootstrap` 也帶回來：招牌在 sessions 與 account
-   *   兩頁都有，兩頁都需要憑證狀態與長度限制。分開讓呼叫端各自記得打，遲早會有一頁忘記。
    * ⚠ **一個 app 生命週期只會問一次**（`identityLoaded` 擋著），跨路由不重打；cookie 失效
    *   時 api() 收到 401 會統一導回登入頁，那條路才是重新確認身分的入口。 */
   async function loadIdentity(): Promise<User | null> {
     try {
-      const d = await fetchAccountMeta();
-      if (d.user) {
-        user.value = d.user;
-        return d.user;
-      }
-      /* ⚠ 舊的後端還沒有 `user` 這個欄位。**降級是安全的，但不可以是無聲的**（同
-         `config.UI` 那條不認得的值的處置）：退回去問 `/api/auth/me`，並且喊一聲說明為什麼
-         多了這一發——不喊的話，症狀會是「golden 的網路序列莫名其妙多一行」，而肇因是兩條
-         線的合併順序，那要查很久。
-         ⚠ **這條相容路徑有明確的死期**：`/api/account/bootstrap` 帶 `user` 之後它就是死的，
-           階段 5 拆舊時連同這段註解一起刪。 */
-      console.warn(
-        "[claude-pty] /api/account/bootstrap 沒有 user 欄位（後端是舊版？），" +
-          "退回 /api/auth/me。網路序列會多一發，那是預期中的降級。",
-      );
-      const me = await api<{ user: User }>("/api/auth/me");
-      user.value = me.user;
-      return me.user;
+      await fetchAccountMeta();
+      return user.value;
     } catch {
       user.value = null;
       return null;
@@ -194,6 +176,9 @@ export const useSiteStore = defineStore("site", () => {
       gitlabProxyError: d.gitlab.proxy_error,
     };
     setCredentials(d.credentials);
+    /* 身分也在這一條回應裡。順手收下，呼叫端就不必記得「存完 PAT 之後 user 的
+       `gitlab_pat_configured` 也變了」——那種要靠人記得的事遲早會漏掉一處。 */
+    user.value = d.user;
     return d;
   }
 
