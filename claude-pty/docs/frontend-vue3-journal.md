@@ -1366,3 +1366,78 @@ vitest 106 支、行覆蓋率 87.6%（門檻 70%，派工要求不低於 87%）�
 
 ⚠ **這一刀沒有跑 `--ui vue`**：vue 模式全套由 vue-phase1 統一跑（兩邊同時改會互相蓋掉），
 而且第 3、4 點會讓 golden 需要從 Vue 版重錄，那也是他們那一側的動作。
+
+### 階段 5 完成：golden 從 Vue 版重錄成新規格
+
+#### 重錄前的差異＝這次的規格變更紀錄
+
+重錄之前先跑一次跨版比對，把差異完整記下來。**掀開 strip 機制之後**的完整清單
+（用 `CURRENT_UI="legacy"` 強制嚴格比對量的，那份改動沒有 commit）：
+
+| 類別 | 差異 | 場數 | 判斷 |
+|---|---|---|---|
+| DOM | `#filter-bar` 收合時多了 `inert` | 22 | **改善**。lane C 的 a11y 修正：收起來的篩選列不該留在 Tab 序裡 |
+| 網路 | `+GET /api/bootstrap`、`+GET /api/account/bootstrap` | 20 / 18 | **設計**。階段 3 把 Jinja 注入改成 API 的直接結果 |
+| 網路 | `-GET /static/js/app.js`、`-app.css` → `+/assets/index-<hash>.{js,css}` | 各 18 | **必然**。手寫的兩支換成打包產物 |
+| 網路 | `+/assets/SessionsView-<hash>.js`、`+AppShell…js`、`+AccountView-<hash>.js` | 16/16/2 | **新能力**。路由層 code splitting；`AccountView` 只在帳號頁載入（2 場），那是真的契約 |
+| 網路 | `-GET /`（換頁那一發文件請求） | 16 | **必然**。SPA 的換頁是 router 在前端做的 |
+| 截圖 | 無 | 0 | **像素級 1:1**。十九張全頁截圖對著 legacy 錄的規格 0.00%，不是落在容忍額度內 |
+
+截圖零差異這件事值得單獨講：那代表 A5（頁尾少一個空白）與其餘視覺修正之後，Vue 版
+**逐像素**等於舊畫面。1:1 不是形容詞。
+
+#### 重錄時抓到兩個新的不穩定源
+
+**一｜Vite 的檔名帶內容雜湊。** `index-DhIKEuyr.js` 每次 build 都不一樣，錄進 golden 的話
+下一次 build 就紅，而紅的原因與介面毫無關係。**`--verify` 抓不到這一類**：兩次錄製共用
+同一份 build，雜湊當然一樣（與階段 2 的 `users.created_at` 完全同一個形狀）。
+
+修法是正規化成 `-<hash>`，**不是整段丟掉**：哪幾個 chunk 會載入是真的契約 ——
+`AccountView-<hash>.js` 只在帳號頁載入，哪天有人把它靜態 import 進 `AppShell`，這裡就會紅。
+
+第一版的正規化**做過頭**了：它把 `/static/images/01-circuit-board-transparent.webp` 也當成
+雜湊抹掉，於是「登入頁用的是哪一張插畫」不見了 —— 而那正是 `pin_all()` 特地釘死的東西。
+收斂成只套在 `/assets/` 上。
+
+**二｜字型是按需抓的。** `account-admin` 第一次錄有 `fa-brands-400.woff2`、第二次沒有：
+瀏覽器只有在真的要畫到某個字面時才去要那份 woff2，而「那一刻有沒有在快照之前發生」會飄。
+這一次**是 `--verify` 抓到的**（跨行程那輪剛好兩邊都有），與上一項恰好互補：兩種驗證各自
+看得到對方看不到的東西。
+
+修法是把需求講明：叫每一個宣告過的 font face 都載入，再等 `fonts.ready`。代價是
+「這一場用到了 brands」變成「這一頁宣告了 brands」，那個損失可以接受 —— 畫面上真的有那顆
+圖示由截圖與 aria 守著，而一個會隨機紅的 golden 最後會被整支關掉。
+
+#### 拆掉的跨版機制
+
+`UI_EXTRA_CALLS`、`strip_expected_extra_calls`、`strip_assets`、`strip_navigations`、
+`CURRENT_UI`、`golden_ui()`、META 的 `ui=` 欄位、`golden_check` 的跨版分支，全部一起走。
+META 那一欄拿掉而不是改成 `vue`：永遠只有一個值的欄位只會讓人以為還有第二版可以比。
+
+#### 驗收
+
+- `--verify` 連錄兩次（中間重 seed）：**110 個檔案逐位一致**。
+- 跨行程 `golden_check`：**109 條全 PASS**。
+- **rebuild 之後再跑一次**：仍然全綠（雜湊正規化的實測，不是推論）。
+- 變異測試：
+
+| 變異 | 紅的是 |
+|---|---|
+| 把「篩選」改成「篩選條件」 | 28 條 aria ＋ 4 條截圖 |
+| `kind: "gitlab"` 打成 `"gitlabb"` | 24 條 DOM（aria／網路／截圖全綠） |
+
+⚠ 這兩個變異**第一次都是無效的**：第一次改的字串不在 production 原始碼裡、第二次改到了
+`__tests__/lib.spec.ts`（不進 build）。兩次都是「沒紅」，而沒紅的第一個解釋永遠是
+「我的變異真的改到東西了嗎」。這已經是這個專案第三次記到同一條。
+
+- `run-all.sh quick` 39 支 0 失敗；`--e2e` 10 支 0 失敗；`ruff@0.16.3` 全過。
+- golden：18 場、110 檔、6.1 MB。
+
+#### 文件
+
+`docs/adr/0020-frontend-vue3.md`（背景、決策、後果）：三份快照各守什麼、三道截圖閘各接
+哪種形狀與實測數字、截圖只能同平台比的限制、「重錄等於改規格」、以及**已知不涵蓋的**
+三件事（互動時序歸 e2e、元件內部分支歸 vitest、`dom.txt` 只記白名單）。
+
+README：架構一覽補前端與 build 步驟、測試指令補 `--e2e` 與 golden 三條、覆蓋率段落補上
+前端的 vitest 門檻並寫明**兩邊的數字不要合著看**（後端那個是診斷，前端那個是 gate）。

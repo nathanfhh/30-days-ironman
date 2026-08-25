@@ -40,7 +40,7 @@ button testid=tab-live aria-selected=false
 button testid=tab-past aria-selected=true
 button testid=filter-toggle active aria-controls=filter-bar
 div open=0
-div testid=filter-bar id=filter-bar
+div testid=filter-bar inert id=filter-bar
 div testid=filters-grid
 span testid=filter-field-label tip="限制＝只放行白名單（entrypoint 會套 iptables）；開放＝容器可以連任何地方。"
 div testid=pick-fnet
