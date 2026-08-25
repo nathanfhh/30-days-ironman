@@ -1544,3 +1544,64 @@ trivy image --scanners vuln --severity CRITICAL claude-pty-control:rescan
 那是**規格的變更**，不是回歸。但 golden 自己的紀律寫得很清楚：「看到紅燈就順手重錄，等於把
 『我改壞了』寫成『這就是新的對的樣子』，這道防線當場消失」。所以我沒有重錄，把差異、成因與
 「只差那一行」一起交出去，由派工方決定。
+
+### 最後一刀：M1 之後重錄 golden
+
+#### 規格變更
+
+lane C 的 M1（`ebaa344`）讓守衛在進 `/login` 之前也探測一次身分，於是每一場多一發。
+重錄前先跑一次 `golden_check` 記下現況：**18 條網路紅，其餘 91 條全綠**（aria、DOM、
+截圖一條都沒動）。重錄之後的 diff 逐字驗過：
+
+```
+新增：GET /api/account/bootstrap × 18
+移除：無
+```
+
+**18 行新增、0 行移除**，位置固定在序列開頭那一段：
+
+```
+GET /login
+GET /api/bootstrap
+GET /api/account/bootstrap   ← 新增的那一發（守衛的身分探測）
+POST /api/auth/login
+GET /api/account/bootstrap   ← 登入後原本就有的那一發
+```
+
+未登入時這一發回 **401，而那是預期的答案不是錯誤** —— 守衛要的就是「你是誰」，401 就是
+「沒有人」。它不走全域的 401 處理（見 store 的 `probe`），否則會在一個正在前往登入頁的
+導航裡再導一次。
+
+#### 驗收
+
+`--verify` 兩次逐位一致（110 檔）、跨行程 `golden_check` 全綠、**rebuild 之後再跑一次仍綠**。
+
+#### `router.ts` 的過期註解
+
+派工要我改，但**去看的時候已經被 lane C 在 `ebaa344` 一起修好了**，而且寫得比原本要求的
+更完整（明說「伺服端那句 302 在正式部署上不會發生：nginx 直接把 index.html 從磁碟吐出來」）。
+`grep -rn "伺服器在吐這個殼之前\|先導走" frontend/src/` 零結果。**沒有做多餘的改動。**
+
+### 交付
+
+| 項目 | 數字 |
+|---|---|
+| `run-all.sh --all`（含 docker） | **50 支 0 失敗**，跳過 3 支 |
+| `run-all.sh --e2e` | **10 支 0 失敗**（九支 e2e ＋ golden_check，109 條） |
+| 跳過的那 3 支 | claude 憑證（不該進 CI）、`test_firewall_ssh_gate` 與 `test_trivy_volume`（macOS 上驗不到，見 `docs/linux-acceptance.md`） |
+| 後端 coverage | `server/` 整體 **84%**（2,972 語句、470 沒跑到） |
+| 前端 vitest | **108 條全過**，行覆蓋 **88.32%**（門檻 70%，是 gate） |
+| 前端 lint／typecheck／prettier | 全過 |
+| `ruff@0.16.3` check／format | 全過 |
+| golden | **18 場、110 檔、6.1 MB** |
+| 測試檔數 | 53（`test_*.py` ＋ `e2e_*.py` ＋ `golden_check.py`） |
+| 這條分支的 commit | **41 顆**（33 顆非 merge） |
+| 淨行數 | 211 檔 **+25,433 / -4,759** |
+
+兩個數字要一起看才不會誤讀：**淨增兩萬行**裡有 6 MB／110 個 golden 檔案（那是規格資產，
+不是程式碼），而**刪掉的四千七百行**是 legacy 的模板與 `app.js`。真正的「手寫前端程式碼」
+是變少的：舊版 `app.js` 2,090 行 ＋ 模板 1,909 行，換成一組有型別、有元件邊界、有單元
+測試的 Vue 原始碼。
+
+⚠ 覆蓋率那兩個數字**不要合著看**：後端 84% 是**診斷**（回答「哪些路徑從來沒被走過」，
+不當 gate），前端 88.32% 是**門檻**（低於 70% 就紅）。

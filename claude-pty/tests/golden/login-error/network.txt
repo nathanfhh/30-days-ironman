@@ -1,6 +1,7 @@
 # 文件與 API（依序，含 query）
 GET /login
 GET /api/bootstrap
+GET /api/account/bootstrap
 POST /api/auth/login
 
 # 靜態資源（排序後、去掉 query，見 golden_scenes.network_text 的說明）
