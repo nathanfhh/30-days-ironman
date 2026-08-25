@@ -1,4 +1,4 @@
-"""E2E：Vue 版（`CLAUDE_PTY_UI=vue`）的登入與 session 清單走一遍真瀏覽器。
+"""E2E：登入與 session 清單走一遍真瀏覽器。
 
     uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
         --with psutil --with cryptography --with playwright python tests/e2e_vue_smoke.py
@@ -11,14 +11,14 @@ golden（`golden_check.py`）比的是**畫面長什麼樣**；這一支比的�
 登入的成功與失敗兩條路、清單畫得出來、篩選寫進網址而且清單真的被篩、頁籤換得動且重整
 之後還在、登出回得去。golden 對這些是盲的——它錄的是靜止的一幀。
 
-## ⚠ 它的價值在於「同一支腳本對兩版都跑得過」
+## ⚠ 每一條斷言都只用 `data-testid` 與網址，不碰任何一版的內部實作
 
-這裡的每一條斷言都只用 `data-testid` 與網址，不碰任何一版的內部實作。所以把
-`CLAUDE_PTY_UI` 換成 `legacy` 再跑一次，**除了「帳號頁是殼」那一條之外全部要過**——
-開發階段就是這樣用的，而那一次對照當場抓到一個真的不一致（看歷史時建立表單，舊版是
-`hidden`、Vue 版寫成了 `v-if`＝節點整個消失）。
+那是刻意的。兩版並存期間，同一支腳本把 `CLAUDE_PTY_UI` 換成 `legacy` 再跑一次就是一次
+免費的對照，而那次對照當場抓到一個真的不一致（看歷史時建立表單，舊版是 `hidden`、
+Vue 版寫成了 `v-if`＝節點整個消失）。
 
-要重跑那個對照：把下面的 `config.UI` 改成 `legacy`，預期只有一條紅。
+legacy 已於 2026-08-26 拆除，那個對照跑不了了。但**寫法照舊**：只認 testid 與網址的
+斷言，下一次換框架時同樣是免費的對照，而綁在實作上的斷言那時只能整批重寫。
 
 ⚠ 需要 `server/static/dist/` 已經 build 好（`cd frontend && npm run build`）。
   `run-all.sh` 會先跑前端那幾關再跑這支，所以照著它跑就不必自己 build；沒有 dist 時
@@ -35,8 +35,8 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# ⚠ 要在 import config **之前**設：`config.UI` 是模組載入時讀環境變數決定的。
-os.environ["CLAUDE_PTY_UI"] = "vue"
+# ⚠ 這裡曾經要先設 `CLAUDE_PTY_UI=vue`（兩版並存期間的切換器）。2026-08-26 legacy 拆除
+#   之後前端只剩一份，那個環境變數與 `config.UI` 都不存在了。
 
 from server import config  # noqa: E402
 
@@ -163,7 +163,7 @@ for _ in range(50):
             break
     time.sleep(0.1)
 
-print(f"== Vue 版煙霧測試（{BASE}，CLAUDE_PTY_UI={config.UI}）==")
+print(f"== Vue 版煙霧測試（{BASE}）==")
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch()

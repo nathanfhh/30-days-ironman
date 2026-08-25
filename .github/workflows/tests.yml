@@ -96,26 +96,11 @@ jobs:
           [ "${n}" = "1" ] || { echo "::error::/assets/ 回了 ${n} 份 Cache-Control"; fail=1; }
           docker rm -f pty-nginx-ci >/dev/null
           exit "${fail}"
-      # legacy（預設）那三條路必須**照舊 proxy 給 Flask**，不可以被 vue 的片段影響。
-      # 沒有 Flask 在後面，所以正確答案是 502；200 代表 nginx 自己回了 SPA 的殼＝切換器漏了。
-      - name: legacy 片段不改變舊路（三條仍然落到 location /）
-        working-directory: claude-pty
-        run: |
-          set -euo pipefail
-          docker rm -f pty-nginx-legacy-ci >/dev/null 2>&1 || true
-          docker run -d --name pty-nginx-legacy-ci --add-host control:127.0.0.1 -p 18081:8080 \
-            -v "$PWD/deploy/nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro" \
-            -v "$PWD/deploy/nginx-ui/legacy:/etc/nginx/claude-pty-ui:ro" \
-            claude-pty-nginx:ci
-          sleep 2
-          fail=0
-          for path in / /login /account; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18081${path}")
-            echo "${path} → ${code}"
-            [ "${code}" = "502" ] || { echo "::error::legacy 的 ${path} 回 ${code}，預期 502（它該被 proxy 給 Flask）"; fail=1; }
-          done
-          docker rm -f pty-nginx-legacy-ci >/dev/null
-          exit "${fail}"
+      # ⚠ 這裡曾經有一個「legacy 片段不改變舊路」的步驟：掛 `nginx-ui/legacy`（空的片段）
+      #   起 nginx，驗三條頁面路由仍然 502（＝落到 `location /` 去 proxy 給 Flask，而 Flask
+      #   不在，所以 502 才是對的）。它守的是「切換器只加分支、不動舊路」，而 legacy 於
+      #   2026-08-26 拆除、那個目錄也刪了，性質本身不再存在。上面那個 `pty-nginx-ci` 的
+      #   步驟（vue 片段真的把三條路由直出成 index.html）照舊。
       # image 裡落地的是哪一組版本，要對得回 lockfile。只驗「build 成功」不夠：
       # `--require-hashes` 保證裝的東西沒被掉包，但保證不了它跟 uv.lock 講的是同一組。
       - name: 落地版本必須對得回 uv.lock
@@ -144,81 +129,50 @@ jobs:
         run: python3 tests/test_locked_runtime.py
 
   claude-pty:
-    # quick 模式：跳過所有會真的起容器的整合測試，不需要 image，約一分鐘。
+    # quick 模式：跳過所有會真的起容器的整合測試，不需要 image。
     # ⚠ 這個 job 存在的理由寫在 run-all.sh 的檔頭：測試寫得再好，沒有機制保證它們被跑過
     #   就等於少了一半。在它之前，claude-pty 那 11,000 行測試沒有任何自動觸發。
+    # ⚠ 這裡曾經有一個並行的 `claude-pty-vue` job（`--ui vue`）。兩版並存期間它是必要的，
+    #   2026-08-26 legacy 拆除之後**兩個 job 跑的是同一件事**，所以併回來了。
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      # node 在這個 job 裡管兩件事：
-      #   1. app.js 的語法檢查（那一關壞掉時症狀是「每支瀏覽器測試都停在登入逾時」）；
-      #   2. **Vue 版前端的六關**（npm ci / oxlint / prettier / vue-tsc / vitest / vite build）。
-      # 沒有它的話 run-all.sh 會把兩者都跳過並講出來，而下面那道「跳過上限」的 gate 只管
-      # `--all` 那個 job——所以這裡一定要裝。
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: claude-pty/frontend/package-lock.json
-      - run: ./tests/run-all.sh
-        working-directory: claude-pty
-
-  claude-pty-vue:
-    # Vue 版：同一套 e2e 與 golden，改跑 `CLAUDE_PTY_UI=vue`。
-    #
-    # ⚠ **這個 job 擋門。** 它一度是 continue-on-error（Vue 版還在補的那幾天），
-    #   2026-08-26 vue 模式四關全過之後拿掉了：留著一個永遠不會擋任何東西的綠勾，
-    #   比沒有這個 job 更糟：它看起來像有人在守。
-    # ⚠ 截圖在這裡會被平台 gate 跳過（golden 錄在 macOS、runner 是 Linux，字體不同），
-    #   跳過會明講。所以**這個 job 全綠不等於四關全過**：它比的是 aria／DOM／API 那三份，
-    #   視覺那一關只有在錄 golden 的那台機器上驗得到。改動版面之後請在本機跑一次
-    #   `./tests/run-all.sh --e2e --ui vue`。
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      # node 管前端那六關（npm ci / oxlint / prettier / vue-tsc / vitest / vite build），
+      # 而最後一關 build 出來的 dist 正是所有瀏覽器測試要吃的東西。沒有它的話 run-all.sh
+      # 會把六關與每一支瀏覽器測試都跳過並講出來，而那一輪等於什麼都沒測到。
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: claude-pty/frontend/package-lock.json
       - name: playwright 瀏覽器
-        # 這個 job 的全部價值就在瀏覽器測試上，沒裝的話 run-all.sh 會把它們全部跳過，
-        # 而 continue-on-error 讓那種「什麼都沒跑」看起來與「跑完了」一模一樣。
+        # 八支 e2e 加 golden_check 都要它。版本要跟 run-all.sh 問到的那顆一致——它問的是
+        # playwright 自己要哪一個 build，不是看快取目錄在不在（快取裡留著舊 build 是常態）。
         run: uv run --with playwright python -m playwright install --with-deps chromium-headless-shell
-      - name: 全套（vue 模式）
+      - name: 全套（quick）
         working-directory: claude-pty
         run: |
           set -o pipefail
-          ./tests/run-all.sh --ui vue 2>&1 | tee /tmp/pty-vue.log
+          ./tests/run-all.sh 2>&1 | tee /tmp/pty-quick.log
       - name: 跳過清單必須只剩已知的那些
-        # ⚠ 這個 job 擋門之後，「安靜地跳過」就變成它最可能的假綠燈形狀：瀏覽器沒裝、
-        #   dist 沒 build，run-all.sh 會把每一支瀏覽器測試都跳過並回 exit 0。
-        #   那一輪什麼都沒測到，而綠勾長得跟真的一樣。
-        # ⚠ 這裡跑的是 quick 模式，所以 docker 那 14 支本來就會跳過（同 claude-pty job）。
-        #   上限取 15：14 支 docker ＋ 沒有 claude 憑證的那一支。多出來的一律當成設定漏了。
+        # ⚠ 「安靜地跳過」在 CI 上跟「跑過而且過了」長得一模一樣，這是假綠燈第一種形狀。
+        #   瀏覽器沒裝、dist 沒 build 的話，run-all.sh 會把每一支瀏覽器測試都跳過並回
+        #   exit 0，那一輪什麼都沒測到而綠勾長得跟真的一樣。
+        # ⚠ **預期是 15：14 支需要 docker 的（quick 模式本來就不跑）＋ 前端相依掃描（trivy
+        #   沒裝在這個 runner 上）。** 這裡先前寫成「14 ＋ claude 憑證那支」，那是錯的：
+        #   `test_entrypoint_human_path` 同時需要 docker，quick 模式下它是被 docker 那道
+        #   gate 擋掉的，已經算在 14 裡面了（fable 快審 4b 低 3）。
         working-directory: claude-pty
         run: |
-          n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-vue.log)
+          n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-quick.log)
           n=${n:-0}
-          echo "跳過 ${n} 支（預期上限 15：docker 那些 ＋ claude 憑證）"
+          echo "跳過 ${n} 支（預期上限 15：14 支 docker ＋ trivy）"
           if [ "${n}" -gt 15 ]; then
-            sed -n '/^跳過/,$p' /tmp/pty-vue.log
-            echo "::error::跳過的數量超出預期：瀏覽器或 dist 沒備好的話這個 job 會什麼都沒測到"
+            sed -n '/^跳過/,$p' /tmp/pty-quick.log
+            echo "::error::跳過的數量超出預期——CI 上的跳過幾乎都是設定漏了，不是正當的環境限制"
             exit 1
           fi
-      - name: 摘要
-        if: always()
-        working-directory: claude-pty
-        run: |
-          {
-            echo "### Vue 版與 golden 的差距"
-            echo
-            echo '```'
-            grep -E "^  FAIL|^跑了|^跳過 " /tmp/pty-vue.log | head -60
-            echo '```'
-          } >> "${GITHUB_STEP_SUMMARY}"
 
   dev-container:
     # build image ＋ 全套（含那 13 支要 docker 的）。

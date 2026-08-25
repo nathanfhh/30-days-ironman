@@ -93,9 +93,10 @@ def main() -> None:
     重錄一次。那不是理論風險：另一條線 import 它拿 `record_into` 用，golden 就沒了，
     而且沒有任何錯誤訊息——下一次 golden_check 綠燈，因為規格剛剛被現況覆寫過。
     """
-    # ⚠ 錄的**永遠是 legacy**，它就是規格本身。不明寫的話，哪天 CLAUDE_PTY_UI 被設成 vue
-    #   （e2e 在 vue 模式下就是這樣跑的），這支會把 Vue 版錄成規格，防線當場反過來替回歸背書。
-    G.config.UI = "legacy"
+    # ⚠ **現在錄出來的一定是 Vue 版**（legacy 於 2026-08-26 拆除，沒有第二份可以錄）。
+    #   所以在階段 5 第二部分「把規格重錄成 Vue 版」之前，**不要跑這支不帶 --verify 的模式**：
+    #   跑了就是把現況覆寫成規格，而那正是這整套東西存在的反面。樹上那一份仍然是
+    #   從 legacy 錄的，`golden_check` 靠 META 的 `ui=legacy` 知道自己在跨版比對。
     G.pin_all()
     G.seed()
     global BASE
