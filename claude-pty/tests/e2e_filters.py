@@ -289,16 +289,15 @@ try:
         check("點了一天之後面板還開著", page.locator('[data-testid="range-panel"]').is_visible())
         days.nth(18).hover()
         page.wait_for_timeout(250)
-        # ⚠ is-in / is-edge 是 paintDays() 塗上去的**狀態 class**，它們本身就是這兩條要驗的
-        #   東西（畫面上那段預覽與兩個端點），不是用來定位元素的結構 class。定位的部分已經
-        #   收斂到 testid，狀態留在 class 上。
+        # 狀態改讀 data-in／data-edge（paintDays 與 class 一起寫）。不讀 is-in／is-edge：
+        # 那兩個 class 是給 CSS 的，換樣式時它們會動，而這兩條驗的是「哪幾格算在區間裡」。
         check(
             "還沒定終點時，滑過的那段會即時預覽",
-            page.locator('[data-testid="range-day"].is-in').count() > 0,
+            page.locator('[data-testid="range-day"][data-in="true"]').count() > 0,
         )
         days.nth(18).click()
         page.wait_for_timeout(200)
-        check("兩端各標一格", page.locator('[data-testid="range-day"].is-edge').count() == 2)
+        check("兩端各標一格", page.locator('[data-testid="range-day"][data-edge="true"]').count() == 2)
         check("還沒按確定就不該動到網址（半截的區間不查詢）", "from=" not in page.url)
         page.click('[data-testid="range-ok"]')
         page.wait_for_timeout(600)
