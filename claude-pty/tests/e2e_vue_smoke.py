@@ -256,6 +256,19 @@ with sync_playwright() as pw:
     page.wait_for_timeout(500)
     check("帳號頁走 SPA 路由（沒有整頁重載）", page.url.endswith("/account"))
 
+    # --- 已登入者冷載入 /login 要被導回 / ---
+    #
+    # ⚠ 這一條守的是 prod 才會發生的形狀：正式部署由 nginx 直接把 index.html 從磁碟吐出來
+    #   （deploy/nginx-ui/vue/ui.conf 的 `location = /login`），**根本不經過 Flask**，
+    #   所以 web.login_page 那句 302 永遠不會跑到。前端不接的話，已經登入的人直接輸入
+    #   /login 會停在登入表單前面，與舊版不一樣。
+    # ⚠ 用 goto 而不是點連結：SPA 內部換頁時身分本來就在記憶體裡，那條路證明不了什麼；
+    #   要證明的是**冷載入**（整份 app 重新開機、記憶體是空的）那一條。
+    page.goto(f"{BASE}/login", wait_until="networkidle")
+    check("已登入者冷載入 /login 被導回 /", page.url.rstrip("/").endswith(str(PORT)))
+    page.wait_for_selector('[data-testid="session-row"]', timeout=8000)
+    check("而且到的是真的清單頁，不是空殼", page.locator('[data-testid="session-row"]').count() >= 1)
+
     # --- 抽屜（ttyd 用替身，不需要 docker）---
     #
     # ⚠ 這裡**不 import golden_scenes 的 install_drawer_routes**：那支模組一 import 就會建暫時

@@ -31,7 +31,8 @@ setUnauthorizedHandler(() => {
 // 不 await：它失敗或慢都不該擋住第一次繪製（拿不到就留白，見 store 的說明）。
 void useSiteStore().loadPublicMeta();
 
-// 上一頁寄放的通知（登出、與 legacy 版互跳）
+// 上一頁寄放的通知。SPA 之內換頁不會清掉 toast，但**離開 SPA 的那條路還在**：登出之後是
+// 整頁跳轉回登入頁，當下發的那一則得有人接手（見 lib/toast 的 toastAfterNav）。
 drainPendingToast();
 
 app.mount("#app");

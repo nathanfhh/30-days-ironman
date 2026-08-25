@@ -123,7 +123,7 @@ export const useSiteStore = defineStore("site", () => {
    *   時 api() 收到 401 會統一導回登入頁，那條路才是重新確認身分的入口。 */
   async function loadIdentity(): Promise<User | null> {
     try {
-      await fetchAccountMeta();
+      await fetchAccountMeta({ probe: true });
       return user.value;
     } catch {
       user.value = null;
@@ -163,8 +163,11 @@ export const useSiteStore = defineStore("site", () => {
    *   它本來就是「這個帳號的處境」那條端點，把 who am I 併進來之後，冷載入從三趟往返
    *   （bootstrap ＋ auth/me ＋ account/bootstrap）變成兩趟。
    */
-  async function fetchAccountMeta(): Promise<AccountBootstrap> {
-    const d = await api<AccountBootstrap>("/api/account/bootstrap");
+  async function fetchAccountMeta({ probe = false } = {}): Promise<AccountBootstrap> {
+    // probe：這一發是「我是誰」的探測，401 由呼叫端自己解讀（見 api 的 handleUnauthorized）
+    const d = await api<AccountBootstrap>("/api/account/bootstrap", {
+      handleUnauthorized: !probe,
+    });
     meta.value = {
       ...meta.value,
       defaultCli: d.default_cli,
