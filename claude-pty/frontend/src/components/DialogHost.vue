@@ -4,6 +4,8 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import { dialogs, settleDialog, type DialogEntry } from "@/lib/dialog";
 
+import PasswordInput from "./PasswordInput.vue";
+
 const inputs = ref<Record<number, HTMLInputElement | null>>({});
 
 const answer = (d: DialogEntry): string | boolean | null => {
@@ -68,7 +70,17 @@ watch(
           :class="{ 'modal__pre--nowrap': d.preNoWrap }"
           >{{ d.pre }}</pre>
         <div v-if="d.input" class="field">
+          <!-- ⚠ 密碼型的輸入框也要包「看一眼」：舊版 `dialog()` 建完之後會呼叫
+               `enhancePasswordFields(wrap)`（管理員重設他人密碼走的就是這條），包完多一個
+               `.pw` 外框與一顆按鈕，而那顆按鈕在 aria 樹裡看得到。 -->
+          <PasswordInput
+            v-if="(d.input.type || 'text') === 'password'"
+            :id="'modal-input'"
+            v-model="d.draft"
+            :placeholder="d.input.placeholder || ''"
+          />
           <input
+            v-else
             :ref="(el) => (inputs[d.id] = el as HTMLInputElement | null)"
             v-model="d.draft"
             id="modal-input"
