@@ -46,6 +46,21 @@ const filtersOpen = ref(false);
 /** 使用者動過那顆篩選鍵沒有。只影響 `#filter-bar` 要不要寫 `inert`——舊版是「點過才寫」，
  *  見 FilterBar 裡的說明。 */
 const filtersToggled = ref(false);
+/** 正在進行中的那一顆列動作（`<act>-<id>`）。舊版是直接動那顆按鈕的 `disabled`，並在
+ *  `finally` 還原——**而使用者確認的對話框就在那中間**，所以「對話框開著時那顆鍵是停用的」
+ *  是真的行為，不是實作細節（它在 aria 樹裡看得到，golden 對得出來）。 */
+const busyAction = ref<string | null>(null);
+
+/** 包一層：不論成功、失敗、或使用者按了取消，那顆鍵都要還原。 */
+async function withBusy(key: string, fn: () => Promise<void>): Promise<void> {
+  if (busyAction.value) return;
+  busyAction.value = key;
+  try {
+    await fn();
+  } finally {
+    busyAction.value = null;
+  }
+}
 const drawer = ref<{ sid: string; label: string; path: string; flavor: string | null } | null>(
   null,
 );
@@ -150,7 +165,11 @@ async function handleRowError(action: string, ex: unknown): Promise<void> {
   }
 }
 
-async function onRename(row: SessionRow): Promise<void> {
+function onRename(row: SessionRow): Promise<void> {
+  return withBusy(`rename-${row.id}`, () => renameRow(row));
+}
+
+async function renameRow(row: SessionRow): Promise<void> {
   try {
     const name = await dialog({
       title: "重新命名",
@@ -183,7 +202,11 @@ async function onRename(row: SessionRow): Promise<void> {
   }
 }
 
-async function onKill(row: SessionRow): Promise<void> {
+function onKill(row: SessionRow): Promise<void> {
+  return withBusy(`kill-${row.id}`, () => killRow(row));
+}
+
+async function killRow(row: SessionRow): Promise<void> {
   // 取了名字之後只報 id 等於要人自己去對照；名字與 container 都寫出來才確認得了
   const label = row.display_name || row.id;
   try {
@@ -208,7 +231,11 @@ async function onKill(row: SessionRow): Promise<void> {
   }
 }
 
-async function onOpen(row: SessionRow, e: MouseEvent): Promise<void> {
+function onOpen(row: SessionRow, e: MouseEvent): Promise<void> {
+  return withBusy(`open-${row.id}`, () => openRow(row, e));
+}
+
+async function openRow(row: SessionRow, e: MouseEvent): Promise<void> {
   try {
     // 先 POST 起 view：失敗（沒有可用 port、session 已不在）在這裡就會拋出，
     // 比讓 iframe 靜靜地被導回首頁清楚得多。
@@ -348,6 +375,7 @@ watch(showHistory, () => {
         :error="error"
         :loading="loading"
         :swapping="swapping"
+        :busy="busyAction"
         @rename="onRename"
         @open="onOpen"
         @kill="onKill"
@@ -372,7 +400,7 @@ watch(showHistory, () => {
       :label="drawer.label"
       :path="drawer.path"
       :flavor="drawer.flavor"
-      @close="drawer = null"
+      @close="(console.log('DBG parent close'), (drawer = null))"
     />
   </AppShell>
 </template>

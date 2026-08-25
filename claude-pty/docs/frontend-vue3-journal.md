@@ -833,3 +833,116 @@ production bundle 上掛一個 `window.toast`。toast 元件本身的行為改�
 它的價值在於**同一支腳本對兩版都跑得過**：每一條斷言只用 `data-testid` 與網址，把
 `config.UI` 換成 `legacy` 再跑，除了「帳號頁是殼」以外全部要過。開發時就是這樣抓到
 「看歷史時建立表單，舊版是 `hidden`、我寫成了 `v-if`＝節點整個消失」的。
+
+### 階段 4 後半：帳號頁與終端抽屜
+
+兩個殼都填起來了。驗法與前半一樣：**拿 golden 的十八個場景錄 Vue 版，跟 legacy 的規格逐字
+比**（`config.UI` 在 `pin_all()` **之後**才改成 vue——它會把值釘回 legacy，在它之前設會被
+蓋掉，於是「錄 vue」其實錄的是 legacy，全綠但毫無意義）。
+
+lane B 在 `2c0aff2` 補了 DOM 快照，這一輪因此比前半好驗得多：**aria 看不到的差異（hidden
+vs 從 DOM 移除、title、data-tip）現在有東西守**，而那正是 1:1 最容易漏的一層。
+
+#### 結果
+
+十八個場景，兩個跑不起來（見下），其餘十六個：
+
+| | aria（兩視口） | dom（兩視口） |
+|---|---|---|
+| 十六個場景 | **全部逐字相同** | 全部只差一行：`div id=app` |
+
+`div id=app` 是 SPA 的掛載點，每個場景都多這一行。要消掉只能把 Vue 掛到 `document.body`
+（mount 時會清空容器，等於連 body 裡的 script 一起拆），為了一行 DOM 換一個不建議的掛法
+不值得——而且階段 5 拆舊之後 golden 會從 Vue 版重錄，那一行就是新規格的一部分。
+這與 4a 已經裁示過的「body 結構」是同一件事。
+
+#### 被 golden 抓到的一條真差異
+
+`sessions-modal-kill` 與 `sessions-modal-rename` 的 aria 一開始是紅的：
+
+```
+-  - button " 終止" [disabled]
++  - button " 終止"
+```
+
+舊版 `manifest` 的 click handler 第一件事是 `btn.disabled = true`，最後在 `finally` 還原
+——而 **`await dialog(...)` 就在那中間**，所以確認對話框開著的時候，那一列的動作鍵是停用
+的。我第一版沒有這個狀態：對話框開著時還能再按一次同一顆鍵。
+
+修法是把「進行中的那一顆」提到 `SessionsView`（`busyAction`＝`<act>-<id>`），三個動作共用
+同一個 `withBusy()` 包裝，`finally` 還原。修完兩個場景的 aria 就乾淨了。
+
+**這條沒有任何人會用眼睛看到**（對話框蓋在上面），是 aria 快照抓到的。
+
+#### 被單元測試抓到的一條真 bug
+
+`TerminalDrawer` 的 `onBeforeUnmount` 用了 `CSS.escape`（照抄舊版）——**jsdom 沒有這個
+函式**，於是整個 beforeUnmount 拋出，元件拆不掉、抽屜留在畫面上，而 Vue 只印一行
+`[Vue warn] Unhandled error during execution of beforeUnmount hook`，畫面沒有任何跡象。
+
+真瀏覽器裡不會發生，但「拆除鉤子拋出就拆不掉」這個形狀值得防：改成有才用，沒有就退回原
+字串（sid 是 uuid4 的 hex，本來就沒有需要逸出的字元）。
+
+#### `useTerminalSize`：階段 1.5 的成果搬成 composable
+
+兩道閘、token、debounce、`healGlyphScale`、字級的夾取與持久化全部逐條搬過來。**Vue 真正
+帶來的好處是拆除有地方掛**（`onBeforeUnmount` 收 ResizeObserver 與計時器），不是
+`nextTick`——後者只保證 DOM patch 刷完，不保證 layout 穩、transition 結束、iframe 內的 JS
+跑完，等的東西根本不對（這件事在階段 1.5 就寫過，搬過來之後更明顯）。
+
+九支 vitest 守它，其中三條是「看畫面永遠看不出來」的那種：
+
+- 抽屜還在滑入就不送（第一道閘）；
+- **無限動畫不可以把 /resize 永遠卡住**——`getAnimations()` 回的是元素上所有的動畫，哪天
+  有人加一條 `animation: … infinite`，它的 `finished` 永遠不會 resolve；
+- token：連按時只送最後一次，而且尺寸是**送出的當下**才讀。
+
+⚠ 寫這幾支時踩到一個測試自己的坑：宿主元件沒有 unmount，composable 排的 debounce 與遞迴
+輪詢會在**下一支**測試裡醒來、打到那一支剛換上的 fetch 替身，於是計數莫名其妙變成 3。
+`afterEach` 一律拆掉。看到「數字比預期多」的第一件事是問「多出來的是不是上一支留下的」。
+
+#### 帳號頁：六個面板拆成六個元件
+
+順序與舊版逐塊對應。幾個照搬的紀律：
+
+- **管理員那三塊整塊 gate**，不是把裡面的按鈕停用：區塊本身若渲染出來，一般使用者會看到
+  一張永遠載入失敗的表格，而且知道有這個東西存在。測試連「不該去打那幾條 API」也驗。
+- 憑證欄**永遠是空的**（存進去不吐回來），「設過沒」只能靠 placeholder 講。
+- 存／清之後**整頁重載**：徽章、chip、按鈕三處狀態同源重畫。SPA 其實可以只重抓 bootstrap，
+  但那是階段 5 的最佳化；現在的重點是行為與舊版一致，而重載這條路不可能漏掉任何一處。
+- 改密碼與重設密碼**收不乾淨時不報成功**（後端回 200 加實情），而且失敗那條要多留時間讓
+  人讀完再跳。這兩條各有一支測試釘著。
+- 權限說明的 `**粗體**` 自己拆成片段用 `v-for` 畫，不走 `v-html`——舊版是 `esc()` 之後才
+  replace，這一版連那一步都不必（Vue 的插值本來就會逸出）。
+
+密碼欄一律走 `PasswordInput`：舊版是 `enhancePasswordFields()` 掃過去包起來的，包完會多一個
+`.pw` 外框與一顆「看一眼」按鈕，**而那顆按鈕在 aria 樹裡看得到**。`dialog({input:{type:
+"password"}})` 那條（管理員重設他人密碼）也一樣，所以 `DialogHost` 跟著改。
+
+#### 兩個場景仍然跑不起來（harness 的耦合，不是畫面差異）
+
+`sessions-toast` 與 `sessions-toast-error` 直接 `page.evaluate("() => toast(...)")` /
+`toastError(...)`——那是 `app.js` 的**全域函式**，Vue 版沒有這個全域。這不是 1:1 的差異，
+是場景伸手進了某一版的內部實作。
+
+我沒有動 `golden_scenes.py`（那是階段 2 的規格），也沒有為了它在 production bundle 上掛一個
+`window.toast`。toast 元件的行為改用真實互動驗：`e2e_vue_smoke` 的「終止 → 取消 → 已取消」
+與 vitest 的 toast 測試。要讓這兩場對兩版都成立，得由場景改成用 UI 動作觸發並重錄。
+
+#### `e2e_vue_smoke` 擴到 50 條
+
+補了抽屜（iframe 指到單一入口那條路徑而不是跨 origin 的直連網址、標題列講得出是哪一顆
+ttyd、背景 inert、字級讀得到、關掉之後節點真的被拆、inert 收回來）與帳號頁（三塊面板、
+管理員的清單與 ttyd 實況、憑證兩態、改密碼的即時驗證、四個密碼欄都有「看一眼」）。
+
+ttyd 用 `page.route` 的替身，**不 import `golden_scenes` 的 `install_drawer_routes`**：
+那支模組一 import 就會建暫時的 DB、改 config，而這一支自己已經有一份。
+
+⚠ 又踩到一個 Playwright 的坑：`wait_for_selector('[data-testid=x][hidden]')` 的預設是「等它
+**可見**」，而一個 hidden 的元素永遠不會可見，於是那一行必定逾時。要用 `state="hidden"`。
+
+#### 驗收
+
+`run-all.sh quick` 39 支 0 失敗、跳過 14 支與基線逐字相同；前端七關全過；vitest 103 支、
+行覆蓋率 87.5%（門檻 70%）；`e2e_vue_smoke` 50 條全過；十六個 golden 場景 aria 逐字相同、
+dom 只差 SPA 的掛載點那一行。
