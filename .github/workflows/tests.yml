@@ -128,6 +128,24 @@ jobs:
         working-directory: claude-pty
         run: python3 tests/test_locked_runtime.py
 
+  golden-change:
+    # golden 動了，commit 訊息就要說是哪幾場（完整審查 L2）。
+    #
+    # ⚠ **只在 PR 上跑。** 它比的是「這個 PR 改了什麼」，而 push 到 main 那一刻沒有 base
+    #   可比（要嘛沒有範圍、要嘛範圍是整個歷史）。既有的重錄 commit 沒有帶標記，這道 gate
+    #   對它們放行不是特例，是它本來就只看 PR range。
+    # ⚠ `fetch-depth: 0`：預設是淺 clone，拿不到 base 的 commit，`rev-list` 會解不開範圍。
+    #   那時腳本會**紅**而不是當成「沒有變動」——「看不到」與「沒有」不可以長得一樣。
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: golden 變動要在 commit 訊息裡交代
+        working-directory: claude-pty
+        run: ./tests/check_golden_change.sh "${{ github.event.pull_request.base.sha }}..HEAD"
+
   claude-pty:
     # quick 模式：跳過所有會真的起容器的整合測試，不需要 image。
     # ⚠ 這個 job 存在的理由寫在 run-all.sh 的檔頭：測試寫得再好，沒有機制保證它們被跑過
