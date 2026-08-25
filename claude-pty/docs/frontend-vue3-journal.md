@@ -1192,3 +1192,55 @@ A6 收尾之後只剩兩場紅（`account-user`／`account-admin`，唯一會 `p
 階段 5 拆舊時連同註解一起刪。單元測試同時釘住兩條路（帶 user 時只打一發、不帶時退回並喊）。
 
 ⚠ 這一刀**沒有實跑 `--ui vue`**：後端還沒併進來，跑了只會驗到相容路徑。等 ff 之後再跑。
+
+### 階段 4 後半收尾：vue 模式歸零
+
+| 指令 | 結果 |
+|---|---|
+| `run-all.sh --e2e --ui vue` | **10 支 0 失敗**（八支 e2e ＋ e2e_vue_smoke ＋ golden_check） |
+| 其中 `golden_check`（vue） | **109 條全 PASS**：36 aria ＋ 36 dom ＋ 18 network ＋ 19 截圖 |
+| `run-all.sh quick --ui vue` | 39 支 0 失敗，跳過 14 支 |
+| `run-all.sh quick`（legacy） | 39 支 0 失敗，跳過清單與階段 1 基線逐字相同 |
+| `run-all.sh --e2e`（legacy） | 10 支 0 失敗 |
+
+**四關全過**，而且截圖那一關是在錄 golden 的同一台機器上比的，所以 A5（頁尾那個空白）
+確實修好了，不是被平台 gate 跳過去的。
+
+#### 收尾時抓到兩個我自己的坑
+
+**一｜dist 保險絲只問「在不在」，不問「新不新」。**
+
+第一輪 `--e2e --ui vue` 有兩條紅：帳號頁仍打 `/api/auth/me`。差一點就當成 Vue 版的 bug
+回報出去 —— 實際上是 `--e2e` 模式會跳過前端六關（build 在那裡面），而我的保險絲看到
+`dist/index.html` 存在就放行，那份 dist 的原始碼**比工作區舊了兩個 commit**。
+`find frontend/src -newer server/static/dist/index.html` 一問就現形。
+
+改成「不在**或比原始碼舊**就 build」。這與 `run-all.sh` 開頭清 `__pycache__` 的理由是
+同一個：**測試必須對應現在的原始碼**，而「build 產物悄悄落後」沒有任何跡象。
+差別只在一個是 `.pyc` 一個是 `dist/`。
+
+教訓與先前那次變異測試無效是同一條：**看到紅燈，第一件事是確認「我測到的真的是我以為
+的那份東西嗎」**，而不是直接把它歸因給被測物。
+
+**二｜`--ui vue` 套得太廣。**
+
+`quick --ui vue` 有三支紅：`test_bootstrap`、`test_web`、`test_gitlab_proxy_conf`。
+它們是**伺服端渲染的契約測試** —— 逐條比對「模板注入的值」與「bootstrap API 回的值」
+是不是同一個（`data-behind-proxy`、`maxlength`、`MIN_PW`…）。vue 模式下 Flask 出的是
+SPA 外殼，那些注入點根本不存在。
+
+紅的原因是「這些測試不適用於這個模式」，不是「有東西壞了」。兩者混在同一輪，紅燈就
+不再是訊號。改成 **`--ui` 只套在 `e2e_*` 與 `golden_check` 上**，其餘一律 legacy，
+而且執行時把模式印在標題上（`== e2e_account（--ui vue）`），看得出哪幾支跟著走。
+階段 5 拆掉 legacy 之後那些測試會跟著模板退場，這條分流也就不必要了。
+
+#### CI
+
+`claude-pty-vue` 的 `continue-on-error` 拿掉了，它現在擋門。同時補一道**跳過上限**：
+這個 job 一旦擋門，「安靜地跳過」就是它最可能的假綠燈形狀 —— 瀏覽器沒裝或 dist 沒
+build 的話，run-all.sh 會把每一支瀏覽器測試都跳過並回 exit 0，那一輪什麼都沒測到而
+綠勾長得跟真的一樣。上限取 15（14 支 docker ＋ claude 憑證那支），實測這一輪是 14。
+
+⚠ 仍然要記著：**這個 job 全綠不等於四關全過。** 截圖在 CI 上被平台 gate 跳過（golden
+錄在 macOS、runner 是 Linux），它比的是 aria／DOM／API 那三份。動到版面之後請在本機
+跑一次 `./tests/run-all.sh --e2e --ui vue`，那裡才驗得到視覺那一關。

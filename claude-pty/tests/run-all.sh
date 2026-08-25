@@ -131,8 +131,15 @@ case "${ui_mode}" in
   legacy|vue) ;;
   *) echo "不認得的 --ui：${ui_mode}（只收 legacy 或 vue）" >&2; exit 2 ;;
 esac
-# 透傳給每一支測試：server/config.py 讀 CLAUDE_PTY_UI 決定 web.py 出哪一套前端。
-export CLAUDE_PTY_UI="${ui_mode}"
+# ⚠ `--ui vue` **只套在瀏覽器測試上**（`e2e_*` 與 `golden_check`），其餘一律 legacy。
+#
+#   其他那些是**伺服端渲染的契約測試**：`test_web` 與 `test_bootstrap` 逐條比對
+#   「模板裡注入的值」與「bootstrap API 回的值」是不是同一個（`data-behind-proxy`、
+#   `maxlength`、`MIN_PW`…），`test_gitlab_proxy_conf` 也讀模板。vue 模式下 Flask 出的是
+#   SPA 外殼，那些注入點根本不存在，於是它們全紅，而紅的原因是「這些測試不適用於
+#   這個模式」，不是「有東西壞了」。把兩者混在同一輪，紅燈就不再是訊號。
+# ⚠ 階段 5 拆掉 legacy 之後，那些測試會跟著模板一起退場，這條分流也就不必要了。
+export CLAUDE_PTY_UI=legacy
 
 # --- 先清掉 bytecode 快取 -----------------------------------------------------
 #
@@ -205,7 +212,11 @@ run_one() {
   if { [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; } && [ "${have_browser}" -eq 0 ]; then
     skipped+=("${base}（playwright 缺這版的瀏覽器：playwright install chromium-headless-shell）"); return
   fi
-  printf '\n\033[1m== %s\033[0m\n' "${base}"
+  if { [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; } && [ "${ui_mode}" != "legacy" ]; then
+    printf '\n\033[1m== %s（--ui %s）\033[0m\n' "${base}" "${ui_mode}"
+  else
+    printf '\n\033[1m== %s\033[0m\n' "${base}"
+  fi
   ran=$((ran + 1))
   # ⚠ 邊印邊收（tee）：跑完之後還看得到它印了什麼——下面那道「空跑」檢查需要。
   #   直接 `> file` 的話跑很久的測試會整段沒有畫面。
@@ -214,7 +225,10 @@ run_one() {
   #   全部吐出來**。跑五分鐘的整合測試因此整段沒有畫面，看起來像卡死。
   #   這是 tee 帶進來的回歸，不是原本就有的：沒有 pipe 時 stdout 是 TTY，本來就是行緩衝。
   local out; out="$(mktemp)"
-  if ! uv run "${DEPS[@]}" python -u "${f}" 2>&1 | tee "${out}"; then
+  # 見上面 `export CLAUDE_PTY_UI=legacy` 那段：只有瀏覽器測試跟著 --ui 走。
+  local ui="legacy"
+  if [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; then ui="${ui_mode}"; fi
+  if ! CLAUDE_PTY_UI="${ui}" uv run "${DEPS[@]}" python -u "${f}" 2>&1 | tee "${out}"; then
     fails=$((fails + 1))
     echo "   ↑ ${base} 失敗"
   # --- 空跑：exit 0 但一條斷言都沒跑 -------------------------------------------
@@ -338,19 +352,33 @@ PYEOF
   fi
 fi
 
-# vue 模式的保險絲：跑到這裡還沒有 dist 就補 build 一次。
+# vue 模式的保險絲：跑到這裡 dist 不在、或**比原始碼舊**，就補 build 一次。
 #
-# 正常情況上面那段前端六關的最後一關就是 build，所以到這裡 dist 已經在了。但它有兩條
+# 正常情況上面那段前端六關的最後一關就是 build，所以到這裡 dist 已經是新的。但它有兩條
 # 會被整段跳過的路：`--e2e` 模式（那一段自己會跳），以及 host 上沒有 npm。
 # legacy 模式下跳過沒差（只有 e2e_vue_smoke 需要 dist，它進跳過清單、看得見）；
 # **vue 模式下缺 dist 等於每一支瀏覽器測試都跳過，那一輪什麼都沒測到而畫面上是綠的**。
-# ⚠ 只在真的缺的時候 build：build 要十幾秒，而多數時候它已經在了。
+#
+# ⚠ **判準是「新不新」不是「在不在」。** 第一版只問存不存在，於是
+#   `./tests/run-all.sh --e2e --ui vue` 拿一份**上一次 build 的 dist** 去測，而那份
+#   dist 的原始碼比工作區舊了兩個 commit。症狀是 golden 的網路序列多一發
+#   `/api/auth/me`，我差一點把它當成 Vue 版的 bug 回報出去（2026-08-26 實際發生）。
+#   這與這個檔案開頭清 `__pycache__` 的理由是同一個：**測試必須對應現在的原始碼**，
+#   而「build 產物悄悄落後」沒有任何跡象。
+# ⚠ 只在真的需要時 build：build 一秒多，但每次都跑會讓「跑一次測試」多一個副作用。
 # ⚠ 沒有 npm 就照既有風格跳過**並講出來**，不可以靜靜地讓後面每一支都以「缺 dist」跳過。
-if [ "${ui_mode}" = "vue" ] && [ ! -f server/static/dist/index.html ]; then
+_dist_stale=0
+if [ ! -f server/static/dist/index.html ]; then
+  _dist_stale=1
+elif [ -n "$(find frontend/src frontend/index.html frontend/package.json frontend/vite.config.ts \
+              -newer server/static/dist/index.html -print -quit 2>/dev/null)" ]; then
+  _dist_stale=1
+fi
+if [ "${ui_mode}" = "vue" ] && [ "${_dist_stale}" -eq 1 ]; then
   if command -v npm >/dev/null 2>&1 && [ -f frontend/package-lock.json ]; then
-    printf '\n\033[1m== vue 模式：dist 還沒 build，先補一次 ==\033[0m\n'
+    printf '\n\033[1m== vue 模式：dist 不在或比原始碼舊，先 build 一次 ==\033[0m\n'
     if (cd frontend && npm ci --no-audit --no-fund >/dev/null 2>&1 && npm run --silent build); then
-      echo "  PASS  dist 建好了"
+      echo "  PASS  dist 是對應現在這份原始碼的了"
     else
       fails=$((fails + 1))
       echo "   ↑ 前端 build 失敗，vue 模式的瀏覽器測試會全部跳過"

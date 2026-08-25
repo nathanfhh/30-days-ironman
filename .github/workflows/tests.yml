@@ -167,15 +167,14 @@ jobs:
   claude-pty-vue:
     # Vue 版：同一套 e2e 與 golden，改跑 `CLAUDE_PTY_UI=vue`。
     #
-    # ⚠ **現在是 continue-on-error。** Vue 版還沒補完（AccountView 與 TerminalDrawer 在做），
-    #   所以這個 job 現在必定是紅的。它存在的用途是**看得見還差多少**，不是擋 merge。
-    # ⚠ 什麼時候改成擋門：階段 5「四關全過」的那一刻，也就是這個 job 自然全綠的第一天。
-    #   把 continue-on-error 拿掉是那次的一部分，不是另一件事。留著它而忘記拿掉，
-    #   等於養一個永遠不會擋任何東西的綠勾。
-    # ⚠ 截圖在這裡會被平台 gate 跳過（golden 錄在 macOS、runner 是 Linux，字體不同）。
-    #   跳過會明講，比的是 aria／DOM／API 那三份——它們是文字，跨平台完全可比。
+    # ⚠ **這個 job 擋門。** 它一度是 continue-on-error（Vue 版還在補的那幾天），
+    #   2026-08-26 vue 模式四關全過之後拿掉了：留著一個永遠不會擋任何東西的綠勾，
+    #   比沒有這個 job 更糟：它看起來像有人在守。
+    # ⚠ 截圖在這裡會被平台 gate 跳過（golden 錄在 macOS、runner 是 Linux，字體不同），
+    #   跳過會明講。所以**這個 job 全綠不等於四關全過**：它比的是 aria／DOM／API 那三份，
+    #   視覺那一關只有在錄 golden 的那台機器上驗得到。改動版面之後請在本機跑一次
+    #   `./tests/run-all.sh --e2e --ui vue`。
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -193,6 +192,22 @@ jobs:
         run: |
           set -o pipefail
           ./tests/run-all.sh --ui vue 2>&1 | tee /tmp/pty-vue.log
+      - name: 跳過清單必須只剩已知的那些
+        # ⚠ 這個 job 擋門之後，「安靜地跳過」就變成它最可能的假綠燈形狀：瀏覽器沒裝、
+        #   dist 沒 build，run-all.sh 會把每一支瀏覽器測試都跳過並回 exit 0。
+        #   那一輪什麼都沒測到，而綠勾長得跟真的一樣。
+        # ⚠ 這裡跑的是 quick 模式，所以 docker 那 14 支本來就會跳過（同 claude-pty job）。
+        #   上限取 15：14 支 docker ＋ 沒有 claude 憑證的那一支。多出來的一律當成設定漏了。
+        working-directory: claude-pty
+        run: |
+          n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-vue.log)
+          n=${n:-0}
+          echo "跳過 ${n} 支（預期上限 15：docker 那些 ＋ claude 憑證）"
+          if [ "${n}" -gt 15 ]; then
+            sed -n '/^跳過/,$p' /tmp/pty-vue.log
+            echo "::error::跳過的數量超出預期：瀏覽器或 dist 沒備好的話這個 job 會什麼都沒測到"
+            exit 1
+          fi
       - name: 摘要
         if: always()
         working-directory: claude-pty
