@@ -102,10 +102,24 @@ export const useSiteStore = defineStore("site", () => {
   /** 進頁那一發 `/api/auth/me` 有沒有回來過。router 的守衛靠它決定要不要等。 */
   const identityLoaded = ref(false);
 
+  /**
+   * 登入成功之後，直接用回應裡的身分——**不要再打一次 `/api/auth/me`**。
+   *
+   * `POST /api/auth/login` 回的就是 `{user: …}`（見 server/app.py 的 login），那份與
+   * `/api/auth/me` 是同一個來源。再問一次除了多一趟往返之外，還讓「登入」這個動作在網路
+   * 序列上多一發 golden 對不到的呼叫。
+   */
+  function adoptIdentity(u: User): void {
+    user.value = u;
+    identityLoaded.value = true;
+  }
+
   /** 我是誰。401 由 api() 統一導回登入頁，這裡只負責把身分放好。
    *
    * ⚠ 拿到身分就順手把 `/api/account/bootstrap` 也帶回來：招牌在 sessions 與 account
-   *   兩頁都有，兩頁都需要憑證狀態與長度限制。分開讓呼叫端各自記得打，遲早會有一頁忘記。 */
+   *   兩頁都有，兩頁都需要憑證狀態與長度限制。分開讓呼叫端各自記得打，遲早會有一頁忘記。
+   * ⚠ **一個 app 生命週期只會問一次**（`identityLoaded` 擋著），跨路由不重打；cookie 失效
+   *   時 api() 收到 401 會統一導回登入頁，那條路才是重新確認身分的入口。 */
   async function loadIdentity(): Promise<User | null> {
     try {
       const d = await api<{ user: User }>("/api/auth/me");
@@ -192,6 +206,7 @@ export const useSiteStore = defineStore("site", () => {
     meta,
     identityLoaded,
     loadIdentity,
+    adoptIdentity,
     loadPublicMeta,
     loadAccountMeta,
     applyMetaToRoot,
