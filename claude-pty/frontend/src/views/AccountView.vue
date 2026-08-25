@@ -1,25 +1,48 @@
 <script setup lang="ts">
 /*
- * 帳號管理頁：**階段 4 前半只有殼**。
+ * 帳號管理頁。對照舊版 `server/templates/account.html`（651 行）。
  *
- * 為什麼不現在做：舊版 `account.html` 有 651 行、**28 處 Jinja 注入**（是三個模板裡最多的），
- * 而那 28 處正是計畫階段 3 要改成 API 的東西。在那些端點出現之前搬過來，等於在前端重寫一份
- * 猜出來的伺服端狀態——那是「描述≠實作」的反面教材，也會讓階段 3 完成時整頁重做一次。
+ * 拆成六個面板各自一個元件，順序與舊版逐塊對應：
+ *   CLI 憑證 → GitLab 憑證（功能開著才畫）→ 變更我的密碼 →〔管理員〕新增使用者 →
+ *   帳號清單 → ttyd 實況
  *
- * 這一頁要搬的區塊（都在舊版模板裡）：改密碼、CLI 憑證（setup-token）、GitLab PAT、
- * ttyd 檢視（views／orphans）、管理員的帳號名冊與新增帳號。
+ * ⚠ 管理員那三塊要**整塊 gate**，不是把裡面的按鈕停用：後端那幾條 API 有 `@admin_only`，
+ *   但區塊本身若對一般使用者也渲染，他會看到一張永遠載入失敗的表格，而且知道有這個東西
+ *   存在（`test_template_contract` 守的就是這條）。
  */
+import { onMounted, useTemplateRef } from "vue";
+
 import AppShell from "@/components/AppShell.vue";
+import CliTokenPanel from "@/components/account/CliTokenPanel.vue";
+import GitlabPatPanel from "@/components/account/GitlabPatPanel.vue";
+import NewUserPanel from "@/components/account/NewUserPanel.vue";
+import PasswordPanel from "@/components/account/PasswordPanel.vue";
+import RosterPanel from "@/components/account/RosterPanel.vue";
+import TtydPanel from "@/components/account/TtydPanel.vue";
+import { useSiteStore } from "@/stores/site";
+
+const store = useSiteStore();
+
+const roster = useTemplateRef<InstanceType<typeof RosterPanel>>("roster");
+const ttyd = useTemplateRef<InstanceType<typeof TtydPanel>>("ttyd");
+
+onMounted(() => {
+  if (store.user?.is_admin) {
+    void roster.value?.load();
+    void ttyd.value?.load();
+  }
+});
 </script>
 
 <template>
   <AppShell>
-    <section class="panel">
-      <h2 class="panel__title">帳號管理</h2>
-      <!-- prettier-ignore -->
-      <p class="empty">
-        這一頁還沒搬到這一版（階段 4 後半，要等階段 3 的 endpoint）。目前請切回舊介面
-        （`CLAUDE_PTY_UI=legacy`）使用。</p>
-    </section>
+    <CliTokenPanel />
+    <GitlabPatPanel v-if="store.meta.gitlabEnabled" />
+    <PasswordPanel />
+    <template v-if="store.user?.is_admin">
+      <NewUserPanel @created="roster?.afterCreate($event)" />
+      <RosterPanel ref="roster" />
+      <TtydPanel ref="ttyd" />
+    </template>
   </AppShell>
 </template>

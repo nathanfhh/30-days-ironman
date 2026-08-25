@@ -404,14 +404,18 @@ describe("SessionsView", () => {
     vi.unstubAllGlobals();
   });
 
-  it("走 nginx 時開抽屜（目前是殼，但路要對）", async () => {
+  it("走 nginx 時開抽屜：iframe 指到單一入口那條路徑，不是跨 origin 的直連網址", async () => {
     setUser();
     useSiteStore().meta.behindProxy = true;
     const w = await mountAt("/");
     installFetch({
       "/api/sessions": { body: listBody([sessionRow()]) },
       "/api/sessions/sid1/view": {
-        body: { path: "/session/sid1/", direct_url: "http://127.0.0.1:41000/" },
+        body: {
+          path: "/session/sid1/",
+          direct_url: "http://127.0.0.1:41000/",
+          ttyd_flavor: "Rust",
+        },
       },
       "/api/catalog": { body: CATALOG },
     });
@@ -419,9 +423,28 @@ describe("SessionsView", () => {
     await flushPromises();
     const drawer = document.querySelector('[data-testid="drawer"]')!;
     expect(drawer.getAttribute("data-sid")).toBe("sid1");
+    // ⚠ **一定是 `path` 不是 `direct_url`**：後者是另一個 origin，會被本站 CSP 擋在 iframe 外
+    const frame = document.querySelector('[data-testid="drawer-frame"]') as HTMLIFrameElement;
+    expect(frame.getAttribute("src")).toBe("/session/sid1/");
+    // 哪一顆 ttyd 在服務：出問題時第一個要問的問題
+    expect(document.querySelector('[data-testid="drawer-bin"]')!.textContent).toBe("Rust");
+    // 背景要退出 Tab 序（aria-modal 只影響螢幕閱讀器的虛擬游標，不影響 Tab 順序）
+    expect((document.querySelector(".shell") as HTMLElement).inert).toBe(true);
     (document.querySelector('[data-testid="drawer-close"]') as HTMLButtonElement).click();
+    // eslint-disable-next-line no-console
+    console.log("DBG drawers:", document.querySelectorAll('[data-testid="drawer"]').length);
+    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 50));
+    await flushPromises();
+    // eslint-disable-next-line no-console
+    console.log(
+      "DBG after:",
+      document.querySelectorAll('[data-testid="drawer"]').length,
+      (document.querySelector('[data-testid="drawer"]') as HTMLElement | null)?.isConnected,
+    );
     await flushPromises();
     expect(document.querySelector('[data-testid="drawer"]')).toBeNull();
+    expect((document.querySelector(".shell") as HTMLElement).inert).toBe(false);
   });
 
   it("那一列已經作古（404）時，操作失敗之後要立刻重拉清單", async () => {
