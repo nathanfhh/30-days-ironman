@@ -27,3 +27,6 @@ diagram-png/
 
 # draw.io 開檔時留下的自動備份（`.$檔名.bkp`），不是產物也不是原稿
 .$*.bkp
+
+# coverage.py 資料檔
+.coverage

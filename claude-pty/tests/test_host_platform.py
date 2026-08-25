@@ -39,7 +39,7 @@ config.SPACE_HOST = config.SPACE_SELF = TMP
 # 掛載存在性檢查用得到，指一個真的在的目錄，免得多冒出無關的 problem。
 config.MOUNTS = {TMP: {"bind": "/x", "mode": "ro"}}
 
-from server import sessions  # noqa: E402
+from server import preflight, sessions  # noqa: E402
 
 _fails = 0
 
@@ -95,11 +95,11 @@ try:
     #   三條共用的是那段附註，拿它當錨最穩。
     NEEDLE = "host 判定為"
     _old_plat = config.HOST_PLATFORM
-    _old_image_uid = sessions.image_uid
+    _old_image_uid = preflight.image_uid
 
     def _run(platform, image_uid_result):
         config.HOST_PLATFORM = platform
-        sessions.image_uid = lambda *a, **k: image_uid_result
+        preflight.image_uid = lambda *a, **k: image_uid_result
         return [p for p in sessions.preflight()[0] if NEEDLE in p]
 
     try:
@@ -118,7 +118,7 @@ try:
         linux_unavail = _run("Linux", ("unavailable", None))
     finally:
         config.HOST_PLATFORM = _old_plat
-        sessions.image_uid = _old_image_uid
+        preflight.image_uid = _old_image_uid
 
     check("🔴 host=Darwin：preflight 一句 uid 的話都沒有", darwin == [])
     check("🔴 host=Linux 且 image 真值對不上：有喊", len(linux_real) == 1)
@@ -173,12 +173,16 @@ check(
 )
 
 print("== 回歸守衛：不可以改回問容器自己 ==")
-with open(os.path.join(REPO, "server", "sessions.py"), encoding="utf-8") as f:
-    src = f.read()
+# preflight() 於 2026-08-25 拆到 preflight.py；sys.platform 這條兩檔都要守。
+_srcs = {}
+for _fn in ("sessions.py", "preflight.py"):
+    with open(os.path.join(REPO, "server", _fn), encoding="utf-8") as f:
+        _srcs[_fn] = f.read()
 # ⚠ 註解裡會提到這個字串（在講為什麼不能用它），所以只看**程式碼行**。
-code = [ln for ln in src.splitlines() if not ln.lstrip().startswith("#")]
-check("🔴 sessions.py 的程式碼不再用 sys.platform 判斷 host", not any("sys.platform" in ln for ln in code))
-check("preflight 走的是 config.host_is_linux()", "config.host_is_linux()" in src)
+for _fn, _src in _srcs.items():
+    code = [ln for ln in _src.splitlines() if not ln.lstrip().startswith("#")]
+    check(f"🔴 {_fn} 的程式碼不再用 sys.platform 判斷 host", not any("sys.platform" in ln for ln in code))
+check("preflight 走的是 config.host_is_linux()", "config.host_is_linux()" in _srcs["preflight.py"])
 
 __import__("shutil").rmtree(TMP, ignore_errors=True)
 print("== HOST_REPO_ROOT 設錯要在啟動就喊，不是等到建 session 才炸 ==")
@@ -220,15 +224,15 @@ class _FakeDocker:
 
 
 def _preflight_with(mounts, host_repo_root):
-    old_docker, old_root, old_mounts = sessions.docker, config.HOST_REPO_ROOT, config.MOUNTS
+    old_docker, old_root, old_mounts = preflight.docker, config.HOST_REPO_ROOT, config.MOUNTS
     try:
-        sessions.docker = _FakeDocker(mounts)
+        preflight.docker = _FakeDocker(mounts)
         config.HOST_REPO_ROOT = host_repo_root
         config.MOUNTS = config.MOUNTS or {"/tmp": {}}
         # HOST_REPO_ROOT 是**致命**那一份（起來也做不了事），所以取 [1] 不是 [0]
         return sessions.preflight()[1]
     finally:
-        sessions.docker, config.HOST_REPO_ROOT, config.MOUNTS = old_docker, old_root, old_mounts
+        preflight.docker, config.HOST_REPO_ROOT, config.MOUNTS = old_docker, old_root, old_mounts
 
 
 _ROOT = "/Users/someone/Projects/repo"

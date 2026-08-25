@@ -31,7 +31,7 @@ config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
 config.SECRET_KEY = "telemetry-secret"
 config.MOUNTS = {}
 
-from server import auth, sessions  # noqa: E402
+from server import auth, jaeger, run_kwargs, sessions  # noqa: E402
 from server.sessions import Profile, SessionManager  # noqa: E402
 
 db.reset_engine()
@@ -170,7 +170,8 @@ def _spy_brk(name, sid, profile, user_id):
     return _orig_brk(name, sid, profile, user_id)
 
 
-sessions.build_run_kwargs = _spy_brk
+run_kwargs.build_run_kwargs = _spy_brk
+sessions.build_run_kwargs = _spy_brk  # create 仍在 sessions 內，兩個名字都換
 
 
 print("== _jaeger_reachable：連得上/連不上 ==")
@@ -203,13 +204,13 @@ check("build_run_kwargs 收到的 profile 也是不送", _captured[sid].telemetr
 
 
 print("== 要求 telemetry 且 jaeger 探得到：真的送、座標記 active ==")
-_saved = sessions._jaeger_reachable
+_saved = jaeger._jaeger_reachable
 try:
-    sessions._jaeger_reachable = lambda: True
+    jaeger._jaeger_reachable = sessions._jaeger_reachable = lambda: True
     mgr = make_mgr()
     sid = mgr.create(user_id=uid, profile=Profile(telemetry=True))["id"]
 finally:
-    sessions._jaeger_reachable = _saved
+    jaeger._jaeger_reachable = sessions._jaeger_reachable = _saved
 prof = stored_profile(sid)
 check("🔴 座標 telemetry=True（要求）", prof["telemetry"] is True)
 check("🔴 座標 telemetry_active=True（真的開成）", prof["telemetry_active"] is True)
@@ -221,14 +222,14 @@ check(
 
 
 print("== 要求 telemetry 但 jaeger 探不到：照開場、不設 env、座標說實話 ==")
-_saved = sessions._jaeger_reachable
+_saved = jaeger._jaeger_reachable
 try:
-    sessions._jaeger_reachable = lambda: False
+    jaeger._jaeger_reachable = sessions._jaeger_reachable = lambda: False
     mgr = make_mgr()
     info = mgr.create(user_id=uid, profile=Profile(telemetry=True))
     sid = info["id"]
 finally:
-    sessions._jaeger_reachable = _saved
+    jaeger._jaeger_reachable = sessions._jaeger_reachable = _saved
 check("🔴 session 照樣建起來了（不 fail-closed）", info.get("id") is not None)
 prof = stored_profile(sid)
 check("🔴 座標 telemetry=True 保留（使用者確實要求了）", prof["telemetry"] is True)
@@ -244,15 +245,15 @@ print("== 探得到、但 jaeger 沒接上這個人的網路：一樣算沒開�
 #   到得了 jaeger，探測回 True，於是 OTEL env 照設——但 session 待在使用者自己那張網上，
 #   jaeger 不在那裡，**一筆 trace 都送不出去，而 OTLP 是 fail-open，完全沒有錯誤訊息**。
 #   畫面上還會說「有在錄」。座標說謊比沒有座標更糟：事後比對會拿一堆空的 trace 當基準。
-_saved = sessions._jaeger_reachable
+_saved = jaeger._jaeger_reachable
 try:
-    sessions._jaeger_reachable = lambda: True  # 控制平面探得到
+    jaeger._jaeger_reachable = sessions._jaeger_reachable = lambda: True  # 控制平面探得到
     _JAEGER_ATTACHED = False  # 但沒接上使用者那張網
     mgr = make_mgr()
     info = mgr.create(user_id=uid, profile=Profile(telemetry=True))
     sid = info["id"]
 finally:
-    sessions._jaeger_reachable = _saved
+    jaeger._jaeger_reachable = sessions._jaeger_reachable = _saved
     _JAEGER_ATTACHED = True
 check("🔴 session 照樣建起來了（不 fail-closed）", info.get("id") is not None)
 prof = stored_profile(sid)

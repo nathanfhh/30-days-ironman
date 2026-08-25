@@ -394,6 +394,28 @@ API 拿 PRIVATE-TOKEN，兩者不互相污染）、`Host` 是上游主機名、P
 最後換一把沒簽過它的 CA 再 clone 一次，**必須失敗**，否則 `proxy_ssl_verify on` 就只是
 擺著好看。前兩支各自驗零件，只有這一支回答「憑證補上去之後上游收不收」。
 
+### 覆蓋率
+
+測試是 check 式腳本（各自 `sys.exit`），不是 pytest 收集的，所以 `pytest --cov` 收不到。
+要量覆蓋率得用 `coverage run --append` 逐支跑：
+
+```bash
+cd claude-pty && rm -f .coverage
+for t in tests/test_*.py; do
+  uv run --with coverage --with flask --with docker --with sqlalchemy --with argon2-cffi \
+    --with psutil --with cryptography --with websocket-client --with pexpect --with packaging \
+    python -m coverage run --append --source=server "$t" >/dev/null 2>&1 || echo "FAIL $t"
+done
+uv run --with coverage python -m coverage report --sort=cover
+```
+
+2026-08-25 在 macOS 上跑 42 支（含 14 支需要 docker 的）：`server/` 整體 **84%**（2,908 語句、470 沒跑到）。
+`sessions.py` 85%、`app.py` 88%、`views.py` 88%、`reconciler.py` 65%、`cli.py` 0%（CLI 進入點沒測）。
+沒跑到的行幾乎全是錯誤路徑（daemon 不通、image 不在、代理起不來那些分支），主線全綠。
+只跑不需要 docker 的 28 支時 `sessions.py` 是 65%，差的 20 個百分點全在 `create` 與 attach 那條真的碰容器的路上。
+
+這個數字會隨檔案增減變動，不當 gate；它回答的是「哪些路徑從來沒被走過」，不是「測得夠不夠」。
+
 Telemetry 也有兩支，因為 **OTLP 是 fail-open：接錯或漏接完全沒有錯誤訊息**。
 `test_telemetry.py` 驗降級與「座標不准說謊」；`test_jaeger_wiring.py` 驗接線本身——
 三個接線點、回收時的拔插互鎖、以及 jaeger 那份 compose 不准自己建網路（每一張 bridge
