@@ -119,6 +119,10 @@ Nathan：不看 debug log；「就算多等幾十 ms 我也不會發覺，而且
 修之後連跑三次 `PASS 2ms / 3ms / 3ms`，整支 0 fail。quick 36 支 0 失敗、跳過清單與基線
 逐字相同；`--e2e` 8 支全綠。
 
+⚠ 那個 2 到 3ms **不是安全邊際**，是量測本身的延遲（動畫 finished 的回呼、Promise 排程、
+route handler 記時間，加起來就是這個量級）。修完之後送出是**因果上**排在停定之後，不是
+「剛好晚了幾毫秒」；如果哪天有人把它讀成邊際、想靠調大它來解別的問題，那是誤讀。
+
 寫斷言時避開一個會做出假綠的坑：不能只 `getAnimations()` 查一次。`data-open` 是下一幀才
 打上去的，那一刻多半還沒有動畫在跑，拿到空陣列會讓「動畫結束＝按下去那一刻」，斷言變成
 恆真。所以先等它真的出現再等 `finished`，超過二十幾幀還沒有才當成 reduced-motion。
@@ -143,3 +147,21 @@ Nathan：不看 debug log；「就算多等幾十 ms 我也不會發覺，而且
 
 教訓記一筆：**修一條守衛的誤報時要兩個方向一起驗。**只顧誤報那一邊，會把真陽性一起關掉，
 而畫面上兩者長得一模一樣（都是綠的）。
+
+### fable 快審 1.5：可進下一階段，一條低度順手補進 `1c`
+
+`drawerSettled()` 的 `getAnimations()` 沒有濾種類。面板上哪天多一個
+`animation: ... infinite`（呼吸燈、脈動、旋轉的載入圖示），它的 `finished` 永遠不會
+resolve，`/resize` 從此再也送不出去。這種壞法最惡劣的地方是**肇因與症狀完全不相干**：
+改的是一條 CSS 裝飾，壞掉的是容器裡的 TTY 尺寸，加裝飾的人不會有任何理由懷疑到自己。
+
+改成只等 `transitionProperty === "transform"` 的那些過渡（`transitionProperty` 只有
+CSSTransition 有，CSSAnimation 給的是 `animationName`；`instanceof` 只是再確認一次）。
+`close()` 那邊的 `transitionend` 早就是濾 `propertyName === "transform"` 的，同一條規矩。
+
+補了一條斷言把它釘住：測試自己灌一個無限動畫進面板（`add_style_tag`，`app.css` 不動），
+開抽屜後要照樣送得出去。拿掉濾網實跑是 `FAIL 收到 0 發`，裝回去是 `PASS 收到 1 發`。
+
+另外兩條低度沒改，理由記著：`attachSizeSync` 裡 term 已存在時不檢查 `closing` 只是白工
+（多跑一次無害的量測，不會送出，因為送出那條路自己會檢查）；e2e 那個 2 到 3ms 是量測延遲
+不是安全邊際（上面已補註）。

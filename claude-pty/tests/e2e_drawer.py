@@ -639,6 +639,31 @@ try:
         page.click('[data-testid="drawer-close"]')
         page.wait_for_selector('[data-testid="drawer"]', state="detached")
 
+        print("== 🔴 面板上有無限動畫時，尺寸照樣送得出去 ==")
+        # 這條守的是 `drawerSettled()` 的濾網。`getAnimations()` 回的是元素上**所有**動畫，
+        # 面板上只要有一個 `animation: ... infinite`（呼吸燈、脈動、旋轉的載入圖示都算），
+        # 它的 `finished` 永遠不會 resolve，於是 /resize 從此再也送不出去。
+        #
+        # ⚠ 這種壞法最惡劣的地方是**肇因與症狀完全不相干**：改的是一條 CSS 裝飾，壞掉的是
+        #   容器裡的 TTY 尺寸。沒有這條斷言的話，加裝飾的人不會有任何理由懷疑到自己。
+        # ⚠ 用 add_style_tag 灌一個無限動畫進去，`app.css` 一行沒動，量完就移除。
+        spin = page.add_style_tag(
+            content="@keyframes e2e-pulse { from { opacity: 1 } to { opacity: 0.985 } }"
+            " .drawer__panel { animation: e2e-pulse 1s linear infinite !important; }"
+        )
+        posts.clear()
+        open_drawer(page, "e1")
+        live = term_size(page)
+        sent = posts[-1] if posts else {}
+        check(f"🔴 有無限動畫也照樣送得出去（收到 {len(posts)} 發）", len(posts) >= 1)
+        check(
+            f"而且送的還是最終尺寸 {live['cols']}×{live['rows']}（實收 {sent.get('cols')}×{sent.get('rows')}）",
+            sent.get("cols") == live["cols"] and sent.get("rows") == live["rows"],
+        )
+        spin.evaluate("el => el.remove()")
+        page.click('[data-testid="drawer-close"]')
+        page.wait_for_selector('[data-testid="drawer"]', state="detached")
+
         print("== 同時只留一個抽屜 ==")
         open_drawer(page, "e1")
         page.evaluate("""() => document.querySelector('[data-testid=shell]').inert = false""")
