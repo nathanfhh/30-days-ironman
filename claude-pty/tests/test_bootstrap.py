@@ -1,8 +1,12 @@
 """畫面啟動資料 `/api/bootstrap` 與 `/api/account/bootstrap`（前端改 SPA 的階段 3）。
 
 這兩條的存在理由是「模板不要再靠 Jinja 注入伺服端狀態」，所以最重要的不是形狀好不好看，
-而是**它給的值與模板此刻印在頁面上的值是同一個**。最後一節就在做這件事：把 HTML 抓下來、
-把注入的值挖出來、跟 JSON 對。那一節紅了，代表兩邊已經分岔，而分岔正是這次改動要防的事。
+而是**它給的值真的來自 config／DB，而不是某處抄了一份**。
+
+⚠ **分界線是 gate，不是頁面**，而 2026-08-26（裁示 L4）把線往回挪過一次：版號（`build`）
+  與主機路徑（`persist_dir`）從公開那條搬進要登入那條。所以這支現在有兩組對稱的斷言：
+  「搬走的那些在新家、值沒變」，以及「公開那條的**完整回應字串**裡一個字都找不到它們」
+  後者拿**實際的值**去找，不只找欄位名：換個鍵名放回去仍然是同一個洩漏。
 
 Flask test client，不需 docker。
     uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
@@ -69,10 +73,9 @@ check("已登入 GET /api/account/bootstrap → 200", c.get("/api/account/bootst
 print("== /api/bootstrap：形狀與值 ==")
 boot = anon.get("/api/bootstrap").get_json()
 check(
-    f"欄位剛好四個（得到 {sorted(boot)}）",
-    set(boot) == {"behind_proxy", "persist_dir", "build", "login_art"},
+    f"欄位剛好兩個（得到 {sorted(boot)}）",
+    set(boot) == {"behind_proxy", "login_art"},
 )
-check("persist_dir 就是 config.DATA_BIND（抽屜標題列的 SSOT）", boot["persist_dir"] == config.DATA_BIND)
 check("behind_proxy 是布林不是 0/1 字串", isinstance(boot["behind_proxy"], bool))
 
 _orig_bp = config.BEHIND_PROXY
@@ -81,16 +84,6 @@ check("未在 proxy 後 → behind_proxy False", anon.get("/api/bootstrap").get_
 config.BEHIND_PROXY = True
 check("在 proxy 後 → behind_proxy True", anon.get("/api/bootstrap").get_json()["behind_proxy"] is True)
 config.BEHIND_PROXY = _orig_bp
-
-_mods = version.summary()["modules"]
-check("build.modules 就是 version.summary() 那一份", boot["build"]["modules"] == _mods)
-check(
-    "每一列自己說得出 name/version/commit/built_at/detail（模板只負責畫）",
-    all(set(m) >= {"name", "version", "commit", "built_at", "detail"} for m in boot["build"]["modules"]),
-)
-# ⚠ built_at 提到最外層是刻意的：它是**整包**的屬性。留在第一列裡的話，前端遲早會有人
-#   把它畫成「claude-pty 這一列的建置時間」，而那句話對其他列都不成立。
-check("build.built_at 提到最外層（整包的屬性，不屬於任何一個模組）", boot["build"]["built_at"] == _mods[0]["built_at"])
 
 if web.LOGIN_ART:
     _arts = {f"/static/images/{a}" for a in web.LOGIN_ART}
@@ -110,11 +103,67 @@ for leaked in ("credentials", "limits", "gitlab", "username", "is_admin", "cli_t
     check(f"公開 payload 不含要登入才看得到的 {leaked!r}", leaked not in _pub_raw)
 
 
+print("== 公開端點不得洩漏版號與主機路徑（2026-08-26 裁示 L4）==")
+#
+# ⚠ 這一節**拿實際的值去找，不只找欄位名**。只找 `"build"`／`"persist_dir"` 這種鍵名的話，
+#   有人把同一批值換個名字放回去（`meta`、`env`、`info`…）這裡照樣是綠的，而洩漏的東西
+#   一個字都沒有少。要守的是「**那些值**不准出現」，所以判準必須是值本身。
+# ⚠ 也一起找鍵名：鍵名還在代表有人把欄位加回來了，那是同一件事的另一種形狀。
+_leak_raw = anon.get("/api/bootstrap").get_data(as_text=True)
+_mods = version.summary()["modules"]
+
+for _key in ("persist_dir", "build", "modules", "built_at", "commit", "version"):
+    check(f"公開 payload 不含欄位名 {_key!r}", _key not in _leak_raw)
+
+# 主機路徑：宿主機上的一個絕對路徑，本身就是偵察素材（使用者名稱、部署佈局）。
+check(
+    f"公開 payload 不含 persist_dir 的**值**（{config.DATA_BIND!r}）",
+    bool(config.DATA_BIND) and config.DATA_BIND not in _leak_raw,
+)
+
+# 版號與 commit：逐一拿真的值去找。ttyd 的版本字串也在這一批裡（它是其中一個模組）。
+# ⚠ 跳過空值：`"" in s` 恆真，留著會讓這幾條變成無條件紅（而不是無條件綠，但一樣沒在守
+#   任何東西）。真的一個值都驗不到時下面那條 sanity 會紅。
+_checked_values = 0
+for _m in _mods:
+    for _field in ("version", "commit", "built_at", "detail"):
+        _val = _m.get(_field)
+        if not isinstance(_val, str) or not _val:
+            continue
+        _checked_values += 1
+        check(
+            f"公開 payload 不含 {_m['name']} 的 {_field}（{_val!r}）",
+            _val not in _leak_raw,
+        )
+    check(f"公開 payload 不含模組名 {_m['name']!r}", _m["name"] not in _leak_raw)
+# ⚠ 沒有這一條的話，`version.summary()` 哪天回一份空的（或欄位全是 None），上面那個迴圈
+#   會一條都不跑、一條都不紅，而這一節看起來仍然是綠的。
+check(f"上面真的驗到了東西（{_checked_values} 個非空的版本字串）", _checked_values >= 2)
+
+# 反向：搬過去的那一份**真的有人給**，否則畫面會少一塊而這裡還是綠的。
+_acct_boot = c.get("/api/account/bootstrap").get_json()
+check(
+    "persist_dir 搬到要登入那條，而且就是 config.DATA_BIND（抽屜標題列的 SSOT）",
+    _acct_boot["persist_dir"] == config.DATA_BIND,
+)
+check("build.modules 搬到要登入那條，就是 version.summary() 那一份", _acct_boot["build"]["modules"] == _mods)
+check(
+    "每一列自己說得出 name/version/commit/built_at/detail（畫面只負責畫）",
+    all(set(m) >= {"name", "version", "commit", "built_at", "detail"} for m in _acct_boot["build"]["modules"]),
+)
+# ⚠ built_at 提到最外層是刻意的：它是**整包**的屬性。留在第一列裡的話，前端遲早會有人
+#   把它畫成「claude-pty 這一列的建置時間」，而那句話對其他列都不成立。
+check(
+    "build.built_at 提到最外層（整包的屬性，不屬於任何一個模組）",
+    _acct_boot["build"]["built_at"] == _mods[0]["built_at"],
+)
+
+
 print("== /api/account/bootstrap：形狀與值 ==")
 acct = c.get("/api/account/bootstrap").get_json()
 check(
-    f"頂層欄位剛好五個（得到 {sorted(acct)}）",
-    set(acct) == {"user", "default_cli", "credentials", "limits", "gitlab"},
+    f"頂層欄位剛好七個（得到 {sorted(acct)}）",
+    set(acct) == {"user", "default_cli", "credentials", "limits", "gitlab", "persist_dir", "build"},
 )
 
 # ── user：與 /api/auth/me 是同一個出口 ────────────────────────────────────────

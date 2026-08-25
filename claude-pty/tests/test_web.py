@@ -292,13 +292,23 @@ from server import version as _version_mod  # noqa: E402
 # ⚠ 這一節原本逐頁抓渲染出來的 HTML（`/login`、`/`、`/account` 各一次），驗「三頁都有頁尾」。
 #   2026-08-26 之後三頁吐的都是同一份 SPA 殼，HTML 裡什麼都沒有，那個驗法失去對象。
 #   性質分成兩半，各自搬到現在的所有者：
-#     · **值**（有哪幾個模組、版本、commit）→ 由 `/api/bootstrap` 出，就在下面驗。
-#     · **每一頁都畫得出來** → 由 golden 的 aria 快照守著，而且守得更嚴：十八個場景
-#       **每一場**的 aria 裡都有頁尾（實測 18/18），涵蓋登入頁、兩個管理頁與各種對話框
-#       開著的狀態，比原本那三頁多得多。
-_boot = app.test_client().get("/api/bootstrap").get_json()
+#     · **值**（有哪幾個模組、版本、commit）→ 由 `/api/account/bootstrap` 出，就在下面驗。
+#     · **每一頁都畫得出來** → 由 golden 的 aria 快照守著：十六個**登入後**的場景每一場
+#       都有頁尾，涵蓋兩個管理頁與各種對話框開著的狀態。
+#
+# ⚠ **2026-08-26（裁示 L4）之後這一節用的是登入過的 client。** 版號搬進
+#   `/api/account/bootstrap` 了，而且**登入頁的頁尾不再顯示版本**，所以 login-empty 與
+#   login-error 兩場的 aria 裡沒有頁尾，那是規格，不是回歸。「公開那條一個字都不給」由
+#   `tests/test_bootstrap.py` 的反向斷言守著。
+# ⚠ 這裡開一支**新的** client 重新登入，不沿用上面的 `_c2`：中間有幾節動過密碼
+#   （`password_version` 一跳，舊 cookie 當場作廢），沿用的話這裡拿到的是 401，而錯誤
+#   訊息會長得像「bootstrap 少了 build 欄位」，完全指錯方向。
+_footer_c = app.test_client()
+auth.create_user("footerpeek", "footerpeek-password-1")
+_footer_c.post("/api/auth/login", json={"username": "footerpeek", "password": "footerpeek-password-1"})
+_boot = _footer_c.get("/api/account/bootstrap").get_json()
 _mods = _boot["build"]["modules"]
-check("bootstrap 給得出頁尾要畫的東西（未登入也拿得到，登入頁本來就要有頁尾）", bool(_mods))
+check("account bootstrap 給得出頁尾要畫的東西（登入後才給）", bool(_mods))
 check("列出 claude-pty 本體", any(m["name"] == "claude-pty" for m in _mods))
 check(
     "列出兩顆 ttyd",
@@ -313,7 +323,7 @@ try:
     os.environ["CLAUDE_PTY_BUILT_AT"] = "2026-07-27T12:00:00+08:00"
     _version_mod.summary.cache_clear()
     # 同上：改問 API。畫面把這兩個值印成什麼樣子是 Vue 的事（golden 的 aria 逐字守著）。
-    _b = app.test_client().get("/api/bootstrap").get_json()["build"]
+    _b = _footer_c.get("/api/account/bootstrap").get_json()["build"]
     _own_mod = {m["name"]: m for m in _b["modules"]}["claude-pty"]
     check("build arg 有給時，commit 出得來", _own_mod["commit"] == "deadbee")
     # ⚠ 這裡放的是**建置時間**不是 commit 時間：同一個 commit 可以在任何時候被重新打包，

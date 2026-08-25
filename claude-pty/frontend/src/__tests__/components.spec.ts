@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 
+import AppFooter from "@/components/AppFooter.vue";
 import ManifestList from "@/components/ManifestList.vue";
 import SitePicker from "@/components/SitePicker.vue";
 import SiteSwitch from "@/components/SiteSwitch.vue";
@@ -338,6 +339,20 @@ describe("RangePicker", () => {
 describe("stores/site", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
+  /** 頁尾那一排。**登入後才給**（2026-08-26 裁示 L4）。 */
+  const BUILD = {
+    modules: [
+      {
+        name: "claude-pty",
+        version: "0.2.0",
+        commit: "abc1234",
+        built_at: "2026-08-20T10:00:00+00:00",
+        detail: "控制平面本體。",
+      },
+    ],
+    built_at: "2026-08-20T10:00:00+00:00",
+  };
+
   /** 一份完整的 `/api/account/bootstrap` 回應。 */
   const bootstrapBody = (user: unknown) => ({
     user,
@@ -345,6 +360,8 @@ describe("stores/site", () => {
     credentials: {},
     limits: { name_max: 25, username_max: 32, min_password_length: 8 },
     gitlab: { enabled: false, host: null, proxy_error: null },
+    persist_dir: "/home/nathan/persistent-data",
+    build: BUILD,
   });
 
   /** 依路徑回應的假後端，並記下打了哪些路徑。 */
@@ -433,5 +450,98 @@ describe("stores/site", () => {
     store.applyMetaToRoot();
     expect(document.documentElement.dataset.behindProxy).toBe("1");
     expect(document.documentElement.dataset.persistDir).toBe("/home/nathan/persistent-data");
+  });
+
+  it("🔴 公開那一條只填得起兩個欄位：版號與主機路徑登入前不得取得（裁示 L4）", async () => {
+    const seen = fakeApi({
+      "/api/bootstrap": { body: { behind_proxy: true, login_art: "/static/images/a.webp" } },
+    });
+    const store = useSiteStore();
+    await store.loadPublicMeta();
+    expect(seen).toEqual(["/api/bootstrap"]);
+    expect(store.meta.behindProxy).toBe(true);
+    expect(store.meta.loginArt).toBe("/static/images/a.webp");
+    // ⚠ 這三條才是這一題：公開那條**沒有**這些值，所以它們必須停在預設值。
+    expect(store.meta.persistDir).toBe("");
+    expect(store.meta.buildModules).toEqual([]);
+    expect(store.meta.buildBuiltAt).toBeNull();
+  });
+
+  it("🔴 版號與主機路徑跟著 /api/account/bootstrap 回來，並補寫 <html>", async () => {
+    document.documentElement.dataset.persistDir = "";
+    fakeApi({
+      "/api/account/bootstrap": {
+        body: bootstrapBody({ id: 1, username: "alice", is_admin: false }),
+      },
+    });
+    const store = useSiteStore();
+    await store.loadAccountMeta();
+    expect(store.meta.buildModules[0].version).toBe("0.2.0");
+    expect(store.meta.buildBuiltAt).toBe("2026-08-20T10:00:00+00:00");
+    expect(store.meta.persistDir).toBe("/home/nathan/persistent-data");
+    // ⚠ 抽屜是 runtime 才建的，讀的是 <html> 上那個屬性。這一條回來之後沒有補寫的話，
+    //   抽屜標題列會少一整行，而且不會有任何錯誤。
+    expect(document.documentElement.dataset.persistDir).toBe("/home/nathan/persistent-data");
+  });
+
+  it("🔴 登出要把登入後才拿到的 meta 一起清掉（SPA 換頁，store 不會自己沒）", async () => {
+    fakeApi({
+      "/api/account/bootstrap": {
+        body: bootstrapBody({ id: 1, username: "alice", is_admin: false }),
+      },
+      "/api/auth/logout": { body: {} },
+    });
+    const store = useSiteStore();
+    await store.loadAccountMeta();
+    store.meta.behindProxy = true;
+    store.meta.loginArt = "/static/images/a.webp";
+    await store.logout();
+    expect(store.user).toBeNull();
+    expect(store.meta.buildModules).toEqual([]);
+    expect(store.meta.buildBuiltAt).toBeNull();
+    expect(store.meta.persistDir).toBe("");
+    expect(document.documentElement.dataset.persistDir).toBe("");
+    // ⚠ 公開的那兩個留著：它們本來就不需要身分，清掉只會讓登入頁少一張插畫。
+    expect(store.meta.behindProxy).toBe(true);
+    expect(store.meta.loginArt).toBe("/static/images/a.webp");
+  });
+});
+
+describe("AppFooter", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it("🔴 沒有 build 資訊時整段不畫（登入頁沒有頁尾）", () => {
+    const w = mount(AppFooter);
+    // ⚠ 不是「畫一個空的頁尾」：`.footer` 有 border-top，空的話畫面上會浮出一條沒有內容
+    //   的橫線，而 legacy 的登入頁從來沒有那條線。
+    expect(w.find('[data-testid="footer"]').exists()).toBe(false);
+    expect(w.html()).toBe("<!--v-if-->");
+  });
+
+  it("有 build 資訊就照舊畫（登入後）", () => {
+    const store = useSiteStore();
+    store.meta.buildModules = [
+      {
+        name: "claude-pty",
+        version: "0.2.0",
+        commit: "abc1234",
+        built_at: "2026-08-20T10:00:00+00:00",
+        detail: "控制平面本體。",
+      },
+    ];
+    store.meta.buildBuiltAt = "2026-08-20T10:00:00+00:00";
+    const w = mount(AppFooter);
+    expect(w.find('[data-testid="footer"]').exists()).toBe(true);
+    expect(w.find('[data-testid="footer-mod"]').text()).toContain("0.2.0");
+    expect(w.find(".footer__sha").text()).toBe("abc1234");
+    expect(w.find(".footer__built").exists()).toBe(true);
+  });
+
+  it("🟡 只有 built_at、沒有模組時仍然畫：那是「答不出來」不是「不給」", () => {
+    const store = useSiteStore();
+    store.meta.buildBuiltAt = "2026-08-20T10:00:00+00:00";
+    const w = mount(AppFooter);
+    expect(w.find('[data-testid="footer"]').exists()).toBe(true);
+    expect(w.find(".footer__built").exists()).toBe(true);
   });
 });

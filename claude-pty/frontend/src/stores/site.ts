@@ -41,10 +41,14 @@ export interface BuildModule {
 /**
  * 伺服端環境事實。來源是階段 3 開的兩條 bootstrap endpoint，**分界線是 gate 不是頁面**：
  *
- *   · `/api/bootstrap`（公開）——未登入者今天也看得到的東西：`<html>` 的兩個屬性、頁尾
- *     版本、登入頁的插畫。登入頁需要它們，所以它不能被關在 401 後面。
- *   · `/api/account/bootstrap`（需登入）——「這個帳號的處境」：憑證狀態、長度限制、GitLab。
+ *   · `/api/bootstrap`（公開）：登入頁自己要畫對的東西：`<html data-behind-proxy>`
+ *     與登入頁的插畫。登入頁需要它們，所以它不能被關在 401 後面。
+ *   · `/api/account/bootstrap`（需登入）：先證明你是誰才給的：憑證狀態、長度限制、
+ *     GitLab，以及 **2026-08-26（裁示 L4）搬過去的版號與主機路徑**。
  *
+ * ⚠ `persistDir` / `buildModules` / `buildBuiltAt` 這三個欄位**在登入之前一定是預設值**
+ *   （空字串、空陣列、null），這不是「還沒載入」，是「不給」。取用它們的地方要能在那個
+ *   狀態下畫得成立：抽屜那段有 `v-if`（而抽屜本來就只在登入後存在），頁尾則整段不畫。
  * ⚠ `buildBuiltAt` 是**整包**的屬性、不屬於任何一個模組，所以獨立一個欄位而不是讀
  *   `buildModules[0].built_at`。端點的 docstring 特地把它提到最外層並寫明理由：留在列裡
  *   的話遲早會有人把它畫成「claude-pty 這一列的時間」。
@@ -83,8 +87,6 @@ const META_DEFAULTS: SiteMeta = {
 
 interface PublicBootstrap {
   behind_proxy: boolean;
-  persist_dir: string;
-  build: { modules: BuildModule[]; built_at: string | null };
   login_art: string | null;
 }
 
@@ -96,6 +98,10 @@ interface AccountBootstrap {
   credentials: Credentials;
   limits: { name_max: number; username_max: number; min_password_length: number };
   gitlab: { enabled: boolean; host: string | null; proxy_error: string | null };
+  /** 宿主機上「寫了會留著」的那個目錄。**登入後才給**（裁示 L4）。 */
+  persist_dir: string;
+  /** 頁尾那一排。**登入後才給**（裁示 L4）。 */
+  build: { modules: BuildModule[]; built_at: string | null };
 }
 
 export const useSiteStore = defineStore("site", () => {
@@ -134,10 +140,13 @@ export const useSiteStore = defineStore("site", () => {
   }
 
   /**
-   * 公開的那一條。**進站就打**，不等身分——登入頁的頁尾與插畫需要它。
+   * 公開的那一條。**進站就打**，不等身分：登入頁的插畫需要它。
    *
-   * ⚠ 失敗不可以擋住畫面：這幾個值全是「畫得更完整」用的，拿不到就退回預設（頁尾留白、
-   *   沒有插畫），登入與列表照樣能用。舊版模板拿不到 `build_info()` 時的行為也是留白。
+   * ⚠ **它只填得起兩個欄位。** 版號與主機路徑在 2026-08-26（裁示 L4）搬進要登入的那條，
+   *   所以這裡不再碰 `persistDir` / `buildModules` / `buildBuiltAt`，那三個要等
+   *   `fetchAccountMeta`。未登入時它們**就是**預設值，而那是規格不是載入中。
+   * ⚠ 失敗不可以擋住畫面：這兩個值都是「畫得更完整」用的，拿不到就退回預設（沒有插畫、
+   *   `data-behind-proxy` 當 0），登入照樣能用。
    */
   async function loadPublicMeta(): Promise<void> {
     try {
@@ -145,9 +154,6 @@ export const useSiteStore = defineStore("site", () => {
       meta.value = {
         ...meta.value,
         behindProxy: d.behind_proxy,
-        persistDir: d.persist_dir,
-        buildModules: d.build.modules,
-        buildBuiltAt: d.build.built_at,
         loginArt: d.login_art,
       };
     } catch {
@@ -177,7 +183,14 @@ export const useSiteStore = defineStore("site", () => {
       gitlabEnabled: d.gitlab.enabled,
       gitlabHost: d.gitlab.host,
       gitlabProxyError: d.gitlab.proxy_error,
+      persistDir: d.persist_dir,
+      buildModules: d.build.modules,
+      buildBuiltAt: d.build.built_at,
     };
+    /* ⚠ `data-persist-dir` 是這一條回來之後才寫得上去的（裁示 L4 之後它是登入後的事實）。
+       抽屜是 runtime 才建的、而且只存在於登入後的頁面，所以「進站那一發寫一次」不夠，
+       這裡要再寫一次。漏掉的話抽屜標題列會少一整行，而且不會有任何錯誤。 */
+    applyMetaToRoot();
     setCredentials(d.credentials);
     /* 身分也在這一條回應裡。順手收下，呼叫端就不必記得「存完 PAT 之後 user 的
        `gitlab_pat_configured` 也變了」——那種要靠人記得的事遲早會漏掉一處。 */
@@ -211,10 +224,24 @@ export const useSiteStore = defineStore("site", () => {
     credentials.value = all;
   }
 
+  /**
+   * 登出。**登入後才拿得到的 meta 要一起清掉**，不只是身分與憑證。
+   *
+   * ⚠ 登出是 SPA 內的換頁（`router.push("/login")`），不是整頁跳轉：store 活著，meta 裡
+   *   那份版號與主機路徑會原封不動跟著人回到登入頁，頁尾就照樣印出來。那正是裁示 L4 要
+   *   收的東西，只是換了一條路徑洩漏。所以這裡把「要登入才給的那些」還原成預設值，
+   *   公開那兩個（`behindProxy` / `loginArt`）留著：它們本來就不需要身分。
+   */
   async function logout(): Promise<void> {
     await api("/api/auth/logout", { method: "POST" });
     user.value = null;
     credentials.value = {};
+    meta.value = {
+      ...META_DEFAULTS,
+      behindProxy: meta.value.behindProxy,
+      loginArt: meta.value.loginArt,
+    };
+    applyMetaToRoot();
   }
 
   return {
