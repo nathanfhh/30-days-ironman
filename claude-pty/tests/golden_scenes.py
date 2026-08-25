@@ -489,6 +489,69 @@ def network_text(reqs: list, base: str) -> str:
     return "\n".join(out) + "\n"
 
 
+# ── DOM 快照：aria 記不到的那一整類合約 ──────────────────────────────────────
+#
+# aria 樹只記 role 與可及名稱。實測（2026-08-25）：整份 golden 的 aria 檔案裡
+# `data-act` / `class` 一個字都沒有，而模板與 app.js 裡光 `data-testid` 就 115 處、
+# `data-act` 28 處。那些正好是**合約型**的東西：testid 是 e2e 的抓手、act 是 app.js
+# 事件委派的分派鍵、tone/kind/state/stale 是狀態的真相來源。
+#
+# ⚠ **只記白名單內的屬性，不記 class、不記完整 HTML。** 記整棵 DOM 的話，Vue 版多包
+#   一層 wrapper 就會整份紅——那種 golden 一週內就會被人停用，停用之後連原本守得住的
+#   那些也一起沒了。白名單讓「多一層 div」無聲、「少一個 data-act」出聲。
+#
+# 排除項也要講清楚，否則看起來像漏掉：
+#   · 動畫與過場的暫態（data-shown / data-closing / data-swap / data-swapping /
+#     data-animate / data-loading / data-drop / data-pausable）：它們在畫面停定之後
+#     不一定是同一個值，記了就是自找不穩定。
+#   · 內容或設定的回音（data-label / data-name / data-container / data-persist-path /
+#     data-cli / data-behind-proxy / data-for / data-theme / data-sid）：可見的部分
+#     aria 與截圖已經蓋著了，這裡再記一份只是同一件事寫兩遍。
+#   · `disabled` / `aria-expanded` / `aria-selected`：**aria 快照已經記了**
+#     （`[disabled]` / `[expanded]` / `[selected]`）。同一個事實兩個來源比一個更糟：
+#     改動時兩邊都要更新，而只更新一邊沒有人會發現。
+#   · `aria-checked` **有記**，因為實測 aria 快照裡一個 `[checked]` 都沒有（開關那三顆
+#     用的是 role=switch，Playwright 沒有把它的勾選狀態畫進去）。那是真的缺口。
+#   · `hidden` **有記**：它區分得出「沒有渲染」與「渲染了但藏起來」，而 Vue 版把
+#     `v-if` 寫成 `v-show`（或反過來）正是這個差別，aria 只看得到前者。
+DOM_ATTRS = [
+    # 身分：誰是誰、按下去會觸發什麼
+    "data-testid", "data-act", "data-id", "data-seg", "data-edit", "data-move",
+    "data-day", "data-value",
+    # 狀態：畫面此刻在說什麼
+    "data-tone", "data-kind", "data-state", "data-stale", "data-level",
+    "data-on", "data-in", "data-edge", "data-active", "data-open",
+    "data-disabled", "data-empty", "aria-checked", "hidden", "inert",
+    # 提示文字：滑過去才看得到，所以截圖蓋不到；不是 aria 名稱，所以 aria 也蓋不到。
+    # 它一旦悄悄消失，沒有任何一道防線會出聲。
+    "data-tip",
+]
+
+_DOM_JS = r"""(attrs) => {
+  const out = [];
+  for (const el of document.querySelectorAll("*")) {
+    const parts = [];
+    for (const a of attrs) {
+      // inert 是 property，反映到同名屬性；直接問 property 比較可靠。
+      if (a === "inert") { if (el.inert) parts.push("inert"); continue; }
+      if (!el.hasAttribute(a)) continue;
+      const key = a.replace(/^(data|aria)-/, "");
+      // 空值的布林屬性（hidden）只印名字；值裡的空白壓成單一空白，保證一元素一行。
+      const v = el.getAttribute(a).replace(/\s+/g, " ").trim();
+      if (v === "") { parts.push(key); continue; }
+      parts.push(v.includes(" ") ? `${key}="${v}"` : `${key}=${v}`);
+    }
+    if (parts.length) out.push(`${el.tagName.toLowerCase()} ${parts.join(" ")}`);
+  }
+  return out.join("\n");
+}"""
+
+
+def dom_text(page) -> str:
+    """帶白名單屬性的元素，一行一個，依 DOM 順序。逐字比對，不設閾值。"""
+    return page.evaluate(_DOM_JS, DOM_ATTRS).rstrip("\n") + "\n"
+
+
 def scene_dir(name: str) -> str:
     return os.path.join(GOLDEN_DIR, name)
 

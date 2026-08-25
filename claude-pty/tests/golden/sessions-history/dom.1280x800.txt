@@ -1,0 +1,115 @@
+div testid=shell
+header testid=masthead
+span active=sessions
+a seg=sessions
+a seg=account
+a testid=cred-badge state=bad tip="在 host 上執行 `claude setup-token`，把輸出貼到帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態啟動，開場只會看到登入提示。"
+span testid=theme-picker
+button testid=theme-picker-button
+ul testid=theme-picker-menu hidden
+button testid=account-btn
+div testid=account-menu hidden
+button testid=menu-settings act=settings
+button testid=menu-logout act=logout
+section hidden
+div testid=pick-cli
+button testid=pick-cli-button
+ul testid=pick-cli-menu hidden
+div testid=pick-model
+button testid=pick-model-button
+ul testid=pick-model-menu hidden
+span testid=model-source tone
+div testid=pick-effort
+button testid=pick-effort-button
+ul testid=pick-effort-menu hidden
+span testid=effort-note tone
+div testid=pick-network on=false
+button testid=pick-network-control checked=false
+span testid=pick-network-label
+div testid=pick-capture on=false
+button testid=pick-capture-control checked=false
+span testid=pick-capture-label
+div testid=pick-telemetry on=false
+button testid=pick-telemetry-control checked=false
+span testid=pick-telemetry-label
+div testid=pick-token-delivery on=false
+button testid=pick-token-delivery-control checked=false
+span testid=pick-token-delivery-label
+button testid=tab-live
+button testid=tab-past
+button testid=filter-toggle active
+div open=0
+div testid=filter-bar
+div testid=filters-grid
+span testid=filter-field-label tip="限制＝只放行白名單（entrypoint 會套 iptables）；開放＝容器可以連任何地方。"
+div testid=pick-fnet
+button testid=pick-fnet-button
+ul testid=pick-fnet-menu hidden
+span testid=filter-field-label tip="這場有沒有把出網流量錄下來（經 mitm 落到 host）。"
+div testid=pick-fcap
+button testid=pick-fcap-button
+ul testid=pick-fcap-menu hidden
+span testid=filter-field-label tip="這場有沒有要求把 OpenTelemetry 送到 Jaeger。容器起來後會先探 Jaeger 通不通，探不通就不送——這個條件篩的是要求，不是結果。"
+div testid=pick-ftel
+button testid=pick-ftel-button
+ul testid=pick-ftel-menu hidden
+span testid=filter-field-label tip=從現在往回算。「執行中」比的是建立時間，「已結束」比的是結束時間——在已結束的清單裡，「一週內」問的是「一週內結束的」。選「自訂範圍」後面會接出起迄兩格。
+div testid=pick-since
+button testid=pick-since-button
+ul testid=pick-since-menu hidden
+div testid=filter-range hidden
+span testid=filter-field-label tip=指定一段明確的區間。展開後左右兩個月並排：點一下選起點、再點一下選終點，中間滑過會預覽整段；也可以直接改上方的日期與時間。任一端留空＝那一端不限。
+button testid=range-trigger
+span empty=1
+div testid=range-panel hidden
+span testid=filter-summary
+button testid=filter-clear
+div testid=manifest
+div testid=manifest-head
+article testid=session-row
+span testid=session-lamp state=exited
+span testid=session-title
+span testid=session-title-text
+div tip=claude-pty-cafe00112233
+div testid=session-status state=ended
+div testid=chips-cell
+span testid=chip tone=owner
+span testid=chip-text
+span testid=chip tone=cli-claude
+span testid=chip-text
+span testid=chip-mark tone=accent kind=network tip=網路：限制
+span testid=chip-mark tone=off kind=capture tip=流量錄製：關
+span testid=chip-mark tone=off kind=telemetry tip=Telemetry：不送
+span testid=chip-mark tone=accent kind=gitlab tip=GitLab：期間曾啟用
+span testid=chip tone=model
+span testid=chip-text
+span testid=chip tone=effort
+span testid=chip-text
+span tip="2026/08/24 10:00:00"
+span tip="2026/08/24 12:00:00"
+article testid=session-row
+span testid=session-lamp state=exited
+span testid=session-title
+span testid=session-title-text
+div tip=claude-pty-beef44556677
+div testid=session-status state=ended
+div testid=chips-cell
+span testid=chip tone=owner
+span testid=chip-text
+span testid=chip tone=cli-claude
+span testid=chip-text
+span testid=chip-mark tone=accent kind=network tip=網路：限制
+span testid=chip-mark tone=off kind=capture tip=流量錄製：關
+span testid=chip-mark tone=off kind=telemetry tip=Telemetry：不送
+span testid=chip-mark tone=accent kind=gitlab tip=GitLab：期間曾啟用
+span testid=chip tone=model
+span testid=chip-text
+span testid=chip tone=effort
+span testid=chip-text
+span tip="2026/08/23 10:00:00"
+span tip="2026/08/23 11:00:00"
+div hidden
+span testid=pager-status
+footer testid=footer
+span testid=footer-mod tip=控制平面本體。
+span testid=footer-mod tip=ttyd-rust：目前用於網頁終端的執行檔。
