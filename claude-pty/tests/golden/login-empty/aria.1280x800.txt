@@ -1,0 +1,21 @@
+- main:
+  - complementary:
+    - paragraph: 控制平台
+    - heading "claude-pty" [level=1]:
+      - text: claude
+      - emphasis: "-pty"
+  - heading "身分驗證" [level=2]
+  - text: 使用者名稱
+  - textbox "使用者名稱"
+  - text: 密碼
+  - textbox "密碼"
+  - button "顯示密碼": 
+  - button " 進入控制台" [disabled]
+- contentinfo:
+  - text: claude-pty 0.0.0-golden
+  - code: "0000000"
+  - text: 控制平面本體。 ttyd（Rust） 1.0.0-golden
+  - code: "1111111"
+  - text: ttyd-rust：目前用於網頁終端的執行檔。 建置於
+  - time: 2026/08/25 12:00:00
+  - text: （0 秒前）

@@ -32,6 +32,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from server import config  # noqa: E402
 
 TMP = tempfile.mkdtemp(prefix="e2e-drawer-")
@@ -130,53 +131,9 @@ for _ in range(50):
     time.sleep(0.1)
 
 
-# ── ttyd 的替身 ──────────────────────────────────────────────────────────────
-# 只做父頁面真正會碰到的那幾件事。字寬/行高取等寬字的常見比例，讓「改字級」真的會改
-# 變欄列數——測「送出的是哪一個尺寸」需要這個因果關係，寫死的數字驗不出東西。
-#
-# 畫布那一段模的是 xterm 真正的行為（2026-07-27 在真的 ttyd 上量過每一條）：
-#   * backing store 只在**重新量字**時才依當下的 dpr 重建；
-#   * 同值指派 fontSize 會被忽略，所以「先跳開再回來」是唯一叫得動它的方式；
-#   * 改字級**不會**順便重新 fit（欄列數不變）——fit 是 window resize 才跑的。
-# `__scale` 是「建立畫布時用的 dpr」，把它設成 dpr 的兩倍就重現了使用者遇到的畫面：
-# 字被畫成一半大小，要手動按一下 +/- px 才會對。
-STUB = """<!doctype html><meta charset="utf-8"><body style="margin:0;background:#111">
-<div class="xterm"><div class="xterm-screen">
-<canvas class="xterm-link-layer"></canvas><canvas></canvas></div></div>
-<script>
-const CB = [];
-let font = 14;
-window.__remeasures = 0;                 // 重新量字的次數（驗「沒事別亂動」）
-window.term = {
-  options: {
-    get fontSize() { return font; },
-    set fontSize(v) { if (v === font) return; font = v; remeasure(); },
-  },
-  cols: 0, rows: 0,
-  onResize(cb) { CB.push(cb); },
-};
-function paint(scale) {
-  document.querySelectorAll(".xterm canvas").forEach((c) => {
-    c.style.width = window.innerWidth + "px";
-    c.style.height = window.innerHeight + "px";
-    c.width  = Math.round(window.innerWidth  * scale);
-    c.height = Math.round(window.innerHeight * scale);
-  });
-}
-function remeasure() { window.__remeasures++; paint(window.devicePixelRatio || 1); }
-function fit() {
-  const cols = Math.max(2, Math.floor(window.innerWidth  / (font * 0.6)));
-  const rows = Math.max(1, Math.floor(window.innerHeight / (font * 1.2)));
-  paint(window.devicePixelRatio || 1);   // fit 之後畫布一定是對的
-  if (cols === window.term.cols && rows === window.term.rows) return;
-  window.term.cols = cols; window.term.rows = rows;
-  CB.forEach((cb) => cb({ cols, rows }));
-}
-window.addEventListener("resize", fit);
-fit();
-paint(__SCALE__);                        // 起始狀態：畫布與 CSS 尺寸脫節
-__FONT_AFTER__                           // 見下方 stub_font_after 的說明（預設空字串）
-</script>"""
+# ttyd 的替身搬去 `tests/fake_ttyd.py` 了：golden_scenes.py 也要用同一份，複製兩份會各自
+# 漂走，而漂走之後兩邊驗的就不是同一個終端，卻沒有任何東西會紅。
+from fake_ttyd import STUB  # noqa: E402
 
 posts = []  # 收到的每一發 /resize（依序）
 post_at = []  # 每一發送到的牆鐘時刻（ms）。與瀏覽器的 Date.now() 是同一支時鐘，

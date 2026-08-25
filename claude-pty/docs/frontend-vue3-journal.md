@@ -298,3 +298,74 @@ formatter、對行為零影響，所以一起收掉了。`frontend-vue3` 那邊�
 
 驗證：76 → 82 條 check、0 失敗；`tests/run-all.sh` 37 支 0 失敗，跳過清單逐字相同；
 `ruff@0.16.3 check .` 與 CI 那條 format 閘都綠。
+
+### 階段 2 完成：錄 golden master
+
+**十二個場景**（`tests/golden_scenes.py` 的 `SCENES`，錄與比共用同一份定義，所以「錄的」
+與「比的」不可能是兩個狀態）：
+
+`login-empty`／`login-error`／`sessions-empty`／`sessions-list`／`sessions-history`／
+`sessions-filters`／`sessions-rangepick`／`sessions-settings`／`sessions-toast`／
+`drawer-open`／`account-user`／`account-admin`
+
+資料是刻意鋪開的，不是四筆一樣的假資料：有名字的與沒名字的（標題退回 sid）、就緒與
+「container 在跑但 driver 沒就緒」、新鮮與過期的狀態確認、四種 telemetry、restricted 與
+unrestricted、GitLab 三態、一個刻意超長會被截斷的名字。全部長一樣的話，換掉半數渲染
+邏輯也不會有人紅。
+
+**每場四個檔案**：`aria.1280x800.txt`、`aria.390x844.txt`、`network.txt`、
+`screen.1280x800.png`。共 **48 個檔案、3.9 MB**（其中 3.8 MB 是十二張全頁 PNG，
+登入頁那張插畫就佔了 512 KB）。
+
+#### 釘死的不穩定源（全部在錄製端，沒有一項是靠放寬閾值蓋掉的）
+
+1. **登入頁的插畫**：`random.choice(LOGIN_ART)`，每次載入可能換一張。釘成固定那一張。
+2. **頁尾的 `build_info()`**：會問工作區的 git sha（含 `-dirty`）與 `ttyd --version`。
+   不釘的話 golden 只有「錄它的那台機器、那個當下」對得起來。
+3. **瀏覽器時鐘**：`page.clock.set_fixed_time()`。`relTime`／`absTime`／`freshness`
+   全都拿 `new Date()` 跟資料裡的時刻相減。用 `set_fixed_time` 不是 `install`：
+   後者會接管所有計時器，而列表的十五秒輪詢與 toast 的關閉都靠計時器。
+4. **登入後的「歡迎回來」toast**：`toastAfterNav` 讓它出現在**每一個**登入後的場景，
+   五秒後自己消失。錄到它等於把一個過場錄成規格，所以除了 toast 那一場之外一律清掉。
+5. **toast 的進度條**：它的 animation **同時是倒數計時器**。錄製時停掉，否則錄到的是
+   「進度條剛好走到某個百分比」。
+6. **抽屜的提示輪播**：停在第一條。
+7. **動畫**：context 開 `reduced_motion="reduce"`（用 `app.css` 自己維護的那條路徑，
+   不是另外灌一份 `animation: none`），截圖再加 `animations="disabled"` 當第二道。
+8. **`users.created_at`**：`auth.create_user()` 用真實時間填，而帳號清單會把它畫出來。
+
+第 8 條是這一段最值得記的：**它被 `--verify` 放過了。** 原本的 `--verify` 在同一個行程
+裡連錄兩次，兩次共用同一次 seed，所以「在 seed 當下用真實時間填的欄位」兩次一模一樣，
+看起來很穩。它是被**跨行程**跑的 `golden_check` 抓出來的（相對時間還顯示成負的）。
+修法不只是釘那個欄位，而是把 `--verify` 改成兩次之間重新 seed 一次，讓這一整類當場現形。
+
+#### 截圖那道閘：1% 的比例形同虛設
+
+派工給的是「像素差比例，閾值 1%」。實測發現它抓不到東西：把抽屜面板的底色**整個換掉**，
+全頁只差 **0.04%**，因為那塊底色幾乎被 iframe 與標題列蓋滿。1% 的全頁比例等於允許一塊
+158x158 的區域整個換掉還是綠的。
+
+所以改成兩道，兩道都要過：比例 <= 1%（保留 Nathan 給的數字），**加上**「單一通道差
+超過 32 的強差異像素數 <= 400」。反鋸齒在字緣是幾階灰，過不了那道濾網；換顏色、位移、
+少一個元件則一定過得了。實測：乾淨的一輪是 **0 個**，換一個底色是 **800 個**。
+
+#### 驗收
+
+- `golden_record.py --verify`：連錄兩次（中間重 seed），**48 個檔案逐位一致**。
+- 跨行程 `golden_check.py`：48 條全 PASS，十二張截圖全部 `差 0.00%、強差異 0 個`。
+- **變異測試**（golden 不能紅就沒有價值）：改一個文字標籤 → 六條 aria 紅；只改一個
+  顏色 → 只有 `drawer-open` 那一場的截圖紅（800 > 400），其餘全綠。
+- `run-all.sh quick`：38 支 0 失敗（原 36 支，`golden_check` 加一支、階段 3 併進來的
+  `test_bootstrap` 加一支），跳過清單與基線逐字相同。
+
+#### 兩個刻意的取捨
+
+- **`network.txt` 分兩段**：文件與 API 依序列出（應用邏輯決定，順序是確定的，也正是
+  「Vue 版有沒有多打少打」要守的），靜態資源排序後列出（誰先回來由瀏覽器排，照原順序
+  記會隨機紅，而隨機紅的 golden 最後只會被人加到忽略清單裡）。query 一律丟掉，
+  `asset_url()` 的 `?v=` 是檔案 mtime 算的。
+- **ttyd 替身抽成 `tests/fake_ttyd.py`**：`e2e_drawer.py` 與 `golden_scenes.py` 共用。
+  複製兩份的話它們會各自漂走，而漂走之後兩邊驗的就不是同一個終端，卻沒有東西會紅。
+
+`golden_record.py` 與 `golden_scenes.py` 都**不是測試**（一條斷言都沒有），所以 run-all.sh
+是逐一列名 `tests/golden_check.py`，不靠 glob；被 glob 撿走只會空跑。
