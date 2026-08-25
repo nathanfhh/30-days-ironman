@@ -1125,3 +1125,44 @@ innerHTML 會把搜尋框的游標與 IME 選字一起沖掉），golden 已往�
 `--ui vue` 的 `--e2e`：10 支跑了 1 支失敗（golden_check 的那兩行 `/api/auth/me`），
 **九支瀏覽器 e2e 全綠**。golden 本身：aria、DOM 合約、截圖全部通過，網路序列 16/18。
 legacy 那邊 `run-all.sh quick` 39 支 0 失敗、跳過 14 支與基線逐字相同。
+
+### 階段 4 後半（三）：`user` 併進 `/api/account/bootstrap`
+
+Nathan 的裁示：剩下那兩發 `/api/auth/me`（帳號頁冷載入）**不進白名單**，改成把 `user`
+併進 `/api/account/bootstrap`，冷載入只打 bootstrap 一發。`/api/auth/me` 保留不動 ——
+登入之後想單獨重新確認身分的路徑仍然需要它。
+
+做法只有一行：`user=g.user`。`g.user` 就是 `/api/auth/me` 回的同一個物件（`auth._to_dict`
+產生的），**不是在這裡另外拼一份** ——拼一份就是第二個真相來源，而分岔的那天沒有人會
+發現，畫面只是「有一邊怪怪的」。PAT 設過沒（`gitlab_pat_configured`）因此順著它一起出來，
+出口仍然只有 `_to_dict` 那一行。
+
+#### 兩條斷言，各擋一種形狀
+
+```python
+check("user 與 /api/auth/me 逐欄相同（只在 me：… ；只在 bootstrap：…）", _u == me)
+check("user 的欄位齊全（得到 …）", set(_u) == {id, username, is_admin, …})
+```
+
+第二條看起來像第一條的重複，其實守的是另一件事：**兩邊都少掉同一個欄位時第一條仍然是
+綠的**（兩個相同的字典永遠相等）。變異測試逐一驗過：
+
+| 變異 | 逐欄相同 | 欄位齊全 |
+|---|---|---|
+| 在 bootstrap 自己拼一份、少 `ttyd_bin` | **紅**（訊息直接指名 `{'ttyd_bin': 'ttyd'}`） | 紅 |
+| `_to_dict` 拿掉 `created_at`（兩邊一起少） | 綠（如預期的盲點） | **紅** |
+
+另外補了兩條洩漏面的：多一個出口就是多一個洩漏面，所以再確認一次 PAT 只給布林、
+整份 `user` 裡沒有任何 `*_enc` 或 `password_hash`。
+
+#### 三條既有斷言要改，但不是一律改掉
+
+`test_bootstrap.py` 有一節「不重複既有出口」，其中三條在守的正好是相反的性質。逐條判：
+
+- `不夾帶使用者本人` → 裁示直接推翻它，改成正面的「使用者本人在（冷載入不必再打一發）」。
+- `不夾帶 PAT 設過沒` → 改成「**只活在 `user` 裡，頂層沒有第二份**」。原本的判準是「有沒有
+  出現這個字」，而現在真正要守的是「有沒有第二個真相來源」，那才是這一節的立場。
+- `不夾帶 ttyd 選項` → 原本查的是 `"ttyd" not in raw`，太寬：`user.ttyd_bin` 是**這個人
+  自己的值**（同源），而 `/api/prefs` 該獨佔的是**選項清單**。改成查 `ttyd_choices`。
+
+驗收：`run-all.sh quick` 39 支 0 失敗、跳過清單與基線逐字相同。
