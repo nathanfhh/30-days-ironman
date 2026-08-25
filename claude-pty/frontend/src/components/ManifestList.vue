@@ -32,6 +32,10 @@ const props = defineProps<{
   error?: string | null;
   loading?: boolean;
   swapping?: boolean;
+  /** 正在進行中的那一顆動作鍵（`<act>-<id>`），它要停用到動作結束為止。
+   *  舊版是 `btn.disabled = true` 加 `finally` 還原——**而 `await dialog(...)` 就在中間**，
+   *  所以對話框開著的時候那顆鍵是停用的。它出現在 aria 樹裡（golden 抓到的就是這個）。 */
+  busy?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -195,6 +199,7 @@ const emptyText = computed(() =>
               :data-name="s.display_name || ''"
               data-tip="重新命名"
               aria-label="重新命名"
+              :disabled="busy === `rename-${s.id}`"
               @click="emit('rename', s)"
             >
               <i class="fa-solid fa-pen"></i>
@@ -255,6 +260,7 @@ const emptyText = computed(() =>
             :data-label="titleOf(s)"
             :data-testid="`row-open-${s.id}`"
             title="開啟終端（按住 ⌘/Ctrl 改開新分頁）"
+            :disabled="busy === `open-${s.id}`"
             @click="emit('open', s, $event)"
           >
             <i class="fa-solid fa-terminal"></i> 終端</button>
@@ -265,6 +271,7 @@ const emptyText = computed(() =>
             :data-id="s.id"
             :data-label="titleOf(s)"
             :data-container="s.container || ''"
+            :disabled="busy === `kill-${s.id}`"
             @click="emit('kill', s)"
           >
             <i class="fa-solid fa-circle-stop"></i> 終止</button>

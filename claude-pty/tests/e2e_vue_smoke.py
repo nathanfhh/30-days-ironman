@@ -51,6 +51,8 @@ if not os.path.isfile(os.path.join(_DIST, "index.html")):
 TMP = tempfile.mkdtemp(prefix="vue-smoke-")
 config.DB_URL = f"sqlite:///{TMP}/t.db"
 config.SECRET_KEY = "vue-smoke-secret"
+# 抽屜只在「走 nginx」的模式下開；直連時呼叫端會改開新分頁（見 SessionsView.onOpen）。
+config.BEHIND_PROXY = True
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
@@ -253,7 +255,90 @@ with sync_playwright() as pw:
     page.click('[data-seg="account"]')
     page.wait_for_timeout(500)
     check("帳號頁走 SPA 路由（沒有整頁重載）", page.url.endswith("/account"))
-    check("帳號頁是殼並明講", "階段 4 後半" in page.locator(".shell").inner_text())
+
+    # --- 抽屜（ttyd 用替身，不需要 docker）---
+    #
+    # ⚠ 這裡**不 import golden_scenes 的 install_drawer_routes**：那支模組一 import 就會建暫時
+    #   的 DB、改 config，而這一支自己已經有一份。替身只要做到「window.term 存在」就夠——
+    #   尺寸同步的兩道閘本身由 vitest 逐條驗（見 frontend 的 terminal-size.spec.ts）。
+    page.goto(f"{BASE}/", wait_until="networkidle")
+    page.wait_for_selector('[data-testid="session-row"]', timeout=8000)
+    page.route(
+        "**/api/sessions/*/view",
+        lambda route, request: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body='{"path": "/session/%s/", "direct_url": "http://127.0.0.1:41999/",'
+            ' "ttyd_flavor": "Rust"}' % request.url.rstrip("/").split("/")[-2],
+        ),
+    )
+    page.route(
+        "**/session/**",
+        lambda route, _r: route.fulfill(
+            status=200,
+            content_type="text/html; charset=utf-8",
+            body="<!doctype html><meta charset=utf-8><body>"
+            "<script>window.term={cols:80,rows:24,options:{fontSize:14},"
+            "onResize(cb){this._cb=cb}};</script>",
+        ),
+    )
+    page.route("**/api/sessions/*/resize", lambda route, _r: route.fulfill(status=204, body=""))
+
+    page.locator('[data-act="open"]').first.click()
+    page.wait_for_selector('[data-testid="drawer"]', timeout=8000)
+    check("抽屜開得起來", page.locator('[data-testid="drawer"]').count() == 1)
+    check(
+        "iframe 指到單一入口那條路徑（不是跨 origin 的直連網址）",
+        "/session/" in (page.locator('[data-testid="drawer-frame"]').get_attribute("src") or ""),
+    )
+    check("標題列講得出是哪一顆 ttyd", page.locator('[data-testid="drawer-bin"]').inner_text().strip() == "Rust")
+    check(
+        "背景退出 Tab 序（aria-modal 不影響 Tab 順序，inert 才是）",
+        page.evaluate("() => document.querySelector('.shell').inert") is True,
+    )
+    # ⚠ 用 state="hidden" 而不是選擇器帶 [hidden]：後者的預設是「等它**可見**」，而一個
+    #   hidden 的元素永遠不會可見，於是這一行必定逾時（第一次寫就是這樣紅的）。
+    page.wait_for_selector('[data-testid="drawer-pending"]', state="hidden", timeout=8000)
+    check("連上之後「連線中」收起來", page.locator('[data-testid="drawer-pending"]').is_hidden())
+    page.wait_for_function(
+        "() => /^\\d+px$/.test(document.querySelector('[data-testid=drawer-font-value]').textContent.trim())",
+        timeout=8000,
+    )
+    check("字級讀得到並畫出來", page.locator('[data-testid="drawer-font-value"]').inner_text().strip().endswith("px"))
+    page.click('[data-testid="drawer-close"]')
+    page.wait_for_selector('[data-testid="drawer"]', state="detached", timeout=5000)
+    check("關掉之後節點真的被拆掉", page.locator('[data-testid="drawer"]').count() == 0)
+    check("背景的 inert 也收回來", page.evaluate("() => document.querySelector('.shell').inert") is False)
+
+    # --- 帳號頁（管理員）---
+    page.goto(f"{BASE}/account", wait_until="networkidle")
+    page.wait_for_selector('[data-testid="roster-table"]', timeout=8000)
+    check(
+        "帳號頁三塊自己的面板都在",
+        page.locator('[data-testid="token-state"]').count() == 1
+        and page.locator('[data-testid="pw-form"]').count() == 1,
+    )
+    check("管理員看得到帳號清單", page.locator('[data-testid="roster-name"]').count() >= 1)
+    check("ttyd 實況那張表也在", page.locator('[data-testid="ttyd-views"]').count() == 1)
+    check(
+        "憑證未設定時 chip 是紅的",
+        page.locator('[data-testid="token-state"] .chip').get_attribute("data-tone") == "error",
+    )
+    check("未設定時清除鍵收起來", page.locator('[data-testid="token-clear"]').is_hidden())
+    check("儲存鍵要等貼了東西才可按", page.locator('[data-testid="token-save"]').is_disabled())
+    page.fill('[data-testid="cli-token"]', "sk-ant-oat-fake")
+    check("貼了就可按", page.locator('[data-testid="token-save"]').is_enabled())
+    # 改密碼的即時驗證（長度與一致性）
+    page.fill('[data-testid="old-pw"]', "vue-password-1")
+    page.fill('[data-testid="new-pw"]', "short")
+    check("太短會講出來", "至少" in page.locator('[data-testid="pw-hint"]').inner_text())
+    page.fill('[data-testid="new-pw"]', "vue-password-2")
+    page.fill('[data-testid="confirm-pw"]', "vue-password-3")
+    check("不一致會講出來", "不一致" in page.locator('[data-testid="pw-hint"]').inner_text())
+    check("不一致時送出鍵是停用的", page.locator('[data-testid="pw-btn"]').is_disabled())
+    page.fill('[data-testid="confirm-pw"]', "vue-password-2")
+    check("兩次一致就可按", page.locator('[data-testid="pw-btn"]').is_enabled())
+    check("密碼欄都有「看一眼」（舊版是 enhancePasswordFields 包的）", page.locator(".pw__toggle").count() >= 4)
 
     # --- 登出 ---
     page.click('[data-testid="account-btn"]')
