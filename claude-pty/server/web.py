@@ -80,11 +80,17 @@ def spa_asset(filename: str):
 
 @web.get("/login")
 def login_page():
-    # 已登入者不該停在登入頁——gate 對本端點是放行的（它必須公開），故這裡自行判斷。
-    # 與「未登入訪問管理頁 → 導向 /login」互為對稱。
-    #
-    # ⚠ 這一條**不能交給前端做**：SPA 要先載入、先問一次「我是誰」才知道自己已經登入了，
-    #   那期間畫面上是登入表單。伺服端一句 302 沒有那個窗口。
+    """登入頁的殼；已登入者導回 `/`。
+
+    ⚠ **這個 302 只在 dev 與 e2e 生效。** 正式部署的 `/login` 由 nginx 直接吐
+      `index.html`（`deploy/nginx-ui/vue/ui.conf` 的 `location = /login`），請求根本不會
+      走到這裡。那條路上「已登入者不該停在登入頁」是 SPA 的守衛負責的
+      （`frontend/src/router.ts` 的 `beforeEach`）。
+
+    ⚠ 所以這一條**不是**兩條路共用的保險絲，它只覆蓋 Flask 自己 serve 頁面的那一種：
+      dev、e2e、以及 nginx 的 UI 片段沒掛上的軟著陸情況。留著它是因為那幾種情況下沒有
+      別人做這件事，不是因為它在 prod 也擋得住。
+    """
     if session.get("uid") and auth.get_user(session["uid"]) is not None:
         return redirect("/")
     return _spa_shell()

@@ -91,7 +91,11 @@ have_claude_cred=0
 #   build，它跑在這幾行之後——先算的話永遠是「還沒 build」。
 # ⚠ 沒有 node 的機器整段前端會被跳過，那時 dist 真的不存在。那不是「測試壞了」，是環境
 #   缺一個工具，所以進跳過清單、看得見（同 ttyd、同 playwright 的處置）。
-NEEDS_DIST=(e2e_vue_smoke)
+# ⚠ **每一支瀏覽器測試都要 dist**，不是只有 e2e_vue_smoke。legacy 拆掉之後畫面只剩這一份，
+#   八支 e2e 與 golden_check 全部吃它；只列一支的話，其餘那幾支在缺 dist 時會以一串看不懂的
+#   逾時失敗，而真正的原因（沒 build）不會出現在跳過清單上（完整審查 L3）。
+NEEDS_DIST=(e2e_account e2e_chips e2e_drawer e2e_filters e2e_flow e2e_gitlab_chip
+            e2e_settings e2e_stale_row e2e_vue_smoke golden_check)
 
 # 瀏覽器 e2e 需要 playwright 真的把 chromium 下載下來。沒下載的話每一支 e2e 都會吐一段
 # 「Executable doesn't exist」的 traceback——看起來像測試壞了，其實是少一個安裝步驟。
@@ -323,7 +327,12 @@ fi
 _dist_stale=0
 if [ ! -f server/static/dist/index.html ]; then
   _dist_stale=1
+# ⚠ `server/static/css/app.css` 也要列進來：SPA 的樣式**不是**打包進 bundle 的，是
+#   `index.html` 直接引用 `/static/css/app.css`（見 frontend/index.html）。它一改，畫面就變，
+#   而 `frontend/` 底下一個字都沒動 —— 少了這一項，golden 會拿一份舊畫面去比新樣式
+#   （完整審查 L3）。
 elif [ -n "$(find frontend/src frontend/index.html frontend/package.json frontend/vite.config.ts \
+              server/static/css/app.css \
               -newer server/static/dist/index.html -print -quit 2>/dev/null)" ]; then
   _dist_stale=1
 fi

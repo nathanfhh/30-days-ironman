@@ -1039,6 +1039,9 @@ vs 從 DOM 移除、title、data-tip）現在有東西守**，而那正是 1:1 �
 
 #### 兩個場景仍然跑不起來（harness 的耦合，不是畫面差異）
 
+> 這一段寫於階段 4 後半（一）合併之前。**該問題已在 `962a9b2` 解決**：兩個場景都改成用真的
+> UI 動作觸發（終止→取消、攔 DELETE 回 409 再確認），不再呼叫任何一版的全域函式。
+
 `sessions-toast` 與 `sessions-toast-error` 直接 `page.evaluate("() => toast(...)")` /
 `toastError(...)`——那是 `app.js` 的**全域函式**，Vue 版沒有這個全域。這不是 1:1 的差異，
 是場景伸手進了某一版的內部實作。
@@ -1314,6 +1317,7 @@ golden 仍是**從 legacy 錄的那一份**，`golden_check` 靠 META 的 `ui=le
 比對。`golden_scenes.CURRENT_UI = "vue"` 是常數不是設定值；重錄成 Vue 版是第二部分的事，
 在那之前**不要跑不帶 `--verify` 的 `golden_record.py`**（跑了就是把現況覆寫成規格），
 那條警告寫在 `golden_record.main()` 的註解裡。
+
 ### 階段 5 前端側：把「為了 1:1 才存在的東西」全部拆掉
 
 舊版還沒刪，但 Vue 版這邊為了與它對齊而背的幾樣東西已經可以還了。fable 快審 4b 的一條中度
@@ -1441,3 +1445,61 @@ META 那一欄拿掉而不是改成 `vue`：永遠只有一個值的欄位只會
 
 README：架構一覽補前端與 build 步驟、測試指令補 `--e2e` 與 golden 三條、覆蓋率段落補上
 前端的 vitest 門檻並寫明**兩邊的數字不要合著看**（後端那個是診斷，前端那個是 gate）。
+
+### 完整審查修正
+
+判定可交付之後的收尾。M1 的前端側給 lane C，其餘主樹側在這一刀。
+
+**M1（後端側）｜`web.py` 的 `/login` 註解在說一件不成立的事。**
+原本寫「這一條**不能交給前端做**：SPA 要先載入、先問一次我是誰才知道自己已經登入了」。
+去查證之後那句話反過來才對：正式部署的 `/login` 由 nginx 直接吐 `index.html`
+（`nginx-ui/vue/ui.conf` 的 `location = /login`），**請求根本不會走到 Flask**，那個 302
+只在 dev、e2e、以及 nginx 片段沒掛上的軟著陸情況下生效。prod 那條路上「已登入者不該停在
+登入頁」是 SPA 守衛的事。註解改成照實說，並寫明它覆蓋的是哪幾種情況。
+
+⚠ **`frontend/src/router.ts:48-49` 有一句對稱的錯**（「伺服器在吐這個殼之前就會先導走，
+見 `web.login_page`」），那在 prod 同樣不成立。那是 M1 的前端側，歸 lane C。
+
+**L1｜`/assets/` 的 `add_header … always`。** 沒有 `always` 時 add_header 只套在 2xx／3xx；
+加了它連 **404 也會帶著 `immutable, max-age=31536000`**。改版之後舊的殼會去要一個已經不存在
+的 `index-<舊雜湊>.js`，那一發 404 被快取一年，**清了快取才救得回來**，而症狀是一片白畫面、
+看不出跟快取有關。拿掉 `always`，`test_nginx_contract` 補一條斷言把它釘住。
+
+**L3｜`NEEDS_DIST` 只列了一支。** legacy 拆掉之後八支 e2e 與 golden_check 全部吃 dist，
+只列 `e2e_vue_smoke` 的話，其餘那幾支在缺 dist 時會以一串看不懂的逾時失敗，而真正的原因
+不會出現在跳過清單上。改成全部列進去。
+
+stale 判準的 `find` 清單補 `server/static/css/app.css`：**SPA 的樣式不是打包進 bundle 的**，
+`frontend/index.html` 直接引用 `/static/css/app.css`。它一改畫面就變，而 `frontend/` 底下
+一個字都沒動 —— 少了這一項，golden 會拿一份舊畫面去比新樣式。改完實測：`touch` 那個檔案
+之後跑 `--e2e`，確實會先補一次 build。
+
+**L7｜五處過期註解**：Dockerfile 的「legacy 模式下它只是躺著」、compose 的同一句、
+nginx.conf 的「legacy 從來不要求 /assets/*」、`golden_record.py` 檔頭的「（legacy）介面」、
+`test_bootstrap.py` 的「照著 legacy 錄下來的」。最後那一條順手把 `d79c87b` 之後的狀態寫清楚
+（守的從「與舊版等價」變成「不要回歸」）。
+
+**L8｜README。** `--e2e` 的支數 8 改 10（九支 e2e ＋ golden_check）；golden 那三條指令補上
+完整的 `--with` 清單。補的時候踩到一件事並寫進 README：**先塞進一個變數再 `uv run $DEPS …`
+在 zsh 是壞的** —— bash 會做單字分割、zsh 不會，貼過去只會得到一句
+`For more information, try '--help'`，而那個錯誤看起來完全不像引號問題。所以三條都逐字寫全，
+而且是**真的貼進終端跑過一次**才寫進去的。
+
+**trivy｜control image 的 3 筆 CRITICAL。**
+先查 `deploy/Dockerfile`：**已經有 `apt-get upgrade -y`**（line 128，旁邊還有一段講 base
+image 的 CVE 節奏不歸我們管）。所以照指示重 build 再掃一次：
+
+```
+docker build --no-cache -f deploy/Dockerfile -t claude-pty-control:rescan .
+trivy image --scanners vuln --severity CRITICAL claude-pty-control:rescan
+```
+
+結果 **3 筆，全部是 `perl-base 5.40.1-6`**（CVE-2026-8376、CVE-2026-13221、CVE-2026-42496），
+而三筆的 `FixedVersion` 都是**空的** —— Debian 上游還沒有修補版本。
+
+所以這三筆不是「政策漏了」而是「現在無藥可用」：`apt-get upgrade` 已經在做它能做的事，
+再多做一次也不會變。**沒有新增任何東西**（那是既有政策），只記錄這個事實與量測方式，
+下次 base image 更新之後重掃即可。
+
+**驗收**：`run-all.sh quick` 39 支 0 失敗；`test_nginx_contract` 42 條全過；
+`ruff@0.16.3` check 與 format 全過。

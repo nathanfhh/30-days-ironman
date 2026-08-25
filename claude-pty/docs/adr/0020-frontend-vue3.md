@@ -85,6 +85,12 @@
 - **重錄等於改規格。** 看到 `golden_check` 紅了就順手重錄，等於把「我改壞了」寫成「這就是
   新的對的樣子」，那條防線當場消失。重錄的 diff 要進 code review，與改一份 API 契約同一個
   份量。
+- **自 `d79c87b` 起 golden 是 Vue 版自身的特徵快照**，守的是「不要回歸」，不再是「與舊版
+  等價」。遷移期它拿 legacy 錄的那一份當規格，那個階段已經結束；現在它只回答「跟上一次
+  錄的時候比，有沒有東西變了」。
+- **已登入者冷載入 `/login` 由 SPA 的守衛導回**（`frontend/src/router.ts` 的 `beforeEach`）。
+  Flask 的 302（`web.login_page`）**只在 dev 與 e2e 路徑生效** —— 正式部署那條路由由 nginx
+  直接吐 `index.html`，請求根本不會走到 Flask。
 
 ### 已知不涵蓋的
 
