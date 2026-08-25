@@ -271,7 +271,9 @@ import re as _re  # noqa: E402
 
 _SITES = {
     "auth.py": ["change_password", "set_ttyd_bin", "set_cli_token", "clear_cli_token", "set_gitlab_pat"],
-    "sessions.py": ["create", "rename", "probe_container", "touch", "resize"],
+    "sessions.py": ["create", "rename", "touch"],
+    "query.py": ["probe_container"],  # 2026-08-25 從 sessions.py 拆出（QueryMixin）
+    "attach.py": ["resize"],  # 2026-08-25 從 sessions.py 拆出（AttachMixin）
     "views.py": ["open_view", "close_views", "_drop_view"],
 }
 # 🔴 **反向釘住：這幾支刻意維持 deferred，不要「順手補齊」。**
