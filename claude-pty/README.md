@@ -387,7 +387,7 @@ PTY 是字元流，圖片拖不進終端。補法：終端抽屜的迴紋針鈕�
 ```bash
 tests/run-all.sh          # 快速組（不需要 docker）
 tests/run-all.sh --all    # 全部（需要 docker；ttyd 在 PATH 上則含真終端測試）
-tests/run-all.sh --e2e    # 只跑瀏覽器那幾支（八支 e2e ＋ golden_check）
+tests/run-all.sh --e2e    # 只跑瀏覽器那幾支（10 支：九支 e2e ＋ golden_check）
 ```
 
 前端那六關（`npm ci` / oxlint / prettier / vue-tsc / vitest / vite build）也在
@@ -400,10 +400,25 @@ tests/run-all.sh --e2e    # 只跑瀏覽器那幾支（八支 e2e ＋ golden_che
 桌機全頁截圖），`golden_check.py` 拿當下的畫面去對它。整套的理由與限制在
 [ADR 0020](docs/adr/0020-frontend-vue3.md)。
 
+⚠ `--with` 那一串不可以省：這幾支是拿 `uv run` **直接跑腳本**、不是安裝這個套件。
+清單的來源是 `tests/run-all.sh` 的 `DEPS`，兩邊要一起動。（下面刻意逐條寫全，不先塞進一個變數：
+`uv run $DEPS …` 在 bash 會做單字分割、在 zsh **不會**，貼過去只會得到一句
+`For more information, try '--help'`，而那個錯誤看起來完全不像是引號的問題。）
+
 ```bash
-uv run … python tests/golden_check.py            # 比（run-all.sh 會跑）
-uv run … python tests/golden_record.py --verify  # 連錄兩次，驗不穩定源都釘死了
-uv run … python tests/golden_record.py           # 重錄＝改規格，見下
+cd claude-pty
+
+uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
+  --with psutil --with cryptography --with playwright --with pillow \
+  python tests/golden_check.py            # 比
+
+uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
+  --with psutil --with cryptography --with playwright --with pillow \
+  python tests/golden_record.py --verify  # 連錄兩次，驗不穩定源都釘死了
+
+uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
+  --with psutil --with cryptography --with playwright --with pillow \
+  python tests/golden_record.py           # 重錄＝改規格，見下
 ```
 
 ⚠ **重錄等於改規格。** 看到 `golden_check` 紅了就順手重錄，等於把「我改壞了」寫成

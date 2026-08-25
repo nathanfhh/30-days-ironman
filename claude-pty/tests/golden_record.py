@@ -1,4 +1,4 @@
-"""錄 golden master：把現在這個（legacy）介面的樣子存成檔案。
+"""錄 golden master：把現在這個介面的樣子存成規格。
 
     uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
         --with psutil --with cryptography --with playwright --with pillow \

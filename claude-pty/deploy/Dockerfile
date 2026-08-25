@@ -212,7 +212,8 @@ RUN pip install --no-cache-dir uv==0.7.3 \
 # ⚠ 放在 pip install **之後**：這個套件沒有宣告 package-data（見 pyproject 的
 #   `[tool.setuptools.packages.find]`），所以執行期讀的一律是 `/app/server`，不是
 #   site-packages 那份。放在後面只是為了不讓「改前端」把 pip 那一層的快取一起弄掉。
-# ⚠ legacy 模式下它只是躺著，不會被任何路由碰到（`config.UI` 預設 legacy）。
+# ⚠ 這一份是 dev 與 e2e 那條路要的：正式部署由 nginx 直出 dist（見 deploy/nginx.conf），
+#   而 Flask 自己 serve 頁面時（沒有 nginx）也要拿得到同一份產物。
 COPY --from=frontend /build/server/static/dist /app/server/static/dist
 
 # registry / secret key 的落腳處；compose 以 volume 掛入使其跨重啟持久。

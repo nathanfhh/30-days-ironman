@@ -108,6 +108,14 @@ check(
     "長快取（Vite 把內容雜湊寫進檔名，改版就換檔名）",
     _assets is not None and "max-age=31536000" in _assets.group(1) and "immutable" in _assets.group(1),
 )
+# 🔴 **不可以有 `always`。** 沒有它時 add_header 只套在 2xx／3xx 上；加了它連 404 也會帶著
+#    `immutable, max-age=31536000`。改版之後舊的殼會去要一個已經不存在的
+#    `index-<舊雜湊>.js`，那一發 404 被快取一年，**清了快取才救得回來**，而症狀是一片白
+#    畫面、看不出跟快取有關（完整審查 L1）。
+check(
+    "🔴 快取標頭沒有 always（404 不可以帶著 immutable 被快取一年）",
+    _assets is not None and "always" not in _assets.group(1),
+)
 # 🔴 `expires` 自己就會送一個 Cache-Control。兩個一起用＝同一個標頭回兩份，而「聽哪一份」
 #    是實作決定的——一個要快取一年的資源不該讓那件事變成問題。
 check(

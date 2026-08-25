@@ -244,8 +244,8 @@ services:
     #   （見 deploy/Dockerfile）。base image 仍然是 nginx:alpine，只多了那一層 COPY。
     #   用 bind mount 的話，host 上沒 build 過的目錄會被 docker 建成空目錄頂替——症狀是整站
     #   404 而不是「你忘了 build」。
-    # ⚠ legacy 模式下這一層只是躺著：頁面路由由下面掛進去的片段決定（預設是空的 legacy 版），
-    #   `/assets/*` 沒有人會要。
+    # ⚠ 這一層現在是唯一的畫面來源（legacy 於 2026-08-26 拆除）：頁面路由由下面掛進去的
+    #   `nginx-ui/vue` 片段直出 index.html，`/assets/*` 由 nginx 從這一層讀。
     build:
       context: ..
       dockerfile: deploy/Dockerfile
