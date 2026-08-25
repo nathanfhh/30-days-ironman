@@ -485,3 +485,68 @@ query 裡，而那正是 Vue 版最容易做錯的地方：少帶一個參數、
 
 驗收：`--verify` 連錄兩次 **73 個檔案逐位一致**；跨行程 `golden_check` 全 PASS；
 `run-all.sh quick` 38 支 0 失敗、跳過清單與基線逐字相同。
+
+### 階段 2b（下半）：補場景與 dom 白名單
+
+**中 4｜補了六個場景**，golden 從 12 場變 **18 場**：
+
+| 場景 | 錄到的狀態 |
+|---|---|
+| `sessions-filter-applied` | 套用一個條件後：網址變 `/?network=unrestricted`、清單剩一列、清除鈕可按 |
+| `sessions-toast-error` | 走 app 自己的 `toastError()`（不是自己拼一個 danger toast，那條路才是失敗時真的會跑的） |
+| `sessions-modal-kill` | 終止的確認對話框 |
+| `sessions-modal-rename` | 重新命名的對話框 |
+| `sessions-pager` | 一頁裝不下時的分頁列 |
+| `sessions-no-gitlab` | 部署沒開 GitLab：gitlab 標記從 3 顆變 0 顆 |
+
+外加 `drawer-open` 補錄 390 視口的截圖（抽屜在窄視窗下是另一套版面，只錄桌機等於沒錄到）。
+其餘場景的手機版仍只靠 aria 與 dom 兩份快照守結構，不另外存圖（圖很貴）。
+
+兩個實作上的決定：
+
+- **重新命名不是 inline 編輯，是帶輸入框的對話框**（`app.js` 的 `dialog({input})`）。
+  派工寫的是「inline 編輯態」，我照實際的樣子錄並把場景命名為 `modal-rename`。
+  golden 記的是現況，不是我們以為的現況；照想像命名的話，之後有人會拿它當「應該長這樣」。
+- **分頁那場是把 `PAGE_SIZE` 調小，不是多塞十幾筆假資料**。多塞的話每一個場景的清單都
+  跟著變長、截圖全部要重錄，而那十幾筆對其他場景一點資訊都沒有。用 `try/finally` 還原，
+  中途拋了也不會汙染後面的場景（那種汙染在 golden 裡的樣子是「不相干的場景莫名其妙全紅」）。
+
+**中 5｜白名單再加三項**：`id`、`aria-controls`、`title`。
+
+- `id` 與 `aria-controls` 是**成對**的契約：`aria-controls` 指的那個 id 必須真的存在。
+  只記其中一半的話，Vue 版把 id 改名而 `aria-controls` 沒跟著改，這裡看起來一切正常，
+  而螢幕閱讀器會指到一個不存在的東西。
+- `title` 是原生 tooltip，與 `data-tip` 同理：滑過去才看得到（截圖蓋不到），也不是可及
+  名稱（aria 蓋不到）。
+- `inert` 本來就在白名單裡（e2e 那條「沒露臉的要退出 Tab 序」守的就是它）。
+
+順手修一個自己挖的坑：原本 `key` 是 `a.replace(/^(data|aria)-/, "")`，把 `aria-checked`
+剝成 `checked`。哪天有人加一個 `data-checked` 就撞名，而撞名之後兩件事在檔案裡長得
+一模一樣。改成**只剝 `data-`**，`aria-*` 原樣保留。
+
+**hidden vs 從 DOM 移除，現在分得出來**（這是 `v-if` 與 `v-show` 的差別，aria 看起來一樣）：
+
+```
+sessions-list   div hidden id=pager     ← 一頁裝得下：在 DOM 裡，藏起來
+sessions-pager  div id=pager            ← 裝不下：同一個元素，露出來
+```
+
+#### 變異測試
+
+| 變異 | 紅的是 | 其他 |
+|---|---|---|
+| `aria-controls="filter-bar"` 打成 `filter-barr` | 4 條，**全是 DOM** | aria／網路／截圖全綠 |
+| `pager.hidden = X` 改成 `pager.remove()`（v-show 改 v-if） | 26 條，**全是 DOM** | aria／網路／截圖全綠 |
+
+第二個特別值得記：**第一次的變異是無效的。** 我原本去拿掉模板裡 `<div class="pager"
+id="pager" hidden>` 的 `hidden`，結果一條都沒紅——因為 `renderPager()` 每次都重設
+`pager.hidden`，模板的初始屬性根本不影響最終狀態。改成真的把元素移除才是 `v-if` 的類比。
+**變異測試自己也會失敗**，看到「沒紅」的第一件事是問「我的變異真的改到東西了嗎」，
+而不是宣告防線有效。
+
+#### 規模與驗收
+
+- **18 場、110 個檔案、6.0 MB**（截圖 19 張佔 5.6 MB）。
+- `--verify` 連錄兩次（中間重 seed）：**110 個檔案逐位一致**。
+- 跨行程 `golden_check`：**109 條全 PASS**（36 aria ＋ 36 dom ＋ 18 network ＋ 19 截圖）。
+- `run-all.sh quick` 38 支 0 失敗、跳過清單與基線逐字相同；`--e2e` 9 支全綠。

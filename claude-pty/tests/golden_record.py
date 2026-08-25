@@ -65,6 +65,7 @@ def record_into(root: str) -> list[str]:
 
                 if vp == G.SHOT_VIEWPORT:
                     _write(os.path.join(out, "network.txt"), G.network_text(page, reqs, BASE), written, root)
+                if vp == G.SHOT_VIEWPORT or name in G.MOBILE_SHOT:
                     # ⚠ animations="disabled"：把還在跑的 CSS 動畫定住。context 已經開了
                     #   reduced-motion，這是第二道（有幾個動畫刻意不受 reduced-motion 影響，
                     #   例如 .lamp 的呼吸燈）。

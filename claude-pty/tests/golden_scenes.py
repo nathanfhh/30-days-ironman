@@ -56,6 +56,9 @@ GOLDEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden")
 # 兩個視口。桌機是主要的比對對象（截圖只存這個），手機用來釘住 media query 之後的結構。
 VIEWPORTS = {"1280x800": {"width": 1280, "height": 800}, "390x844": {"width": 390, "height": 844}}
 SHOT_VIEWPORT = "1280x800"
+# 這幾場在手機視口是**另一套版面**（抽屜在窄視窗下是全螢幕），只錄桌機等於沒錄到。
+# 其餘場景的手機版靠 aria 與 dom 兩份快照守結構，不另外存圖（圖很貴，48 張就 8 MB）。
+MOBILE_SHOT = {"drawer-open"}
 
 # 整組資料與瀏覽器時鐘共用的「現在」。挑一個寫死的時刻，不是 utcnow()。
 NOW = _dt.datetime(2026, 8, 25, 4, 0, 0, tzinfo=_dt.timezone.utc)
@@ -422,6 +425,81 @@ def scene_account_admin(page, base):
     _settle(page)
 
 
+def scene_sessions_filter_applied(page, base):
+    _login(page, base, "golden-admin")
+    page.locator('[data-testid="session-row"]').first.wait_for(timeout=8000)
+    page.click('[data-testid="filter-toggle"]')
+    page.locator('[data-testid="filter-bar"]').wait_for(state="visible", timeout=4000)
+    page.click('[data-testid="pick-fnet-button"]')
+    page.click('[data-testid="pick-fnet-opt-unrestricted"]')
+    # 條件生效之後清單會重畫。等「只剩一列」而不是睡一段時間：那才是這一場的定義。
+    page.wait_for_function(
+        "() => document.querySelectorAll('[data-testid=session-row]').length === 1", timeout=8000
+    )
+    _settle(page)
+
+
+def scene_sessions_toast_error(page, base):
+    _login(page, base, "golden-admin")
+    page.locator('[data-testid="session-row"]').first.wait_for(timeout=8000)
+    page.evaluate("() => document.querySelectorAll('[data-testid=toast]').forEach((t) => t.remove())")
+    # 走 app 自己的 toastError()，不是自己拼一個 danger toast：那條路才是失敗時真正跑的。
+    page.evaluate("() => toastError('終止 Session', new Error('這個 session 的 container 已經結束了'))")
+    page.locator('[data-testid="toast"]').wait_for(state="visible", timeout=4000)
+    _settle(page, keep_toasts=True)
+
+
+def scene_sessions_modal_kill(page, base):
+    _login(page, base, "golden-admin")
+    page.locator('[data-testid="session-row"]').first.wait_for(timeout=8000)
+    page.click(f'button[data-act="kill"][data-id="{SESSION_ROWS[0][0]}"]')
+    page.locator('[data-testid="modal"]').wait_for(timeout=4000)
+    _settle(page)
+
+
+def scene_sessions_modal_rename(page, base):
+    _login(page, base, "golden-admin")
+    page.locator('[data-testid="session-row"]').first.wait_for(timeout=8000)
+    # ⚠ 重新命名**不是** inline 編輯，是一個帶輸入框的對話框（app.js 的 dialog({input})）。
+    #   場景名字照實叫 modal，不要照著想像命名——golden 記的是現況，不是我們以為的現況。
+    page.click(f'button[data-act="rename"][data-id="{SESSION_ROWS[0][0]}"]')
+    page.locator('[data-testid="modal"]').wait_for(timeout=4000)
+    _settle(page)
+
+
+def scene_sessions_pager(page, base):
+    """一頁裝不下時的分頁列。"""
+    # ⚠ 把 PAGE_SIZE 調小，而不是多塞十幾筆假資料進 seed：多塞的話**每一個**場景的清單
+    #   都跟著變長，截圖全部要重錄，而那十幾筆對其他場景一點資訊都沒有。
+    # ⚠ try/finally：中途拋了也要還原，否則後面每一場都會用到一個被改過的分頁大小，
+    #   而那種汙染在 golden 裡的樣子是「不相干的場景莫名其妙全紅」。
+    real = config.PAGE_SIZE
+    config.PAGE_SIZE = 2
+    try:
+        _login(page, base, "golden-admin")
+        page.locator('[data-testid="pager-status"]').wait_for(timeout=8000)
+        page.wait_for_function(
+            "() => document.querySelectorAll('[data-testid=session-row]').length === 2", timeout=8000
+        )
+        _settle(page)
+    finally:
+        config.PAGE_SIZE = real
+
+
+def scene_sessions_no_gitlab(page, base):
+    """部署沒開 GitLab：整欄標記一顆都不畫。"""
+    # 這道 gate 在伺服端（web.sessions_page 把 gitlab_enabled 給模板），所以要在載入頁面
+    # **之前**改，而且改完整頁重載才吃得到。
+    real = config.GITLAB_HOST
+    config.GITLAB_HOST = ""
+    try:
+        _login(page, base, "golden-admin")
+        page.locator('[data-testid="session-row"]').first.wait_for(timeout=8000)
+        _settle(page)
+    finally:
+        config.GITLAB_HOST = real
+
+
 SCENES = [
     ("login-empty", "登入頁，什麼都還沒填", scene_login_empty),
     ("login-error", "登入頁，帳密錯誤的提示", scene_login_error),
@@ -432,6 +510,12 @@ SCENES = [
     ("sessions-rangepick", "工作階段，起迄的日期面板開著", scene_sessions_rangepick),
     ("sessions-settings", "工作階段，設定對話框開著", scene_sessions_settings),
     ("sessions-toast", "工作階段，右上角有一則 toast", scene_sessions_toast),
+    ("sessions-filter-applied", "工作階段，套用了一個篩選條件", scene_sessions_filter_applied),
+    ("sessions-toast-error", "工作階段，失敗的 toast（danger）", scene_sessions_toast_error),
+    ("sessions-modal-kill", "工作階段，終止的確認對話框", scene_sessions_modal_kill),
+    ("sessions-modal-rename", "工作階段，重新命名的對話框（帶輸入框）", scene_sessions_modal_rename),
+    ("sessions-pager", "工作階段，一頁裝不下時的分頁列", scene_sessions_pager),
+    ("sessions-no-gitlab", "工作階段，部署沒開 GitLab", scene_sessions_no_gitlab),
     ("drawer-open", "終端抽屜開著（ttyd 用替身）", scene_drawer_open),
     ("account-user", "帳號頁，一般使用者看到的", scene_account_user),
     ("account-admin", "帳號頁，管理員看到的（含帳號清單）", scene_account_admin),
@@ -551,6 +635,13 @@ DOM_ATTRS = [
     "data-tone", "data-kind", "data-state", "data-stale", "data-level",
     "data-on", "data-in", "data-edge", "data-active", "data-open",
     "data-disabled", "data-empty", "aria-checked", "hidden", "inert",
+    # id 與 aria-controls 是**成對**的契約：aria-controls 指的那個 id 必須真的存在。
+    # 只記其中一半的話，Vue 版把 id 改名而 aria-controls 沒跟著改，這裡看起來一切正常，
+    # 而螢幕閱讀器會指到一個不存在的東西。
+    "id", "aria-controls",
+    # title：原生 tooltip。與 data-tip 同理，滑過去才看得到（截圖蓋不到），
+    # 也不是可及名稱（aria 蓋不到）。
+    "title",
     # 提示文字：滑過去才看得到，所以截圖蓋不到；不是 aria 名稱，所以 aria 也蓋不到。
     # 它一旦悄悄消失，沒有任何一道防線會出聲。
     "data-tip",
@@ -564,7 +655,9 @@ _DOM_JS = r"""(attrs) => {
       // inert 是 property，反映到同名屬性；直接問 property 比較可靠。
       if (a === "inert") { if (el.inert) parts.push("inert"); continue; }
       if (!el.hasAttribute(a)) continue;
-      const key = a.replace(/^(data|aria)-/, "");
+      // 只剝 data- 前綴。aria-* 原樣保留：剝掉的話 aria-checked 會變成 checked，
+      // 哪天有人加一個 data-checked 就撞名了，而撞名之後兩件事在檔案裡長得一模一樣。
+      const key = a.replace(/^data-/, "");
       // 空值的布林屬性（hidden）只印名字；值裡的空白壓成單一空白，保證一元素一行。
       const v = el.getAttribute(a).replace(/\s+/g, " ").trim();
       if (v === "") { parts.push(key); continue; }
