@@ -17,7 +17,7 @@ import { useRouter } from "vue-router";
 import { api } from "@/api/client";
 import PasswordInput from "@/components/PasswordInput.vue";
 import { toast } from "@/lib/toast";
-import { useSiteStore } from "@/stores/site";
+import { useSiteStore, type User } from "@/stores/site";
 
 const router = useRouter();
 const store = useSiteStore();
@@ -34,11 +34,14 @@ async function submit(): Promise<void> {
   error.value = "";
   submitting.value = true;
   try {
-    await api("/api/auth/login", {
+    // ⚠ 登入的回應**本身就帶著身分**（`{user: …}`，見 server/app.py 的 login），與
+    //   `/api/auth/me` 同一個來源。直接收下，不要再問一次。
+    const d = await api<{ user: User }>("/api/auth/login", {
       method: "POST",
       body: { username: username.value, password: password.value },
     });
-    await store.loadIdentity();
+    store.adoptIdentity(d.user);
+    await store.loadAccountMeta();
     toast(`歡迎回來，${username.value.trim()}`, "success", { body: "已進入控制台" });
     await router.push("/");
   } catch (ex) {
