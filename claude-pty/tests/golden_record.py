@@ -38,6 +38,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import golden_scenes as G  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
+# main() 起完服務才有值；record_into 讀它。
+BASE = ""
+
 
 def record_into(root: str) -> list[str]:
     """把每一場錄進 root/<scene>/。回傳寫出去的相對路徑（排序過）。"""
@@ -83,42 +86,57 @@ def _write(path: str, text: str, written: list[str], root: str) -> None:
     written.append(os.path.relpath(path, root))
 
 
-G.pin_all()
-G.seed()
-BASE = G.start_server()
+def main() -> None:
+    """⚠ 錄製**只在直接執行這支時**才跑。
 
-try:
-    if "--verify" in sys.argv:
-        # 連錄兩次比對。不穩定源沒釘乾淨的話，這裡會直接指出是哪一個檔案。
-        a, b = tempfile.mkdtemp(prefix="golden-a-"), tempfile.mkdtemp(prefix="golden-b-")
-        try:
-            print("第一次：")
-            names = record_into(a)
-            # ⚠ 兩次之間重新 seed。不重 seed 的話「在 seed 當下用真實時間填的欄位」兩次
-            #   會一模一樣，這支就看不到它在飄——`users.created_at` 正是這樣溜過去，
-            #   最後被跨行程跑的 golden_check 抓到的（2026-08-25）。
-            time.sleep(1.1)
-            G.seed()
-            print("第二次：")
-            record_into(b)
-            diff = [n for n in names if not filecmp.cmp(os.path.join(a, n), os.path.join(b, n), shallow=False)]
-            print()
-            if diff:
-                print(f"❌ 兩次錄製有 {len(diff)} 個檔案不一致：")
-                for n in diff:
-                    print(f"  · {n}")
-                print("   不准用放寬閾值蓋過去：去 golden_scenes.pin_all() 把來源釘死。")
-                sys.exit(1)
-            print(f"✅ 兩次錄製逐位一致（{len(names)} 個檔案）")
-        finally:
-            shutil.rmtree(a, ignore_errors=True)
-            shutil.rmtree(b, ignore_errors=True)
-    else:
-        shutil.rmtree(G.GOLDEN_DIR, ignore_errors=True)
-        os.makedirs(G.GOLDEN_DIR, exist_ok=True)
-        print(f"錄進 {G.GOLDEN_DIR}：")
-        names = record_into(G.GOLDEN_DIR)
-        total = sum(os.path.getsize(os.path.join(G.GOLDEN_DIR, n)) for n in names)
-        print(f"\n寫出 {len(names)} 個檔案，共 {total / 1024:.0f} KB")
-finally:
-    G.cleanup()
+    原本這一段掛在模組層，於是 `import golden_record` 就會當場把 tests/golden/ 整個刪掉
+    重錄一次。那不是理論風險：另一條線 import 它拿 `record_into` 用，golden 就沒了，
+    而且沒有任何錯誤訊息——下一次 golden_check 綠燈，因為規格剛剛被現況覆寫過。
+    """
+    # ⚠ 錄的**永遠是 legacy**，它就是規格本身。不明寫的話，哪天 CLAUDE_PTY_UI 被設成 vue
+    #   （e2e 在 vue 模式下就是這樣跑的），這支會把 Vue 版錄成規格，防線當場反過來替回歸背書。
+    G.config.UI = "legacy"
+    G.pin_all()
+    G.seed()
+    global BASE
+    BASE = G.start_server()
+
+    try:
+        if "--verify" in sys.argv:
+            # 連錄兩次比對。不穩定源沒釘乾淨的話，這裡會直接指出是哪一個檔案。
+            a, b = tempfile.mkdtemp(prefix="golden-a-"), tempfile.mkdtemp(prefix="golden-b-")
+            try:
+                print("第一次：")
+                names = record_into(a)
+                # ⚠ 兩次之間重新 seed。不重 seed 的話「在 seed 當下用真實時間填的欄位」兩次
+                #   會一模一樣，這支就看不到它在飄——`users.created_at` 正是這樣溜過去，
+                #   最後被跨行程跑的 golden_check 抓到的（2026-08-25）。
+                time.sleep(1.1)
+                G.seed()
+                print("第二次：")
+                record_into(b)
+                diff = [n for n in names if not filecmp.cmp(os.path.join(a, n), os.path.join(b, n), shallow=False)]
+                print()
+                if diff:
+                    print(f"❌ 兩次錄製有 {len(diff)} 個檔案不一致：")
+                    for n in diff:
+                        print(f"  · {n}")
+                    print("   不准用放寬閾值蓋過去：去 golden_scenes.pin_all() 把來源釘死。")
+                    sys.exit(1)
+                print(f"✅ 兩次錄製逐位一致（{len(names)} 個檔案）")
+            finally:
+                shutil.rmtree(a, ignore_errors=True)
+                shutil.rmtree(b, ignore_errors=True)
+        else:
+            shutil.rmtree(G.GOLDEN_DIR, ignore_errors=True)
+            os.makedirs(G.GOLDEN_DIR, exist_ok=True)
+            print(f"錄進 {G.GOLDEN_DIR}：")
+            names = record_into(G.GOLDEN_DIR)
+            total = sum(os.path.getsize(os.path.join(G.GOLDEN_DIR, n)) for n in names)
+            print(f"\n寫出 {len(names)} 個檔案，共 {total / 1024:.0f} KB")
+    finally:
+        G.cleanup()
+
+
+if __name__ == "__main__":
+    main()

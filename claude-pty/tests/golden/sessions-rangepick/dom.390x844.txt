@@ -39,8 +39,8 @@ div testid=pick-token-delivery on=false id=pick-token-delivery
 button testid=pick-token-delivery-control aria-checked=false
 span testid=pick-token-delivery-label
 button id=create-btn
-button testid=tab-live id=tab-live
-button testid=tab-past id=tab-past
+button testid=tab-live aria-selected=true id=tab-live
+button testid=tab-past aria-selected=false id=tab-past
 button testid=filter-toggle active id=filter-toggle aria-controls=filter-bar
 span id=filter-count
 span id=list-updated
@@ -64,11 +64,11 @@ span testid=filter-field-label tip=從現在往回算。「執行中」比的是
 div testid=pick-since id=pick-since
 button testid=pick-since-button
 ul testid=pick-since-menu hidden
-li testid=pick-since-opt-any value active=true
-li testid=pick-since-opt-1 value=1 active=false
-li testid=pick-since-opt-7 value=7 active=false
-li testid=pick-since-opt-30 value=30 active=false
-li testid=pick-since-opt-custom value=custom active=false
+li testid=pick-since-opt-any value active=false aria-selected=false
+li testid=pick-since-opt-1 value=1 active=false aria-selected=false
+li testid=pick-since-opt-7 value=7 active=false aria-selected=false
+li testid=pick-since-opt-30 value=30 active=false aria-selected=false
+li testid=pick-since-opt-custom value=custom active=true aria-selected=true
 div testid=filter-range id=field-range
 span testid=filter-field-label tip=指定一段明確的區間。展開後左右兩個月並排：點一下選起點、再點一下選終點，中間滑過會預覽整段；也可以直接改上方的日期與時間。任一端留空＝那一端不限。
 div id=pick-range

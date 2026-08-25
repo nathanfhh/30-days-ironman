@@ -79,5 +79,5 @@
   - text: ttyd-rust：目前用於網頁終端的執行檔。 建置於
   - time: 2026/08/25 12:00:00
   - text: （0 秒前）
-- text:  終止 Session失敗 這個 session 的 container 已經結束了
+- text:  操作失敗 這個 session 的 container 已經結束了
 - button "關閉": 

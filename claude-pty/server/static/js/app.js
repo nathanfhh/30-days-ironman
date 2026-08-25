@@ -420,6 +420,22 @@ function createPicker(mount, options, initial, { search = false } = {}) {
   }
   function pick(v, origin) {
     state.value = v;
+    /* ⚠ 選中狀態要**就地更新**，不能等下次展開。
+     *
+     * `renderMenu()` 只在 open() 裡跑，所以選完之後收起來的那份 DOM 還停在上一次展開時
+     * 的樣子：`aria-selected` 仍指著舊的值，`data-active` 的游標也還在舊的那一列。
+     * 畫面上完全看不出來（按鈕的文字是 renderButton() 另外畫的，它是對的），但螢幕閱讀器
+     * 唸的是這份 DOM，而下一次展開的第一幀也是它。
+     *
+     * ⚠ 不呼叫 renderMenu() 重畫：那會重建 innerHTML，把搜尋框的游標與 IME 選字一起沖掉
+     *   （同檔 paintDays 那段記的是同一個教訓）。只改屬性就夠，也最小。
+     */
+    state.active = Math.max(0, options.findIndex((o) => o.value === v));
+    for (const li of menu.querySelectorAll(".picker__option")) {
+      const on = li.dataset.value === state.value;
+      li.setAttribute("aria-selected", String(on));
+      li.dataset.active = String(on);
+    }
     renderButton();
     close();
     // detail 帶上點擊座標：主題切換的同心圓過渡需要圓心

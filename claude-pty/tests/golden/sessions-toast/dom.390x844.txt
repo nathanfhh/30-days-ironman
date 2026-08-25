@@ -39,8 +39,8 @@ div testid=pick-token-delivery on=false id=pick-token-delivery
 button testid=pick-token-delivery-control aria-checked=false
 span testid=pick-token-delivery-label
 button id=create-btn
-button testid=tab-live id=tab-live
-button testid=tab-past id=tab-past
+button testid=tab-live aria-selected=true id=tab-live
+button testid=tab-past aria-selected=false id=tab-past
 button testid=filter-toggle active id=filter-toggle aria-controls=filter-bar
 span id=filter-count
 span id=list-updated
@@ -185,7 +185,7 @@ footer testid=footer
 span testid=footer-mod tip=控制平面本體。
 span testid=footer-mod tip=ttyd-rust：目前用於網頁終端的執行檔。
 div id=toast-stack
-div testid=toast level=success
+div testid=toast level=info
 div testid=toast-title
 div testid=toast-desc
 button testid=toast-close

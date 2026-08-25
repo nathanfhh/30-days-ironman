@@ -545,9 +545,7 @@ try:
         #   「UI 停定之後才告訴 PTY」這個順序本身，不是一個被誤診出來的數字。
         # ⚠ 動畫時長只在測試裡改（add_style_tag），`app.css` 一行沒動；量完就把那條規則
         #   移掉，後面的段落不受影響。
-        slow = page.add_style_tag(
-            content=".drawer__panel { transition: transform 800ms linear !important; }"
-        )
+        slow = page.add_style_tag(content=".drawer__panel { transition: transform 800ms linear !important; }")
         posts.clear()
         post_at.clear()
         page.click('[data-testid="row-open-e1"]')

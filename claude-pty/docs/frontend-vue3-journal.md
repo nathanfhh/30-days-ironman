@@ -833,3 +833,57 @@ production bundle 上掛一個 `window.toast`。toast 元件本身的行為改�
 它的價值在於**同一支腳本對兩版都跑得過**：每一條斷言只用 `data-testid` 與網址，把
 `config.UI` 換成 `legacy` 再跑，除了「帳號頁是殼」以外全部要過。開發時就是這樣抓到
 「看歷史時建立表單，舊版是 `hidden`、我寫成了 `v-if`＝節點整個消失」的。
+
+### 階段 4 後半（一）：四件小事
+
+**1. CI format gate。** `uvx ruff@0.16.3 format` 抓到三支：`e2e_drawer.py`（派工指名的）
+加上我自己的 `golden_check.py` 與 `golden_scenes.py`。本機 venv 的 ruff 版本與 CI 釘的
+0.16.3 不同，所以我先前那幾刀在本機是綠的、在 CI 是紅的。三支一起修，之後一律用
+`uvx ruff@0.16.3` 驗。
+
+**2. `golden_record.py` 的模組層會覆寫 golden。** 錄製那一整段原本掛在模組層，於是
+`import golden_record` 就會當場把 `tests/golden/` 刪掉重錄一次。那不是理論風險：另一條線
+只是想拿 `record_into` 用，規格就沒了，而且**沒有任何錯誤訊息** ——下一次 `golden_check`
+還是綠的，因為規格剛剛被現況覆寫過。包進 `main()` 加 `if __name__ == "__main__"`，
+實測 import 前後 golden 的指紋相同。
+
+順手把 `config.UI = "legacy"` 從 `pin_all()` 搬進 `golden_record.main()`。**錄**的永遠是
+legacy（規格本身），但**比**的時候要比當下在測的那一版：`CLAUDE_PTY_UI=vue` 跑
+`golden_check` 就是拿 Vue 版去對規格，那正是這整套東西存在的理由。寫在共用的地方會讓
+vue 模式變成「legacy 跟自己比」，永遠是綠的。
+
+同一個道理，`META` 的 `ui=` 那一行**不列入平台比較**。它是說明「錄的是哪一版」，不是
+gate；當成環境指紋的話，vue 模式下每一張截圖都會被判成「平台不同」而跳過，等於把最該
+比的那一次比對關掉。
+
+**3. legacy 的 a11y bug：選單收起來之後選中狀態是過期的。** `renderMenu()` 只在 `open()`
+裡跑，所以選完之後那份收起來的 DOM 還停在上一次展開的樣子：`aria-selected` 指著舊的值、
+`data-active` 的游標也還在舊那一列。畫面上完全看不出來（按鈕文字是 `renderButton()` 另外
+畫的，它是對的），但螢幕閱讀器唸的是這份 DOM，下一次展開的第一幀也是它。
+
+修在 `pick()` 裡就地改屬性，**不呼叫 `renderMenu()` 重畫** ——重建 innerHTML 會把搜尋框的
+游標與 IME 選字一起沖掉（同檔 `paintDays` 記的是同一個教訓）。
+
+**這是 legacy 的 bug，Vue 版是對的，所以規格往正確那邊修。** golden 重錄之後：
+
+```
+修之前  li testid=pick-since-opt-any    active=true    ← 已經選了「自訂範圍」
+修之後  li testid=pick-since-opt-custom active=true aria-selected=true
+```
+
+順帶把 `aria-selected` 加進 DOM 白名單。先前排除它的理由是「aria 快照已經記了
+`[selected]`」，但那句話只對**可見**的元素成立 ——picker 的選單收起來之後就不在 aria 樹裡，
+而收起來的那份 DOM 正是選中狀態最容易過期的地方。可見的那些重複一次無害，隱藏的那些
+只有 dom.txt 看得到。
+
+**4. 兩個 toast 場景改用真的 UI 動作。** 原本是 `page.evaluate` 去呼叫全域的 `toast()` 與
+`toastError()`，那等於把場景綁在 legacy 的實作上：Vue 版沒有那個全域，這兩場會在「還沒
+開始比」的地方就炸掉，而炸掉的原因與介面像不像一點關係都沒有。
+
+- `sessions-toast`：終止 → 取消（`toast("已取消", "info")`）。
+- `sessions-toast-error`：攔 `DELETE /api/sessions/*` 回 409，再真的按下終止並確認。
+  錯誤 toast 的文字是前端的錯誤處理自己拼的，不是我們餵進去的字串。
+
+驗收：`--verify` 110 檔逐位一致；跨行程 `golden_check` 全 PASS；`run-all.sh quick`
+**39 支** 0 失敗（多的那支是 scaffold 帶進來的 `e2e_vue_smoke`，dist 已 build 所以它跑得起來），
+跳過清單與基線逐字相同。
