@@ -1,0 +1,20 @@
+# 文件與 API（依序）
+GET /login
+POST /api/auth/login
+GET /
+GET /api/catalog
+GET /api/sessions
+GET /account
+GET /api/users
+GET /api/ttyd/inspect
+
+# 靜態資源（排序後，見 golden_scenes.network_text 的說明）
+GET /static/css/app.css
+GET /static/images/01-circuit-board-transparent.webp
+GET /static/js/app.js
+GET /static/vendor/fontawesome/css/all.min.css
+GET /static/vendor/fontawesome/webfonts/fa-brands-400.woff2
+GET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2
+GET /static/vendor/fonts/instrument-serif-1.woff2
+GET /static/vendor/fonts/instrument-serif-3.woff2
+GET /static/vendor/fonts/instrument-serif.css
