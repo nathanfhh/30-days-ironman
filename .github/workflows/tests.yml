@@ -59,6 +59,63 @@ jobs:
             'test -f /usr/share/nginx/html/index.html && ls /usr/share/nginx/html/assets | head -5'
       - name: 控制平面 image 裡也要有同一份 dist（dev 與 e2e 走 Flask 那條路）
         run: docker run --rm --entrypoint sh claude-pty-control:ci -c 'test -f /app/server/static/dist/index.html'
+      # ⚠ **這一步抓的是「三個頁面全部 404」。** `test_nginx_contract` 是結構測試：它證明
+      #   指令都在、接對了名字，證明不了 nginx 真的照做。而 try_files 的內部轉向正是那種
+      #   「設定看起來完全正確、跑起來卻整站 404」的東西（`try_files $uri /index.html;` 會
+      #   把 /index.html 當新請求重跑一次 location 比對 → 落到 location / → proxy 給
+      #   Flask → 404）。所以這裡起真的 nginx 用真的 curl 問。
+      # ⚠ **刻意不起 Flask。** `control` 指到 127.0.0.1、那個 port 上沒有東西，所以任何
+      #   落到 `location /` 的請求都會是 502——502 就是失敗，200 才是「nginx 自己送出了殼」。
+      #   起了 Flask 的話兩條路都會 200，這道閘就分不出來了。
+      - name: nginx 真的送得出 SPA 的殼（vue 片段）
+        working-directory: claude-pty
+        run: |
+          set -euo pipefail
+          docker rm -f pty-nginx-ci >/dev/null 2>&1 || true
+          docker run -d --name pty-nginx-ci --add-host control:127.0.0.1 -p 18080:8080 \
+            -v "$PWD/deploy/nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro" \
+            -v "$PWD/deploy/nginx-ui/vue:/etc/nginx/claude-pty-ui:ro" \
+            claude-pty-nginx:ci
+          for i in $(seq 1 20); do
+            curl -sf -o /dev/null http://127.0.0.1:18080/login && break || sleep 0.5
+          done
+          fail=0
+          for path in / /login /account; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18080${path}")
+            echo "${path} → ${code}"
+            [ "${code}" = "200" ] || { echo "::error::${path} 回 ${code}，不是 200（502＝落到 location / 被 proxy 走了）"; fail=1; }
+          done
+          # 安全標頭要真的送出來（那三條路不經 Flask，`_security_headers` 不會跑）
+          hdrs=$(curl -sI http://127.0.0.1:18080/login)
+          for h in "Cache-Control: no-store" "X-Frame-Options: DENY" "X-Content-Type-Options: nosniff" "Referrer-Policy: same-origin" "Content-Security-Policy:"; do
+            echo "${hdrs}" | grep -qi "^${h}" || { echo "::error::/login 少了標頭：${h}"; fail=1; }
+          done
+          # Cache-Control 只能有一份（expires 與 add_header 並用會送兩份）
+          asset=$(docker exec pty-nginx-ci sh -c 'ls /usr/share/nginx/html/assets | head -1')
+          n=$(curl -sI "http://127.0.0.1:18080/assets/${asset}" | grep -ci '^Cache-Control:')
+          [ "${n}" = "1" ] || { echo "::error::/assets/ 回了 ${n} 份 Cache-Control"; fail=1; }
+          docker rm -f pty-nginx-ci >/dev/null
+          exit "${fail}"
+      # legacy（預設）那三條路必須**照舊 proxy 給 Flask**，不可以被 vue 的片段影響。
+      # 沒有 Flask 在後面，所以正確答案是 502；200 代表 nginx 自己回了 SPA 的殼＝切換器漏了。
+      - name: legacy 片段不改變舊路（三條仍然落到 location /）
+        working-directory: claude-pty
+        run: |
+          set -euo pipefail
+          docker rm -f pty-nginx-legacy-ci >/dev/null 2>&1 || true
+          docker run -d --name pty-nginx-legacy-ci --add-host control:127.0.0.1 -p 18081:8080 \
+            -v "$PWD/deploy/nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro" \
+            -v "$PWD/deploy/nginx-ui/legacy:/etc/nginx/claude-pty-ui:ro" \
+            claude-pty-nginx:ci
+          sleep 2
+          fail=0
+          for path in / /login /account; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18081${path}")
+            echo "${path} → ${code}"
+            [ "${code}" = "502" ] || { echo "::error::legacy 的 ${path} 回 ${code}，預期 502（它該被 proxy 給 Flask）"; fail=1; }
+          done
+          docker rm -f pty-nginx-legacy-ci >/dev/null
+          exit "${fail}"
       # image 裡落地的是哪一組版本，要對得回 lockfile。只驗「build 成功」不夠：
       # `--require-hashes` 保證裝的東西沒被掉包，但保證不了它跟 uv.lock 講的是同一組。
       - name: 落地版本必須對得回 uv.lock

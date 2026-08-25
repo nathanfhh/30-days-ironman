@@ -168,8 +168,8 @@ services:
       # session 列表每頁筆數（前端以後端回報的 limit 為準）
       CLAUDE_PTY_PAGE_SIZE: ${CLAUDE_PTY_PAGE_SIZE:-10}
       # 前端要用哪一版：legacy（Jinja + app.js，預設）或 vue（frontend/ 的 SPA）。
-      # ⚠ **只有 control 需要**：nginx 那邊是靠掛哪一個片段決定的（見下方 nginx 的 volumes），
-      #   兩者要一起換。reconciler 不畫任何畫面，不必給。
+      # ⚠ **同一個變數也決定 nginx 掛哪一份頁面路由**（見下方 nginx 的 volumes：目錄名就是
+      #   這個值），所以兩條路不可能各說各話。reconciler 不畫任何畫面，不必給。
       CLAUDE_PTY_UI: ${CLAUDE_PTY_UI:-legacy}
       # SSH agent 轉發（opt-in，預設關；ADR 0011）。值是 **host 上** agent socket 的路徑，
       # 由 daemon 解讀——控制平面自己不掛也不碰它，只把路徑轉給 daemon。
@@ -263,11 +263,15 @@ services:
       - "${CLAUDE_PTY_BIND_ADDR:-127.0.0.1}:8080:8080"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro
-      # 前端要用哪一版的頁面路由（`/`、`/login`、`/account`）。預設 legacy＝**空的片段**，
-      # 三條路照舊 proxy 給 Flask。切 Vue 版：`CLAUDE_PTY_NGINX_UI=./nginx-ui/vue`。
-      # ⚠ 要與 control 的 `CLAUDE_PTY_UI` 一起換（見 nginx-ui/legacy/ui.conf 的說明）。
-      #   只換一邊的話兩條路會各說各話，而畫面上分不出來。
-      - ${CLAUDE_PTY_NGINX_UI:-./nginx-ui/legacy}:/etc/nginx/claude-pty-ui:ro
+      # 前端要用哪一版的頁面路由（`/`、`/login`、`/account`）。目錄名**就是** CLAUDE_PTY_UI
+      # 的值，所以這裡與 control 讀的是同一個變數——原本是兩個（`CLAUDE_PTY_UI` 與
+      # `CLAUDE_PTY_NGINX_UI`），而「兩個一定要一起改」的設定遲早會有人只改一個：只改
+      # control 的話正式站仍然吐舊模板，只改 nginx 的話 `/api/*` 照舊能動、畫面卻換了版，
+      # 兩種都不會報錯。收成一個之後那個錯誤形狀就不存在了。
+      # ⚠ 值不認得（例如打錯字）時這裡會指到一個不存在的目錄，docker 會建一個空的頂替，
+      #   於是 include 撿不到任何 .conf ＝ 落回 legacy 的行為。**同時** control 的 preflight
+      #   會喊一行（見 server/preflight.py）——降級是安全的，但不可以是無聲的。
+      - ./nginx-ui/${CLAUDE_PTY_UI:-legacy}:/etc/nginx/claude-pty-ui:ro
     # ⚠ 預設的 json-file driver **沒有大小上限**。control 每個請求一行 access log、
     #   nginx 也有、reconciler 每 30 秒一輪，三者都 restart: unless-stopped——磁碟被吃滿時
     #   的症狀是 SQLite 寫入失敗，那個症狀完全指不到 log 檔（審查 F-017）。
