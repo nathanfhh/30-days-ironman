@@ -337,25 +337,76 @@ describe("RangePicker", () => {
 describe("stores/site", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
+  /** 一份完整的 `/api/account/bootstrap` 回應。`user` 由呼叫端決定要不要帶。 */
+  const bootstrapBody = (user?: unknown) => ({
+    ...(user ? { user } : {}),
+    default_cli: "claude",
+    credentials: {},
+    limits: { name_max: 25, username_max: 32, min_password_length: 8 },
+    gitlab: { enabled: false, host: null, proxy_error: null },
+  });
+
+  /** 依路徑回應的假後端，並記下打了哪些路徑。 */
+  function fakeApi(routes: Record<string, { status?: number; body?: unknown }>): string[] {
+    const seen: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input).split("?")[0];
+      seen.push(path);
+      const r = routes[path];
+      if (!r) return new Response("{}", { status: 404 });
+      return new Response(JSON.stringify(r.body ?? {}), {
+        status: r.status ?? 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    return seen;
+  }
+
   it("loadIdentity 失敗時把身分清掉，但仍然標記問過了", async () => {
-    globalThis.fetch = vi.fn(async () => new Response("{}", { status: 500 })) as typeof fetch;
+    fakeApi({ "/api/account/bootstrap": { status: 500 } });
     const store = useSiteStore();
     expect(await store.loadIdentity()).toBeNull();
     expect(store.identityLoaded).toBe(true);
   });
 
-  it("loadIdentity 成功就存下 user", async () => {
-    globalThis.fetch = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ user: { id: 1, username: "alice", is_admin: true } }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-    ) as typeof fetch;
+  it("🔴 冷載入只打 /api/account/bootstrap，身分從那條回應來", async () => {
+    const seen = fakeApi({
+      "/api/account/bootstrap": {
+        body: bootstrapBody({ id: 1, username: "alice", is_admin: true }),
+      },
+    });
     const store = useSiteStore();
     const u = await store.loadIdentity();
     expect(u?.username).toBe("alice");
     expect(store.user?.is_admin).toBe(true);
+    // ⚠ 這一條才是重點：**不可以**再多問一次 /api/auth/me
+    expect(seen).toEqual(["/api/account/bootstrap"]);
+    // 同一發也要把 meta 填好（它本來就是「這個帳號的處境」那條）
+    expect(store.meta.nameMax).toBe(25);
+    expect(store.meta.defaultCli).toBe("claude");
+  });
+
+  it("後端還沒帶 user 時退回 /api/auth/me——降級是安全的，但要喊一聲", async () => {
+    const seen = fakeApi({
+      "/api/account/bootstrap": { body: bootstrapBody() },
+      "/api/auth/me": { body: { user: { id: 2, username: "bob", is_admin: false } } },
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const store = useSiteStore();
+    const u = await store.loadIdentity();
+    expect(u?.username).toBe("bob");
+    expect(seen).toEqual(["/api/account/bootstrap", "/api/auth/me"]);
+    // 靜靜降級的話，症狀會是「網路序列莫名其妙多一行」，而肇因是合併順序
+    expect(warn).toHaveBeenCalledOnce();
+    expect(String(warn.mock.calls[0][0])).toContain("/api/auth/me");
+    warn.mockRestore();
+  });
+
+  it("adoptIdentity：登入的回應本身就帶身分，不必再問一次", () => {
+    const store = useSiteStore();
+    store.adoptIdentity({ id: 3, username: "carol", is_admin: false });
+    expect(store.user?.username).toBe("carol");
+    expect(store.identityLoaded).toBe(true);
   });
 
   it("憑證欄位缺席時維持現狀，不要清成空白", () => {

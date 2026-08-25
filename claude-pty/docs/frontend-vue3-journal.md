@@ -1166,3 +1166,29 @@ check("user 的欄位齊全（得到 …）", set(_u) == {id, username, is_admin
   自己的值**（同源），而 `/api/prefs` 該獨佔的是**選項清單**。改成查 `ttyd_choices`。
 
 驗收：`run-all.sh quick` 39 支 0 失敗、跳過清單與基線逐字相同。
+
+### 冷載入少一趟：身分改從 `/api/account/bootstrap` 來
+
+A6 收尾之後只剩兩場紅（`account-user`／`account-admin`，唯一會 `page.goto("/account")` 的
+兩場）：冷載入一個要登入的頁面時，SPA 記憶體裡沒有身分，而伺服器已經不再把它印進 HTML。
+
+裁示是**把 `user` 併進 `/api/account/bootstrap`**（後端由 vue-phase1 做，形狀與
+`/api/auth/me` 相同）。那條端點本來就是「這個帳號的處境」，who am I 併進去之後冷載入從
+**三趟往返（`/api/bootstrap` ＋ `/api/auth/me` ＋ `/api/account/bootstrap`）變成兩趟**，
+而且剩下的兩趟都已經在 `UI_EXTRA_CALLS` 裡——網路序列因此會全綠。
+
+前端這一側：`fetchAccountMeta()` 打一次、把 meta 與憑證填好、把回應交回去；`loadIdentity()`
+從那份回應取 `user`。登入那條路不受影響（`POST /api/auth/login` 的回應本身就帶身分，
+上一刀已經改成直接收下）。
+
+#### 相容路徑：會退回 `/api/auth/me`，但會喊
+
+兩條線的 commit 合併順序不保證。回應裡沒有 `user` 時退回去問 `/api/auth/me`，並在 console
+喊一聲說明為什麼多了那一發——**降級是安全的，但不可以是無聲的**（同 `config.UI` 對不認得
+的值的處置）。不喊的話，症狀會是「golden 的網路序列莫名其妙多一行」，而肇因是合併順序，
+那要查很久。
+
+⚠ **這條相容路徑有明確的死期**：`/api/account/bootstrap` 帶 `user` 之後它就是死的，
+階段 5 拆舊時連同註解一起刪。單元測試同時釘住兩條路（帶 user 時只打一發、不帶時退回並喊）。
+
+⚠ 這一刀**沒有實跑 `--ui vue`**：後端還沒併進來，跑了只會驗到相容路徑。等 ff 之後再跑。

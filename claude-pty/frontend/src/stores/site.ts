@@ -89,6 +89,9 @@ interface PublicBootstrap {
 }
 
 interface AccountBootstrap {
+  /** 這一版才有：形狀與 `/api/auth/me` 的 `user` 相同，是同一個來源。
+   *  舊的後端沒有這個欄位，`loadIdentity()` 會退回去問 `/api/auth/me` 並喊一聲（見那裡）。 */
+  user?: User;
   default_cli: string;
   credentials: Credentials;
   limits: { name_max: number; username_max: number; min_password_length: number };
@@ -122,10 +125,24 @@ export const useSiteStore = defineStore("site", () => {
    *   時 api() 收到 401 會統一導回登入頁，那條路才是重新確認身分的入口。 */
   async function loadIdentity(): Promise<User | null> {
     try {
-      const d = await api<{ user: User }>("/api/auth/me");
-      user.value = d.user;
-      await loadAccountMeta();
-      return d.user;
+      const d = await fetchAccountMeta();
+      if (d.user) {
+        user.value = d.user;
+        return d.user;
+      }
+      /* ⚠ 舊的後端還沒有 `user` 這個欄位。**降級是安全的，但不可以是無聲的**（同
+         `config.UI` 那條不認得的值的處置）：退回去問 `/api/auth/me`，並且喊一聲說明為什麼
+         多了這一發——不喊的話，症狀會是「golden 的網路序列莫名其妙多一行」，而肇因是兩條
+         線的合併順序，那要查很久。
+         ⚠ **這條相容路徑有明確的死期**：`/api/account/bootstrap` 帶 `user` 之後它就是死的，
+           階段 5 拆舊時連同這段註解一起刪。 */
+      console.warn(
+        "[claude-pty] /api/account/bootstrap 沒有 user 欄位（後端是舊版？），" +
+          "退回 /api/auth/me。網路序列會多一發，那是預期中的降級。",
+      );
+      const me = await api<{ user: User }>("/api/auth/me");
+      user.value = me.user;
+      return me.user;
     } catch {
       user.value = null;
       return null;
@@ -157,23 +174,35 @@ export const useSiteStore = defineStore("site", () => {
     applyMetaToRoot();
   }
 
-  /** 需要登入的那一條。`loadIdentity()` 拿到身分之後才有意義。 */
+  /**
+   * 需要登入的那一條。打一次、把 meta 與憑證都填好，並把回應交回去。
+   *
+   * ⚠ **冷載入一個要登入的頁面時，這是唯一的那一發。** 身分（`user`）也在這條回應裡——
+   *   它本來就是「這個帳號的處境」那條端點，把 who am I 併進來之後，冷載入從三趟往返
+   *   （bootstrap ＋ auth/me ＋ account/bootstrap）變成兩趟。
+   */
+  async function fetchAccountMeta(): Promise<AccountBootstrap> {
+    const d = await api<AccountBootstrap>("/api/account/bootstrap");
+    meta.value = {
+      ...meta.value,
+      defaultCli: d.default_cli,
+      nameMax: d.limits.name_max,
+      usernameMax: d.limits.username_max,
+      minPasswordLength: d.limits.min_password_length,
+      gitlabEnabled: d.gitlab.enabled,
+      gitlabHost: d.gitlab.host,
+      gitlabProxyError: d.gitlab.proxy_error,
+    };
+    setCredentials(d.credentials);
+    return d;
+  }
+
+  /** 只要 meta 不要身分的呼叫端（登入成功之後——身分已經從登入的回應收下了）。 */
   async function loadAccountMeta(): Promise<void> {
     try {
-      const d = await api<AccountBootstrap>("/api/account/bootstrap");
-      meta.value = {
-        ...meta.value,
-        defaultCli: d.default_cli,
-        nameMax: d.limits.name_max,
-        usernameMax: d.limits.username_max,
-        minPasswordLength: d.limits.min_password_length,
-        gitlabEnabled: d.gitlab.enabled,
-        gitlabHost: d.gitlab.host,
-        gitlabProxyError: d.gitlab.proxy_error,
-      };
-      setCredentials(d.credentials);
+      await fetchAccountMeta();
     } catch {
-      /* 同上：拿不到就用預設，畫面不至於壞掉 */
+      /* 拿不到就用預設，畫面不至於壞掉 */
     }
   }
 
