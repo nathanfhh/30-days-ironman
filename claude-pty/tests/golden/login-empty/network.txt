@@ -1,6 +1,7 @@
 # 文件與 API（依序，含 query）
 GET /login
 GET /api/bootstrap
+GET /api/account/bootstrap
 
 # 靜態資源（排序後、去掉 query，見 golden_scenes.network_text 的說明）
 GET /assets/index-<hash>.css

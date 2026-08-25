@@ -1,6 +1,7 @@
 # 文件與 API（依序，含 query）
 GET /login
 GET /api/bootstrap
+GET /api/account/bootstrap
 POST /api/auth/login
 GET /api/account/bootstrap
 GET /api/catalog
