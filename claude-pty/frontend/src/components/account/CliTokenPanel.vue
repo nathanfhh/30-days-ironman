@@ -7,9 +7,8 @@
  *
  * ⚠ 欄位**永遠是空的**（存進去不吐回來），所以「設過沒」只能靠 placeholder 講，不然兩種
  *   狀態在這一格裡長得一模一樣。
- * ⚠ 存／清之後**整頁重載**：徽章、chip、按鈕三處狀態同源重畫，比逐一手改可靠。
- *   （SPA 其實可以只重抓 bootstrap，但那是階段 5 拆舊之後再說的最佳化——現在的重點是
- *   行為與舊版一致，而重載這條路不可能漏掉任何一處。）
+ * ⚠ 存／清之後重抓 `/api/account/bootstrap`：徽章、chip、按鈕三處都是照那一份畫的，
+ *   一發就全部對齊（階段 4 為了與舊版一致是整頁重載，舊版拆掉之後不必再付那個代價）。
  */
 import { computed, ref } from "vue";
 
@@ -29,15 +28,24 @@ const placeholder = computed(() =>
   credOk.value ? "••••••••••••••••••••（已設定，貼新的可覆寫）" : "貼上 claude setup-token 的輸出",
 );
 
-const reloadSoon = (): void => {
-  setTimeout(() => globalThis.location.reload(), 900);
-};
+/** 存或清之後把狀態重新抓一次。
+ *
+ * ⚠ 舊版是 `setTimeout(() => location.reload(), 900)`——徽章、chip、按鈕三處狀態同源重畫，
+ *   在一個每頁都要重新跑 Jinja 的架構下那是最可靠的做法。SPA 不必付那個代價：
+ *   `/api/account/bootstrap` 一發就把憑證、限制、身分全帶回來，那三處都是照它畫的。
+ * ⚠ 欄位要**自己清**。舊版靠整頁重載順便清掉，不重載就得明寫——不清的話畫面會停在
+ *   「已經存進去了，但輸入框裡還留著剛剛那把 token」，而那是最不該留在畫面上的東西。
+ */
+async function refresh(): Promise<void> {
+  token.value = "";
+  await store.loadAccountMeta();
+}
 
 const save = submitting(busy, async () => {
   try {
     await api("/api/users/me/token", { method: "PUT", body: { token: token.value } });
     toast("憑證已儲存", "success", { body: "之後開的 session 會用它登入" });
-    reloadSoon();
+    await refresh();
   } catch (ex) {
     toastError("儲存憑證", ex);
   }
@@ -49,7 +57,7 @@ async function clear(): Promise<void> {
     toast("憑證已清除", "warning", {
       body: "之後開新 session 會被擋下，重新貼上即可；已在跑的不受影響",
     });
-    reloadSoon();
+    await refresh();
   } catch (ex) {
     toastError("清除憑證", ex);
   }

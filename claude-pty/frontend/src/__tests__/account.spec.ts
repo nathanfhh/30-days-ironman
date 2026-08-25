@@ -206,6 +206,41 @@ describe("AccountView：一般使用者", () => {
     expect((w.find('[data-testid="old-pw"]').element as HTMLInputElement).value).toBe("");
   });
 
+  it("🔴 存完憑證是**重抓 bootstrap**，不是整頁重載，而且欄位要清掉", async () => {
+    const reload = vi.fn();
+    // location.reload 在 jsdom 是唯讀的 getter，蓋掉一個間諜才問得出「有沒有被呼叫」
+    Object.defineProperty(globalThis, "location", {
+      value: { ...globalThis.location, reload },
+      configurable: true,
+    });
+    installFetch({
+      "/api/users/me/token": { status: 204 },
+      "/api/account/bootstrap": {
+        body: {
+          user: { id: 1, username: "alice", is_admin: false },
+          default_cli: "claude",
+          credentials: CREDENTIALS(true),
+          limits: { name_max: 25, username_max: 32, min_password_length: 8 },
+          gitlab: { enabled: false, host: null, proxy_error: null },
+        },
+      },
+    });
+    const store = useSiteStore();
+    store.setCredentials(CREDENTIALS(false));
+    const w = await mountAccount(false);
+    await w.find('[data-testid="cli-token"]').setValue("sk-ant-oat-fake");
+    await w.find("#token-form").trigger("submit");
+    await flushPromises();
+    expect(calls.some((c) => c.url === "/api/users/me/token" && c.method === "PUT")).toBe(true);
+    // 重抓那一發：三處狀態（徽章、chip、按鈕）都是照它畫的
+    expect(calls.some((c) => c.url === "/api/account/bootstrap")).toBe(true);
+    expect(reload).not.toHaveBeenCalled();
+    // ⚠ 欄位要自己清：不清的話畫面會停在「已經存進去了，但輸入框裡還留著剛剛那把 token」
+    expect((w.find('[data-testid="cli-token"]').element as HTMLInputElement).value).toBe("");
+    // chip 跟著轉綠（同一發回應餵的）
+    expect(w.find('[data-testid="token-state"] .chip').attributes("data-tone")).toBe("ok");
+  });
+
   it("GitLab 那一塊只有功能開著才畫", async () => {
     const w = await mountAccount(false);
     expect(w.find("#pat-form").exists()).toBe(false);

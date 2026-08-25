@@ -45,7 +45,11 @@ function makeDebug(): (...a: unknown[]) => void {
   const on = lsGet("claude-pty:debug-size") === "1";
   const t0 = performance.now();
   return on
-    ? (...a: unknown[]) => console.log(`[size +${Math.round(performance.now() - t0)}ms]`, ...a)
+    ? // ⚠ 這一支 console 是**刻意的**：它是那個要靠 localStorage 明確打開的診斷開關（照搬
+      //   舊版 app.js 的 sizeDebug），平時一個字都不印。`no-console` 擋的是忘了拿掉的除錯
+      //   輸出，兩者不是同一件事，所以在這一行單獨放行而不是把規則放寬。
+      // oxlint-disable-next-line no-console
+      (...a: unknown[]) => console.log(`[size +${Math.round(performance.now() - t0)}ms]`, ...a)
     : () => {};
 }
 
