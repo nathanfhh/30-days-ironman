@@ -17,3 +17,14 @@ __pycache__/
 
 # `pip install --no-build-isolation .` 在本機跑時的產物（image 裡不留）
 claude_pty.egg-info/
+
+# Vue 版前端的 build 產物（frontend/vite.config.ts 的 outDir）。由 node 階段現做，
+# 見 deploy/Dockerfile。
+server/static/dist/
+
+# 前端相依。lockfile（frontend/package-lock.json）**進版控**，裝出來的東西不進——
+# repo 根的 .gitignore 沒有這一條，而 `npm ci` 一跑就是幾百 MB 幾萬個檔案。
+frontend/node_modules/
+
+# vitest 的覆蓋率報告（run-all.sh 每次跑都會重產）。
+frontend/coverage/

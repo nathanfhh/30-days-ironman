@@ -29,6 +29,16 @@ deploy/data
 .mypy_cache
 .playwright-mcp
 
+# --- 前端 -------------------------------------------------------------------------
+# node_modules 是**幾百 MB 的 build context**，而 image 裡那一份由 `npm ci` 在 build 期
+# 重裝（frontend 階段）。不排掉的話每次 build 都要把它整包送給 daemon。
+**/node_modules
+# host 上 build 出來的產物。image 裡那一份一律由 frontend 階段現做——把 host 的複製進去，
+# 等於讓正式站跑的東西取決於部署那台機器當下的工作區（而且它連 gitignore 都在擋）。
+server/static/dist
+frontend/dist
+frontend/coverage
+
 # --- 不屬於執行期的東西 -------------------------------------------------------------
 # 測試在 host 對著跑起來的 stack 執行，不在 image 內
 tests

@@ -86,6 +86,13 @@ NEEDS_CLAUDE_CRED=(test_entrypoint_human_path)
 have_claude_cred=0
 { [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -f "${HOME}/.claude/.credentials.json" ]; } && have_claude_cred=1
 
+# Vue 版的 e2e 需要前端**已經 build 過**（`server/static/dist/`，不進版控）。
+# ⚠ 存在與否要在**用到的當下**才問，不是在這裡先算一次：上面那段前端六關的最後一關就是
+#   build，它跑在這幾行之後——先算的話永遠是「還沒 build」。
+# ⚠ 沒有 node 的機器整段前端會被跳過，那時 dist 真的不存在。那不是「測試壞了」，是環境
+#   缺一個工具，所以進跳過清單、看得見（同 ttyd、同 playwright 的處置）。
+NEEDS_DIST=(e2e_vue_smoke)
+
 # 瀏覽器 e2e 需要 playwright 真的把 chromium 下載下來。沒下載的話每一支 e2e 都會吐一段
 # 「Executable doesn't exist」的 traceback——看起來像測試壞了，其實是少一個安裝步驟。
 # ⚠ 不可以只判「快取目錄在不在」：playwright 升版之後要的是**另一個 build 編號**，舊的那幾顆
@@ -168,6 +175,9 @@ run_one() {
   if in_list "${base}" "${NEEDS_CLAUDE_CRED[@]}" && [ "${have_claude_cred}" -eq 0 ]; then
     skipped+=("${base}（host 上沒有 claude 憑證可複製進沙盒）"); return
   fi
+  if in_list "${base}" "${NEEDS_DIST[@]}" && [ ! -f server/static/dist/index.html ]; then
+    skipped+=("${base}（前端還沒 build：server/static/dist/ 不存在，裝 node 24 讓上面那幾關跑）"); return
+  fi
   # golden_check 也開真的瀏覽器（它就是拿畫面跟 tests/golden/ 錄下來的比），同一道 gate。
   if { [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; } && [ "${have_browser}" -eq 0 ]; then
     skipped+=("${base}（playwright 缺這版的瀏覽器：playwright install chromium-headless-shell）"); return
@@ -222,6 +232,87 @@ if command -v node >/dev/null 2>&1; then
   fi
 else
   skipped+=("app.js 語法檢查（host 上沒有 node）")
+fi
+
+# --- 前端（Vue 版）的工具鏈 ---------------------------------------------------
+#
+# 六關，順序是「便宜的先擋」：安裝 → lint → 格式 → 型別 → 單元測試（含覆蓋率門檻）→ build。
+#
+# ⚠ 為什麼 build 也要跑：型別過得了不代表打包得出來（outDir 寫錯、import 到 root 外面沒放行、
+#   CSS 原檔被搬走），而那些只有 `vite build` 會紅。產物不進版控，所以「沒有人 build 過」
+#   這件事在部署之前不會有任何跡象。
+# ⚠ `npm ci` 不是 `npm install`：ci 只照 lockfile 裝，裝不出來就直接失敗（同 deploy/Dockerfile）。
+# ⚠ 沒有 node/npm 就整段跳過**並講出來**——不可以靜靜不驗（同上面 app.js 語法檢查的做法）。
+front_gate() {          # front_gate <說明> <指令...>
+  local label="$1"; shift
+  printf '\n\033[1m== %s\033[0m\n' "${label}"
+  if (cd frontend && "$@"); then
+    echo "  PASS  ${label}"
+  else
+    fails=$((fails + 1))
+    echo "   ↑ ${label} 失敗"
+  fi
+}
+
+if [ ! -d frontend ]; then
+  skipped+=("前端工具鏈（沒有 frontend/ 目錄）")
+elif [ "${want_e2e}" -eq 2 ]; then
+  skipped+=("前端工具鏈（--e2e 只跑瀏覽器測試）")
+elif ! command -v npm >/dev/null 2>&1; then
+  skipped+=("前端工具鏈（host 上沒有 npm，裝 node 24）")
+elif [ ! -f frontend/package-lock.json ]; then
+  # lockfile 不見了不是「環境沒裝」，是 repo 壞了——這條要紅，不是跳過。
+  fails=$((fails + 1))
+  echo "   ↑ frontend/package-lock.json 不見了：npm ci 沒有它就跑不了，而 npm install 會自己挑版本"
+else
+  front_gate "前端相依（npm ci）" npm ci --no-audit --no-fund
+  front_gate "前端 lint（oxlint）" npm run --silent lint
+  front_gate "前端格式（prettier --check）" npm run --silent format:check
+  front_gate "前端型別（vue-tsc）" npm run --silent typecheck
+  front_gate "前端單元測試（vitest，行覆蓋率門檻 70%）" npm run --silent test:coverage
+  front_gate "前端 build（vite）" npm run --silent build
+
+  # --- 供應鏈：前端的相依也要掃 -----------------------------------------------
+  #
+  # ⚠ python 那邊的相依早就在掃（deploy 的 image 掃描），而前端一口氣加了 200 多個
+  #   套件——那些程式碼會被打包進 `/assets/*.js`，直接在使用者的瀏覽器裡執行。
+  #   只掃後端等於掃了一半。
+  # ⚠ **「沒有目標」不等於「乾淨」**（repo 既有的紀律，見 skills 的 scanners.md）：
+  #   trivy 掃不到任何相依清單時一樣 exit 0、報告是空的，而那個空白什麼都沒證明。
+  #   所以除了「有沒有漏洞」，還要驗「它真的把 lockfile 當成 npm 目標解析了」。
+  # ⚠ 沒裝 trivy 就跳過並講出來（同 node、同 playwright 的做法）。
+  if ! command -v trivy >/dev/null 2>&1; then
+    skipped+=("前端相依掃描（host 上沒有 trivy）")
+  else
+    printf '\n\033[1m== 前端相依掃描（trivy）\033[0m\n'
+    _trivy_out="$(mktemp)"
+    if trivy fs --scanners vuln --severity CRITICAL,HIGH,MEDIUM --format json --quiet \
+         frontend/package-lock.json > "${_trivy_out}" 2>/dev/null \
+       && python3 - "${_trivy_out}" <<'PYEOF'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+results = data.get("Results") or []
+npm = [r for r in results if r.get("Type") == "npm"]
+if not npm:
+    print("  FAIL  trivy 沒有把 package-lock.json 當成 npm 目標解析——空報告證明不了任何事")
+    sys.exit(1)
+vulns = [v for r in npm for v in (r.get("Vulnerabilities") or [])]
+if vulns:
+    print(f"  FAIL  {len(vulns)} 筆 MEDIUM 以上：")
+    for v in vulns[:20]:
+        print(f"          {v['VulnerabilityID']}  {v['PkgName']} {v.get('InstalledVersion')}"
+              f"  → {v.get('FixedVersion') or '尚無修正版'}  [{v['Severity']}]")
+    sys.exit(1)
+print(f"  PASS  {len(npm)} 個 npm 目標、0 筆 MEDIUM 以上")
+PYEOF
+    then
+      :
+    else
+      fails=$((fails + 1))
+      echo "   ↑ 前端相依掃描失敗"
+    fi
+    rm -f "${_trivy_out}"
+  fi
 fi
 
 # ⚠ `golden_check.py` 要逐一列名，不能靠 glob：同一個目錄下的 `golden_record.py`（錄）

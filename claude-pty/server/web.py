@@ -10,7 +10,7 @@ import contextlib
 import os
 import random
 
-from flask import Blueprint, g, redirect, render_template, session, url_for
+from flask import Blueprint, g, redirect, render_template, send_from_directory, session, url_for
 
 from . import auth, config, version
 from . import sessions as sessions_mod
@@ -84,6 +84,42 @@ def login_art() -> str | None:
     return random.choice(LOGIN_ART) if LOGIN_ART else None
 
 
+# --- Vue 版（階段 4）：同樣三條網址，回的是 SPA 的殼 -------------------------------
+#
+# ⚠ **這條路只在 dev 與 e2e 用。** 正式部署由 nginx 直接 serve `server/static/dist/`
+#   （`/assets/` 長快取、三條頁面路由 try_files 回 index.html，見 deploy/nginx.conf 與
+#   它旁邊的 nginx-ui/）。留這條的理由是 e2e 跑的是 in-thread Flask、沒有 nginx——
+#   兩邊都要走得通，不然「測試綠了但部署是另一條路」。
+#
+# ⚠ 兩種 UI 的 gate **完全相同**：`/` 與 `/account` 不在 `_PUBLIC_ENDPOINTS` 裡，未登入
+#   照樣被導回 `/login`。SPA 自己進頁再打一次 `/api/auth/me` 是為了拿身分，不是授權——
+#   授權永遠在後端（每一支 `/api/*` 都過同一道 gate）。
+
+
+def _spa_shell():
+    """SPA 的殼。
+
+    ⚠ Cache-Control 要**明確**設成 no-store。`SEND_FILE_MAX_AGE_DEFAULT` 是一年（給帶版本戳
+      的 static 用的），而 `_security_headers` 用的是 `setdefault`——不自己設的話，
+      `send_from_directory` 先寫上的 max-age=31536000 會留著，改版後使用者會拿到舊的殼，
+      而殼裡指的是**已經不存在的** /assets/*.js（那是一片白畫面，沒有任何線索）。
+      HTML 一律 no-store 是這個 codebase 既有的規矩，這裡只是把它兌現到新的路上。
+    """
+    resp = send_from_directory(config.DIST_DIR, "index.html", max_age=0)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@web.get("/assets/<path:filename>")
+def spa_asset(filename: str):
+    """SPA 的 JS/CSS。檔名帶內容雜湊（Vite 產的），所以可以放心長期快取。
+
+    ⚠ 這一條**必須公開**（見 app._PUBLIC_ENDPOINTS）：登入頁本身就是 SPA，資源拿不到的話
+      沒登入的人只看得到一片白。它只吐 build 產物，不含任何使用者資料。
+    """
+    return send_from_directory(os.path.join(config.DIST_DIR, "assets"), filename, max_age=31536000)
+
+
 def _page(template: str, active: str, **extra):
     # 憑證狀態在伺服端就算好：招牌上的徽章第一次繪製就是正確的，不會先閃一個
     # 預設樣式再被 JS 改成警示。帳號管理頁沒有輪詢，也只有這條路能拿到它。
@@ -109,6 +145,8 @@ def login_page():
     # 與「未登入訪問管理頁 → 導向 /login」互為對稱。
     if session.get("uid") and auth.get_user(session["uid"]) is not None:
         return redirect("/")
+    if config.UI == "vue":
+        return _spa_shell()
     return render_template(
         "login.html",
         behind_proxy=config.BEHIND_PROXY,
@@ -125,6 +163,8 @@ def login_page():
 
 @web.get("/")
 def sessions_page():
+    if config.UI == "vue":
+        return _spa_shell()
     # claude 的模型白名單在伺服端就給，列表的 chip 直接照它畫。
     return _page(
         "sessions.html",
@@ -141,6 +181,8 @@ def sessions_page():
 
 @web.get("/account")
 def account_page():
+    if config.UI == "vue":
+        return _spa_shell()
     # GitLab 那一塊的兩個事實都在伺服端算好：這套部署有沒有開這個功能，以及這個人設過沒。
     # ⚠ 只給**狀態**，永遠不給值（連密文都不出去）——見 auth._to_dict。
     return _page(
