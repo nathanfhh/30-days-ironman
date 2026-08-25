@@ -517,3 +517,138 @@ settings-modal 的動態那幾組）。帳號頁那 23 個與抽屜那 12 個隨
 
 這幾項全部集中在 `stores/site.ts` 的 `META_DEFAULTS` 與 `loadMeta()`，帶著
 `TODO(階段 3)`：那支端點一上線，**只有那一個函式要改**，其餘畫面一個字都不必動。
+
+### fable 快審 4a：兩條嚴重、兩條中度、一條低度，全部修完
+
+派工把發現分成五組。以下按「這條到底在講什麼」重排，每一條都附上**怎麼驗的**——
+其中兩條的驗證方式本身就是這次最大的收穫。
+
+#### 【嚴重】prod 的 vue 模式三個頁面全部 404
+
+`try_files $uri /index.html;` 的最後一個參數是 URI，nginx 會做**內部轉向**：把
+`/index.html` 當成一個新請求重跑一次 location 比對，而它不符合那三條精確比對，於是落到
+`location /` 被 proxy 給 Flask——Flask 沒有這條路由，回 404。**設定看起來完全正確。**
+
+改成 `try_files /index.html =404;`：最後一個參數是 `=404` 時，前面的 `/index.html` 是
+**檔案路徑**（相對 root），命中就直接送檔，完全不重新比對。
+
+驗法（這一條的重點）：`test_nginx_contract` 是**結構**測試，它證明指令都在、接對了名字，
+證明不了 nginx 真的照做——而這個 bug 正好活在那個縫裡。所以起真的 nginx 用真的 curl 問，
+而且**刻意不起 Flask**：`control` 指到 127.0.0.1、那個 port 上沒有東西，於是任何落到
+`location /` 的請求都是 502。**502 就是失敗，200 才是「nginx 自己送出了殼」。**
+起了 Flask 的話兩條路都會 200，這道閘就分不出來了。
+
+實測（本機，真 nginx 容器）：
+
+| 寫法 | `/` | `/login` | `/account` |
+|---|---|---|---|
+| `try_files $uri /index.html;`（舊） | 502 | 502 | 502 |
+| `try_files /index.html =404;`（新） | 200 | 200 | 200 |
+| legacy 片段（空的） | 502 | 502 | 502 ← 這才是對的（它該被 proxy 給 Flask） |
+
+兩條 curl 步驟都進了 CI（vue 那份要 200、legacy 那份要 502）。
+
+#### 【嚴重】1:1 的差異：拿 golden 的場景對兩版逐字比
+
+派工列了十幾條。與其一條一條猜，我把 `golden_scenes.py` 的場景直接拿來錄 **Vue 版**
+（`config.UI = "vue"`，其餘完全相同），跟 `tests/golden/` 的 legacy 規格逐字 diff。
+
+⚠ **踩到的第一個坑：不可以 `import golden_record`。** 那支在模組層就直接
+`record_into(G.GOLDEN_DIR)`——import 它等於當場把真正的 golden 覆寫掉。我覆寫了一次，
+靠 `git checkout` 救回來。臨時腳本改成自己跑一遍同樣的錄製迴圈。
+
+結果：**七個場景的 aria 快照（兩個視口，共 14 個檔案）逐字相同**——login-empty、
+login-error、sessions-empty、sessions-list、sessions-history、sessions-filters、
+sessions-rangepick、sessions-settings。
+
+aria 會把空白摺疊掉，所以另外寫了一支比 `outerHTML` 的腳本（同一個場景、同一份資料、
+只換 `config.UI`）。修掉的：
+
+- `#pager-status`、`.rangepick__month`、`清除`／`確定` 等 **12 處尾巴多一個空白**。成因是
+  Vue 的 `whitespace: 'condense'` 會把「文字＋換行縮排」這種**混合**文字節點摺成
+  「文字＋一個空白」，而舊版是伺服端一次印出來的。修法是把文字與收尾標籤放回同一行並掛
+  `<!-- prettier-ignore -->`。
+- **屬性順序**：`cred-badge`（class 在 id 前）、picker 的 `aria-*` 在 `data-testid` 前、
+  日期格的 `tabindex` 在 `data-edge` 前。順序對 HTML 沒有語意，但逐字比對時它是唯一還會
+  亮的差異，留著只會讓真的差異被雜訊蓋住。
+- **`v-if` 的註解錨點**：沒有 `v-else` 的 `v-if` 會在 DOM 上留一個空註解當錨點，而舊版那個
+  `<ul>` 在沒展開過時是完全空的。改成 `v-for`（Fragment 的錨點是空白文字節點，
+  `outerHTML` 看不到）。
+  ⚠ 這一改帶出一個真的 bug：`v-for` 裡的 template ref 收成的是**陣列**，於是
+  `searchInput.value?.focus()` 變成「對陣列呼叫 focus」，執行期 TypeError。是 vitest 的
+  unhandled error 當場抓到的，改成從選單元素 query 一次。
+- `#pick-range` 的 `data-move`：舊版靠它做事件委派，我改用 `@click` 之後屬性就沒了。補回。
+- 其餘照派工修的：`inert` 只有點過篩選鍵才寫（舊版是 `setFiltersOpen()` 裡設的，剛進站
+  身上沒有）、`#cred-badge` 首幀就在（不 v-if）、`data-drop`／`data-loading`／`data-tone`
+  只在條件成立時寫、拿掉多出來的 `data-testid="pick-range"`、`.cred__brand` 補 `data-brand`、
+  密碼欄補 `data-pw-toggle="1"`、使用者欄補 `autofocus`、theme-picker 掛載點回 `<span>`、
+  `#toast-stack` 常駐、讀取失敗時 pager 收起來、`<title>` 隨路由（三個字串逐字照舊）、
+  RouterLink 改 `custom` 自己畫 `<a>`（不要它自動掛的 `router-link-active`）。
+
+**剩下三處差異，都不修，理由如下。**
+
+1. **inline style 的序列化**：舊版 `style="--form-col-min:20rem"`，Vue 是
+   `style="--form-col-min: 20rem;"`。Vue 的編譯器把靜態 `style` 屬性**一律解析成物件**
+   （`{"--form-col-min":"20rem"}`，兩種寫法編出來一模一樣，實測過），執行期經 CSSOM 設定，
+   而瀏覽器序列化時會自己加上空格與分號。改原始碼的空白完全沒有作用。computed style 相同、
+   截圖相同、aria 相同。
+2. **`#filter-bar` 裡 `aria-selected` 的位置**：舊版把 `pick-since-opt-any` 標成
+   `aria-selected="true"`，而那一刻按鈕上寫的是「自訂範圍」。**那是舊版的過期值**——
+   `renderMenu()` 只在展開時跑，選了之後選單沒有重畫。實測：
+
+   | | 按鈕顯示 | `aria-selected=true` 落在 |
+   |---|---|---|
+   | legacy | 自訂範圍 | `opt-any` ← 過期 |
+   | vue | 自訂範圍 | `opt-custom` ← 正確 |
+
+   要「1:1」就得把這個錯一起搬過來。選單是 `hidden` 的，沒有人（含輔助技術）看得到它，
+   所以我留著正確的那一版，**不當成差異修**。這一條要不要照舊版，請 Nathan 或 fable 裁示；
+   若要照舊，那就等於要求 Vue 版在關閉的選單裡保留一份過期的可及性狀態。
+3. **body 的結構**：舊版是 `.shell` + `footer` + 兩個 `<script>` + `#toast-stack`，
+   Vue 版是 `#app` + `#toast-stack`（頁尾在 `#app` 裡、module script 在 head）。
+   這是 SPA 的形狀本身，不是可修的差異。
+
+另外，`#cred-data` 那個 `<script type="application/json">` 照舊版建出來了（Vue 的樣板
+編譯器不吐 `<script>`，所以是 onMounted 時建的）。⚠ **這一版沒有任何讀者**——憑證狀態走
+`/api/account/bootstrap` 與列表的順風車。它純粹是為了 DOM 一致而存在的相容節點，
+**階段 5 拆舊時要連同模板那一行一起刪**。
+
+#### `sessions-toast` 這一場對 Vue 版跑不起來（harness 的耦合，不是 1:1 的差異）
+
+`scene_sessions_toast` 直接 `page.evaluate("() => toast(...)")`——那是 `app.js` 的**全域
+函式**，Vue 版沒有這個全域。這不是畫面差異，是場景伸手進了某一版的內部實作。
+
+我**沒有**動 `golden_scenes.py`（那是階段 2 的規格，動它等於改規格），也沒有為了它在
+production bundle 上掛一個 `window.toast`。toast 元件本身的行為改用真實互動驗
+（`e2e_vue_smoke` 裡「終止 → 取消 → 已取消」那一條）。要讓這一場對兩版都成立，得由場景
+改成用 UI 動作觸發並重錄——那是 lane B 的決定。
+
+#### 【中】兩個環境變數收成一個
+
+`CLAUDE_PTY_NGINX_UI` 拿掉，compose 直接掛 `./nginx-ui/${CLAUDE_PTY_UI:-legacy}`。
+「兩個一定要一起改」的設定遲早會有人只改一個，而兩種漏法都不報錯：只改 control 是正式站
+仍吐舊模板，只改 nginx 是 `/api/*` 照舊能動、畫面卻換了版。收成一個之後那個錯誤形狀就
+不存在了。打錯字會掛到不存在的目錄（docker 建個空的頂替）＝落回 legacy，而 preflight
+會喊一行——降級是安全的，但不會是無聲的。
+
+#### 【中】trivy 掃前端相依
+
+`run-all.sh` 加一關（沒裝 trivy 就跳過並講出來）。⚠ **「沒有目標」不等於「乾淨」**（repo
+既有的紀律）：trivy 掃不到任何相依清單時一樣 exit 0、報告是空的。所以除了「有沒有漏洞」，
+還驗「它真的把 lockfile 當成 npm 目標解析了」。目前 1 個 npm 目標、0 筆 MEDIUM 以上。
+
+#### 【低】`/assets/` 回了兩份 Cache-Control、nginx 直出的殼少了安全標頭
+
+`expires 1y` 自己就會送一個 `Cache-Control`，再 `add_header` 一條就是同一個標頭回兩份。
+合成一條 `public, max-age=31536000, immutable`（實測：改前兩份，改後一份）。
+
+那三條頁面路由不經 Flask，`_security_headers` 完全沒有機會跑——不補的話，切到 vue 版等於
+把 CSP、nosniff、Referrer-Policy、X-Frame-Options 一起關掉，而畫面上完全看不出來。
+值逐字照 `server/app.py`，契約測試會比對兩邊是否分岔。
+
+#### 臨時腳本進 commit
+
+那支 30 條的對照腳本收成 `tests/e2e_vue_smoke.py`（審查說沒進 commit 無法覆核）。
+它的價值在於**同一支腳本對兩版都跑得過**：每一條斷言只用 `data-testid` 與網址，把
+`config.UI` 換成 `legacy` 再跑，除了「帳號頁是殼」以外全部要過。開發時就是這樣抓到
+「看歷史時建立表單，舊版是 `hidden`、我寫成了 `v-if`＝節點整個消失」的。
