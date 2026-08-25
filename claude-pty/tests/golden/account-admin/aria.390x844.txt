@@ -1,0 +1,134 @@
+- banner:
+  - text: claude
+  - emphasis: "-pty"
+  - group "主要區域":
+    - link " 工作階段":
+      - /url: /
+    - link " 帳號管理":
+      - /url: /account
+  - navigation:
+    - status: " Claude 未設定憑證 在 host 上執行 `claude setup-token`，把輸出貼到帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態啟動，開場只會看到登入提示。"
+    - button "介面主題":  Instrument 
+    - button "golden-admin  admin"
+- heading "CLI 憑證" [level=2]
+- text: 未設定
+- paragraph:
+  - text: 在 host 上執行
+  - code: claude setup-token
+  - text: ，把輸出貼進來。之後開的 session 用它 登入；
+  - strong: token 過期不會有預告
+  - text: ——症狀是新開的 session 停在登入提示， 遇到就重跑一次指令、把新的貼回這裡（已在跑的 session 不受影響）。
+- text: setup-token
+- textbox "setup-token":
+  - /placeholder: 貼上 claude setup-token 的輸出
+- button "顯示密碼": 
+- button " 儲存" [disabled]
+- heading "GitLab 憑證" [level=2]
+- text: 已設定
+- paragraph:
+  - text: 你自己的
+  - strong: gitlab.example.test
+  - text: Personal Access Token（需要
+  - code: api
+  - text: scope）。你開的 session 會接上一顆
+  - strong: 只屬於你
+  - text: 的代理，由它蓋章——
+  - strong: token 不會進入 session 容器
+  - text: ，裡面的 AI 用得到你的 GitLab， 卻讀不到這把鑰匙。clone 用正規網址就好（
+  - code: https://…
+  - text: 與
+  - code: git@…
+  - text: 都會自動改寫成走代理）。請用專門建立、scope 最小、有到期日的 token。
+- text: Personal Access Token
+- textbox "Personal Access Token":
+  - /placeholder: ••••••••••••••••••••（已設定，貼新的可覆寫）
+- button "顯示密碼": 
+- button " 儲存" [disabled]
+- button " 清除"
+- paragraph:
+  - text: 換一把新的：已接上代理的 session 會在一個對帳週期內改用新的。清除：它們當場失去 GitLab，
+  - strong: 再填回去會恢復
+  - text: 。所以——
+  - strong: 輪替 token 不等於隔離一場你 不信任的 session；要隔離那場，就終止那場。
+  - text: 設定 token 之前開的 session 沒接上代理，事後補不上，要開新的一場。
+- heading "變更我的密碼" [level=2]
+- text: 目前密碼
+- textbox "目前密碼"
+- button "顯示密碼": 
+- text: 新密碼（至少 8 字元）
+- textbox "新密碼（至少 8 字元）"
+- button "顯示密碼": 
+- text: 再輸入一次新密碼
+- textbox "再輸入一次新密碼"
+- button "顯示密碼": 
+- button " 更新密碼" [disabled]
+- heading "新增使用者" [level=2]
+- paragraph: 只看得見、也只能操作自己開的 session。讀別人的一律回「未知 session」，連那筆存不存在都不洩漏。可以自己改密碼。
+- text: 使用者名稱
+- textbox "使用者名稱"
+- text: 密碼
+- textbox "密碼"
+- button "顯示密碼": 
+- text: 權限
+- button " 一般使用者 "
+- button " 建立帳號"
+- heading "帳號清單" [level=2]
+- table:
+  - rowgroup:
+    - row "ID 使用者名稱 權限 建立時間":
+      - columnheader "ID"
+      - columnheader "使用者名稱"
+      - columnheader "權限"
+      - columnheader "建立時間"
+      - columnheader
+  - rowgroup:
+    - row "1 golden-admin admin 2026-08-22 04:00 3 天前  重設密碼":
+      - cell "1"
+      - cell "golden-admin"
+      - cell "admin"
+      - cell "2026-08-22 04:00 3 天前"
+      - cell " 重設密碼":
+        - button " 重設密碼"
+    - row "3 golden-empty user 2026-08-22 04:00 3 天前  重設密碼":
+      - cell "3"
+      - cell "golden-empty"
+      - cell "user"
+      - cell "2026-08-22 04:00 3 天前"
+      - cell " 重設密碼":
+        - button " 重設密碼"
+    - row "2 golden-user user 2026-08-22 04:00 3 天前  重設密碼":
+      - cell "2"
+      - cell "golden-user"
+      - cell "user"
+      - cell "2026-08-22 04:00 3 天前"
+      - cell " 重設密碼":
+        - button " 重設密碼"
+- heading "ttyd 實況" [level=2]
+- button " 重新整理"
+- paragraph:
+  - text: 「在聽」與「連線」是去問那顆行程自己的 socket 得到的，不是 DB 記的。 「在聽」把
+  - strong: 它實際綁的 port
+  - text: 跟
+  - strong: 左邊 DB 記的 port
+  - text: 對起來：相符代表兩邊講的是同一件事； 對不上代表 DB 記錯了——照 DB 那個 port 連不到終端，而它真正占著的那個沒有人在管。
+- table:
+  - rowgroup:
+    - row "擁有者 / session port pid 在聽 連線 ttyd 開啟於":
+      - columnheader "擁有者 / session"
+      - columnheader "port"
+      - columnheader "pid"
+      - columnheader "在聽"
+      - columnheader "連線"
+      - columnheader "ttyd"
+      - columnheader "開啟於"
+  - rowgroup:
+    - row "目前沒有開著的終端":
+      - cell "目前沒有開著的終端"
+- contentinfo:
+  - text: claude-pty 0.0.0-golden
+  - code: "0000000"
+  - text: 控制平面本體。 ttyd（Rust） 1.0.0-golden
+  - code: "1111111"
+  - text: ttyd-rust：目前用於網頁終端的執行檔。 建置於
+  - time: 2026/08/25 12:00:00
+  - text: （0 秒前）

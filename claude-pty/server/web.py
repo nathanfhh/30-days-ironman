@@ -73,6 +73,17 @@ except OSError:
     LOGIN_ART = []  # 沒有這個目錄就不顯示插畫，登入功能不受影響
 
 
+def login_art() -> str | None:
+    """這次要顯示哪一張插畫的檔名；沒有圖就 `None`。
+
+    **每次呼叫重挑一張**：「每次載入換一張」是這張圖的行為，不是啟動時定案的設定。
+    抽出來是為了讓登入頁與 `/api/bootstrap` 共用同一個決定：兩邊各寫一份 `random.choice`
+    的話，哪天有人給其中一邊加了條件（例如「沒有圖時改畫別的」），另一邊不會跟著變，
+    而畫面上看不出兩者已經是兩套規則。
+    """
+    return random.choice(LOGIN_ART) if LOGIN_ART else None
+
+
 # --- Vue 版（階段 4）：同樣三條網址，回的是 SPA 的殼 -------------------------------
 #
 # ⚠ **這條路只在 dev 與 e2e 用。** 正式部署由 nginx 直接 serve `server/static/dist/`
@@ -121,8 +132,9 @@ def _page(template: str, active: str, **extra):
         name_max=config.NAME_MAX,
         username_max=config.USERNAME_MAX,
         credentials=sessions_mod.credentials_state(g.user["id"]),
-        # 招牌徽章的鍵：這套東西只驅動 claude 一種 CLI。
-        default_cli="claude",
+        # 招牌徽章的鍵：這套東西只驅動一種 CLI（SSOT 在 config，`/api/account/bootstrap`
+        # 與 credentials_state 讀的是同一個常數，三份字面量遲早分岔）。
+        default_cli=config.DEFAULT_CLI,
         **extra,
     )
 
@@ -138,10 +150,14 @@ def login_page():
     return render_template(
         "login.html",
         behind_proxy=config.BEHIND_PROXY,
-        min_password_length=config.MIN_PASSWORD_LENGTH,
+        # ⚠ **這裡刻意不給 `min_password_length`。** 登入頁本來就不檢查密碼長度（見
+        #   login.html 的說明：長度是「建立／變更密碼」時的政策，搬到登入頁的話，調高
+        #   政策之後所有舊帳號都會按不下送出鈕，而後端明明還驗得過他們的密碼）。
+        #   這個參數以前傳著卻沒有人用，而沒人用的參數不是無害的：它讓下一個人以為登入
+        #   頁需要這個值，於是把它加進**公開**的 /api/bootstrap，那才是真的放寬曝光面。
         # 每次載入隨機挑一張——在伺服端選，頁面第一次繪製就是最終畫面，
         # 不會出現「先空著、JS 載入後才蹦出一張圖」的跳動。
-        art=random.choice(LOGIN_ART) if LOGIN_ART else None,
+        art=login_art(),
     )
 
 
