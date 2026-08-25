@@ -69,7 +69,13 @@ if _fatal:
 #   未登入者拿得到的 /login 上（頁尾在 base.html，三頁共用）。要收緊得先收緊登入頁，
 #   不是先收緊這一條：兩邊不一致的話，收緊的那一邊只會讓人以為收緊了。
 #   需要登入才看得到的東西一律不在那條裡，見 `/api/account/bootstrap`。
-_PUBLIC_ENDPOINTS = {"login", "bootstrap", "web.login_page", "web.healthz", "static"}
+# ⚠ `web.spa_asset` 是 Vue 版的 JS/CSS（`/assets/*`），同樣必須公開——登入頁本身就是那包
+#   SPA，擋掉的話沒登入的人只看得到一片白。它只吐 build 產物，不含任何使用者資料，
+#   與 `static` 同一個性質。
+# ⚠ 這一行是兩條 lane 合併時**唯一會撞在一起的一行**（階段 3 加 `bootstrap`、階段 4 加
+#   `web.spa_asset`），而掉哪一個都不會報錯、只會靜靜壞掉：掉 `bootstrap` 是登入頁沒有
+#   頁尾版本也沒有插畫，掉 `web.spa_asset` 是 vue 模式的登入頁一片白。所以取聯集。
+_PUBLIC_ENDPOINTS = {"login", "bootstrap", "web.login_page", "web.healthz", "static", "web.spa_asset"}
 
 
 @app.errorhandler(SessionNotFound)

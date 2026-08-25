@@ -167,6 +167,10 @@ services:
       CLAUDE_PTY_BIND_ADDR: ${CLAUDE_PTY_BIND_ADDR:-127.0.0.1}
       # session 列表每頁筆數（前端以後端回報的 limit 為準）
       CLAUDE_PTY_PAGE_SIZE: ${CLAUDE_PTY_PAGE_SIZE:-10}
+      # 前端要用哪一版：legacy（Jinja + app.js，預設）或 vue（frontend/ 的 SPA）。
+      # ⚠ **同一個變數也決定 nginx 掛哪一份頁面路由**（見下方 nginx 的 volumes：目錄名就是
+      #   這個值），所以兩條路不可能各說各話。reconciler 不畫任何畫面，不必給。
+      CLAUDE_PTY_UI: ${CLAUDE_PTY_UI:-legacy}
       # SSH agent 轉發（opt-in，預設關；ADR 0011）。值是 **host 上** agent socket 的路徑，
       # 由 daemon 解讀——控制平面自己不掛也不碰它，只把路徑轉給 daemon。
       # ⚠ 開了就是每個能建立 session 的帳號都拿得到那把 key（沒有租戶隔離）。
@@ -239,7 +243,17 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    # ⚠ 從 `image: nginx:alpine` 改成 build，是因為 **Vue 版的產物要跟著 image 走版本**：
+    #   `--target nginx` 的那一階段把 node 階段 build 出來的 dist COPY 進 /usr/share/nginx/html
+    #   （見 deploy/Dockerfile）。base image 仍然是 nginx:alpine，只多了那一層 COPY。
+    #   用 bind mount 的話，host 上沒 build 過的目錄會被 docker 建成空目錄頂替——症狀是整站
+    #   404 而不是「你忘了 build」。
+    # ⚠ legacy 模式下這一層只是躺著：頁面路由由下面掛進去的片段決定（預設是空的 legacy 版），
+    #   `/assets/*` 沒有人會要。
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: nginx
     # 唯一對外發布 port 的服務（ADR 0005 單一入口）。ttyd 的 port 全在內部網路，不發布。
     # ⚠ **預設只綁 loopback**。這個站台是明文 HTTP（COOKIE_SECURE 預設 0）、沒有租戶隔離、
     #   而且能在 host 的 dockerd 上開特權容器；SSH agent 轉發開著時還多一把能認證任何主機
@@ -249,6 +263,15 @@ services:
       - "${CLAUDE_PTY_BIND_ADDR:-127.0.0.1}:8080:8080"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro
+      # 前端要用哪一版的頁面路由（`/`、`/login`、`/account`）。目錄名**就是** CLAUDE_PTY_UI
+      # 的值，所以這裡與 control 讀的是同一個變數——原本是兩個（`CLAUDE_PTY_UI` 與
+      # `CLAUDE_PTY_NGINX_UI`），而「兩個一定要一起改」的設定遲早會有人只改一個：只改
+      # control 的話正式站仍然吐舊模板，只改 nginx 的話 `/api/*` 照舊能動、畫面卻換了版，
+      # 兩種都不會報錯。收成一個之後那個錯誤形狀就不存在了。
+      # ⚠ 值不認得（例如打錯字）時這裡會指到一個不存在的目錄，docker 會建一個空的頂替，
+      #   於是 include 撿不到任何 .conf ＝ 落回 legacy 的行為。**同時** control 的 preflight
+      #   會喊一行（見 server/preflight.py）——降級是安全的，但不可以是無聲的。
+      - ./nginx-ui/${CLAUDE_PTY_UI:-legacy}:/etc/nginx/claude-pty-ui:ro
     # ⚠ 預設的 json-file driver **沒有大小上限**。control 每個請求一行 access log、
     #   nginx 也有、reconciler 每 30 秒一輪，三者都 restart: unless-stopped——磁碟被吃滿時
     #   的症狀是 SQLite 寫入失敗，那個症狀完全指不到 log 檔（審查 F-017）。
