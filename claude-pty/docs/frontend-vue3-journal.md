@@ -77,3 +77,55 @@ Nathan：不看 debug log；「就算多等幾十 ms 我也不會發覺，而且
 ### 階段 1.5 派工（同一 agent）
 
 要求先用 Playwright 重現（攔 `POST /resize`、對 `term.cols/rows`、記錄送出時間點相對抽屜動畫結束；可暫時把 transition 拉長放大時序），再修，再連跑 3 次。
+
+### 階段 1.5 完成：`8873988`
+
+**重現的結果推翻了派工時的診斷。** 我（agent）寫了一支逐幀取樣的探針，開抽屜後每個
+`requestAnimationFrame` 記下 `frame.clientWidth/clientHeight`、`contentWindow.innerWidth/innerHeight`、
+`getBoundingClientRect().left`、`term.cols/rows`，常態 240ms 跑三次、把 transition 拉長到
+800ms 再跑兩次。五次的結論一致：
+
+```
++  11ms  client=1295x834  inner=1295x834  term=None    rectLeft=1441
++ 158ms  client=1295x834  inner=1295x834  term=154x49  rectLeft=1279
++ 846ms  client=1295x834  inner=1295x834  term=154x49  rectLeft=145
+```
+
+滑入期間**版面尺寸一格都沒動**，只有 rect 的 left 在跑。因為滑入用的是
+`transform: translateX()`，而 transform 不影響版面尺寸；`app.css:2224` 本來就寫著這件事
+（「用 transform 而不是 right/width：改位置屬性會讓 iframe 裡的終端每一幀重排」）。
+所以「fit 量到中途寬度」並沒有發生，五次的最後一發也都與最終 `term.cols/rows` 一致。
+
+第二個量到的事實：**只用 CSS 把面板從 90vw 改成 50vw（完全不碰視窗），iframe 內部確實
+收到了 resize，也正確重送了一發。** 既有的事件鏈沒有斷，ResizeObserver 是補強不是救命繩。
+
+**真正站得住的問題是順序**：送出的時機純由 300ms debounce 決定，與抽屜動畫誰先誰後沒有
+任何人管。拉長到 800ms 就現形，那一發在動畫結束前 577ms 就送掉了。常態 240ms 下它剛好
+落在動畫之後幾十毫秒，那是巧合不是設計，reduced-motion、慢機器、或有人調長動畫都會翻盤。
+
+修法（方向照派工，理由換成量出來的那個）：
+
+- `ResizeObserver` 掛 `.drawer__frame`，盒子一變就往 iframe 丟 resize 逼 fit，並記下
+  `lastBoxAt`。註解誠實寫明 Chromium 目前會補發 resize、但那是實作不是規格。
+- 送出前兩道閘：`getAnimations().finished` 全數 resolve（沒有動畫就是 `Promise.all([])`，
+  reduced-motion 直接過；動畫被取消時 `finished` 會 reject，`.catch` 收成「不必再等」），
+  且 `performance.now() - lastBoxAt >= 150`。
+- 每次排程給一個 token，等閘門期間有新變化就作廢舊的那一發，「只送最後一次」維持成立。
+- `close()` 時 `frameRO?.disconnect()`。
+- 保留黏著 redraw 旗標、`healGlyphScale`、字級邏輯、5 秒放棄輪詢、`sizeDebug`。CSS 沒動。
+  `sendSize` 從 `setTimeout` 裡抽成具名函式，內容一字未改（diff 大部分是這個位移）。
+
+三次結果：修之前把 `app.js` 還原成 `16655d4` 實跑，新斷言 `FAIL 動畫結束後 -577ms 才送出`；
+修之後連跑三次 `PASS 2ms / 3ms / 3ms`，整支 0 fail。quick 36 支 0 失敗、跳過清單與基線
+逐字相同；`--e2e` 8 支全綠。
+
+寫斷言時避開一個會做出假綠的坑：不能只 `getAnimations()` 查一次。`data-open` 是下一幀才
+打上去的，那一刻多半還沒有動畫在跑，拿到空陣列會讓「動畫結束＝按下去那一刻」，斷言變成
+恆真。所以先等它真的出現再等 `finished`，超過二十幾幀還沒有才當成 reduced-motion。
+
+`open_drawer` 從固定睡 700ms 改成等那一發真的到（helper，不是斷言）：送出時機現在由事實
+決定，固定秒數在慢機器上會搶在它前面，那種紅燈長得像功能壞了。
+
+**已知沒驗到的一段**：替身終端的 `fit()` 是同步且純依 `window.innerWidth` 算的，天生不會
+有「字體到位後 cell 尺寸才變」這一類真 xterm 才有的晚到變化。這次的閘門對那一類也有幫助，
+但替身證明不了，所以沒有寫成斷言、也沒有在 commit 訊息裡宣稱。要驗得接真的 ttyd。

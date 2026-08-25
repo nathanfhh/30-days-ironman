@@ -179,6 +179,8 @@ __FONT_AFTER__                           // 見下方 stub_font_after 的說明�
 </script>"""
 
 posts = []  # 收到的每一發 /resize（依序）
+post_at = []  # 每一發送到的牆鐘時刻（ms）。與瀏覽器的 Date.now() 是同一支時鐘，
+# 所以「送出」與「動畫結束」這兩個時間點可以直接比大小（見最後那段時序測試）。
 fail_next = 0  # 還要讓幾發失敗（驗「旗標黏著」）
 stub_scale = "2"  # iframe 起始的畫布倍率；"window.devicePixelRatio" ＝一開始就是好的
 
@@ -214,6 +216,7 @@ def route_session(route, _request):
 def route_resize(route, request):
     global fail_next
     posts.append(json.loads(request.post_data))
+    post_at.append(time.time() * 1000)
     if fail_next > 0:
         fail_next -= 1
         route.fulfill(status=500, content_type="application/json", body='{"error":"session 還在 creating"}')
@@ -247,11 +250,19 @@ def canvas_state(page):
 
 
 def open_drawer(page, sid):
+    before = len(posts)
     page.click(f'[data-testid="row-open-{sid}"]')
     page.wait_for_selector('[data-testid="drawer"]')
     # pending 收起來＝iframe 已載入且父頁面認得它，attachSizeSync 這時才會開始
     page.wait_for_selector('[data-testid="drawer-pending"]', state="hidden", timeout=8000)
-    page.wait_for_timeout(700)  # 讓 debounce（300ms）那一發送完
+    # ⚠ 不睡一個固定的秒數。送出的時機由「抽屜停定 ＋ iframe 盒子不再變」決定，不是一個
+    #   常數；睡 700ms 在慢一點的機器上會剛好搶在它前面，而那種紅燈長得像功能壞了。
+    #   等它真的到，沒到就讓後面的斷言去說話（這裡不拋）。
+    for _ in range(80):
+        if len(posts) > before:
+            break
+        page.wait_for_timeout(50)
+    page.wait_for_timeout(250)  # 若還會有第二發，讓它也到齊再斷言
 
 
 try:
@@ -562,6 +573,71 @@ try:
         page.wait_for_selector('[data-testid="drawer"]', state="detached")
         globals()["stub_font_after"] = ""
         page.evaluate("() => localStorage.removeItem('claude-pty:term-font')")
+
+        print("== 🔴 送出的時機：抽屜停定之後，不是滑到一半 ==")
+        # 這一條守的是**順序**，不是數字。
+        #
+        # 送出的時機原本完全由一個 300ms 的 debounce 決定，而抽屜的滑入是 CSS 裡的 240ms
+        # transition，兩者誰先誰後沒有任何人管：prefers-reduced-motion、慢一點的機器、
+        # 或哪天有人把動畫調長，都會換一個答案。把動畫拉長到 800ms 就看得出來：修之前
+        # 那一發在 +335ms 就送掉了，那時面板還滑到一半（2026-08-25 用 Playwright 逐幀量的）。
+        #
+        # ⚠ 這裡**不驗**「送出的格數是中途值」，因為那件事並沒有發生：滑入用的是
+        #   `transform: translateX()`，不影響版面尺寸，實測整段動畫期間 iframe 的
+        #   clientWidth/innerWidth 從第一幀到最後一幀都是 1295×834。要守的是
+        #   「UI 停定之後才告訴 PTY」這個順序本身，不是一個被誤診出來的數字。
+        # ⚠ 動畫時長只在測試裡改（add_style_tag），`app.css` 一行沒動；量完就把那條規則
+        #   移掉，後面的段落不受影響。
+        slow = page.add_style_tag(
+            content=".drawer__panel { transition: transform 800ms linear !important; }"
+        )
+        posts.clear()
+        post_at.clear()
+        page.click('[data-testid="row-open-e1"]')
+        page.wait_for_selector('[data-testid="drawer"]')
+        # 面板的滑入真的跑完的時刻。
+        # ⚠ 不可以只 `getAnimations()` 一次就算數：`data-open` 是下一幀才打上去的，這一刻
+        #   多半還沒有任何動畫在跑，拿到空陣列會讓這條斷言變成恆真（動畫結束＝按下去的
+        #   那一刻，當然比送出早）。所以要等到它真的出現，再等它 finished。
+        anim_end = page.evaluate("""() => new Promise((resolve) => {
+          const panel = document.querySelector('.drawer__panel');
+          let frames = 0;
+          const poll = () => {
+            const anims = panel.getAnimations();
+            if (anims.length) {
+              Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(() => resolve(Date.now()));
+              return;
+            }
+            // 等了二十幾幀還是沒有動畫：prefers-reduced-motion 把 transition 關掉了，
+            // 那就是「一開始就停定」，據實回報而不是假裝有等過。
+            if (++frames > 24) return resolve(Date.now());
+            requestAnimationFrame(poll);
+          };
+          poll();
+        })""")
+        for _ in range(80):
+            if posts:
+                break
+            page.wait_for_timeout(50)
+        page.wait_for_timeout(400)
+        live = term_size(page)
+        last = posts[-1] if posts else {}
+        sent_at = post_at[-1] if post_at else None
+        check(f"有送出（收到 {len(posts)} 發）", len(posts) >= 1)
+        check(
+            "🔴 最後一發是在抽屜停定**之後**才送的"
+            f"（動畫結束後 {round(sent_at - anim_end) if sent_at else '沒送'}ms 才送出）",
+            sent_at is not None and sent_at >= anim_end,
+        )
+        check(
+            f"送出的就是最終尺寸 {live['cols']}×{live['rows']}（實收 {last.get('cols')}×{last.get('rows')}）",
+            last.get("cols") == live["cols"] and last.get("rows") == live["rows"],
+        )
+        check(f"等歸等，還是只送一發（收到 {len(posts)} 發）", len(posts) == 1)
+        check(f"redraw 旗標沒有被這道閘吃掉：{last}", last.get("redraw") is True)
+        slow.evaluate("el => el.remove()")
+        page.click('[data-testid="drawer-close"]')
+        page.wait_for_selector('[data-testid="drawer"]', state="detached")
 
         print("== 同時只留一個抽屜 ==")
         open_drawer(page, "e1")
