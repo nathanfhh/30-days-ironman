@@ -58,7 +58,7 @@ def _put_cli_token(container, user_id: int, delivery: str) -> bool:
         return False
 
 
-_CLAUDE_BASE = {"cli": "claude", "brand": "anthropic"}
+_CLAUDE_BASE = {"cli": config.DEFAULT_CLI, "brand": "anthropic"}
 
 
 def claude_credentials_state(user_id: int | None) -> dict:

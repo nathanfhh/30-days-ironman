@@ -73,6 +73,17 @@ except OSError:
     LOGIN_ART = []  # 沒有這個目錄就不顯示插畫，登入功能不受影響
 
 
+def login_art() -> str | None:
+    """這次要顯示哪一張插畫的檔名；沒有圖就 `None`。
+
+    **每次呼叫重挑一張**：「每次載入換一張」是這張圖的行為，不是啟動時定案的設定。
+    抽出來是為了讓登入頁與 `/api/bootstrap` 共用同一個決定：兩邊各寫一份 `random.choice`
+    的話，哪天有人給其中一邊加了條件（例如「沒有圖時改畫別的」），另一邊不會跟著變，
+    而畫面上看不出兩者已經是兩套規則。
+    """
+    return random.choice(LOGIN_ART) if LOGIN_ART else None
+
+
 def _page(template: str, active: str, **extra):
     # 憑證狀態在伺服端就算好：招牌上的徽章第一次繪製就是正確的，不會先閃一個
     # 預設樣式再被 JS 改成警示。帳號管理頁沒有輪詢，也只有這條路能拿到它。
@@ -85,8 +96,9 @@ def _page(template: str, active: str, **extra):
         name_max=config.NAME_MAX,
         username_max=config.USERNAME_MAX,
         credentials=sessions_mod.credentials_state(g.user["id"]),
-        # 招牌徽章的鍵：這套東西只驅動 claude 一種 CLI。
-        default_cli="claude",
+        # 招牌徽章的鍵：這套東西只驅動一種 CLI（SSOT 在 config，`/api/account/bootstrap`
+        # 與 credentials_state 讀的是同一個常數，三份字面量遲早分岔）。
+        default_cli=config.DEFAULT_CLI,
         **extra,
     )
 
@@ -103,7 +115,7 @@ def login_page():
         min_password_length=config.MIN_PASSWORD_LENGTH,
         # 每次載入隨機挑一張——在伺服端選，頁面第一次繪製就是最終畫面，
         # 不會出現「先空著、JS 載入後才蹦出一張圖」的跳動。
-        art=random.choice(LOGIN_ART) if LOGIN_ART else None,
+        art=login_art(),
     )
 
 
