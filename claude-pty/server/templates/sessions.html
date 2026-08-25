@@ -408,14 +408,18 @@
     }
     // profile 三項改純圖示：六個文字 chip 一定換行，整列會擠成兩層。
     // 語意靠圖示 + tooltip（開/關用同一族圖示的實心與槓掉版本，一眼分得出來）。
+    // ⚠ 每一顆都要帶 kind（第四欄）。tone 是共用的（網路用 accent、錄製也用 accent），
+    //   圖示 class 又是 Font Awesome 的實作細節，兩者都不足以回答「這顆是哪一種標記」。
+    //   kind 渲染成 data-kind，讓自動化測試（tests/e2e_gitlab_chip.py）認得出這一顆是誰，
+    //   不必去撿 `i.fa-gitlab` 這種一換圖示就斷的抓手。
     const marks = [];
     if (p.network) {
       const [label, icon, tone] = NET_CHIP[p.network] || [p.network, "fa-solid fa-question", ""];
-      marks.push([`網路：${label}`, icon, tone]);
+      marks.push([`網路：${label}`, icon, tone, "network"]);
     }
     marks.push(p.capture
-      ? ["流量錄製：開", "fa-solid fa-circle-dot", "accent"]
-      : ["流量錄製：關", "fa-solid fa-circle-dot", "off"]);
+      ? ["流量錄製：開", "fa-solid fa-circle-dot", "accent", "capture"]
+      : ["流量錄製：關", "fa-solid fa-circle-dot", "off", "capture"]);
     // ⚠ 這個座標的用途是**事後比對**，所以不准說謊。控制平面在建立 session 時就探過
     //   Jaeger 通不通，把結果記在 telemetry_active：探得到＝真的在送、探不到＝要求了
     //   但沒開成（見 sessions.create）。三態要分得出來——把「沒開成」畫成「送」會讓人
@@ -423,15 +427,16 @@
     //   舊列沒有 telemetry_active 這個鍵（undefined）：那是控制平面還沒探測前建的，
     //   誠實的措辭是「已要求（實際以容器 log 為準）」，不假裝知道結果。
     if (!p.telemetry) {
-      marks.push(["Telemetry：不送", "fa-solid fa-chart-line", "off"]);
+      marks.push(["Telemetry：不送", "fa-solid fa-chart-line", "off", "telemetry"]);
     } else if (p.telemetry_active === true) {
-      marks.push(["Telemetry：送 Jaeger（建立時探測可達）", "fa-solid fa-chart-line", "accent"]);
+      marks.push(["Telemetry：送 Jaeger（建立時探測可達）",
+                  "fa-solid fa-chart-line", "accent", "telemetry"]);
     } else if (p.telemetry_active === false) {
       marks.push(["Telemetry：要求了但沒開成（建立時 Jaeger 探不到，已降級不送）",
-                  "fa-solid fa-chart-line", "warn"]);
+                  "fa-solid fa-chart-line", "warn", "telemetry"]);
     } else {
       marks.push(["Telemetry：已要求送 Jaeger（實際是否送出以容器 log 為準）",
-                  "fa-solid fa-chart-line", "accent"]);
+                  "fa-solid fa-chart-line", "accent", "telemetry"]);
     }
     // GitLab 代理（ADR 0016）。**這一顆要讀兩個事實，只看任何一個都會說謊**：
     //   · s.gitlab_proxy   ＝這場**當初**有沒有接上代理的網路。不可變——網路必須在容器
@@ -450,15 +455,15 @@
         marks.push([historical
           ? "GitLab：期間未啟用"
           : "GitLab：本場沒有——開場時沒接上代理網路，事後補 token 也救不了這一場（網路要在容器啟動前接），要用就開新的一場",
-          "fa-brands fa-gitlab", "off"]);
+          "fa-brands fa-gitlab", "off", "gitlab"]);
       } else if (historical) {
-        marks.push(["GitLab：期間曾啟用", "fa-brands fa-gitlab", "accent"]);
+        marks.push(["GitLab：期間曾啟用", "fa-brands fa-gitlab", "accent", "gitlab"]);
       } else if (s.gitlab_pat_set) {
-        marks.push(["GitLab：本場可用", "fa-brands fa-gitlab", "accent"]);
+        marks.push(["GitLab：本場可用", "fa-brands fa-gitlab", "accent", "gitlab"]);
       } else {
         marks.push([
           "GitLab：本場當初接上了代理網路，但你現在沒有設 token——git 與 API 都會失敗。到帳號頁填回去，一個對帳週期內會自己恢復",
-          "fa-brands fa-gitlab", "warn"]);
+          "fa-brands fa-gitlab", "warn", "gitlab"]);
       }
     }
 
@@ -472,8 +477,9 @@
       `<span class="chip" data-testid="chip"${tone ? ` data-tone="${esc(tone)}"` : ""}>${icon || ""}` +
       `<span class="chip__text" data-testid="chip-text">${esc(t)}</span></span>`
     ).join("");
-    const glyphs = marks.map(([title, icon, tone]) =>
-      `<span class="chip chip--mark tip" data-testid="chip-mark" data-tone="${esc(tone)}" data-tip="${esc(title)}"
+    const glyphs = marks.map(([title, icon, tone, kind]) =>
+      `<span class="chip chip--mark tip" data-testid="chip-mark" data-kind="${esc(kind)}"
+             data-tone="${esc(tone)}" data-tip="${esc(title)}"
              aria-label="${esc(title)}"><i class="${esc(icon)}"></i></span>`
     ).join("");
     // 擁有者 / CLI → 網路 · 錄製 · telemetry → 模型 / 思考深度

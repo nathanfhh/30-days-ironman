@@ -169,12 +169,14 @@ for _ in range(50):
     time.sleep(0.1)
 
 # 每一列的 GitLab 標記（沒有就回 null）。
-# ⚠ 認的是**圖示 class** 不是 data-tone：tone 是共用的（網路也用 accent、錄製也用 off），
+# ⚠ 認的是 **data-kind** 不是 data-tone：tone 是共用的（網路也用 accent、錄製也用 off），
 #   拿它當選擇器會撿到隔壁那顆，而且撿錯時斷言照樣可能是綠的。
+# ⚠ 也不認圖示 class（原本是 `i.fa-gitlab`）：那是 Font Awesome 的實作細節，換一顆圖示
+#   或改用 SVG 就靜靜地一列都撿不到，而「一顆都沒畫」正好是這支測試的其中一種預期結果，
+#   於是抓手斷掉會偽裝成綠燈。kind 是 chips() 明講的語意欄位，換圖示不會動到它。
 PROBE = """
 () => [...document.querySelectorAll('[data-testid=chips-cell]')].map(cell => {
-  const el = [...cell.querySelectorAll('[data-testid=chip-mark]')]
-    .find(c => c.querySelector('i.fa-gitlab'));
+  const el = cell.querySelector('[data-testid=chip-mark][data-kind=gitlab]');
   return el ? { tone: el.dataset.tone || null, tip: el.dataset.tip || null } : null;
 })
 """

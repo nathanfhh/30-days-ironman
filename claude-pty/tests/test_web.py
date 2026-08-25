@@ -259,6 +259,26 @@ for tpl in ("sessions.html", "account.html"):
 # innerHTML 寫訊息，白名單會讓上面所有檢查對它視而不見，等於直接變成一個漏洞。
 toast_body = re.search(r"function toast\(.*?\n\}", js, re.DOTALL)
 check("toast() 存在", bool(toast_body))
+
+
+def html_interpolations(fn_src: str, var: str) -> list[str]:
+    r"""fn_src 的 innerHTML 賦值裡，**插值**（`${...}`）中出現 var 的那些。
+
+    ⚠ 只認插值，不認「這段字串裡有沒有出現這幾個字」。原本寫的是
+      `innerHTML\s*[+]?=\s*[^;]*\btitle\b`，它會把樣板裡任何含 title 的**字面量**
+      一起判成漏洞：`data-testid="toast-title"` 就這樣紅過一次（`-` 不是 word
+      character，所以 `\btitle\b` 照樣命中）。
+    ⚠ 為什麼要修而不是把那顆 testid 改名：一條會對正確程式碼喊狼來了的守衛，下場是被
+      繞過或刪掉，不是被修好。而繞過之後它還掛在那裡，看起來仍像有人在守。
+    ⚠ `[^}]*` 對付不了巢狀樣板，這與同檔上面那圈模板掃描是同一個取捨（見 206-207 行的
+      說明）：寧可對巢狀漏看，也不要製造誤報。
+    """
+    out = []
+    for chunk in re.findall(r"innerHTML\s*[+]?=\s*([^;]*)", fn_src, re.DOTALL):
+        out += [m for m in re.findall(r"\$\{[^}]*\}", chunk) if re.search(rf"\b{var}\b", m)]
+    return out
+
+
 if toast_body:
     src = toast_body.group(0)
     # 標題與內文都必須走 textContent。比對變數名而非固定字串：toast 的參數日後可能
@@ -268,7 +288,21 @@ if toast_body:
             f"toast() 以 textContent 寫入 {var}（TEXT_SINKS 白名單的前提）",
             re.search(rf"\.textContent = {var}\b", src) is not None,
         )
-        check(f"toast() 不把 {var} 塞進 innerHTML", not re.search(rf"innerHTML\s*[+]?=\s*[^;]*\b{var}\b", src))
+        leaked = html_interpolations(src, var)
+        check(f"toast() 不把 {var} 塞進 innerHTML（插值處 {leaked or '無'}）", not leaked)
+
+# 🔴 收緊之後這條守衛還抓不抓得到？拿兩段假 toast 餵同一支偵測器：一段真的漏、一段
+#    只是字面量裡出現那個字。兩個方向都要對，否則「收緊」等於「關掉」。
+_LEAKY = 'function toast(title) {\n  el.innerHTML = `<div>${title}</div>`;\n}'
+check(
+    f"🔴 而且它真的抓得到（把 ${{title}} 插進 innerHTML 要命中：{html_interpolations(_LEAKY, 'title')}）",
+    html_interpolations(_LEAKY, "title") == ["${title}"],
+)
+_LITERAL = 'function toast(title) {\n  el.innerHTML = `<div data-testid="toast-title"></div>`;\n}'
+check(
+    "🟡 而且不對字面量誤報（data-testid=\"toast-title\" 不是插值）",
+    html_interpolations(_LITERAL, "title") == [],
+)
 
 # chips() 是唯一把 profile 值寫進 HTML 的地方，確認它內部有逸出
 sessions_tpl = open(os.path.join(os.path.dirname(static_dir), "templates", "sessions.html")).read()

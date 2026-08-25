@@ -150,7 +150,7 @@ function toast(title, level = "info", { body = "", duration = 5000, pausable = t
   el.innerHTML =
     `<i class="toast__icon fa-solid ${TOAST_LEVELS[kind]}"></i>` +
     `<div class="toast__body">` +
-      `<div class="toast__title"></div>` +
+      `<div class="toast__title" data-testid="toast-title"></div>` +
       `<div class="toast__desc" data-testid="toast-desc"></div>` +
     `</div>` +
     `<button class="toast__close" type="button" aria-label="關閉" data-testid="toast-close">` +
@@ -159,13 +159,7 @@ function toast(title, level = "info", { body = "", duration = 5000, pausable = t
   // ⚠ 一律 textContent：標題與內文都可能含後端回傳或使用者輸入的字串。
   //   （tests/test_web.py 的 TEXT_SINKS 白名單正是建立在這一點上，改成 innerHTML
   //    會讓那些 XSS 檢查對 toast 全面失效。）
-  const titleEl = el.querySelector(".toast__title");
-  // ⚠ 這一顆 testid **刻意不寫在上面那段 innerHTML 裡**：test_web.py 那條「toast() 不把
-  //   title 塞進 innerHTML」的守衛是用 `\btitle\b` 去掃整段字串，而 `-` 不是 word
-  //   character，`data-testid="toast-title"` 會被判成插值，把一條真正的 XSS 守衛弄成紅的。
-  //   寫在這裡兩件事都成立：守衛照掃它該掃的，測試也抓得到這顆元素。
-  titleEl.dataset.testid = "toast-title";
-  titleEl.textContent = title;
+  el.querySelector(".toast__title").textContent = title;
   const descEl = el.querySelector(".toast__desc");
   descEl.textContent = body;
   descEl.hidden = !body;      // 沒有內文就不要留一行空白撐高
@@ -650,10 +644,15 @@ function createRangePicker(mount, { onChange } = {}) {
       const [y, m, dd] = el.dataset.day.split("-").map(Number);
       const d = new Date(y, m - 1, dd);
       const edge = _rpSameDay(d, state.dFrom) || _rpSameDay(d, state.dTo);
+      const inside = !edge && !!(lo && hi) && _rpDay(d) > _rpDay(lo) && _rpDay(d) < _rpDay(hi);
       el.classList.toggle("is-today", _rpSameDay(d, today));
       el.classList.toggle("is-edge", edge);
-      el.classList.toggle("is-in",
-        !edge && !!(lo && hi) && _rpDay(d) > _rpDay(lo) && _rpDay(d) < _rpDay(hi));
+      el.classList.toggle("is-in", inside);
+      // ⚠ 同一件事寫兩份是刻意的，但兩份的**讀者不同**：class 給 CSS（樣式規則本來就
+      //   掛在 .is-edge / .is-in 上，改成屬性選擇器等於動樣式），屬性給自動化測試。
+      //   測試不該為了問「這一格在不在區間裡」而去讀 class 名，那條路一改樣式就斷。
+      el.dataset.edge = String(edge);
+      el.dataset.in = String(inside);
     }
     const put = (key, v) => {
       const el = panel.querySelector(`[data-edit="${key}"]`);
