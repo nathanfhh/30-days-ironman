@@ -293,14 +293,14 @@ if toast_body:
 
 # 🔴 收緊之後這條守衛還抓不抓得到？拿兩段假 toast 餵同一支偵測器：一段真的漏、一段
 #    只是字面量裡出現那個字。兩個方向都要對，否則「收緊」等於「關掉」。
-_LEAKY = 'function toast(title) {\n  el.innerHTML = `<div>${title}</div>`;\n}'
+_LEAKY = "function toast(title) {\n  el.innerHTML = `<div>${title}</div>`;\n}"
 check(
     f"🔴 而且它真的抓得到（把 ${{title}} 插進 innerHTML 要命中：{html_interpolations(_LEAKY, 'title')}）",
     html_interpolations(_LEAKY, "title") == ["${title}"],
 )
 _LITERAL = 'function toast(title) {\n  el.innerHTML = `<div data-testid="toast-title"></div>`;\n}'
 check(
-    "🟡 而且不對字面量誤報（data-testid=\"toast-title\" 不是插值）",
+    '🟡 而且不對字面量誤報（data-testid="toast-title" 不是插值）',
     html_interpolations(_LITERAL, "title") == [],
 )
 

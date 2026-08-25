@@ -77,3 +77,99 @@ Nathan：不看 debug log；「就算多等幾十 ms 我也不會發覺，而且
 ### 階段 1.5 派工（同一 agent）
 
 要求先用 Playwright 重現（攔 `POST /resize`、對 `term.cols/rows`、記錄送出時間點相對抽屜動畫結束；可暫時把 transition 拉長放大時序），再修，再連跑 3 次。
+
+### 階段 3 完成：Jinja 注入改 API
+
+**只加出口，不動模板。** 這一階段的 diff 一行都沒有落在 `.html` 與 `app.js` 上。舊版此刻
+仍然照舊由 Jinja 注入、照舊運作，新開的兩條 API 只是把同一批事實再開一個 JSON 出口。
+階段 4 的 Vue 版才會改成吃它們。
+
+#### 盤點：50 處注入其實只有 11 種事實
+
+模板裡 `{{ }}` / `{% %}` 一共 50 處（account 28、sessions 13、login 9），但重複的很多
+（`min_password_length` 出現三次、`gitlab_proxy_error` 三次、`credentials[default_cli]` 三次）。
+去重之後是 11 種伺服端事實，其中**四種已經有 API 給得出來**：
+
+| 事實 | 模板裡的樣子 | 來源 | 出口 |
+|---|---|---|---|
+| `user.username` / `user.is_admin` | 招牌的 whoami、兩頁的 `const isAdmin` | `g.user` | **既有** `/api/auth/me` |
+| `gitlab_pat_set` | 帳號頁 chip／placeholder／清除鍵 | `auth.get_user()` | **既有** `/api/auth/me` 的 `gitlab_pat_configured` |
+| `claude_models` | sessions 的 `CLAUDE_MODELS` | `config.CLAUDE_MODELS` | **既有** `/api/catalog` 的 `models[].slug` |
+| 管理員清單／ttyd 實況 | 帳號頁兩張表 | JS 本來就在打 API | **既有** `/api/users`、`/api/users/options`、`/api/ttyd/inspect` |
+| `behind_proxy` | `<html data-behind-proxy>` | `config.BEHIND_PROXY` | 新開 `/api/bootstrap` |
+| `persist_dir()` | `<html data-persist-dir>` | `config.DATA_BIND` | 新開 `/api/bootstrap` |
+| `build_info()` | 頁尾整排版本與建置時間 | `version.summary()` | 新開 `/api/bootstrap` |
+| `art` | 登入頁左下角插畫 | `web.LOGIN_ART` | 新開 `/api/bootstrap` |
+| `credentials` / `default_cli` | 招牌的 `#cred-data` 與 `data-cli` | `credentials_state(uid)` | 新開 `/api/account/bootstrap` |
+| `name_max` / `username_max` / `min_password_length` | 三個表單的長度限制 | `config` | 新開 `/api/account/bootstrap` |
+| `gitlab_enabled` / `gitlab_host` / `gitlab_proxy_error` | 帳號頁整個 GitLab 區塊 | `config` ＋ `auth.gitlab_proxy_error(uid)` | 新開 `/api/account/bootstrap` |
+
+`asset_url()` 那幾條不算注入（是靜態資源網址，階段 4 由 Vite 接手）；`active` 也不算
+（SPA 的 router 自己就知道現在在哪一頁）。
+
+#### 為什麼是兩條，而且分界線是 gate 不是頁面
+
+派工時的預設是「一條 bootstrap」。盤完之後改成兩條，理由是**登入頁也要拿東西**：
+`<html>` 的兩個屬性、頁尾那排版本、左下角那張插畫，未登入者今天就看得到（頁尾在
+base.html，三頁共用）。全部塞進一條需登入的 endpoint，SPA 的登入畫面會少一塊；照
+「哪一頁要用」去切又會切出兩條內容重疊的東西。所以分界線取 gate 本身：
+
+- `GET /api/bootstrap`（**公開**）：`behind_proxy`、`persist_dir`、`build`、`login_art`。
+  公開是**照著登入頁現在的樣子畫的，不是放寬**：這四件今天就印在未登入者拿得到的
+  `/login` 上。要收緊得先收緊登入頁，不是先收緊這一條；兩邊不一致的話，收緊的那一邊
+  只會讓人以為收緊了。
+- `GET /api/account/bootstrap`（**需登入**）：`default_cli`、`credentials`、`limits`、`gitlab`。
+  名字取 account 是因為它回答的都是「這個帳號的處境」；招牌兩頁都有，所以**兩頁都打它**，
+  它不是帳號頁專用。
+
+也考慮過「擴充 `/api/auth/me`」，否決：那條是 SPA 殼進頁判斷「還算不算登入」的熱路徑
+（計畫決策 3），把部署設定與憑證狀態掛上去等於讓一個身分查詢背著整頁的資料；而且它
+在 401 後面，登入頁根本走不到。
+
+#### 其他決定
+
+- **已經有出口的一律不重複。** `user`、`gitlab_pat_configured`、模型清單、ttyd 選項都不
+  夾帶。重複一份的代價不是流量，是兩份會分岔，而分岔的那天沒有人會發現。測試裡有反向
+  的一條：`/api/auth/me` 必須真的給得出 `gitlab_pat_configured`，否則委派出去的東西沒人
+  接，SPA 會少一塊而測試還是綠的。
+- **`limits` 不隨權限改變形狀。** `username_max` 今天只印在帳號頁的管理員區塊裡，這裡卻
+  對所有登入者都給。它是表單長度常數不是誰的資料，而形狀依角色而異會把一個 `undefined`
+  分支推給每一個取用它的地方。該 gate 的是「那個區塊畫不畫」，答案在 `is_admin`。
+  這一階段因此**沒有新的管理員限定資料**，403 也就無從測起。帳號頁要的管理員資料
+  （清單、選項、ttyd 實況）三條既有 endpoint 都已經是 `@admin_only`。
+- **`build.built_at` 提到最外層。** 它是整包的屬性、不屬於任何一個模組（base.html 也是
+  這樣讀的：`modules[0].built_at` 之後單獨畫一行）。留在列裡的話前端遲早會有人把它畫成
+  「claude-pty 這一列的時間」。
+- **`config.DEFAULT_CLI` 補上了。** `app.js` 的註解本來就寫著「data-cli 由伺服端以
+  `config.DEFAULT_CLI` 種下」，但那個常數不存在，`web.py` 自己寫死一份 `"claude"`。
+  現在它真的存在，`credentials.py`、`web.py`、新 endpoint 三處讀同一個。
+- **`web.login_art()` 抽出來**，登入頁與 API 共用同一個決定（各寫一份 `random.choice` 的話，
+  哪天有人給其中一邊加了條件，另一邊不會跟著變）。
+- 秘密照既有做法：token 與 PAT 明文、密文都不出去，`credentials` 只有狀態三態與文案。
+
+#### 測試
+
+新增 `tests/test_bootstrap.py`，**76 條 check**，八節：gate（公開／401）、兩條的形狀與值、
+不重複既有出口（含反向）、權限（形狀不隨角色變、不夾帶別人的東西）、憑證狀態隨 DB 走且
+明文不外流、GitLab 三態、**對照模板**。
+
+最後一節是重點：把 HTML 抓下來、用正則把注入的值挖出來、跟 JSON 對。15 條逐項比
+`data-behind-proxy`、`data-persist-dir`、名稱欄 `maxlength`、新增帳號欄 `maxlength`、
+`MIN_PW`、`data-cli`、`#cred-data`、`isAdmin`、`gitlabEnabled`、`CLAUDE_MODELS`、頁尾模組名、
+插畫來源、GitLab 主機與代理錯誤。**那一節紅了就代表兩邊已經分岔**，而分岔正是這次要防的事。
+挖不到注入點時它記一筆失敗而不是靜靜跳過（`_one()`）。
+
+`run-all.sh` **沒有動**：它的清單是 `for f in tests/test_*.py tests/e2e_*.py` 這個 glob，
+新檔自動被撿走（跑的支數 36 → 37 就是證據）；`NEEDS_DOCKER` / `NEEDS_TTYD` / `NEEDS_LINUX`
+那幾份是「缺什麼就跳過」的 gate，這支一個都不需要，加進去反而會讓它被跳掉。
+
+驗證：`tests/run-all.sh`（不帶參數＝quick）跑 37 支 0 失敗，跳過 14 支、清單與基線逐字相同
+（含 7 支 e2e 在內，模板與 `app.js` 沒動所以本來就不該有變化）。`ruff@0.16.3 check .` 與
+CI 那條 `git ls-files -co --exclude-standard '*.py' | xargs ruff format --check` 都綠。
+
+#### 順手修的一件事（不是這階段的產物）
+
+`tests/test_web.py` 在 `16655d4` 之後就沒有通過 `ruff format --check`（兩行引號風格），
+CI 的格式閘在這個分支上本來是紅的。它落在本階段允許的 diff 範圍內、修法是跑一次
+formatter、對行為零影響，所以一起收掉了。`frontend-vue3` 那邊若也修了同一處，衝突就是
+這兩行。
