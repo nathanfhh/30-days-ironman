@@ -58,7 +58,16 @@ def _put_cli_token(container, user_id: int, delivery: str) -> bool:
         return False
 
 
-_CLAUDE_BASE = {"cli": "claude", "brand": "anthropic"}
+def _claude_base() -> dict:
+    """每份 claude 憑證狀態都帶的兩個識別欄位。
+
+    ⚠ **`cli` 在呼叫時才讀 `config.DEFAULT_CLI`，不在 import 時抄一份。** 這個值同時是
+      `credentials_state()` 的字典鍵、招牌的 `data-cli`、以及 `/api/account/bootstrap`
+      的 `default_cli`，四處必須是同一個字。抄一份在模組層的話，其中一處改了另一處
+      不會跟著變，而測試也驗不出來：斷言會變成拿同一份寫死的值自己比自己。
+    ⚠ 做成函式而不是常數，代價是每次多建一個 dict，買到的是「只有一個地方說得出這個值」。
+    """
+    return {"cli": config.DEFAULT_CLI, "brand": "anthropic"}
 
 
 def claude_credentials_state(user_id: int | None) -> dict:
@@ -84,7 +93,7 @@ def claude_credentials_state(user_id: int | None) -> dict:
     token = auth_mod.cli_token(user_id) if user_id is not None else None
     if token is None:
         return {
-            **_CLAUDE_BASE,
+            **_claude_base(),
             "ok": False,
             "state": "bad",
             "label": "Claude 未設定憑證",
@@ -93,7 +102,7 @@ def claude_credentials_state(user_id: int | None) -> dict:
             "啟動，開場只會看到登入提示。",
         }
     return {
-        **_CLAUDE_BASE,
+        **_claude_base(),
         "ok": True,
         "state": "ok",
         "label": "Claude 憑證已設定",
@@ -104,8 +113,13 @@ def claude_credentials_state(user_id: int | None) -> dict:
 
 
 def credentials_state(user_id: int | None) -> dict:
-    """憑證狀態（招牌徽章用）。形狀維持 {cli: state}，讀取端以 cli 為鍵。"""
-    return {"claude": claude_credentials_state(user_id)}
+    """憑證狀態（招牌徽章用）。形狀維持 {cli: state}，讀取端以 cli 為鍵。
+
+    ⚠ 鍵讀 `config.DEFAULT_CLI`，不寫死 `"claude"`：招牌的 `data-cli` 與
+      `/api/account/bootstrap` 的 `default_cli` 都是那個常數，這裡再寫一份字面量的話，
+      改了常數就會變成「用 A 當鍵、拿 B 去查」，而畫面上只是徽章靜靜地停在預設樣式。
+    """
+    return {config.DEFAULT_CLI: claude_credentials_state(user_id)}
 
 
 def _guard_credentials(user_id: int | None) -> None:

@@ -289,7 +289,7 @@ def _code_only(chunk: str) -> str:
                     while i < n and depth:
                         depth += {"{": 1, "}": -1}.get(chunk[i], 0)
                         i += 1
-                    out.append(f" {chunk[start:i - 1]} ")   # 前後留空白，別把兩個字黏成一個
+                    out.append(f" {chunk[start : i - 1]} ")  # 前後留空白，別把兩個字黏成一個
                 else:
                     i += 1
             i += 1
@@ -342,7 +342,7 @@ if toast_body:
 # 🔴 這條守衛自己也要被守。兩個方向都得驗，只驗一邊的話「收緊」與「關掉」看起來一樣。
 #    真陽性列三種形狀，因為 1b 那次就是只顧了其中一種、把另外兩種放走了。
 _LEAKY = {
-    "插值": 'function toast(title) {\n  el.innerHTML = `<div>${title}</div>`;\n}',
+    "插值": "function toast(title) {\n  el.innerHTML = `<div>${title}</div>`;\n}",
     "串接": 'function toast(title) {\n  el.innerHTML = "<b>" + title + "</b>";\n}',
     "直接指派": "function toast(title) {\n  el.innerHTML = title;\n}",
 }
