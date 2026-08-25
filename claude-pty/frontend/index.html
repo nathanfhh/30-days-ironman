@@ -3,9 +3,8 @@
   ⚠ 這一份對應舊版的 `server/templates/base.html`，逐項對照過：
 
     · `data-behind-proxy` / `data-persist-dir` 舊版是伺服端算好塞進 <html> 的。SPA 沒有
-      伺服端渲染這一步，所以改由 `stores/site` 在進頁時取得（**目前還沒有那支 API，
-      見 src/stores/site.ts 的 TODO(階段 3)**）。屬性仍然由 JS 寫回 <html>，讓抽屜與
-      `behindProxy()` 的讀法一字不變。
+      伺服端渲染這一步，所以改由 `stores/site` 在進頁時向 `/api/bootstrap` 取得，再由 JS
+      寫回 <html>——屬性本身留著，因為抽屜是 runtime 才建的，它讀的就是這兩個屬性。
     · 首屏套色的 inline script **原樣照抄**（連 key 都一樣）：它必須在 CSS 之後、
       body 之前同步執行，那件事跟框架無關，交給 Vue 反而會晚一整個 mount。
     · 字體與圖示一律自帶、不走 CDN（部署環境未必出得去公網）。這兩份仍由 Flask/nginx
