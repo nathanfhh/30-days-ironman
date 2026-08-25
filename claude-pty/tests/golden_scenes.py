@@ -25,6 +25,7 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 import os
+import re
 import socket
 import sys
 import tempfile
@@ -303,7 +304,21 @@ def _settle(page, keep_toasts: bool = False) -> None:
       toast 那一場之外一律清掉。清的時機在 networkidle **之後**：太早清的話它還沒出現。
     """
     page.wait_for_load_state("networkidle")
-    page.evaluate("() => document.fonts && document.fonts.ready")
+    # ⚠ 字型是**按需**抓的：瀏覽器只有在真的要畫到某個字面時才去要那一份 woff2，而「那一刻
+    #   有沒有在快照之前發生」會飄。實際踩到過（2026-08-26）：`account-admin` 第一次錄有
+    #   `fa-brands-400.woff2`、第二次沒有，而 `--verify` 是唯一抓得到的地方（跨行程那次
+    #   剛好兩邊都有）。
+    # ⚠ 所以把需求**講明**：叫每一個宣告過的 font face 都載入，再等 `fonts.ready`。
+    #   代價是每一場都會抓齊全部字型，於是「這一場用到了 brands」這個訊號變成「這一頁宣告了
+    #   brands」——那個損失是可以接受的，因為「畫面上真的有那顆圖示」本來就由截圖與 aria 守著，
+    #   而一個會隨機紅的 golden 最後會被整支關掉。
+    page.evaluate(
+        "async () => { if (!document.fonts) return;"
+        "  await Promise.all([...document.fonts].map((f) => f.load().catch(() => {})));"
+        "  await document.fonts.ready; }"
+    )
+    # 上面那幾發要求也算網路活動，等它們落地再取樣。
+    page.wait_for_load_state("networkidle")
     if not keep_toasts:
         page.evaluate("() => document.querySelectorAll('[data-testid=toast]').forEach((t) => t.remove())")
     page.wait_for_timeout(150)
@@ -582,59 +597,24 @@ def prepare_page(page) -> list:
     return reqs
 
 
-# 靜態資源那一段的標題。`strip_assets()` 靠它把整段切掉，所以只有一份定義。
+# 各段的標題。只有一份定義，比對時是逐字比的，改字要連 golden 一起重錄。
 ASSETS_HEADER = "# 靜態資源（排序後、去掉 query，見 golden_scenes.network_text 的說明）"
 URL_HEADER = "# 場景就緒時的網址（replaceState 寫進去的條件不會產生請求）"
 
 
-# 跨版比對時，某一版**依設計**就是會多打的呼叫。
+# Vite 把內容雜湊寫進檔名（`index-DhIKEuyr.js`），**每次 build 都不一樣**。
 #
-# ⚠ 這是**規格的一部分，不是容忍額度**。階段 3 刻意把模板注入的伺服端狀態改成兩條
-#   bootstrap API，所以 Vue 版一定會多這兩發；legacy 那些值是 Jinja 直接印進 HTML 的。
-# ⚠ 清單要**窄而且吵**：只列這兩條，而且 golden_check 每次都把它印出來。看不見的白名單
-#   會慢慢變成一個沒有人記得為什麼在那裡的東西，然後有人往裡面再加一條。
-# ⚠ 階段 5 把 golden 重錄成 Vue 版之後，這份清單就該整個消失（那時兩邊是同一版）。
-UI_EXTRA_CALLS = {"vue": ["GET /api/bootstrap", "GET /api/account/bootstrap"]}
+# ⚠ 不正規化的話 golden 會在下一次 build 就紅，而紅的原因與介面一點關係都沒有。
+#   `--verify` 也**抓不到**這一類：兩次錄製共用同一份 build，雜湊當然一樣（同
+#   `users.created_at` 那次的形狀，見階段 2 的紀錄）。
+# ⚠ 只套在 `/assets/` 上，見 network_text 裡那段說明。
+# ⚠ 但**不是整段丟掉**：哪幾個 chunk 會載入是真的契約 —— 路由層的 code splitting 讓
+#   `AccountView-*.js` 只在帳號頁載入，哪天有人把它靜態 import 進 AppShell，這裡就會紅。
+_HASHED = re.compile(r"-[A-Za-z0-9_-]{8,}(\.[a-z]+)$")
 
 
-def strip_expected_extra_calls(text: str, ui: str) -> str:
-    """把「這一版依設計就會多打」的那幾發拿掉，其餘逐字比。"""
-    drop = set(UI_EXTRA_CALLS.get(ui, []))
-    return "\n".join(ln for ln in text.splitlines() if ln not in drop).rstrip("\n") + "\n"
-
-
-def strip_navigations(text: str) -> str:
-    """把「文件」那幾發（`GET /`、`GET /login`、`GET /account`）拿掉，只留 API。
-
-    ⚠ **跨版比對時才用。** SPA 的換頁是 router 在前端做的，不會再跟伺服器要一次 HTML；
-      legacy 是 `location.href = "/"`，一定會有那一發。這個差異是兩種架構的定義，
-      不是誰做錯了，留著它只會讓每一場都紅在同一件已知的事上。
-    ⚠ 換頁「到底有沒有到對的地方」沒有因此失守：那是最後那一段「場景就緒時的網址」在守的，
-      它跨版是逐字比的，而且目前全綠。
-    """
-    keep = []
-    for ln in text.splitlines():
-        parts = ln.split(" ", 1)
-        if len(parts) == 2 and parts[0].isupper() and not parts[1].startswith("/api/"):
-            continue
-        keep.append(ln)
-    return "\n".join(keep).rstrip("\n") + "\n"
-
-
-def strip_assets(text: str) -> str:
-    """把靜態資源那一段拿掉，只留文件與 API、以及最終網址。
-
-    ⚠ **跨 UI 比對時才用。** legacy 載的是 `app.js` 與 `app.css`，Vue 版載的是
-      `assets/index-<hash>.js`；兩份清單本來就不可能一樣，而那個差異與「介面像不像」
-      毫無關係。同一版之內它仍然守得住「少載了一個檔案」，所以不是刪掉，是跨版時才略過。
-    """
-    lines = text.splitlines()
-    try:
-        a = lines.index(ASSETS_HEADER)
-        b = lines.index(URL_HEADER)
-    except ValueError:
-        return text
-    return "\n".join(lines[:a] + lines[b:]).rstrip("\n") + "\n"
+def _unhash(path: str) -> str:
+    return _HASHED.sub(r"-<hash>\1", path)
 
 
 def network_text(page, reqs: list, base: str) -> str:
@@ -662,7 +642,11 @@ def network_text(page, reqs: list, base: str) -> str:
         #   檔名帶內容雜湊、每次 build 都不一樣。不歸類的話它會落進「文件與 API」那一段，
         #   而那一段是逐字比的。
         if path.startswith(("/static/", "/assets/")):
-            assets.append(f"{method} {path}")
+            # ⚠ 只有 `/assets/` 要正規化。`/static/` 底下是人取的檔名，
+            #   `01-circuit-board-transparent.webp` 被當成雜湊抹掉的話，「登入頁用的是哪一張
+            #   插畫」就不見了 —— 而那正是 pin_all() 特地釘死的東西（2026-08-26 第一次重錄
+            #   時實際踩到）。
+            assets.append(f"{method} {_unhash(path) if path.startswith('/assets/') else path}")
         else:
             docs.append(f"{method} {rest}")
     here = page.evaluate("() => location.pathname + location.search")
@@ -798,36 +782,20 @@ def dom_text(page) -> str:
 # ⚠ 跳過時要**明說**，不可以靜靜地少比三十六條。看不見的跳過就是假綠燈。
 META_NAME = "META"
 
-# 現在在跑的是哪一版前端。
-#
-# ⚠ 這是一個**常數**，不是設定值。legacy 於 2026-08-26 拆除之後只剩一份前端，
-#   `config.UI` 那個切換器也一起沒了；把這裡寫成「讀某個旗標」只會讓人以為還切得回去。
-# ⚠ 但 golden 目前仍是**從 legacy 錄的那一份**（META 的 `ui=legacy`），所以
-#   `golden_check` 還在跨版比對模式：略過靜態資源與文件請求、扣掉 Vue 依設計多打的那幾發。
-#   階段 5 的第二部分把 golden 從 Vue 重錄之後，`golden_ui() == CURRENT_UI`，那一整套
-#   跨版的機制（`UI_EXTRA_CALLS` 與三支 strip 函式）就該一起刪掉。
-CURRENT_UI = "vue"
-
 
 def meta_text(browser) -> str:
     import platform
 
+    # ⚠ 這裡曾經有一行 `ui=`（legacy／vue），兩版並存期間 golden_check 靠它知道自己在跨版
+    #   比對。legacy 於 2026-08-26 拆除、golden 也重錄成 Vue 版之後，那一行永遠只有一個值，
+    #   留著只會讓人以為還有第二版可以比（同 config.py 拿掉 CLAUDE_PTY_UI 的理由）。
     return (
-        f"ui={CURRENT_UI}\n"
         f"platform={platform.system()} {platform.machine()}\n"
         f"chromium={browser.version}\n"
         f"device_scale_factor=1\n"
         f"color_scheme=dark\n"
         f"viewports={','.join(VIEWPORTS)}\n"
     )
-
-
-def golden_ui() -> str:
-    """golden 是錄哪一版的（META 的 ui= 那一行）。沒有 META 就當 legacy。"""
-    try:
-        return dict(_kv(open(meta_path(), encoding="utf-8").read())).get("ui", "legacy")
-    except OSError:
-        return "legacy"
 
 
 def meta_path() -> str:
@@ -842,10 +810,7 @@ def screenshot_comparable(browser) -> tuple[bool, str]:
         return False, "golden 裡沒有 META（用舊版錄的，重錄一次就有）"
     now = meta_text(browser)
     wl, nl = dict(_kv(want)), dict(_kv(now))
-    # ⚠ `ui` **不列入比較**。golden 錄的永遠是 legacy，而拿 Vue 版去比它正是這套東西的用途；
-    #   把 ui 也當成環境指紋的話，vue 模式下每一張截圖都會被判成「平台不同」而跳過，
-    #   等於把最該比的那一次比對關掉。ui 那一行是**說明錄的是哪一版**，不是 gate。
-    keys = [k for k in set(wl) | set(nl) if k != "ui"]
+    keys = set(wl) | set(nl)
     diff = [f"{k}：golden={wl.get(k)!r} 現在={nl.get(k)!r}" for k in sorted(keys) if wl.get(k) != nl.get(k)]
     return (False, "；".join(diff)) if diff else (True, "")
 

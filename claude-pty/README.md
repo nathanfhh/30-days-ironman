@@ -16,6 +16,12 @@
 nginx → ttyd → `docker attach`，**不經過 Flask**。授權掛在 nginx 把連線交給 ttyd
 之前那一刻（`auth_request`），ttyd 端還有第二層（`--auth-url`，見下）。
 
+畫面是一支 Vue 3 SPA（`frontend/`，Vite build 到 `server/static/dist/`），三條頁面路由
+（`/`、`/login`、`/account`）都吐同一份殼，資料一律走 `/api/*`。**產物不進版控**，所以
+第一次跑之前要 `cd frontend && npm ci && npm run build`（`tests/run-all.sh` 會自己補）。
+改寫前的那一版（Jinja 模板 + 手寫 `app.js`）於 2026-08-26 退場，見
+[ADR 0020](docs/adr/0020-frontend-vue3.md)。
+
 設計決策的完整記錄在 [`docs/adr/`](docs/adr/)。
 
 ## 部署
@@ -381,7 +387,33 @@ PTY 是字元流，圖片拖不進終端。補法：終端抽屜的迴紋針鈕�
 ```bash
 tests/run-all.sh          # 快速組（不需要 docker）
 tests/run-all.sh --all    # 全部（需要 docker；ttyd 在 PATH 上則含真終端測試）
+tests/run-all.sh --e2e    # 只跑瀏覽器那幾支（八支 e2e ＋ golden_check）
 ```
+
+前端那六關（`npm ci` / oxlint / prettier / vue-tsc / vitest / vite build）也在
+`run-all.sh` 裡，最後一關 build 出來的 `dist/` 正是所有瀏覽器測試要吃的東西。
+沒有 node 的機器會整段跳過**並講出來**，不會靜靜略過。
+
+### golden master：舊畫面就是規格
+
+`tests/golden/` 是十八個場景的四份快照（兩個視口的 aria 樹、DOM 合約屬性、網路呼叫、
+桌機全頁截圖），`golden_check.py` 拿當下的畫面去對它。整套的理由與限制在
+[ADR 0020](docs/adr/0020-frontend-vue3.md)。
+
+```bash
+uv run … python tests/golden_check.py            # 比（run-all.sh 會跑）
+uv run … python tests/golden_record.py --verify  # 連錄兩次，驗不穩定源都釘死了
+uv run … python tests/golden_record.py           # 重錄＝改規格，見下
+```
+
+⚠ **重錄等於改規格。** 看到 `golden_check` 紅了就順手重錄，等於把「我改壞了」寫成
+「這就是新的對的樣子」，那條防線當場消失。先看差異圖（`golden_check` 會印路徑），
+確認那是你要的改動，再重錄，並把 diff 一起送審。
+
+⚠ **截圖只能在錄它的那台機器上比。** golden 錄在 macOS，ubuntu runner 算繪出來的字是
+另一組像素；`tests/golden/META` 記著平台與 chromium 版本，對不上時**只跳過截圖**、
+aria／DOM／網路照比，而且會明講跳了什麼。所以 **CI 全綠不等於四關全過**：動到版面之後
+要在本機跑一次 `tests/run-all.sh --e2e`。
 
 GitLab 代理有三支：`test_gitlab_proxy_conf.py`（離線，驗設定產生與「token 不進 session
 容器」）、`test_user_proxy.py`（需要 docker，真的建容器、真的熱重載、真的用
@@ -415,6 +447,10 @@ uv run --with coverage python -m coverage report --sort=cover
 只跑不需要 docker 的 28 支時 `sessions.py` 是 65%，差的 20 個百分點全在 `create` 與 attach 那條真的碰容器的路上。
 
 這個數字會隨檔案增減變動，不當 gate；它回答的是「哪些路徑從來沒被走過」，不是「測得夠不夠」。
+
+前端是另一套：`cd frontend && npm run test:coverage`（vitest），**行覆蓋率門檻 70%，
+這一個是 gate**（在 `run-all.sh` 的前端六關裡，不到就紅）。兩邊的數字不要合著看：
+後端那個是診斷，前端那個是門檻。
 
 Telemetry 也有兩支，因為 **OTLP 是 fail-open：接錯或漏接完全沒有錯誤訊息**。
 `test_telemetry.py` 驗降級與「座標不准說謊」；`test_jaeger_wiring.py` 驗接線本身——
