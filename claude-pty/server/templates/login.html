@@ -6,7 +6,7 @@
   <aside class="gate__aside">
     <div class="gate__brand">
       <p class="gate__kicker">控制平台</p>
-      <h1 class="gate__mark">claude<em>-pty</em></h1>
+      <h1 class="gate__mark" data-testid="brand-mark">claude<em>-pty</em></h1>
     </div>
     {% if art %}
     <!-- 插畫是氣氛，不是資訊：aria-hidden 讓螢幕閱讀器直接跳過，別唸一段沒有意義的描述 -->
@@ -20,15 +20,16 @@
       <!-- 標題就該長得像標題：顯示字體 + 一道強調色短線，而不是跟欄位標籤同一個字級 -->
       <h2 class="gate__heading">身分驗證</h2>
 
-      <div class="notice" data-tone="error" id="login-error" hidden></div>
+      <div class="notice" data-tone="error" id="login-error" data-testid="login-error" hidden></div>
 
       <div class="field">
         <label class="label label--field" for="username">使用者名稱</label>
-        <input class="input" id="username" name="username" autocomplete="username" required autofocus>
+        <input class="input" id="username" name="username" data-testid="login-username"
+               autocomplete="username" required autofocus>
       </div>
       <div class="field">
         <label class="label label--field" for="password">密碼</label>
-        <input class="input" id="password" name="password" type="password"
+        <input class="input" id="password" name="password" type="password" data-testid="login-password"
                autocomplete="current-password" required>
       </div>
 

@@ -143,21 +143,29 @@ function toast(title, level = "info", { body = "", duration = 5000, pausable = t
 
   const el = document.createElement("div");
   el.className = "toast";
+  // 讓自動化測試（tests/e2e_*.py）抓得到，不必靠 class 名稱去猜結構
+  el.dataset.testid = "toast";
   el.dataset.level = kind;
   if (!pausable) el.dataset.pausable = "0";
   el.innerHTML =
     `<i class="toast__icon fa-solid ${TOAST_LEVELS[kind]}"></i>` +
     `<div class="toast__body">` +
       `<div class="toast__title"></div>` +
-      `<div class="toast__desc"></div>` +
+      `<div class="toast__desc" data-testid="toast-desc"></div>` +
     `</div>` +
-    `<button class="toast__close" type="button" aria-label="關閉">` +
+    `<button class="toast__close" type="button" aria-label="關閉" data-testid="toast-close">` +
       `<i class="fa-solid fa-xmark"></i></button>` +
-    `<span class="toast__bar"></span>`;
+    `<span class="toast__bar" data-testid="toast-bar"></span>`;
   // ⚠ 一律 textContent：標題與內文都可能含後端回傳或使用者輸入的字串。
   //   （tests/test_web.py 的 TEXT_SINKS 白名單正是建立在這一點上，改成 innerHTML
   //    會讓那些 XSS 檢查對 toast 全面失效。）
-  el.querySelector(".toast__title").textContent = title;
+  const titleEl = el.querySelector(".toast__title");
+  // ⚠ 這一顆 testid **刻意不寫在上面那段 innerHTML 裡**：test_web.py 那條「toast() 不把
+  //   title 塞進 innerHTML」的守衛是用 `\btitle\b` 去掃整段字串，而 `-` 不是 word
+  //   character，`data-testid="toast-title"` 會被判成插值，把一條真正的 XSS 守衛弄成紅的。
+  //   寫在這裡兩件事都成立：守衛照掃它該掃的，測試也抓得到這顆元素。
+  titleEl.dataset.testid = "toast-title";
+  titleEl.textContent = title;
   const descEl = el.querySelector(".toast__desc");
   descEl.textContent = body;
   descEl.hidden = !body;      // 沒有內文就不要留一行空白撐高
@@ -311,7 +319,9 @@ function createPicker(mount, options, initial, { search = false } = {}) {
   //   markup 有、grep 找得到，執行期卻不存在，靜態掃描對這種東西天生盲目）。
   mount.className = "picker";
   mount.append(btn, menu);
-  // 讓自動化測試（tests/e2e_*.py）點得到，不必靠 class 名稱去猜結構
+  // 讓自動化測試（tests/e2e_*.py）點得到，不必靠 class 名稱去猜結構。
+  // ⚠ 掛載點自己也要一顆：class 被上面那行吃掉了，測試量它的尺寸時沒有別的抓手。
+  mount.dataset.testid = mount.id;
   btn.dataset.testid = `${mount.id}-button`;
   menu.dataset.testid = `${mount.id}-menu`;
 
@@ -584,8 +594,10 @@ function createRangePicker(mount, { onChange } = {}) {
     const cells = _rpCells(view).map((d) => {
       const other = d.getMonth() !== view.getMonth() ? " is-other" : "";
       const gone = _rpFuture(d) ? " is-disabled" : "";
+      // testid 分兩種：鄰月那些格子不是這個月的日子，測試點選時要排除掉
       return `<button type="button" class="rangepick__day${other}${gone}"
                       data-day="${_rpYmd(d)}"${gone ? " disabled" : ""}
+                      data-testid="range-day${other ? "-other" : ""}"
                       tabindex="-1">${d.getDate()}</button>`;
     }).join("");
     // 上一月/下一月只放在對應的那一側：兩個月曆是連動的（右邊永遠是左邊 +1），
@@ -606,7 +618,7 @@ function createRangePicker(mount, { onChange } = {}) {
            <i class="fa-solid fa-angles-right"></i></button>`
       : "";
     return `
-      <div class="rangepick__cal">
+      <div class="rangepick__cal" data-testid="range-cal">
         <div class="rangepick__calhead">
           <span class="rangepick__navs">${nav}</span>
           <span class="rangepick__month">${view.getFullYear()} 年 ${view.getMonth() + 1} 月</span>
@@ -874,9 +886,12 @@ function createSwitch(mount, { off, on, initial, offLabel, onLabel, offIcon, onI
                                 hint, name }) {
   const state = { value: initial ?? off };
   mount.className = "switch";
+  mount.dataset.testid = mount.id;
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "switch__control";
+  // 同 createPicker：測試靠 testid 定位，不靠 class 名稱
+  btn.dataset.testid = `${mount.id}-control`;
   btn.setAttribute("role", "switch");
   // 沒有這個名字，螢幕閱讀器只會唸出「switch，已勾選」——聽的人無從得知這是網路能力、
   // 流量錄製還是 telemetry。旁邊那行狀態文字對它來說只是不相干的兄弟節點。
@@ -889,6 +904,7 @@ function createSwitch(mount, { off, on, initial, offLabel, onLabel, offIcon, onI
   const icon = btn.querySelector(".switch__icon");
   const text = document.createElement("span");
   text.className = "switch__label";
+  text.dataset.testid = `${mount.id}-label`;
   text.innerHTML = '<span class="switch__text"></span><span class="switch__hint"></span>';
   const textMain = text.querySelector(".switch__text");
   const textHint = text.querySelector(".switch__hint");
@@ -1463,10 +1479,12 @@ function dialog({ title, body, confirmText = "確定", danger = false, input = n
   return new Promise((resolve) => {
     const wrap = document.createElement("div");
     wrap.className = "modal";
+    wrap.dataset.testid = "modal";
     wrap.innerHTML = `
-      <div class="modal__box${wide ? " modal__box--screen" : ""}" role="dialog" aria-modal="true">
-        <h2 class="modal__title">${esc(title)}</h2>
-        <div class="modal__body">${esc(body || "")}</div>
+      <div class="modal__box${wide ? " modal__box--screen" : ""}" data-testid="modal-box"
+           role="dialog" aria-modal="true">
+        <h2 class="modal__title" data-testid="modal-title">${esc(title)}</h2>
+        <div class="modal__body" data-testid="modal-body">${esc(body || "")}</div>
         ${pre !== null ? `<pre class="modal__pre${preNoWrap ? " modal__pre--nowrap" : ""}"
              id="modal-pre"></pre>` : ""}
         ${input ? `<div class="field"><input class="input" id="modal-input"
@@ -1930,18 +1948,18 @@ function settingsModal() {
   wrap.className = "modal";
   wrap.dataset.testid = "settings-modal";
   wrap.innerHTML = `
-    <div class="modal__box modal__box--wide" role="dialog" aria-modal="true"
+    <div class="modal__box modal__box--wide" data-testid="modal-box" role="dialog" aria-modal="true"
          aria-labelledby="settings-modal-title">
-      <h2 class="modal__title" id="settings-modal-title">
+      <h2 class="modal__title" data-testid="modal-title" id="settings-modal-title">
         <i class="fa-solid fa-sliders"></i> 設定</h2>
       <div class="settings">
-        <section class="settings__row">
+        <section class="settings__row" data-testid="settings-row">
           <div class="settings__head">
-            <span class="settings__label">終端程式</span>
-            <span class="settings__note">新開的 session 立刻套用；已經開著的那一場，要把終端分頁全部關掉、下次再開才會換</span>
+            <span class="settings__label" data-testid="settings-label">終端程式</span>
+            <span class="settings__note" data-testid="settings-note">新開的 session 立刻套用；已經開著的那一場，要把終端分頁全部關掉、下次再開才會換</span>
           </div>
           <div id="pick-ttyd"></div>
-          <p class="settings__note" style="margin:var(--space-2) 0 0">
+          <p class="settings__note" data-testid="settings-note" style="margin:var(--space-2) 0 0">
             兩顆有一個實質差異：網頁標題 Rust 版由伺服器端決定，C 版是在瀏覽器端蓋掉的。
             在意這一點就選 Rust 版。
           </p>

@@ -2,7 +2,7 @@
 {% block title %}Sessions · claude-pty{% endblock %}
 
 {% block body %}
-<div class="shell">
+<div class="shell" data-testid="shell">
   {% include "_masthead.html" %}
 
 
@@ -110,25 +110,25 @@
       {# 排序：先是「這場是誰開的、跑什麼、怎麼跑」，時間範圍**擺最後**。
          這樣選了「自訂範圍」時，起迄兩格就緊接在它後面流下去——讀起來是連續的一句話，
          而不是跑到下面另一塊區域去。三格都是一般的 .field，尺寸與其他格一致。 #}
-      <div class="filters__grid">
+      <div class="filters__grid" data-testid="filters-grid">
         <div class="field">
-          <span class="label tip tip--wide" data-tip="限制＝只放行白名單（entrypoint 會套 iptables）；開放＝容器可以連任何地方。">網路能力</span>
+          <span class="label tip tip--wide" data-testid="filter-field-label" data-tip="限制＝只放行白名單（entrypoint 會套 iptables）；開放＝容器可以連任何地方。">網路能力</span>
           <div id="pick-fnet"></div>
         </div>
         <div class="field">
-          <span class="label tip tip--wide" data-tip="這場有沒有把出網流量錄下來（經 mitm 落到 host）。">流量錄製</span>
+          <span class="label tip tip--wide" data-testid="filter-field-label" data-tip="這場有沒有把出網流量錄下來（經 mitm 落到 host）。">流量錄製</span>
           <div id="pick-fcap"></div>
         </div>
         <div class="field">
-          <span class="label tip tip--wide" data-tip="這場有沒有要求把 OpenTelemetry 送到 Jaeger。容器起來後會先探 Jaeger 通不通，探不通就不送——這個條件篩的是要求，不是結果。">Telemetry</span>
+          <span class="label tip tip--wide" data-testid="filter-field-label" data-tip="這場有沒有要求把 OpenTelemetry 送到 Jaeger。容器起來後會先探 Jaeger 通不通，探不通就不送——這個條件篩的是要求，不是結果。">Telemetry</span>
           <div id="pick-ftel"></div>
         </div>
         <div class="field">
-          <span class="label tip tip--wide" data-tip="從現在往回算。「執行中」比的是建立時間，「已結束」比的是結束時間——在已結束的清單裡，「一週內」問的是「一週內結束的」。選「自訂範圍」後面會接出起迄兩格。">時間範圍</span>
+          <span class="label tip tip--wide" data-testid="filter-field-label" data-tip="從現在往回算。「執行中」比的是建立時間，「已結束」比的是結束時間——在已結束的清單裡，「一週內」問的是「一週內結束的」。選「自訂範圍」後面會接出起迄兩格。">時間範圍</span>
           <div id="pick-since"></div>
         </div>
         <div class="field range-field" id="field-range" hidden data-testid="filter-range">
-          <span class="label tip tip--wide"
+          <span class="label tip tip--wide" data-testid="filter-field-label"
                 data-tip="指定一段明確的區間。展開後左右兩個月並排：點一下選起點、再點一下選終點，中間滑過會預覽整段；也可以直接改上方的日期與時間。任一端留空＝那一端不限。">起迄</span>
           <div id="pick-range"></div>
         </div>
@@ -143,7 +143,7 @@
     </div>
 
     <div class="manifest" id="manifest" data-testid="manifest">
-      <div class="empty">載入中…</div>
+      <div class="empty" data-testid="manifest-empty">載入中…</div>
     </div>
     <div class="pager" id="pager" hidden>
       <button class="btn" id="prev-btn"><i class="fa-solid fa-chevron-left"></i> 上一頁</button>
@@ -469,11 +469,11 @@
     //   而 `text-overflow: ellipsis` 對它無效——原本 CSS 寫了 ellipsis 卻只看到硬切，
     //   就是這個原因（長模型名會被切掉尾巴）。
     const asChips = (list) => list.map(([t, tone, icon]) =>
-      `<span class="chip"${tone ? ` data-tone="${esc(tone)}"` : ""}>${icon || ""}` +
-      `<span class="chip__text">${esc(t)}</span></span>`
+      `<span class="chip" data-testid="chip"${tone ? ` data-tone="${esc(tone)}"` : ""}>${icon || ""}` +
+      `<span class="chip__text" data-testid="chip-text">${esc(t)}</span></span>`
     ).join("");
     const glyphs = marks.map(([title, icon, tone]) =>
-      `<span class="chip chip--mark tip" data-tone="${esc(tone)}" data-tip="${esc(title)}"
+      `<span class="chip chip--mark tip" data-testid="chip-mark" data-tone="${esc(tone)}" data-tip="${esc(title)}"
              aria-label="${esc(title)}"><i class="${esc(icon)}"></i></span>`
     ).join("");
     // 擁有者 / CLI → 網路 · 錄製 · telemetry → 模型 / 思考深度
@@ -514,12 +514,12 @@
   // 表頭。與資料列共用 .manifest__row 的格線定義，欄位才會對齊——另外寫一份
   // grid-template-columns 遲早會與資料列漂移（欄位一改就得記得改兩個地方）。
   const HEAD_LIVE = `
-    <div class="manifest__row manifest__row--head" aria-hidden="true">
+    <div class="manifest__row manifest__row--head" data-testid="manifest-head" aria-hidden="true">
       <div>#</div><div>名稱 / Container</div><div>狀態</div><div>設定</div>
       <div>耗時</div><div>時間</div><div>操作</div>
     </div>`;
   const HEAD_PAST = `
-    <div class="manifest__row manifest__row--past manifest__row--head" aria-hidden="true">
+    <div class="manifest__row manifest__row--past manifest__row--head" data-testid="manifest-head" aria-hidden="true">
       <div>#</div><div>名稱 / Container</div><div>結束原因</div><div>設定</div>
       <div>耗時</div><div>時間</div>
     </div>`;
@@ -571,7 +571,7 @@
   // 歷史紀錄是唯讀的：容器早就不在了，沒有終端可開、也沒有東西好改名
   function renderHistory(rows, offset) {
     if (!rows.length) {
-      manifest.innerHTML = `<div class="empty">還沒有結束的 Session。</div>`;
+      manifest.innerHTML = `<div class="empty" data-testid="manifest-empty">還沒有結束的 Session。</div>`;
       return;
     }
     manifest.innerHTML = HEAD_PAST + rows.map((s, idx) => {
@@ -581,22 +581,24 @@
       const reason = END_REASON[s.ended_reason] || s.ended_reason || "";
       const lived = span(s.created_at, s.ended_at) || "—";
       return `
-      <article class="manifest__row manifest__row--past" style="animation-delay:${idx * 40}ms">
+      <article class="manifest__row manifest__row--past" data-testid="session-row"
+               style="animation-delay:${idx * 40}ms">
         <div class="manifest__index">
-          <span class="lamp" data-state="exited"></span>
+          <span class="lamp" data-testid="session-lamp" data-state="exited"></span>
           <span>${String(i + 1).padStart(2, "0")}</span>
         </div>
         <div>
           <div class="manifest__name">
-            <span class="${titleClass}"><span class="manifest__id-text">${title}</span></span>
+            <span class="${titleClass}" data-testid="session-title"
+              ><span class="manifest__id-text" data-testid="session-title-text">${title}</span></span>
           </div>
           <div class="manifest__meta tip" data-tip="${esc(s.container || "")}">
             <span class="manifest__meta-text">${esc(s.container || "")}</span></div>
         </div>
-        <div class="manifest__status" data-state="ended">
+        <div class="manifest__status" data-testid="session-status" data-state="ended">
           <i class="fa-solid fa-clock-rotate-left"></i>${esc(reason)}
         </div>
-        <div class="chips manifest__chips-cell">${chips(s, true)}</div>
+        <div class="chips manifest__chips-cell" data-testid="chips-cell">${chips(s, true)}</div>
         <div class="manifest__metrics">
           <span class="metric__label">啟動</span>${bootCell(s)}
           <span class="metric__label">時長</span><span class="metric">${esc(lived)}</span>
@@ -614,7 +616,7 @@
 
   function render(sessions, offset) {
     if (!sessions.length) {
-      manifest.innerHTML = `<div class="empty">目前沒有 Session。用上面的表單開一個。</div>`;
+      manifest.innerHTML = `<div class="empty" data-testid="manifest-empty">目前沒有 Session。用上面的表單開一個。</div>`;
       return;
     }
     const nowIso = new Date().toISOString();
@@ -647,14 +649,16 @@
       // 時間點，不會出現「第一列 3 分 01 秒、最後一列 3 分 02 秒」這種抖動
       const running = span(s.created_at, nowIso) || "—";
       return `
-      <article class="manifest__row" style="animation-delay:${idx * 40}ms">
+      <article class="manifest__row" data-testid="session-row" style="animation-delay:${idx * 40}ms">
         <div class="manifest__index">
-          <span class="lamp" data-state="${esc(lamp)}" title="${esc(lampTitle)}"></span>
+          <span class="lamp" data-testid="session-lamp"
+                data-state="${esc(lamp)}" title="${esc(lampTitle)}"></span>
           <span>${String(i + 1).padStart(2, "0")}</span>
         </div>
         <div>
           <div class="manifest__name">
-            <span class="${titleClass}"><span class="manifest__id-text">${title}</span></span>
+            <span class="${titleClass}" data-testid="session-title"
+              ><span class="manifest__id-text" data-testid="session-title-text">${title}</span></span>
             <button class="icon-btn tip" data-act="rename" data-id="${esc(s.id)}"
                     data-name="${esc(s.display_name || "")}"
                     data-tip="重新命名" aria-label="重新命名">
@@ -663,13 +667,13 @@
           <div class="manifest__meta tip" data-tip="${esc(s.container || "")}">
             <span class="manifest__meta-text">${esc(s.container || "")}</span></div>
         </div>
-        <div class="manifest__status" data-state="${esc(state[0])}">
+        <div class="manifest__status" data-testid="session-status" data-state="${esc(state[0])}">
           <span class="manifest__state"><i class="${esc(state[2])}"></i>${esc(state[1])}</span>
           <span class="manifest__checked tip tip--right" data-stale="${esc(checked.stale)}"
                 data-testid="checked-${esc(s.id)}"
                 data-tip="${esc(checked.tip)}">${esc(checked.text)}</span>
         </div>
-        <div class="chips manifest__chips-cell">${chips(s)}</div>
+        <div class="chips manifest__chips-cell" data-testid="chips-cell">${chips(s)}</div>
         <div class="manifest__metrics">
           <span class="metric__label">啟動</span>${bootCell(s)}
           <span class="metric__label">已跑</span><span class="metric">${esc(running)}</span>

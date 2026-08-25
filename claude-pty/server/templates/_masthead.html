@@ -1,4 +1,4 @@
-<header class="masthead">
+<header class="masthead" data-testid="masthead">
   <div class="masthead__brand">
     <span class="masthead__title">claude<em>-pty</em></span>
     <span class="masthead__kicker">控制平台</span>
@@ -37,7 +37,7 @@
        只有帳號頁**。讓抱怨的東西自己就是去處，比要人自己找一次少一步。
        已設定時同樣連過去——那裡也是換 token 的地方，不必為兩種狀態做兩種行為。
        role="status" 保留（輪詢改寫時要念出來）；tabindex 拿掉，連結本身就進得了焦點序。 #}
-    <a class="cred tip tip--wide tip--left" id="cred-badge" role="status" href="/account"
+    <a class="cred tip tip--wide tip--left" id="cred-badge" data-testid="cred-badge" role="status" href="/account"
        data-cli="{{ default_cli }}"
        data-state="{{ credentials[default_cli].state }}"
        data-tip="{{ credentials[default_cli].detail }}">
