@@ -440,14 +440,17 @@ def _check_model_effort(raw: dict) -> None:
 def bootstrap():
     """**公開**：畫面外殼在知道「你是誰」之前就要畫對的東西。
 
-    對應 base.html 與 login.html 現在注入的四件事：
+    這四件事**在知道你是誰之前**就要畫對，所以這條端點是公開的。
 
-    | 回傳欄位 | 模板裡的樣子 |
+    | 回傳欄位 | 畫面上的樣子 |
     |---|---|
-    | `behind_proxy` | `<html data-behind-proxy>`（終端要用哪種網址） |
-    | `persist_dir` | `<html data-persist-dir>`（抽屜標題列講「哪個目錄寫了會留著」） |
-    | `build` | 頁尾那一排模組版本與 commit（`build_info()`） |
+    | `behind_proxy` | 開終端要用抽屜還是新分頁（跨 origin 的 direct_url 會被 CSP 擋） |
+    | `persist_dir` | 抽屜標題列講「哪個目錄寫了會留著」 |
+    | `build` | 頁尾那一排模組版本與 commit |
     | `login_art` | 登入頁左下角那張插畫的網址 |
+
+    ⚠ 這張表原本寫的是「**模板裡的樣子**」（`<html data-behind-proxy>` 之類）。模板在
+      2026-08-26 隨 legacy 一起刪了，欄位沒變、消費者換成 SPA，所以只改了描述的角度。
 
     ⚠ `build.built_at` **提到最外層**，不留在第一列裡。它是**整包**的屬性、不屬於任何
       一個模組（base.html 也是這樣讀的：`modules[0].built_at` 之後單獨畫一行）。留在
@@ -485,11 +488,11 @@ def account_bootstrap():
     他的 GitLab 代理活著沒、他打字時受哪些長度限制。招牌在 sessions 與 account 兩頁都
     有，所以兩頁都要打這一條，它不是「帳號頁專用」。
 
-    | 回傳欄位 | 模板裡的樣子 |
+    | 回傳欄位 | 畫面上的樣子 |
     |---|---|
-    | `user` | `_masthead.html` 的名字與 admin 徽章、account 的管理員區塊（同 `/api/auth/me`） |
-    | `default_cli` | `_masthead.html` 的 `data-cli` |
-    | `credentials` | `_masthead.html` 的 `#cred-data`（同 `/api/sessions` 搭順風車那份） |
+    | `user` | 招牌上的名字與 admin 徽章、account 的管理員區塊（同 `/api/auth/me`） |
+    | `default_cli` | 招牌徽章看的是哪一種 CLI 的憑證狀態 |
+    | `credentials` | 招牌上的憑證徽章（同 `/api/sessions` 搭順風車那份） |
     | `limits.name_max` | sessions 的名稱欄 `maxlength` 與重新命名對話框 |
     | `limits.username_max` | account 新增帳號欄的 `maxlength` 與 `title` |
     | `limits.min_password_length` | account 改密碼欄的標籤與 `MIN_PW` |

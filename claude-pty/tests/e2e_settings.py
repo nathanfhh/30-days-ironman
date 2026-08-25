@@ -27,7 +27,6 @@ markup 裡有、`grep` 找得到、**執行期卻不存在**，那條規則從�
 
 import logging
 import os
-import re
 import socket
 import sys
 import tempfile
@@ -167,29 +166,15 @@ try:
         saved = auth.get_user(1)["ttyd_bin"]
         check(f"選的那一顆真的存進 DB（{saved}）", saved in config.TTYD_BINS and saved != config.TTYD_BIN_DEFAULT)
 
-        print("== 🔴 picker 掛載點不准帶 class（原始碼層級，因為執行期看不出來）==")
-        # ⚠ 這條守的是那個「靜態掃描抓不到」的 bug 本體：`createPicker` 開頭是
-        #   `mount.className = "picker"`，會**把掛載點原本的 class 整個吃掉**。所以在掛載點
-        #   上寫 class 是無效的——而且不會報錯、不會有任何跡象，`grep` 還找得到它。
-        #   `.settings__control { width: 100% }` 就這樣睡了很久。
-        # ⚠ 為什麼驗原始碼而不是驗畫面：畫面上分不出來。掛載點沒有多餘 class 時，
-        #   `className =` 與 `classList.add` 產生的結果完全相同，執行期的斷言恆真。
-        _src = ""
-        for _f in ("server/static/js/app.js", "server/templates/sessions.html", "server/templates/account.html"):
-            _src += open(
-                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), _f), encoding="utf-8"
-            ).read()
-        _bad = re.findall(r'<[^>]*id="pick-[a-z-]+"[^>]*\bclass=[^>]*>', _src)
-        check(f"沒有任何 picker 掛載點帶 class（找到 {len(_bad)} 個：{_bad}）", not _bad)
-        # 反向確認這條抓得到：拿一段「掛載點帶 class」的假 markup 餵同一條 regex。
-        check(
-            "🔴 而且它真的抓得到（同一條 regex 對假 markup 要命中）",
-            bool(
-                re.findall(
-                    r'<[^>]*id="pick-[a-z-]+"[^>]*\bclass=[^>]*>', '<div id="pick-x" class="settings__control"></div>'
-                )
-            ),
-        )
+        # ⚠ 這裡曾經有一條「picker 掛載點不准帶 class」的原始碼層斷言。它守的是 legacy
+        #   `createPicker` 的一個具體 bug：那個函式開頭是 `mount.className = "picker"`，
+        #   會**把掛載點原本的 class 整個吃掉**，於是寫在掛載點上的樣式規則從來沒有生效過，
+        #   而且不會報錯、grep 還找得到它（`.settings__control { width: 100% }` 就這樣睡了很久）。
+        #
+        #   2026-08-26 拆掉 legacy 之後**那個機制不存在了**：picker 是一個 Vue 元件，沒有
+        #   「掛載點」這個東西可以被吃掉。查證過再刪的，不是看到紅燈就拿掉：
+        #   `grep -rn 'className\s*=' frontend/src/`（排除 __tests__）**一個結果都沒有**。
+        #   性質消失，斷言才跟著消失。
 
         print("== Esc 關得掉（焦點不在對話框裡也要收到）==")
         page.keyboard.press("Escape")

@@ -88,11 +88,14 @@ check(
     _up is not None and "client_max_body_size 12m;" in _up.group(1),
 )
 
-print("== 前端切換：頁面路由不寫死在主檔，assets 直出且長快取 ==")
-# ⚠ 這一節守的是「切換器只加分支、不動舊路」。把 try_files 直接寫進 nginx.conf 的話，
-#   正式站在 **legacy 模式下也會吐 SPA**——而 legacy 才是預設（計畫的決定 3）。
+print("== 前端：頁面路由不寫死在主檔，assets 直出且長快取 ==")
+# ⚠ 這一節原本守的是「切換器只加分支、不動舊路」。切換器沒了（legacy 於 2026-08-26 拆除），
+#   但 include 這條仍然要守：那份片段裡有一整套「為什麼是 `location =` 而不是前綴、
+#   為什麼 `try_files` 是錯的」的說明，搬進主檔只會讓它多七十行不相干的東西。
+#   而 glob 沒命中不是錯誤，所以掛載掉了 nginx 照樣起得來、三條路由落回 `location /`
+#   去 proxy 給 Flask（Flask 也吐同一份殼），那是刻意留的軟著陸。
 check(
-    "頁面路由由外部檔案帶進來（legacy 是空的，落到 location /）",
+    "頁面路由由外部檔案帶進來（glob 沒命中就落到 location /）",
     "include /etc/nginx/claude-pty-ui/*.conf;" in code,
 )
 _assets = re.search(r"location /assets/ \{([^}]*)\}", code)
@@ -113,17 +116,11 @@ check(
 )
 
 _ui_dir = os.path.join(_repo, "deploy", "nginx-ui")
-_legacy = os.path.join(_ui_dir, "legacy", "ui.conf")
 _vue = os.path.join(_ui_dir, "vue", "ui.conf")
-check("legacy 的片段存在", os.path.isfile(_legacy))
 check("vue 的片段存在", os.path.isfile(_vue))
-if os.path.isfile(_legacy):
-    _legacy_code = "\n".join(
-        ln for ln in open(_legacy, encoding="utf-8").read().splitlines() if not ln.lstrip().startswith("#")
-    )
-    # 🔴 legacy 的片段**必須一條指令都沒有**。有任何 location 都代表舊路被改了形狀，
-    #    而那正是「兩版並存期間 legacy 行為一個字不變」的反面。
-    check("🔴 legacy 片段沒有任何指令（舊路完全不受影響）", _legacy_code.strip() == "")
+# ⚠ 這裡曾經有三條在守 `nginx-ui/legacy/ui.conf`（存在、而且**一條指令都沒有**）。
+#   那三條守的是「兩版並存期間 legacy 行為一個字不變」，而 legacy 於 2026-08-26 拆除，
+#   那個目錄也一起刪了，性質本身不再存在。下面「vue 的片段長什麼樣」那幾條照舊。
 if os.path.isfile(_vue):
     _vue_code = "\n".join(
         ln for ln in open(_vue, encoding="utf-8").read().splitlines() if not ln.lstrip().startswith("#")

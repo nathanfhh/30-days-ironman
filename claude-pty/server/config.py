@@ -632,20 +632,14 @@ NAME_SLUG_MAX = int(os.environ.get("CLAUDE_PTY_NAME_SLUG_MAX", "24"))
 # 稽核紀錄裡把版面推爆——而帳號**不能刪**（ADR 0010），建錯就永遠留著。
 USERNAME_MAX = int(os.environ.get("CLAUDE_PTY_USERNAME_MAX", "32"))
 
-# --- 前端要用哪一版 ---------------------------------------------------------------
+# --- 前端 -------------------------------------------------------------------------
 #
-# `legacy` ＝ Jinja 模板 + `static/js/app.js`（現行運行版）。
-# `vue`    ＝ `frontend/` build 出來的 SPA（`server/static/dist/`）。
-#
-# ⚠ **預設是 legacy，而且會一直是**，直到 Vue 版四關全過（e2e、aria、網路序列、截圖）
-#   ——見計畫的階段 5。兩版並存期間，legacy 那條路的行為必須一個字都不變：切換器只加
-#   新的分支，不動舊的。
-# ⚠ 不認得的值一律當 legacy，並在啟動診斷裡喊出來（同 PAGE_SIZE 的紀律）。靜靜降級的話，
-#   「我明明設了 vue」與「vue 版壞了」這兩件事在畫面上長得一模一樣。
-UI_CHOICES = ("legacy", "vue")
-_ui_raw = os.environ.get("CLAUDE_PTY_UI", "legacy").strip().lower()
-UI_INVALID = None if _ui_raw in ("", *UI_CHOICES) else _ui_raw
-UI = _ui_raw if _ui_raw in UI_CHOICES else "legacy"
+# ⚠ **`CLAUDE_PTY_UI` 這個切換器在 2026-08-26 拆掉了。** 它存在的理由是「兩版並存期間
+#   legacy 那條路的行為必須一個字都不變」，而 Vue 版四關全過（e2e、aria、DOM、網路序列、
+#   截圖）之後 legacy 就整個刪除了，沒有第二條路可以切。留著一個只有一個合法值的旗標，
+#   只會讓人以為還切得回去。
+# ⚠ 舊的 `.env` 裡可能還留著 `CLAUDE_PTY_UI=...`：**那是無害的**（沒有人讀它），
+#   而 `deploy/.env.example` 已經拿掉那一段。
 
 # SPA 的產物目錄（`frontend/vite.config.ts` 的 outDir）。**不進版控**：它是 build 產物，
 # 由 node 階段產生（見 deploy/Dockerfile）。prod 由 nginx 直出，dev 與 e2e 由 Flask serve。

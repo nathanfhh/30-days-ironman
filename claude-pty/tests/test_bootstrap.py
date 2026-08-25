@@ -9,9 +9,7 @@ Flask test client，不需 docker。
         python tests/test_bootstrap.py
 """
 
-import json
 import os
-import re
 import sys
 import tempfile
 
@@ -170,15 +168,22 @@ try:
         "換掉 config.DEFAULT_CLI → 憑證狀態裡的 cli 也跟著走（不是 import 時抄的那份）",
         _probe["credentials"].get("not-claude", {}).get("cli") == "not-claude",
     )
-    # ⚠ 同理要接住 render 的例外：四處不同源時 `_masthead.html` 是**當場炸掉**（它拿
-    #   default_cli 去 credentials 裡查，查不到就 UndefinedError）。那個炸法本身就是答案，
-    #   但不能讓它把整支測試帶走。
-    try:
-        _masthead_ok = 'data-cli="not-claude"' in c.get("/").get_data(as_text=True)
-    except Exception as _e:
-        _masthead_ok = False
-        print(f"        （render 直接炸了：{type(_e).__name__}，那正是四處分岔在正式環境的症狀）")
-    check("換掉 config.DEFAULT_CLI → 招牌的 data-cli 也跟著走（模板讀的是同一個常數）", _masthead_ok)
+    # ⚠ 第四處原本是 `_masthead.html` 的 `data-cli`（模板讀同一個常數）。模板刪了之後，
+    #   第四處變成**招牌那個 Vue 元件有沒有真的去讀 API 給的值**——如果它自己寫死 "claude"，
+    #   上面三條照樣全綠，而換掉常數之後畫面會查不到憑證狀態、徽章一片空白。
+    #   這一條是靜態的（讀原始碼），因為那個查表發生在瀏覽器裡，伺服端問不到。
+    _masthead = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "frontend",
+        "src",
+        "components",
+        "AppMasthead.vue",
+    )
+    _m_src = open(_masthead, encoding="utf-8").read() if os.path.isfile(_masthead) else ""
+    check(
+        "招牌用的是 API 給的 default_cli，不是自己寫死的字面量",
+        "store.meta.defaultCli" in _m_src and '"claude"' not in _m_src and "'claude'" not in _m_src,
+    )
 finally:
     # ⚠ 一定要 finally：上面任何一條炸掉都不可以讓後面幾十條對著一個被改壞的常數跑。
     config.DEFAULT_CLI = _orig_cli
@@ -300,98 +305,20 @@ auth.set_gitlab_pat(_alice["id"], "")
 config.GITLAB_HOST = _orig_host
 
 
-print("== 對照模板：API 給的值與頁面此刻印的是同一個 ==")
-# 這一節是整份測試的重點。上面驗的是「形狀對」，這裡驗的是「**值一樣**」。階段 4 把
-# 模板換成 Vue 之後，1:1 還原的前提就是這些值同源。
-_boot = anon.get("/api/bootstrap").get_json()
-_acct = ca.get("/api/account/bootstrap").get_json()
-_me_admin = ca.get("/api/auth/me").get_json()["user"]
-_sessions_html = ca.get("/").get_data(as_text=True)
-_account_html = ca.get("/account").get_data(as_text=True)
-
-
-def _one(pattern, html, label):
-    """從 HTML 挖出模板注入的那一個值；挖不到就當場記一筆失敗（而不是靜靜跳過）。"""
-    m = re.search(pattern, html)
-    if m is None:
-        check(f"{label}：在頁面上找得到這個注入點", False)
-        return None
-    return m.group(1)
-
-
-_v = _one(r'<html lang="zh-Hant" data-behind-proxy="([01])"', _sessions_html, "data-behind-proxy")
-check("data-behind-proxy 與 bootstrap.behind_proxy 同值", _v is not None and (_v == "1") == _boot["behind_proxy"])
-
-_v = _one(r'data-persist-dir="([^"]*)"', _sessions_html, "data-persist-dir")
-check("data-persist-dir 與 bootstrap.persist_dir 同值", _v == _boot["persist_dir"])
-
-_v = _one(r'<input class="input" id="name" maxlength="(\d+)"', _sessions_html, "sessions 名稱欄 maxlength")
-check("名稱欄 maxlength 與 limits.name_max 同值", _v is not None and int(_v) == _acct["limits"]["name_max"])
-
-_v = _one(r'id="new-user"[^>]*?maxlength="(\d+)"', _account_html, "account 新增帳號欄 maxlength")
-check("新增帳號欄 maxlength 與 limits.username_max 同值", _v is not None and int(_v) == _acct["limits"]["username_max"])
-
-_v = _one(r"const MIN_PW = (\d+);", _account_html, "account 的 MIN_PW")
-check("MIN_PW 與 limits.min_password_length 同值", _v is not None and int(_v) == _acct["limits"]["min_password_length"])
-
-_v = _one(r'data-cli="([^"]*)"', _sessions_html, "招牌徽章的 data-cli")
-check("data-cli 與 bootstrap.default_cli 同值", _v == _acct["default_cli"])
-
-_v = _one(r'id="cred-data">(.*?)</script>', _sessions_html, "招牌的 #cred-data")
-check("#cred-data 與 bootstrap.credentials 是同一份", _v is not None and json.loads(_v) == _acct["credentials"])
-
-_v = _one(r"const isAdmin = (true|false);", _sessions_html, "sessions 的 isAdmin")
-check("isAdmin 與 /api/auth/me 的 is_admin 同值", _v is not None and (_v == "true") == _me_admin["is_admin"])
-
-_v = _one(r"const gitlabEnabled = (true|false);", _sessions_html, "sessions 的 gitlabEnabled")
-check("gitlabEnabled 與 bootstrap.gitlab.enabled 同值", _v is not None and (_v == "true") == _acct["gitlab"]["enabled"])
-
-_v = _one(r"const CLAUDE_MODELS = new Set\((\[[^\]]*\])\);", _sessions_html, "sessions 的 CLAUDE_MODELS")
-_catalog_slugs = [m["slug"] for m in ca.get("/api/catalog").get_json()["claude"]["models"]]
-# 這一條驗的是**盤點表的一個結論**：模型清單不必新開 endpoint，/api/catalog 已經給得出來。
-check("CLAUDE_MODELS 與 /api/catalog 的 slug 清單同序同值", _v is not None and json.loads(_v) == _catalog_slugs)
-
-_names = re.findall(r'<span class="footer__name">([^<]*)</span>', _sessions_html)
-check(
-    "頁尾印的模組名與 bootstrap.build.modules 同序同值",
-    _names == [m["name"] for m in _boot["build"]["modules"]],
-)
-
-_login_html = anon.get("/login").get_data(as_text=True)
-_v = _one(r'class="gate__art"[^>]*src="([^"]*)"', _login_html, "登入頁插畫") if web.LOGIN_ART else None
-if web.LOGIN_ART:
-    # 每次載入重挑，所以比不了等值，比的是「兩邊從同一個池子裡挑」（web.login_art 是唯一來源）。
-    _pool = {f"/static/images/{a}" for a in web.LOGIN_ART}
-    check("登入頁的插畫來自同一個池子", _v in _pool)
-    check("bootstrap.login_art 也來自同一個池子", _boot["login_art"] in _pool)
-else:
-    check("沒有插畫時登入頁不畫 img（與 login_art=null 對稱）", 'class="gate__art"' not in _login_html)
-
-# GitLab 那一段的兩個值：模板只在功能開著時才印，所以要現場打開再比。
-_orig_host = config.GITLAB_HOST
-config.GITLAB_HOST = "gitlab.parity.test"
-with db.session_scope(immediate=True) as _s:
-    from server.models import User as _User2
-
-    _s.get(_User2, _alice["id"]).gitlab_proxy_error = _ERR
-_acct_alice = c.get("/api/account/bootstrap").get_json()
-_alice_account_html = c.get("/account").get_data(as_text=True)
-check(
-    "帳號頁印的 GitLab 主機與 gitlab.host 同值",
-    f"<strong>{_acct_alice['gitlab']['host']}</strong>" in _alice_account_html,
-)
-_v = _one(r"<br><code>(.*?)</code><br>", _alice_account_html, "帳號頁的代理錯誤")
-# 模板走 Jinja 自動跳脫，比對前要先還原成原文才是同一個東西。
-check(
-    "帳號頁印的代理錯誤與 gitlab.proxy_error 同值",
-    _v is not None and _v.replace("&#34;", '"').replace("&amp;", "&") == _acct_alice["gitlab"]["proxy_error"],
-)
-config.GITLAB_HOST = _orig_host
-with db.session_scope(immediate=True) as _s:
-    from server.models import User as _User3
-
-    _s.get(_User3, _alice["id"]).gitlab_proxy_error = None
-
+# ⚠ 這裡曾經有一整節「對照模板：API 給的值與頁面此刻印的是同一個」（約八十行，逐條把
+#   `data-behind-proxy`、`maxlength`、`MIN_PW`、`#cred-data`、`isAdmin`、`CLAUDE_MODELS`、
+#   登入頁插畫、GitLab 那兩個值……從渲染出來的 HTML 挖出來，跟這兩條 API 的回傳比對）。
+#
+#   **它是遷移期的鷹架，2026-08-26 隨模板一起退場。** 它存在的理由寫在原本的節頭：
+#   「階段 4 把模板換成 Vue 之後，1:1 還原的前提就是這些值同源」——也就是說，它守的是
+#   「舊畫面印的」與「新 API 給的」不可以分岔。模板刪掉之後那兩者只剩一個，沒有東西可以
+#   分岔，那一節就變成拿 API 跟自己比。
+#
+#   接手的是誰要講清楚，否則這看起來像「刪掉一節就沒人守了」：
+#     · **值對不對** → 上面那些「形狀與值」的斷言（讀 config／DB，不讀畫面）。
+#     · **畫面照著畫** → `golden_check`：十八個場景的 aria 與 DOM 快照是**照著 legacy
+#       錄下來的**，而現在拿 Vue 版去對它。那正是「1:1 還原」這件事本身，比逐個欄位
+#       挖 HTML 涵蓋得更廣（連版面與可及名稱都在內）。
 
 print("== 清理 ==")
 db.reset_engine()

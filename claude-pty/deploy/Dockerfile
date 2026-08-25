@@ -66,7 +66,7 @@ RUN for flag in --title --auth-url --auth-cache-ttl; do         /src/rust/target
 # --- 第二階段：把 Vue 版前端 build 出來（階段 4）----------------------------------
 #
 # ⚠ 產物**不進版控**（`claude-pty/.gitignore` 只加了 `server/static/dist/` 一行），所以它
-#   一定要在 build 期產生。少了這一階段，`CLAUDE_PTY_UI=vue` 的部署會三個頁面全部 404——
+#   一定要在 build 期產生。少了這一階段，三個頁面會全部 404——
 #   而那看起來像路由壞掉，不像「你忘了 build 前端」。
 # ⚠ 用 `npm ci` 不是 `npm install`：ci 只照 lockfile 裝，裝不出來就直接失敗。install 會
 #   為了「解得開」而自己挑另一組版本，於是 image 裡跑的與 lockfile 講的可以是兩組——那正是

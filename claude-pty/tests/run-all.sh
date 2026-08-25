@@ -105,41 +105,15 @@ _pw_dir="$(uv run "${DEPS[@]}" python -m playwright install --dry-run chromium-h
 
 # --- 參數 -------------------------------------------------------------------
 #
-# 模式（quick / --all / --e2e）與「測哪一版前端」是**兩個獨立的維度**，所以分開收：
-#   tests/run-all.sh --ui vue          # legacy 的 python 測試照跑，瀏覽器那些對 Vue 版跑
-#   tests/run-all.sh --all --ui vue
-#
-# ⚠ 預設**永遠是 legacy**。兩版並存期間 legacy 那條路的行為必須一個字都不變，
-#   預設值一翻過去，所有既有的紅綠就不再是在講同一件事了（同 config.py 的紀律）。
-mode="quick"
-ui_mode="legacy"
-while [ $# -gt 0 ]; do
-  case "$1" in
-    quick|--quick|--all|--e2e) mode="$1" ;;
-    --ui) shift; ui_mode="${1:-}" ;;
-    --ui=*)      ui_mode="${1#--ui=}" ;;
-    *) echo "不認得的參數：$1（只收 --all / --e2e / --ui <legacy|vue>）" >&2; exit 2 ;;
-  esac
-  shift
-done
+# ⚠ 這裡曾經有一個 `--ui legacy|vue`（兩版並存期間用的）。**2026-08-26 legacy 拆除之後
+#   它就消失了**：只剩一份前端，瀏覽器測試與 golden 一律對它跑，沒有第二條路可以切。
+mode="${1:-quick}"
 case "${mode}" in
   quick|--quick) want_docker=0; want_e2e=1 ;;
   --all)         want_docker=1; want_e2e=1 ;;
   --e2e)         want_docker=1; want_e2e=2 ;;   # 2 ＝只跑 e2e
+  *) echo "不認得的參數：${mode}（只收 --all / --e2e）" >&2; exit 2 ;;
 esac
-case "${ui_mode}" in
-  legacy|vue) ;;
-  *) echo "不認得的 --ui：${ui_mode}（只收 legacy 或 vue）" >&2; exit 2 ;;
-esac
-# ⚠ `--ui vue` **只套在瀏覽器測試上**（`e2e_*` 與 `golden_check`），其餘一律 legacy。
-#
-#   其他那些是**伺服端渲染的契約測試**：`test_web` 與 `test_bootstrap` 逐條比對
-#   「模板裡注入的值」與「bootstrap API 回的值」是不是同一個（`data-behind-proxy`、
-#   `maxlength`、`MIN_PW`…），`test_gitlab_proxy_conf` 也讀模板。vue 模式下 Flask 出的是
-#   SPA 外殼，那些注入點根本不存在，於是它們全紅，而紅的原因是「這些測試不適用於
-#   這個模式」，不是「有東西壞了」。把兩者混在同一輪，紅燈就不再是訊號。
-# ⚠ 階段 5 拆掉 legacy 之後，那些測試會跟著模板一起退場，這條分流也就不必要了。
-export CLAUDE_PTY_UI=legacy
 
 # --- 先清掉 bytecode 快取 -----------------------------------------------------
 #
@@ -212,11 +186,7 @@ run_one() {
   if { [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; } && [ "${have_browser}" -eq 0 ]; then
     skipped+=("${base}（playwright 缺這版的瀏覽器：playwright install chromium-headless-shell）"); return
   fi
-  if { [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; } && [ "${ui_mode}" != "legacy" ]; then
-    printf '\n\033[1m== %s（--ui %s）\033[0m\n' "${base}" "${ui_mode}"
-  else
-    printf '\n\033[1m== %s\033[0m\n' "${base}"
-  fi
+  printf '\n\033[1m== %s\033[0m\n' "${base}"
   ran=$((ran + 1))
   # ⚠ 邊印邊收（tee）：跑完之後還看得到它印了什麼——下面那道「空跑」檢查需要。
   #   直接 `> file` 的話跑很久的測試會整段沒有畫面。
@@ -225,10 +195,7 @@ run_one() {
   #   全部吐出來**。跑五分鐘的整合測試因此整段沒有畫面，看起來像卡死。
   #   這是 tee 帶進來的回歸，不是原本就有的：沒有 pipe 時 stdout 是 TTY，本來就是行緩衝。
   local out; out="$(mktemp)"
-  # 見上面 `export CLAUDE_PTY_UI=legacy` 那段：只有瀏覽器測試跟著 --ui 走。
-  local ui="legacy"
-  if [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; then ui="${ui_mode}"; fi
-  if ! CLAUDE_PTY_UI="${ui}" uv run "${DEPS[@]}" python -u "${f}" 2>&1 | tee "${out}"; then
+  if ! uv run "${DEPS[@]}" python -u "${f}" 2>&1 | tee "${out}"; then
     fails=$((fails + 1))
     echo "   ↑ ${base} 失敗"
   # --- 空跑：exit 0 但一條斷言都沒跑 -------------------------------------------
@@ -252,24 +219,10 @@ run_one() {
   rm -f "${out}"
 }
 
-# --- 先驗 app.js 的語法 -------------------------------------------------------
-#
-# ⚠ 這一條放在最前面，因為它壞掉時的**症狀指向完全錯的地方**。app.js 解析失敗＝整頁沒有
-#   任何 JS，於是每一支瀏覽器測試都停在「登入之後沒有跳轉」而逾時——看起來像是登入壞了。
-#   2026-07-29 實測踩到：抽屜那段 HTML 註解裡寫了一個反引號，而那段在 template literal
-#   裡面，字串當場被截斷。從逾時訊息完全看不出這件事，`node --check` 一秒就指到行號。
-# ⚠ 沒有 node 就跳過並講出來——不可以靜靜不驗。
-if command -v node >/dev/null 2>&1; then
-  printf '\n\033[1m== app.js 語法\033[0m\n'
-  if node --check server/static/js/app.js; then
-    echo "  PASS  解析得過"
-  else
-    fails=$((fails + 1))
-    echo "   ↑ app.js 語法錯誤——所有瀏覽器測試都會以「登入逾時」的形式失敗"
-  fi
-else
-  skipped+=("app.js 語法檢查（host 上沒有 node）")
-fi
+# ⚠ 這裡曾經有一道「app.js 語法檢查」（`node --check server/static/js/app.js`）。
+#   那個檔案在 2026-08-26 隨 legacy 一起刪了，這道 gate 也跟著退場。它守的性質現在由前端
+#   六關的 `vue-tsc` 與 `vite build` 接手，而且接得更緊：那兩關看得到型別與打包，
+#   `node --check` 只看得到語法。
 
 # --- 前端（Vue 版）的工具鏈 ---------------------------------------------------
 #
@@ -279,7 +232,7 @@ fi
 #   CSS 原檔被搬走），而那些只有 `vite build` 會紅。產物不進版控，所以「沒有人 build 過」
 #   這件事在部署之前不會有任何跡象。
 # ⚠ `npm ci` 不是 `npm install`：ci 只照 lockfile 裝，裝不出來就直接失敗（同 deploy/Dockerfile）。
-# ⚠ 沒有 node/npm 就整段跳過**並講出來**——不可以靜靜不驗（同上面 app.js 語法檢查的做法）。
+# ⚠ 沒有 node/npm 就整段跳過**並講出來**——不可以靜靜不驗（同 ttyd、同 playwright 的處置）。
 front_gate() {          # front_gate <說明> <指令...>
   local label="$1"; shift
   printf '\n\033[1m== %s\033[0m\n' "${label}"
@@ -352,12 +305,12 @@ PYEOF
   fi
 fi
 
-# vue 模式的保險絲：跑到這裡 dist 不在、或**比原始碼舊**，就補 build 一次。
+# dist 的保險絲：跑到這裡不在、或**比原始碼舊**，就補 build 一次。
 #
 # 正常情況上面那段前端六關的最後一關就是 build，所以到這裡 dist 已經是新的。但它有兩條
 # 會被整段跳過的路：`--e2e` 模式（那一段自己會跳），以及 host 上沒有 npm。
-# legacy 模式下跳過沒差（只有 e2e_vue_smoke 需要 dist，它進跳過清單、看得見）；
-# **vue 模式下缺 dist 等於每一支瀏覽器測試都跳過，那一輪什麼都沒測到而畫面上是綠的**。
+# **缺 dist 等於每一支瀏覽器測試都跳過，那一輪什麼都沒測到而畫面上是綠的**
+# （legacy 拆掉之後前端只剩這一份，所有瀏覽器測試都吃它）。
 #
 # ⚠ **判準是「新不新」不是「在不在」。** 第一版只問存不存在，於是
 #   `./tests/run-all.sh --e2e --ui vue` 拿一份**上一次 build 的 dist** 去測，而那份
@@ -374,9 +327,9 @@ elif [ -n "$(find frontend/src frontend/index.html frontend/package.json fronten
               -newer server/static/dist/index.html -print -quit 2>/dev/null)" ]; then
   _dist_stale=1
 fi
-if [ "${ui_mode}" = "vue" ] && [ "${_dist_stale}" -eq 1 ]; then
+if [ "${_dist_stale}" -eq 1 ]; then
   if command -v npm >/dev/null 2>&1 && [ -f frontend/package-lock.json ]; then
-    printf '\n\033[1m== vue 模式：dist 不在或比原始碼舊，先 build 一次 ==\033[0m\n'
+    printf '\n\033[1m== dist 不在或比原始碼舊，先 build 一次 ==\033[0m\n'
     if (cd frontend && npm ci --no-audit --no-fund >/dev/null 2>&1 && npm run --silent build); then
       echo "  PASS  dist 是對應現在這份原始碼的了"
     else
@@ -384,7 +337,7 @@ if [ "${ui_mode}" = "vue" ] && [ "${_dist_stale}" -eq 1 ]; then
       echo "   ↑ 前端 build 失敗，vue 模式的瀏覽器測試會全部跳過"
     fi
   else
-    skipped+=("vue 模式的 dist（host 上沒有 npm 或缺 lockfile，裝 node 24）")
+    skipped+=("前端 dist（host 上沒有 npm 或缺 lockfile，裝 node 24）")
   fi
 fi
 

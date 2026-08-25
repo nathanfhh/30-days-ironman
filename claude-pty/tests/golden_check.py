@@ -177,7 +177,7 @@ try:
         browser = p.chromium.launch()
         shots_ok, why_not = G.screenshot_comparable(browser)
         golden_ui = G.golden_ui()
-        now_ui = getattr(G.config, "UI", "legacy")
+        now_ui = G.CURRENT_UI
         same_ui = golden_ui == now_ui
         print(f"== 環境：golden 錄的是 {golden_ui} 版，現在比的是 {now_ui} 版 ==")
         if not same_ui:

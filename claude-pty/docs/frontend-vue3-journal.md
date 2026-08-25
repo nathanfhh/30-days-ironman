@@ -1244,3 +1244,73 @@ build 的話，run-all.sh 會把每一支瀏覽器測試都跳過並回 exit 0�
 ⚠ 仍然要記著：**這個 job 全綠不等於四關全過。** 截圖在 CI 上被平台 gate 跳過（golden
 錄在 macOS、runner 是 Linux），它比的是 aria／DOM／API 那三份。動到版面之後請在本機
 跑一次 `./tests/run-all.sh --e2e --ui vue`，那裡才驗得到視覺那一關。
+
+### 階段 5 第一部分：拆 legacy
+
+**淨減 4,800 行**（27 檔 +299/-5102）。刪掉的：`server/static/js/app.js`（2,090 行）、
+`server/templates/` 五份（1,909 行）、`deploy/nginx-ui/legacy/`、`tests/test_template_contract.py`。
+
+`server/web.py` 從 210 行收到 110 行：三條頁面路由現在一律 `_spa_shell()`，`_page()` 那層
+包裝與三個 template global（`asset_url` / `persist_dir` / `build_info`）一起退場。後兩者的值
+現在由 `/api/bootstrap` 出，那才是 SPA 拿得到的地方。`config.UI` 切換器、compose 的
+`${CLAUDE_PTY_UI:-legacy}`、`.env.example` 那一段、preflight 的降級診斷、`run-all.sh` 的
+`--ui` 分流與 app.js 語法檢查，全部一起走。
+
+#### 逐條判，不是逐條刪
+
+派工說「守的性質若仍成立就改成對 config／API 驗，純守模板的刪」。這一段是整個第一部分
+最花時間、也最容易做錯的地方：**看到紅燈就刪，等於把測試覆蓋當成一個要清掉的障礙。**
+所以每一條都先問「它守的到底是什麼」，再問「那件事現在還存在嗎、由誰負責」。
+
+| 原本的斷言 | 判斷 | 去處 |
+|---|---|---|
+| `test_template_contract`：模板 class 在 CSS 裡都有 | **對象消失** | 刪 |
+| 同上：模板內嵌 `<script>` 語法過 | **對象消失** | 刪（性質由 `vue-tsc` 與 `vite build` 接手，而且接得更緊） |
+| 同上：ttyd 那節被 `{% if is_admin %}` 包住 | **裂成兩半** | 畫面那半 → 前端 vitest；**後端那半 → 新的 `test_admin_endpoint_gate.py`** |
+| `test_web`：TAINTED 掃模板／app.js 的 `${}` 有沒有 `esc()` | **形狀換了** | 改成掃 `frontend/src` 有無 `v-html`／`innerHTML` 寫入 |
+| `test_web`：抽屜只吃同源 `view.path` | **還在，搬家了** | 來源從 `sessions.html` 換成 `SessionsView.vue` |
+| `test_web`：三頁都有頁尾 | **裂成兩半** | 值 → `/api/bootstrap`；「每頁都畫得出來」→ golden 的 aria（**18/18 場都有**，比原本三頁多） |
+| `test_web`：`data-behind-proxy` 是 0 還是 1 | **搬到 API** | `test_bootstrap` 已逐欄驗；這裡改驗三條路由吐的是同一份殼且 `no-store` |
+| `test_bootstrap`：對照模板那一整節（約 80 行） | **遷移期的鷹架** | 刪，接手的是 `golden_check`（拿 Vue 版對照 legacy 錄的規格，正是「1:1 還原」本身） |
+| 同上：`data-cli` 四處同源的第四處 | **還在，換了位置** | 改驗「招牌那個 Vue 元件真的讀 API 給的 `defaultCli`，不是寫死 `"claude"`」 |
+| `test_gitlab_proxy_conf`：帳號頁說得出是哪一台 | **搬到 API** | 驗 `/api/account/bootstrap` 的 `gitlab.host` |
+| 同上：畫面上不出現 PAT | **搬到 API，而且更嚴** | 舊的只看一頁 HTML，新的看畫面拿得到的**每一份**資料 |
+| 同上：畫面講得出輪替語意那條準則 | **還在，搬家了** | 改驗 `GitlabPatPanel.vue` 的文案（同一種靜態檢查，換成現在的所有者） |
+| `test_nginx_contract`：legacy 片段一條指令都沒有 | **對象消失** | 刪（vue 片段那幾條照舊） |
+| `e2e_settings`：picker 掛載點不准帶 class | **機制消失** | 刪。**查證過才刪**：`grep -rn 'className\s*=' frontend/src/` 一個結果都沒有，Vue 版沒有「掛載點被吃掉 class」這個東西 |
+| CI：legacy 片段不改變舊路（掛空片段驗 502） | **對象消失** | 刪 |
+
+新增的 `tests/test_admin_endpoint_gate.py` 值得單獨講：它守的是**前端 gate 只是禮貌，
+後端那一行才是門**。端點名從 `frontend/src` 撈（排除 `__tests__/`，那裡面的字串是 vitest
+的 mock 路由表，撈進來會把「前端真的在打」變成「測試檔裡提過」），再驗後端那條路由上面
+緊接著就是 `@admin_only`。附一條反向 case 確認 regex 抓得出「沒掛」的情況。
+
+#### `innerHTML` 歸零
+
+`grep -rn innerHTML server/ frontend/src/` 的結果只剩**註解**（三個 Vue 元件在講舊版怎麼做的、
+一條 CSS 註解）與 `__tests__/` 裡的 `document.body.innerHTML = ""`（vitest 清場）。
+沒有任何一處是畫面在拼 HTML。
+
+守它的是 `test_web` 那道新的靜態守衛。**oxlint 接不住這一條**：`frontend/.oxlintrc.json`
+只開了 typescript／unicorn／oxc 三個 plugin，沒有 vue plugin，`v-html` 對它只是一個普通屬性。
+判準是**用法**不是**出現過這個字**（`v-html` 要跟著 `=`、`innerHTML` 要跟著賦值），
+否則那幾條講舊版的註解會全部誤報，而會誤報的守衛最後只會被關掉。附了正反兩條 case。
+
+#### CI
+
+`claude-pty-vue` 併回 `claude-pty`：兩版並存期間它是必要的，現在兩個 job 跑的是同一件事。
+併回來的 job 要裝 playwright（八支 e2e 加 golden_check 都吃它）。
+
+跳過上限的註解**改正了**（fable 快審 4b 低 3）：我先前寫「14 支 docker ＋ claude 憑證那支」，
+那是錯的 —— `test_entrypoint_human_path` 同時需要 docker，quick 模式下它是被 docker 那道
+gate 擋掉的，已經算在 14 裡面。第 15 支是**前端相依掃描**（trivy 沒裝在 runner 上）。
+
+#### 驗收
+
+`run-all.sh quick` **39 支 0 失敗**、跳過 14 支（本機有 trivy）；`--e2e` **10 支 0 失敗**
+（含 golden_check 109 條）；`ruff@0.16.3` check 與 format 全過。
+
+golden 仍是**從 legacy 錄的那一份**，`golden_check` 靠 META 的 `ui=legacy` 知道自己在跨版
+比對。`golden_scenes.CURRENT_UI = "vue"` 是常數不是設定值；重錄成 Vue 版是第二部分的事，
+在那之前**不要跑不帶 `--verify` 的 `golden_record.py`**（跑了就是把現況覆寫成規格），
+那條警告寫在 `golden_record.main()` 的註解裡。

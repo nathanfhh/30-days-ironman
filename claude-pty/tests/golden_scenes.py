@@ -95,11 +95,6 @@ def pin_all() -> None:
     }
 
     # 3. 週期性的計時器不跑，見 FREEZE_TIMERS_JS。
-    #
-    # ⚠ `config.UI` **不在這裡釘**。錄的時候永遠是 legacy（規格本身），但**比**的時候要比
-    #   當下在測的那一版：`CLAUDE_PTY_UI=vue` 跑 golden_check 就是拿 Vue 版去對規格，
-    #   那正是這整套 golden 存在的理由。在共用的地方寫死 legacy 會讓 vue 模式變成
-    #   「legacy 跟自己比」，永遠是綠的。所以 legacy 那一行寫在 golden_record.main() 裡。
 
 
 class _FakeContainer:
@@ -803,12 +798,22 @@ def dom_text(page) -> str:
 # ⚠ 跳過時要**明說**，不可以靜靜地少比三十六條。看不見的跳過就是假綠燈。
 META_NAME = "META"
 
+# 現在在跑的是哪一版前端。
+#
+# ⚠ 這是一個**常數**，不是設定值。legacy 於 2026-08-26 拆除之後只剩一份前端，
+#   `config.UI` 那個切換器也一起沒了；把這裡寫成「讀某個旗標」只會讓人以為還切得回去。
+# ⚠ 但 golden 目前仍是**從 legacy 錄的那一份**（META 的 `ui=legacy`），所以
+#   `golden_check` 還在跨版比對模式：略過靜態資源與文件請求、扣掉 Vue 依設計多打的那幾發。
+#   階段 5 的第二部分把 golden 從 Vue 重錄之後，`golden_ui() == CURRENT_UI`，那一整套
+#   跨版的機制（`UI_EXTRA_CALLS` 與三支 strip 函式）就該一起刪掉。
+CURRENT_UI = "vue"
+
 
 def meta_text(browser) -> str:
     import platform
 
     return (
-        f"ui={getattr(config, 'UI', 'legacy')}\n"
+        f"ui={CURRENT_UI}\n"
         f"platform={platform.system()} {platform.machine()}\n"
         f"chromium={browser.version}\n"
         f"device_scale_factor=1\n"
