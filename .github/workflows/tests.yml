@@ -159,6 +159,11 @@ jobs:
       # node 管前端那六關（npm ci / oxlint / prettier / vue-tsc / vitest / vite build），
       # 而最後一關 build 出來的 dist 正是所有瀏覽器測試要吃的東西。沒有它的話 run-all.sh
       # 會把六關與每一支瀏覽器測試都跳過並講出來，而那一輪等於什麼都沒測到。
+      - uses: aquasecurity/setup-trivy@v0.2.3
+        # 前端相依掃描（run-all.sh 的 trivy 那關）要 runner 上真的有 trivy；沒有的話它會
+        # 「跳過並講出來」，而跳過在 CI 上要被下面那道上限擋住。裝了它，掃描才是真的跑。
+        with:
+          cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -177,16 +182,17 @@ jobs:
         # ⚠ 「安靜地跳過」在 CI 上跟「跑過而且過了」長得一模一樣，這是假綠燈第一種形狀。
         #   瀏覽器沒裝、dist 沒 build 的話，run-all.sh 會把每一支瀏覽器測試都跳過並回
         #   exit 0，那一輪什麼都沒測到而綠勾長得跟真的一樣。
-        # ⚠ **預期是 15：14 支需要 docker 的（quick 模式本來就不跑）＋ 前端相依掃描（trivy
-        #   沒裝在這個 runner 上）。** 這裡先前寫成「14 ＋ claude 憑證那支」，那是錯的：
+        # ⚠ **預期是 14：需要 docker 的那 14 支（quick 模式本來就不跑）。** trivy 已由
+        #   setup-trivy 裝進 runner，前端相依掃描是真的跑，不再是跳過項（PR #2 第一輪 CI
+        #   就是因為 runner 沒有 trivy 而在 dev-container job 多跳一支）。
         #   `test_entrypoint_human_path` 同時需要 docker，quick 模式下它是被 docker 那道
-        #   gate 擋掉的，已經算在 14 裡面了（fable 快審 4b 低 3）。
+        #   gate 擋掉的，已經算在 14 裡面（fable 快審 4b 低 3）。
         working-directory: claude-pty
         run: |
           n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-quick.log)
           n=${n:-0}
-          echo "跳過 ${n} 支（預期上限 15：14 支 docker ＋ trivy）"
-          if [ "${n}" -gt 15 ]; then
+          echo "跳過 ${n} 支（預期上限 14：需要 docker 的那 14 支）"
+          if [ "${n}" -gt 14 ]; then
             sed -n '/^跳過/,$p' /tmp/pty-quick.log
             echo "::error::跳過的數量超出預期——CI 上的跳過幾乎都是設定漏了，不是正當的環境限制"
             exit 1
@@ -202,6 +208,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       # 這個 job 跑 `run-all.sh --all`，前端那六關也在裡面（見 claude-pty job 的說明）。
+      - uses: aquasecurity/setup-trivy@v0.2.3
+        # 前端相依掃描（run-all.sh 的 trivy 那關）要 runner 上真的有 trivy；沒有的話它會
+        # 「跳過並講出來」，而跳過在 CI 上要被下面那道上限擋住。裝了它，掃描才是真的跑。
+        with:
+          cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
