@@ -13,7 +13,7 @@
  *   2. 憑證徽章的翻頁動畫（舊版 swapCred）拿掉：它只在**換 agent** 時才跑，而這套東西
  *      只驅動 claude 一種 CLI，`switched` 恆為 false——留著等於留一段永遠不執行的程式碼。
  */
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { anchorPanel } from "@/lib/anchor";
@@ -33,7 +33,6 @@ const router = useRouter();
 const activeSeg = computed(() => (route.path === "/account" ? "account" : "sessions"));
 
 const cred = computed(() => store.credentials[store.meta.defaultCli]);
-watch(() => store.credentials, syncCredData, { deep: true });
 
 const theme = ref("instrument");
 const themeOptions: PickerOption[] = THEMES.map((t) => ({
@@ -135,30 +134,7 @@ function onThemeChange(detail: { value: string; origin: PickerOrigin | null }): 
   void applyTheme(detail.value, detail.origin);
 }
 
-/* ⚠ `#cred-data` 是舊版 `_masthead.html` 的 `<script type="application/json">`：伺服端把
- *   憑證狀態塞在頁面裡，`app.js` 進站時讀它，之後才由列表輪詢覆蓋。
- *
- *   這一版**沒有任何讀者**（值走 `/api/account/bootstrap` 與列表的順風車），節點留著純粹
- *   是為了 DOM 與舊版一致。Vue 的模板編譯器不吐 `<script>`，所以只能自己建。
- *   ⚠ 這是一個明知沒有用途的相容節點，階段 5 拆舊時**要連同模板那一行一起刪**。
- */
-let credDataEl: HTMLScriptElement | null = null;
-
-function syncCredData(): void {
-  if (!credDataEl) return;
-  credDataEl.textContent = JSON.stringify(store.credentials);
-}
-
 onMounted(async () => {
-  const nav = document.querySelector(".masthead__nav");
-  if (nav && !document.getElementById("cred-data")) {
-    credDataEl = document.createElement("script");
-    credDataEl.type = "application/json";
-    credDataEl.id = "cred-data";
-    // 舊版的位置：`.masthead__nav` 的第一個子節點（在憑證徽章之前）
-    nav.insertBefore(credDataEl, nav.firstChild);
-    syncCredData();
-  }
   theme.value = await initTheme();
   document.addEventListener("click", onDocClick, true);
   document.addEventListener("keydown", onDocKeydown);
@@ -166,8 +142,6 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  credDataEl?.remove();
-  credDataEl = null;
   document.removeEventListener("click", onDocClick, true);
   document.removeEventListener("keydown", onDocKeydown);
   globalThis.removeEventListener("resize", onResize);

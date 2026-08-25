@@ -5,6 +5,9 @@
     "correctness": "error",
     "suspicious": "warn"
   },
+  "rules": {
+    "no-console": ["error", { "allow": ["warn", "error"] }]
+  },
   "env": { "browser": true, "es2022": true },
   "ignorePatterns": ["dist", "node_modules"]
 }

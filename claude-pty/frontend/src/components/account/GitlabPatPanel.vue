@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /*
  * GitLab 憑證。與 CLI 憑證那一塊同一套做法：狀態在進頁時就算好（不會先閃一個預設值），
- * 存／清之後整頁重載讓三處狀態同源重畫。
+ * 存／清之後重抓 `/api/account/bootstrap` 讓三處狀態同源重畫。
  *
  * ⚠ 空字串＝清除，所以清除也走 PUT，**沒有 DELETE 端點**（見 app.set_own_gitlab_pat）。
  * ⚠ 整塊只在 `gitlab.enabled` 時畫（呼叫端 gate）：功能關掉時每一場的代理都不存在，
@@ -31,9 +31,18 @@ const placeholder = computed(() =>
 const putPat = (value: string): Promise<unknown> =>
   api("/api/users/me/gitlab-pat", { method: "PUT", body: { pat: value } });
 
-const reloadSoon = (): void => {
-  setTimeout(() => globalThis.location.reload(), 900);
-};
+/** 存或清之後把狀態重新抓一次。
+ *
+ * ⚠ 舊版是 `setTimeout(() => location.reload(), 900)`——徽章、chip、按鈕三處狀態同源重畫，
+ *   在一個每頁都要重新跑 Jinja 的架構下那是最可靠的做法。SPA 不必付那個代價：
+ *   `/api/account/bootstrap` 一發就把憑證、限制、身分全帶回來，那三處都是照它畫的。
+ * ⚠ 欄位要**自己清**。舊版靠整頁重載順便清掉，不重載就得明寫——不清的話畫面會停在
+ *   「已經存進去了，但輸入框裡還留著剛剛那把 PAT」，而那是最不該留在畫面上的東西。
+ */
+async function refresh(): Promise<void> {
+  pat.value = "";
+  await store.loadAccountMeta();
+}
 
 const save = submitting(busy, async () => {
   try {
@@ -41,7 +50,7 @@ const save = submitting(busy, async () => {
     toast("GitLab 憑證已儲存", "success", {
       body: "已接上代理的 session 會在一個對帳週期內改用新的；還沒接上的要開新的一場",
     });
-    reloadSoon();
+    await refresh();
   } catch (ex) {
     toastError("儲存 GitLab 憑證", ex);
   }
@@ -53,7 +62,7 @@ async function clear(): Promise<void> {
     toast("GitLab 憑證已清除", "warning", {
       body: "你的代理會被收掉，所有 session 當場失去 GitLab；再填一把回去它們會恢復",
     });
-    reloadSoon();
+    await refresh();
   } catch (ex) {
     toastError("清除 GitLab 憑證", ex);
   }
