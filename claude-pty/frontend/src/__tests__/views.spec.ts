@@ -443,17 +443,9 @@ describe("SessionsView", () => {
     // 背景要退出 Tab 序（aria-modal 只影響螢幕閱讀器的虛擬游標，不影響 Tab 順序）
     expect((document.querySelector(".shell") as HTMLElement).inert).toBe(true);
     (document.querySelector('[data-testid="drawer-close"]') as HTMLButtonElement).click();
-    // eslint-disable-next-line no-console
-    console.log("DBG drawers:", document.querySelectorAll('[data-testid="drawer"]').length);
     await new Promise((r) => setTimeout(r, 600));
     await new Promise((r) => setTimeout(r, 50));
     await flushPromises();
-    // eslint-disable-next-line no-console
-    console.log(
-      "DBG after:",
-      document.querySelectorAll('[data-testid="drawer"]').length,
-      (document.querySelector('[data-testid="drawer"]') as HTMLElement | null)?.isConnected,
-    );
     await flushPromises();
     expect(document.querySelector('[data-testid="drawer"]')).toBeNull();
     expect((document.querySelector(".shell") as HTMLElement).inert).toBe(false);

@@ -206,8 +206,8 @@ describe("FilterBar", () => {
     await router.isReady();
   });
 
-  const mountBar = (open = true, toggled = true) =>
-    mount(FilterBar, { props: { open, toggled }, global: { plugins: [router] } });
+  const mountBar = (open = true) =>
+    mount(FilterBar, { props: { open }, global: { plugins: [router] } });
 
   it("五個欄位標籤都有 tooltip（篩的是什麼要講得出來）", () => {
     const w = mountBar();
@@ -227,10 +227,11 @@ describe("FilterBar", () => {
     expect(w.find("#filter-shell").attributes("data-open")).toBe("1");
   });
 
-  it("**沒點過那顆篩選鍵就不寫 inert**（舊版只在 setFiltersOpen 裡設，首載身上沒有）", () => {
-    const w = mountBar(false, false);
+  it("🔴 首載（沒點過那顆鍵）收著的時候也要 inert——階段 4 照抄舊版那個洞已經拆掉", () => {
+    const w = mountBar(false);
     expect(w.find("#filter-shell").attributes("data-open")).toBe("0");
-    expect(w.find('[data-testid="filter-bar"]').attributes("inert")).toBeUndefined();
+    // 舊版只在 setFiltersOpen() 裡設 inert，所以剛進站時鍵盤 Tab 得進一塊看不見的區域
+    expect(w.find('[data-testid="filter-bar"]').attributes("inert")).toBeDefined();
   });
 
   it("選一個條件就寫進網址並通知上層重抓", async () => {
@@ -337,9 +338,9 @@ describe("RangePicker", () => {
 describe("stores/site", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  /** 一份完整的 `/api/account/bootstrap` 回應。`user` 由呼叫端決定要不要帶。 */
-  const bootstrapBody = (user?: unknown) => ({
-    ...(user ? { user } : {}),
+  /** 一份完整的 `/api/account/bootstrap` 回應。 */
+  const bootstrapBody = (user: unknown) => ({
+    user,
     default_cli: "claude",
     credentials: {},
     limits: { name_max: 25, username_max: 32, min_password_length: 8 },
@@ -386,20 +387,20 @@ describe("stores/site", () => {
     expect(store.meta.defaultCli).toBe("claude");
   });
 
-  it("後端還沒帶 user 時退回 /api/auth/me——降級是安全的，但要喊一聲", async () => {
-    const seen = fakeApi({
-      "/api/account/bootstrap": { body: bootstrapBody() },
-      "/api/auth/me": { body: { user: { id: 2, username: "bob", is_admin: false } } },
+  it("🔴 loadAccountMeta 也要把身分收下（存完 PAT 之後 gitlab_pat_configured 會變）", async () => {
+    fakeApi({
+      "/api/account/bootstrap": {
+        body: bootstrapBody({
+          id: 1,
+          username: "alice",
+          is_admin: false,
+          gitlab_pat_configured: true,
+        }),
+      },
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const store = useSiteStore();
-    const u = await store.loadIdentity();
-    expect(u?.username).toBe("bob");
-    expect(seen).toEqual(["/api/account/bootstrap", "/api/auth/me"]);
-    // 靜靜降級的話，症狀會是「網路序列莫名其妙多一行」，而肇因是合併順序
-    expect(warn).toHaveBeenCalledOnce();
-    expect(String(warn.mock.calls[0][0])).toContain("/api/auth/me");
-    warn.mockRestore();
+    await store.loadAccountMeta();
+    expect(store.user?.gitlab_pat_configured).toBe(true);
   });
 
   it("adoptIdentity：登入的回應本身就帶身分，不必再問一次", () => {

@@ -198,7 +198,6 @@ function onPanelTransitionEnd(e: TransitionEvent): void {
 }
 
 function requestClose(): void {
-  console.log("DBG requestClose", closing.value);
   if (closing.value) return;
   closing.value = true;
   stop();
@@ -206,10 +205,7 @@ function requestClose(): void {
   open.value = false;
   // 動畫跑完才讓呼叫端把節點拆掉；prefers-reduced-motion 下 transition 被關掉、
   // transitionend 永遠不會來，所以另外掛一個 timeout 保底。
-  closeTimer = setTimeout(() => {
-    console.log("DBG emit close");
-    emit("close");
-  }, 400);
+  closeTimer = setTimeout(() => emit("close"), 400);
 }
 
 let shellEl: HTMLElement | null = null;
