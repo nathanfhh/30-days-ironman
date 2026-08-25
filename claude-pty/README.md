@@ -425,6 +425,17 @@ uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
 「這就是新的對的樣子」，那條防線當場消失。先看差異圖（`golden_check` 會印路徑），
 確認那是你要的改動，再重錄，並把 diff 一起送審。
 
+⚠ **重錄的 commit 訊息要帶 `golden:` 並逐場列出來，CI 會擋**（PR 上跑
+`tests/check_golden_change.sh`）。列不出改了哪幾場，正是要攔的那一次；名字可以分成好幾行、
+也可以散在同一個 PR 的好幾顆 commit 裡，gate 取聯集。`META`（錄製環境的指紋）也算一個名字。
+標記**必須在一行的開頭**（前面只允許空白），這樣「寫標記」與在訊息裡「談論標記」才分得開。
+
+```
+golden: sessions-list, sessions-filters
+```
+
+本機先驗一次：`tests/check_golden_change.sh`（預設 `main..HEAD`）。
+
 ⚠ **截圖只能在錄它的那台機器上比。** golden 錄在 macOS，ubuntu runner 算繪出來的字是
 另一組像素；`tests/golden/META` 記著平台與 chromium 版本，對不上時**只跳過截圖**、
 aria／DOM／網路照比，而且會明講跳了什麼。所以 **CI 全綠不等於四關全過**：動到版面之後
