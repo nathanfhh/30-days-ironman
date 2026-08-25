@@ -36,7 +36,7 @@ os.environ["CLAUDE_PTY_DB_URL"] = f"sqlite:///{os.path.join(_tmp, 'e2e.db')}"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import docker  # noqa: E402
-from playwright.sync_api import sync_playwright  # noqa: E402
+from playwright.sync_api import expect, sync_playwright  # noqa: E402
 
 from server import config, db  # noqa: E402
 
@@ -116,60 +116,72 @@ try:
         check("導向 /login", page.url.endswith("/login"))
         # ⚠ 這條原本比對 "claude"，但產品早就改名成 claude-pty（內部識別字仍是 claude-pty）
         #   ——斷言沒跟著改，於是這支 e2e 一直是紅的。改成比對現在真正的品牌字樣。
-        check("登入頁顯示品牌", "claude-pty" in page.inner_text(".gate__mark").lower())
+        check("登入頁顯示品牌", "claude-pty" in page.inner_text('[data-testid="brand-mark"]').lower())
 
         print("== 錯誤帳密顯示錯誤訊息、不放行 ==")
-        page.fill("#username", "e2e-user")
-        page.fill("#password", "wrong-password")
-        page.click("button[type=submit]")
-        page.wait_for_selector("#login-error:not([hidden])", timeout=5000)
-        check("顯示錯誤提示", "錯誤" in page.inner_text("#login-error"))
+        page.fill('[data-testid="login-username"]', "e2e-user")
+        page.fill('[data-testid="login-password"]', "wrong-password")
+        page.get_by_role("button", name="進入控制台").click()
+        # 「錯誤提示看得見」用 to_be_visible()，不是自己去判 hidden 屬性在不在
+        err = page.locator('[data-testid="login-error"]')
+        expect(err).to_be_visible(timeout=5000)
+        check("顯示錯誤提示", "錯誤" in err.inner_text())
         check("仍停在登入頁", page.url.endswith("/login"))
 
         print("== 正確帳密登入 ==")
-        page.fill("#password", "e2e-password-1")
-        page.click("button[type=submit]")
+        page.fill('[data-testid="login-password"]', "e2e-password-1")
+        page.get_by_role("button", name="進入控制台").click()
         page.wait_for_url(f"{BASE}/", timeout=8000)
         check("進入控制台", page.url.rstrip("/") == BASE)
         # 用 text_content 而非 inner_text：後者會套用 CSS text-transform（.label 是
         # uppercase），拿到的會是 E2E-USER
-        check("顯示登入者", "e2e-user" in page.text_content(".masthead"))
+        check("顯示登入者", "e2e-user" in page.text_content('[data-testid="masthead"]'))
 
         print("== 建立 session（走真 docker）==")
-        page.wait_for_selector("#manifest .empty, #manifest .manifest__row", timeout=8000)
+        page.wait_for_selector('[data-testid="manifest-empty"], [data-testid="session-row"]', timeout=8000)
         # 明確選 unrestricted：表單預設是 restricted（安全預設），但那需要 NET_ADMIN +
         # gitlab-proxy network——E2E 驗的是 UI 流程，
         # firewall 本身另有 live 驗證，不該讓它拖慢並增加環境相依。
         # 網路能力是二元的，用開關而非下拉：點一下即從 restricted 切到 unrestricted
-        page.click("#pick-network .switch__control")
+        page.click('[data-testid="pick-network-control"]')
         check(
             "開關切換後 aria-checked 為 true",
-            page.get_attribute("#pick-network .switch__control", "aria-checked") == "true",
+            page.get_attribute('[data-testid="pick-network-control"]', "aria-checked") == "true",
         )
-        check("開關的標籤反映新狀態", "完全開放" in page.text_content("#pick-network .switch__label"))
-        page.click("#create-btn")
-        page.wait_for_selector(".manifest__row", timeout=60000)
-        # 表頭也掛 .manifest__row（為了與資料列共用 grid 定義），數資料列要排除它
-        rows = page.query_selector_all(".manifest__row:not(.manifest__row--head)")
+        check(
+            "開關的標籤反映新狀態",
+            "完全開放" in page.text_content('[data-testid="pick-network-label"]'),
+        )
+        page.get_by_role("button", name="建立 Session").click()
+        page.wait_for_selector('[data-testid="session-row"]', timeout=60000)
+        # 表頭與資料列共用 grid 定義但 testid 不同，數資料列不會撿到它
+        rows = page.query_selector_all('[data-testid="session-row"]')
         check("列表出現一筆 session", len(rows) == 1)
-        check("列表有表頭", page.query_selector(".manifest__row--head") is not None)
-        sid = page.inner_text(".manifest__id").strip()
+        check("列表有表頭", page.query_selector('[data-testid="manifest-head"]') is not None)
+        sid = page.inner_text('[data-testid="session-title"]').strip()
         check("session id 顯示為 12 位 hex", len(sid) == 12 and all(c in "0123456789abcdef" for c in sid))
         # 這裡跑的是 bash entrypoint，不會印 DRIVER_MARKER（那是 entrypoint.sh 要進 CLI
         # 前才印的），所以 UI 應該誠實顯示「啟動中」——container 在跑 ≠ CLI 已經可用。
         check(
             "driver 未就緒時燈號為啟動中（container 在跑 ≠ CLI 可用）",
-            page.get_attribute(".lamp", "data-state") == "creating",
+            page.get_attribute('[data-testid="session-lamp"]', "data-state") == "creating",
         )
-        check("狀態欄標示啟動中", "啟動中" in page.text_content(".manifest__status"))
+        check("狀態欄標示啟動中", "啟動中" in page.text_content('[data-testid="session-status"]'))
         check("container 實際存在", D.containers.get(f"claude-pty-{sid}").status == "running")
-        check("顯示 profile chips", len(page.query_selector_all(".chip")) >= 2)
+        check(
+            "顯示 profile chips",
+            len(page.query_selector_all('[data-testid="chip"], [data-testid="chip-mark"]')) >= 2,
+        )
 
         print("== 開啟終端：新分頁載入 ttyd 且可互動 ==")
         with ctx.expect_page(timeout=30000) as tab_info:
             page.click('button[data-act="open"]')
         term = tab_info.value
         term.wait_for_load_state("domcontentloaded")
+        # ⚠ 這兩行是**這個 repo 之外**的 DOM：終端分頁跑的是 ttyd 自己的頁面（xterm.js），
+        #   我們沒有地方可以在上面補 data-testid。所以這裡只能認 xterm 的結構，這是全套
+        #   e2e 裡唯一一處刻意保留的 class 選擇器（另一處是 e2e_drawer 那個模仿 ttyd 的
+        #   假頁面，理由相同）。
         term.wait_for_selector(".xterm-screen, canvas", timeout=20000)
         check("終端分頁載入 xterm", term.query_selector(".xterm-screen, canvas") is not None)
         term.click("body")
@@ -206,37 +218,43 @@ try:
 
         print("== 切換主題：JSON 套用到 CSS 變數 ==")
         before = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim()")
-        page.click("#theme-picker .picker__button")
-        page.click('#theme-picker .picker__option[data-value="daylight"]')
+        page.click('[data-testid="theme-picker-button"]')
+        page.click('[data-testid="theme-picker-opt-daylight"]')
         page.wait_for_timeout(500)
         after = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim()")
         check(f"強調色由 {before} 變為 {after}", before != after and after)
-        page.click("#theme-picker .picker__button")
-        page.click('#theme-picker .picker__option[data-value="instrument"]')
+        page.click('[data-testid="theme-picker-button"]')
+        page.click('[data-testid="theme-picker-opt-instrument"]')
 
         print("== 帳號頁：改密碼 ==")
         # 先把「改密碼之前」的登入狀態複製到另一個 context——那就是「另一台裝置」。
         # ⚠ 一定要在改密碼**之前**存，改完之後這一張已經被伺服器續期，拿它去驗撤銷
         #   會驗到一個永遠會過的東西（那正是這條斷言曾經在守代理指標的原因）。
         ctx_stale = browser.new_context(storage_state=ctx.storage_state())
-        page.click('a[href="/account"]')
-        page.wait_for_selector("#pw-form", timeout=8000)
-        page.fill("#old-pw", "e2e-password-1")
-        page.fill("#new-pw", "e2e-password-2")
+        page.get_by_role("link", name="帳號管理").click()
+        page.wait_for_selector('[data-testid="pw-form"]', timeout=8000)
+        page.fill('[data-testid="old-pw"]', "e2e-password-1")
+        page.fill('[data-testid="new-pw"]', "e2e-password-2")
         # 兩次輸入不一致時按鈕必須是關的——不然「重複確認」等於沒做
-        page.fill("#confirm-pw", "e2e-password-X")
-        check("確認密碼不符 → 送出鈕停用", page.is_disabled("#pw-btn"))
-        check("並提示不一致", "不一致" in page.text_content("#pw-hint"))
-        page.fill("#confirm-pw", "e2e-password-2")
-        check("兩次一致 → 送出鈕啟用", page.is_enabled("#pw-btn"))
+        page.fill('[data-testid="confirm-pw"]', "e2e-password-X")
+        check("確認密碼不符 → 送出鈕停用", page.is_disabled('[data-testid="pw-btn"]'))
+        check("並提示不一致", "不一致" in page.text_content('[data-testid="pw-hint"]'))
+        page.fill('[data-testid="confirm-pw"]', "e2e-password-2")
+        check("兩次一致 → 送出鈕啟用", page.is_enabled('[data-testid="pw-btn"]'))
         # 帳號清單要趁改密碼**之前**查——改完會跳轉登入頁，跳轉後這頁就不在了
-        check("管理員看得到帳號清單", page.query_selector("#roster-body") is not None)
-        page.click("#pw-btn")
+        check("管理員看得到帳號清單", page.query_selector('[data-testid="roster"]') is not None)
+        page.click('[data-testid="pw-btn"]')
         # 操作結果以右上角 toast 呈現。改密碼的成功文案是「請重新登入」——因為 D 階段起
         # 改密碼＝這個帳號的登入狀態與互動終端全部斷掉，前端跟著在 1200ms 後送回登入頁。
-        page.wait_for_selector(".toast[data-level='success']", timeout=8000)
-        check("顯示成功 toast（文案叫人重新登入）", "請重新登入" in page.inner_text(".toast__title"))
-        check("toast 有倒數進度條（不需使用者手動關）", page.query_selector(".toast__bar") is not None)
+        page.wait_for_selector('[data-testid="toast"][data-level="success"]', timeout=8000)
+        check(
+            "顯示成功 toast（文案叫人重新登入）",
+            "請重新登入" in page.inner_text('[data-testid="toast-title"]'),
+        )
+        check(
+            "toast 有倒數進度條（不需使用者手動關）",
+            page.query_selector('[data-testid="toast-bar"]') is not None,
+        )
         pw_ok = False
         try:
             auth.authenticate("e2e-user", "e2e-password-2")
@@ -258,16 +276,19 @@ try:
         ctx_stale.close()
 
         print("== 終止 session（先用新密碼重新登入——上一步把這台也登出了）==")
-        page.fill("#username", "e2e-user")
-        page.fill("#password", "e2e-password-2")
-        page.click("#login-btn")
-        page.wait_for_selector(".manifest__row", timeout=8000)
+        page.fill('[data-testid="login-username"]', "e2e-user")
+        page.fill('[data-testid="login-password"]', "e2e-password-2")
+        page.get_by_role("button", name="進入控制台").click()
+        page.wait_for_selector('[data-testid="session-row"]', timeout=8000)
         page.click('button[data-act="kill"]')
-        page.wait_for_selector(".modal", timeout=5000)
-        check("終止採用自訂對話框（非原生 confirm）", "終止 Session" in page.text_content(".modal__title"))
-        page.click('.modal button[data-act="ok"]')
-        page.wait_for_selector("#manifest .empty", timeout=30000)
-        check("列表已清空", page.query_selector(".manifest__row") is None)
+        page.wait_for_selector('[data-testid="modal"]', timeout=5000)
+        check(
+            "終止採用自訂對話框（非原生 confirm）",
+            "終止 Session" in page.text_content('[data-testid="modal-title"]'),
+        )
+        page.click('[data-testid="modal"] button[data-act="ok"]')
+        page.wait_for_selector('[data-testid="manifest-empty"]', timeout=30000)
+        check("列表已清空", page.query_selector('[data-testid="session-row"]') is None)
         removed = False
         try:
             D.containers.get(f"claude-pty-{sid}")
@@ -278,7 +299,7 @@ try:
 
         print("== 登出 ==")
         # 登出收進身分下拉了（原本是招牌上一顆常駐按鈕）
-        page.click("#account-btn")
+        page.click('[data-testid="account-btn"]')
         page.wait_for_selector('[data-testid="menu-logout"]', state="visible", timeout=4000)
         page.click('[data-testid="menu-logout"]')
         page.wait_for_url(f"{BASE}/login", timeout=8000)

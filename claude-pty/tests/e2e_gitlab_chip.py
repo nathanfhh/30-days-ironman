@@ -172,8 +172,8 @@ for _ in range(50):
 # ⚠ 認的是**圖示 class** 不是 data-tone：tone 是共用的（網路也用 accent、錄製也用 off），
 #   拿它當選擇器會撿到隔壁那顆，而且撿錯時斷言照樣可能是綠的。
 PROBE = """
-() => [...document.querySelectorAll('.manifest__chips-cell')].map(cell => {
-  const el = [...cell.querySelectorAll('.chip--mark')]
+() => [...document.querySelectorAll('[data-testid=chips-cell]')].map(cell => {
+  const el = [...cell.querySelectorAll('[data-testid=chip-mark]')]
     .find(c => c.querySelector('i.fa-gitlab'));
   return el ? { tone: el.dataset.tone || null, tip: el.dataset.tip || null } : null;
 })
@@ -183,11 +183,11 @@ with sync_playwright() as pw:
     browser = pw.chromium.launch()
     page = browser.new_page(viewport={"width": 1440, "height": 900})
     page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-    page.fill("#username", "e2e-gl-admin")
-    page.fill("#password", "e2e-password-1")
-    page.click("#login-btn")
+    page.fill('[data-testid="login-username"]', "e2e-gl-admin")
+    page.fill('[data-testid="login-password"]', "e2e-password-1")
+    page.get_by_role("button", name="進入控制台").click()
     page.wait_for_function("() => !location.pathname.startsWith('/login')", timeout=8000)
-    page.wait_for_selector(".manifest__chips-cell .chip", timeout=8000)
+    page.wait_for_selector('[data-testid="chips-cell"] [data-testid="chip-mark"]', timeout=8000)
 
     print("== 四種狀態各畫成什麼 ==")
     got = page.evaluate(PROBE)
@@ -206,8 +206,8 @@ with sync_playwright() as pw:
         check("accent 的說法是「本場可用」", a is not None and "本場可用" in (a["tip"] or ""))
 
     print("== 歷史那張表只讀一個事實（沒有「現在能不能用」可言）==")
-    page.click("#tab-past")
-    page.wait_for_function("() => document.querySelectorAll('.manifest__chips-cell').length === 2", timeout=8000)
+    page.click('[data-testid="tab-past"]')
+    page.wait_for_function("() => document.querySelectorAll('[data-testid=chips-cell]').length === 2", timeout=8000)
     hist = page.evaluate(PROBE)
     check(f"兩列歷史都畫出來了（拿到 {len(hist)} 列）", len(hist) == len(HIST))
     if len(hist) == len(HIST):
@@ -220,19 +220,21 @@ with sync_playwright() as pw:
         )
         check("說法是時間軸的（曾啟用），不是「現在可用」", h_on is not None and "期間曾啟用" in (h_on["tip"] or ""))
         check("🔴 舊歷史的 null 一樣一顆都不畫", h_unknown is None)
-    page.click("#tab-live")
-    page.wait_for_function("() => document.querySelectorAll('.manifest__chips-cell').length === 4", timeout=8000)
+    page.click('[data-testid="tab-live"]')
+    page.wait_for_function("() => document.querySelectorAll('[data-testid=chips-cell]').length === 4", timeout=8000)
 
     print("== 部署沒開 GitLab：整欄一顆都不畫 ==")
     # ⚠ 這道 gate 在**伺服端**（web.sessions_page 把 gitlab_enabled 給模板），所以要重新
     #   載入整頁才吃得到新值——不是重拉列表 API 就好。
     config.GITLAB_HOST = ""
     page.goto(BASE, wait_until="domcontentloaded")
-    page.wait_for_selector(".manifest__chips-cell .chip", timeout=8000)
+    page.wait_for_selector('[data-testid="chips-cell"] [data-testid="chip-mark"]', timeout=8000)
     off = page.evaluate(PROBE)
     check("🔴 功能關掉時一顆 GitLab 標記都沒有（否則每一列都在講一件不存在的事）", all(x is None for x in off))
     # 對照組：其他標記還在。上面那條若因為「整排標記都不見了」而綠燈，等於沒測到東西。
-    other_marks = page.evaluate("() => document.querySelectorAll('.manifest__chips-cell .chip--mark').length")
+    other_marks = page.evaluate(
+        "() => document.querySelectorAll('[data-testid=chips-cell] [data-testid=chip-mark]').length"
+    )
     check("🔴 而且不是整排標記都消失了（網路／錄製／telemetry 還在）", other_marks > 0)
 
     browser.close()

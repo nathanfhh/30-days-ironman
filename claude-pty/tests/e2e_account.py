@@ -99,39 +99,41 @@ try:
         page = ctx.new_page()
 
         page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-        page.fill("#username", "aaa-boss")
-        page.fill("#password", PW)
-        page.click("#login-btn")
+        page.fill('[data-testid="login-username"]', "aaa-boss")
+        page.fill('[data-testid="login-password"]', PW)
+        page.get_by_role("button", name="進入控制台").click()
         page.wait_for_function("() => !location.pathname.startsWith('/login')", timeout=8000)
         page.goto(f"{BASE}/account", wait_until="domcontentloaded")
         page.wait_for_timeout(800)
 
         print("== CLI 憑證面板：貼 token → 已設定；清除 → 未設定（D 階段的入口）==")
-        check("初始是未設定（chip 紅）", "未設定" in page.inner_text("#token-state"))
-        check("招牌徽章也說未設定", "未設定" in page.inner_text("#cred-badge"))
-        check("沒 token 時沒有清除鍵（沒東西可清）", page.locator("#token-clear").is_hidden())
+        check("初始是未設定（chip 紅）", "未設定" in page.inner_text('[data-testid="token-state"]'))
+        check("招牌徽章也說未設定", "未設定" in page.inner_text('[data-testid="cred-badge"]'))
+        check("沒 token 時沒有清除鍵（沒東西可清）", page.locator('[data-testid="token-clear"]').is_hidden())
         check(
             "輸入框是 password 型別（貼進來的是憑證，畫面上不該讀得出來）",
-            page.get_attribute("#cli-token", "type") == "password",
+            page.get_attribute('[data-testid="cli-token"]', "type") == "password",
         )
-        check("空欄位時儲存鍵按不下去", page.locator("#token-save").is_disabled())
-        page.fill("#cli-token", "sk-ant-oat01-e2e-test-token")
-        check("貼了字儲存鍵才亮", page.locator("#token-save").is_enabled())
-        page.click("#token-save")
+        check("空欄位時儲存鍵按不下去", page.locator('[data-testid="token-save"]').is_disabled())
+        page.fill('[data-testid="cli-token"]', "sk-ant-oat01-e2e-test-token")
+        check("貼了字儲存鍵才亮", page.locator('[data-testid="token-save"]').is_enabled())
+        page.click('[data-testid="token-save"]')
         # 成功後前端先 toast、900ms 才 location.reload()——不能只等時間，要等 chip
         # 真的翻過來（等時間就是在賭 reload 已完成，賭輸的樣子像功能壞掉）。
         page.wait_for_function(
-            "() => document.querySelector('#token-state')?.textContent.includes('已設定')", timeout=8000
+            "() => document.querySelector('[data-testid=token-state]')?.textContent.includes('已設定')",
+            timeout=8000,
         )
-        check("重載後 chip 變已設定", "已設定" in page.inner_text("#token-state"))
-        check("招牌徽章跟著轉綠（同一個真相來源）", "已設定" in page.inner_text("#cred-badge"))
-        check("輸入框不吐回存過的值（永遠是空的）", page.input_value("#cli-token") == "")
-        check("清除鍵出現了", page.locator("#token-clear").is_visible())
-        page.click("#token-clear")
+        check("重載後 chip 變已設定", "已設定" in page.inner_text('[data-testid="token-state"]'))
+        check("招牌徽章跟著轉綠（同一個真相來源）", "已設定" in page.inner_text('[data-testid="cred-badge"]'))
+        check("輸入框不吐回存過的值（永遠是空的）", page.input_value('[data-testid="cli-token"]') == "")
+        check("清除鍵出現了", page.locator('[data-testid="token-clear"]').is_visible())
+        page.click('[data-testid="token-clear"]')
         page.wait_for_function(
-            "() => document.querySelector('#token-state')?.textContent.includes('未設定')", timeout=8000
+            "() => document.querySelector('[data-testid=token-state]')?.textContent.includes('未設定')",
+            timeout=8000,
         )
-        check("清除後回到未設定", "未設定" in page.inner_text("#token-state"))
+        check("清除後回到未設定", "未設定" in page.inner_text('[data-testid="token-state"]'))
 
         print("== 第一頁 ==")
         check(
@@ -178,9 +180,9 @@ try:
         print("== 建立新帳號：要看得到他，即使他排在別頁 ==")
         # 名字刻意排在最後——不跳頁的話，建完會停在目前這頁，畫面上完全看不到他，
         # 跟建立失敗長得一模一樣
-        page.fill("#new-user", "zzz-newbie")
-        page.fill("#new-user-pw", PW)
-        page.click('#user-form button[type="submit"]')
+        page.fill('[data-testid="new-user"]', "zzz-newbie")
+        page.fill('[data-testid="new-user-pw"]', PW)
+        page.get_by_role("button", name="建立帳號").click()
         page.wait_for_timeout(1200)
         check("新帳號出現在畫面上（清單已翻到他那一頁）", "zzz-newbie" in names(page))
         check(f"總數加一：{status(page)}", f"共{TOTAL + 1}筆" in status(page).replace(" ", ""))
@@ -188,15 +190,18 @@ try:
         print("== 長名字要被截斷，不能把表格推爆 ==")
         # 後端的長度上限只管得住碼位與東亞寬字元；字形寬度是字體的事、伺服器量不到
         # （U+FDF5 這種阿拉伯連字算一欄卻畫得像四欄）。所以版面這一層要自己站得住。
-        table_w = page.eval_on_selector(".roster", "el => el.clientWidth")
-        page.fill("#new-user", "z" * 32)
-        page.fill("#new-user-pw", PW)
-        page.click('#user-form button[type="submit"]')
+        table_w = page.eval_on_selector('[data-testid="roster-table"]', "el => el.clientWidth")
+        page.fill('[data-testid="new-user"]', "z" * 32)
+        page.fill('[data-testid="new-user-pw"]', PW)
+        page.get_by_role("button", name="建立帳號").click()
         page.wait_for_timeout(1200)
-        cell = page.locator(".roster__name", has_text="zzzzzzzz").first
+        cell = page.locator('[data-testid="roster-name"]', has_text="zzzzzzzz").first
         box = cell.evaluate("el => ({ scroll: el.scrollWidth, client: el.clientWidth })")
         check(f"名字被截斷（內容 {box['scroll']}px > 格寬 {box['client']}px）", box["scroll"] > box["client"])
-        check("表格沒有被撐寬", page.eval_on_selector(".roster", "el => el.clientWidth") <= table_w)
+        check(
+            "表格沒有被撐寬",
+            page.eval_on_selector('[data-testid="roster-table"]', "el => el.clientWidth") <= table_w,
+        )
         check("完整名稱仍拿得到（放在 title，滑上去看得見）", cell.get_attribute("title") == "z" * 32)
 
         print("== 只有一頁時整條分頁列收起來 ==")

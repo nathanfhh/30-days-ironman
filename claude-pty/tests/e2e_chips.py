@@ -173,10 +173,10 @@ for _ in range(50):
 # 一顆 chip 的量測結果。tone 認得出是哪一顆：model / effort 各自有 data-tone。
 PROBE = """
 ([tone, rowIdx]) => {
-  const cell = document.querySelectorAll('.manifest__chips-cell')[rowIdx];
-  const el = [...cell.querySelectorAll('.chip')].find(c => c.dataset.tone === tone);
+  const cell = document.querySelectorAll('[data-testid=chips-cell]')[rowIdx];
+  const el = [...cell.querySelectorAll('[data-testid=chip]')].find(c => c.dataset.tone === tone);
   if (!el) return null;
-  const text = el.querySelector('.chip__text');
+  const text = el.querySelector('[data-testid=chip-text]');
   const cs = getComputedStyle(el);
   const ts = text ? getComputedStyle(text) : null;
   return {
@@ -197,11 +197,11 @@ with sync_playwright() as pw:
     browser = pw.chromium.launch()
     page = browser.new_page(viewport={"width": 1440, "height": 900})
     page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-    page.fill("#username", "e2e-admin")
-    page.fill("#password", "e2e-password-1")
-    page.click("#login-btn")
+    page.fill('[data-testid="login-username"]', "e2e-admin")
+    page.fill('[data-testid="login-password"]', "e2e-password-1")
+    page.get_by_role("button", name="進入控制台").click()
     page.wait_for_function("() => !location.pathname.startsWith('/login')", timeout=8000)
-    page.wait_for_selector(".manifest__chips-cell .chip", timeout=8000)
+    page.wait_for_selector('[data-testid="chips-cell"] [data-testid="chip"]', timeout=8000)
 
     print("== 超長的 slug：切掉 + 有 tooltip，且 tooltip 講的是完整字串 ==")
     m = page.evaluate(PROBE, ["model", 0])
@@ -226,7 +226,7 @@ with sync_playwright() as pw:
     # 🔴 這條是這次漏掉的那個洞。原本只驗了 model 一種 tone，於是 `claude`／
     #    `medium` 被切成 `CLA…` `med…` 整欄送到使用者面前才被發現——寫死的
     #    5.6rem 本來就放不下它們，只是先前 ellipsis 沒生效、看起來剛好而已。
-    clipped = page.evaluate("""() => [...document.querySelectorAll('.chip__text')]
+    clipped = page.evaluate("""() => [...document.querySelectorAll('[data-testid=chip-text]')]
       .filter(t => t.scrollWidth > t.clientWidth + 1).map(t => t.textContent)""")
     check("🔴 被切的只有那顆刻意超長的（claude／medium 這些真實長度值一律不准被切）", clipped == [TOO_LONG])
 
@@ -237,10 +237,11 @@ with sync_playwright() as pw:
     check("🔴 沒有 tooltip（不然滑過去只會重複顯示同樣的字）", bool(e) and e["hasTip"] is False and e["tip"] is None)
 
     print("== hover 真的看得到（不只是掛了 class）==")
-    page.hover('.manifest__chips-cell .chip[data-tone="model"]')
+    page.hover('[data-testid="chips-cell"] [data-testid="chip"][data-tone="model"]')
     page.wait_for_timeout(300)
     seen = page.evaluate("""() => {
-      const el = document.querySelector('.manifest__chips-cell .chip[data-tone="model"]');
+      const el = document.querySelector(
+        '[data-testid=chips-cell] [data-testid=chip][data-tone=model]');
       const st = getComputedStyle(el, '::after');
       return { opacity: parseFloat(st.opacity), content: st.content };
     }""")
@@ -251,9 +252,9 @@ with sync_playwright() as pw:
     # 量的是內層 .manifest__id-text、掛 tooltip 的是外層 .manifest__id——**必須分兩層**，
     # 同一個元素既 overflow:hidden 又掛 .tip 的話，::after 會被自己的裁切吃掉。
     names = page.evaluate("""() => [...document.querySelectorAll(
-        '.manifest__row:not(.manifest__row--head)')].map(row => {
-      const host = row.querySelector('.manifest__id');
-      const text = row.querySelector('.manifest__id-text');
+        '[data-testid=session-row]')].map(row => {
+      const host = row.querySelector('[data-testid=session-title]');
+      const text = row.querySelector('[data-testid=session-title-text]');
       return {
         label: text ? text.textContent : null,
         clipped: text ? text.scrollWidth > text.clientWidth + 1 : null,
@@ -282,11 +283,11 @@ with sync_playwright() as pw:
     # ⚠ 選擇器**不要**寫成 `.manifest__id.tip`：tooltip 沒掛上時那個節點根本不存在，
     #   hover 會卡滿 30 秒逾時再丟 traceback——真正的失敗（沒掛 tooltip）會被埋在裡面。
     #   一律 hover「一定存在」的那個節點，讓斷言去說話。
-    page.hover(".manifest__row:not(.manifest__row--head) .manifest__id")
+    page.hover('[data-testid="session-row"] [data-testid="session-title"]')
     page.wait_for_timeout(300)
     seen = page.evaluate("""() => {
       const el = document.querySelector(
-        '.manifest__row:not(.manifest__row--head) .manifest__id');
+        '[data-testid=session-row] [data-testid=session-title]');
       const st = getComputedStyle(el, '::after');
       return { opacity: parseFloat(st.opacity), content: st.content };
     }""")

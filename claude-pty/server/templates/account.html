@@ -2,7 +2,7 @@
 {% block title %}帳號 · claude-pty{% endblock %}
 
 {% block body %}
-<div class="shell">
+<div class="shell" data-testid="shell">
   {% include "_masthead.html" %}
 
 
@@ -10,7 +10,7 @@
     <div class="section-head" style="margin-bottom:var(--space-2)">
       <h2 class="panel__title" style="margin:0">CLI 憑證</h2>
       {# 狀態 chip 由 JS 依 #cred-data 畫（同招牌徽章的資料，不另打一趟 API）。 #}
-      <span id="token-state"></span>
+      <span id="token-state" data-testid="token-state"></span>
     </div>
     <p class="panel__lede">
       在 host 上執行 <code data-copy title="點一下複製">claude setup-token</code>，把輸出貼進來。之後開的 session 用它
@@ -24,14 +24,14 @@
           {# type=password：貼進來的是憑證，畫面上不該讀得出來（旁邊有人、截圖、錄影）。
              存進去之後也不吐回來：這一欄永遠是空的，狀態只能靠 placeholder 講——
              所以它由 JS 依「設過沒」改寫，不然兩種狀態在這一格裡長得一模一樣。 #}
-          <input class="input" id="cli-token" type="password" autocomplete="off"
+          <input class="input" id="cli-token" data-testid="cli-token" type="password" autocomplete="off"
                  placeholder="貼上 claude setup-token 的輸出">
         </div>
       </div>
       <div class="form-actions">
-        <button class="btn btn--primary" type="submit" id="token-save" disabled>
+        <button class="btn btn--primary" type="submit" id="token-save" data-testid="token-save" disabled>
           <i class="fa-solid fa-id-card"></i> 儲存</button>
-        <button class="btn" type="button" id="token-clear" hidden>
+        <button class="btn" type="button" id="token-clear" data-testid="token-clear" hidden>
           <i class="fa-solid fa-eraser"></i> 清除</button>
       </div>
     </form>
@@ -104,24 +104,24 @@
 
   <section class="panel">
     <h2 class="panel__title">變更我的密碼</h2>
-    <form id="pw-form">
+    <form id="pw-form" data-testid="pw-form">
       <div class="form-row">
         <div class="field">
           <label class="label" for="old-pw">目前密碼</label>
-          <input class="input" id="old-pw" type="password" autocomplete="current-password" required>
+          <input class="input" id="old-pw" data-testid="old-pw" type="password" autocomplete="current-password" required>
         </div>
         <div class="field">
           <label class="label" for="new-pw">新密碼（至少 {{ min_password_length }} 字元）</label>
-          <input class="input" id="new-pw" type="password" autocomplete="new-password" required>
+          <input class="input" id="new-pw" data-testid="new-pw" type="password" autocomplete="new-password" required>
         </div>
         <div class="field">
           <label class="label" for="confirm-pw">再輸入一次新密碼</label>
-          <input class="input" id="confirm-pw" type="password" autocomplete="new-password" required>
-          <span class="field__hint" id="pw-hint" hidden></span>
+          <input class="input" id="confirm-pw" data-testid="confirm-pw" type="password" autocomplete="new-password" required>
+          <span class="field__hint" id="pw-hint" data-testid="pw-hint" hidden></span>
         </div>
       </div>
       <div class="form-actions">
-        <button class="btn btn--primary" type="submit" id="pw-btn" disabled>
+        <button class="btn btn--primary" type="submit" id="pw-btn" data-testid="pw-btn" disabled>
           <i class="fa-solid fa-key"></i> 更新密碼</button>
       </div>
     </form>
@@ -140,13 +140,13 @@
           <label class="label" for="new-user">使用者名稱</label>
           {# maxlength 只是先擋一手（貼上超長字串時當場截斷），真正的把關在後端 _clean_username
    ——瀏覽器的限制繞得過去，而帳號建錯了不能刪。 #}
-<input class="input" id="new-user" autocomplete="off" required
+<input class="input" id="new-user" data-testid="new-user" autocomplete="off" required
        maxlength="{{ username_max }}"
        title="最長 {{ username_max }} 字元，不可含空白或換行">
         </div>
         <div class="field">
           <label class="label" for="new-user-pw">密碼</label>
-          <input class="input" id="new-user-pw" type="password" autocomplete="new-password" required>
+          <input class="input" id="new-user-pw" data-testid="new-user-pw" type="password" autocomplete="new-password" required>
         </div>
         <div class="field">
           <span class="label">權限</span>
@@ -162,7 +162,7 @@
 
   <section class="panel">
     <h2 class="panel__title">帳號清單</h2>
-    <table class="roster">
+    <table class="roster" data-testid="roster-table">
       <thead>
         <tr><th>ID</th><th>使用者名稱</th><th>權限</th><th>建立時間</th><th></th></tr>
       </thead>
@@ -433,7 +433,8 @@
           return `
           <tr>
             <td class="mono-id">${u.id}</td>
-            <td><span class="roster__name" title="${esc(u.username)}">${esc(u.username)}</span></td>
+            <td><span class="roster__name" data-testid="roster-name"
+                       title="${esc(u.username)}">${esc(u.username)}</span></td>
             <td>${role}</td>
             {# 絕對時間回答「是哪一天」，相對時間回答「多久以前」——找特定帳號時用前者，
                判斷「這是不是剛剛新增的」用後者，兩個問題都常問，所以兩個都給。

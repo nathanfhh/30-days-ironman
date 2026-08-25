@@ -231,7 +231,11 @@ def term_size(page):
 
 
 def canvas_state(page):
-    """iframe 裡每一張畫布的 backing store 有沒有跟 CSS 尺寸對上。"""
+    """iframe 裡每一張畫布的 backing store 有沒有跟 CSS 尺寸對上。
+
+    ⚠ `.xterm canvas` 是 ttyd／xterm.js 自己的 DOM（上面那個假頁面照著它長），
+      不是我們的模板，沒有地方可以在上面補 data-testid，所以這裡照原樣認 class。
+    """
     return page.evaluate(
         "() => { const f = document.querySelector('[data-testid=\"drawer-frame\"]');"
         " const w = f.contentWindow, dpr = w.devicePixelRatio || 1;"
@@ -260,9 +264,9 @@ try:
         page.route("**/session/**", route_session)
 
         page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-        page.fill("#username", "e2e-admin")
-        page.fill("#password", "e2e-password-1")
-        page.click("#login-btn")
+        page.fill('[data-testid="login-username"]', "e2e-admin")
+        page.fill('[data-testid="login-password"]', "e2e-password-1")
+        page.get_by_role("button", name="進入控制台").click()
         page.wait_for_function("() => !location.pathname.startsWith('/login')", timeout=8000)
         page.wait_for_timeout(600)
 
@@ -419,7 +423,7 @@ try:
         #    有人日後把路徑拆出去或在它上面攔 click 就會靜靜失效。這裡直接點 code 釘住它。
         page.evaluate("() => navigator.clipboard.writeText('__before__')")
         persist.locator("code").click()
-        page.wait_for_selector(".toast", state="visible", timeout=4000)
+        page.wait_for_selector('[data-testid="toast"]', state="visible", timeout=4000)
         check(
             f"🔴 點路徑本身就複製到了（{page.evaluate('navigator.clipboard.readText()')}）",
             page.evaluate("navigator.clipboard.readText()") == config.DATA_BIND,
@@ -434,14 +438,14 @@ try:
         #   只有一個」不等於「不會再有第二個」**——下次有人再發明一個掃得到它的全域機制，
         #   這條就會紅。等 800ms 而不是立刻數：第二則若是非同步來的，立刻數會漏掉。
         page.wait_for_timeout(800)
-        _n = page.locator(".toast").count()
+        _n = page.locator('[data-testid="toast"]').count()
         check(f"🔴 一次點擊只有一則 toast（實際 {_n} 則）", _n == 1)
         # 收掉這一則，下面要驗的是「再點一次」自己那一則
-        page.locator(".toast__close").first.click()
-        page.wait_for_selector(".toast", state="detached", timeout=4000)
+        page.locator('[data-testid="toast-close"]').first.click()
+        page.wait_for_selector('[data-testid="toast"]', state="detached", timeout=4000)
         persist.click()
-        page.wait_for_selector(".toast", state="visible", timeout=4000)
-        toast_el = page.locator(".toast").first
+        page.wait_for_selector('[data-testid="toast"]', state="visible", timeout=4000)
+        toast_el = page.locator('[data-testid="toast"]').first
         check("🔴 有 toast", toast_el.is_visible())
         check("toast 說得出複製了什麼", config.DATA_BIND in toast_el.inner_text())
         copied = page.evaluate("navigator.clipboard.readText()")
@@ -449,22 +453,23 @@ try:
         box = toast_el.bounding_box()
         top = page.evaluate(
             "([x, y]) => { const e = document.elementFromPoint(x, y);"
-            "  return e ? (e.closest('.toast') ? 'toast'"
-            "            : e.closest('.drawer') ? 'drawer' : e.tagName) : 'none'; }",
+            "  return e ? (e.closest('[data-testid=toast]') ? 'toast'"
+            "            : e.closest('[data-testid=drawer]') ? 'drawer' : e.tagName) : 'none'; }",
             [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2],
         )
         check(f"🔴 toast 那個點上最上層的是 toast 本身而不是抽屜（{top}）", top == "toast")
         # 抽屜把 .shell 設成 inert；toast 掛在 document.body 而不是 .shell 裡，所以仍點得到。
-        check("toast 沒有被 inert 掃到（關閉鍵可以按）", page.locator(".toast__close").first.is_enabled())
+        check("toast 沒有被 inert 掃到（關閉鍵可以按）", page.locator('[data-testid="toast-close"]').first.is_enabled())
 
         print("== 提示是輪播：同時只露一條，而且會換 ==")
         # ⚠ 先把滑鼠移開、焦點放掉：輪播**依設計**在 hover/focus 時暫停（裡面有可點的
         #   複製鍵），而上一段剛剛點過它。不做這件事會等到逾時，然後看起來像「輪播壞了」。
         page.mouse.move(5, 5)
         page.evaluate("document.activeElement && document.activeElement.blur()")
-        hints = page.locator('[data-testid="drawer-hints"] .drawer__hint')
+        # 兩條提示各自有 testid（drawer-persist / drawer-mouse），這裡數的是「有 testid 的那些」
+        hints = page.locator('[data-testid="drawer-hints"] [data-testid]')
         check(f"兩條提示都在 DOM 裡（{hints.count()} 條）", hints.count() == 2)
-        shown = page.locator('[data-testid="drawer-hints"] .drawer__hint[data-on="true"]')
+        shown = page.locator('[data-testid="drawer-hints"] [data-testid][data-on="true"]')
         check("🔴 同時只有一條露臉", shown.count() == 1)
         first = shown.first.get_attribute("data-testid")
         # ⚠ 等的是「換人了」而不是固定睡 6 秒：睡太短會偶爾紅、睡太久拖慢整套。
@@ -476,7 +481,7 @@ try:
         try:
             page.wait_for_function(
                 "(prev) => { const el = document.querySelector("
-                '  \'[data-testid="drawer-hints"] .drawer__hint[data-on="true"]\');'
+                "  '[data-testid=drawer-hints] [data-testid][data-on=true]');"
                 "  return el && el.dataset.testid !== prev; }",
                 arg=first,
                 timeout=9000,
@@ -487,7 +492,7 @@ try:
         check("換完之後仍然只有一條露臉", shown.count() == 1)
         # 沒露臉的不可以還在 Tab 序裡——否則鍵盤使用者會 Tab 到一顆看不見的複製鍵
         hidden_focusable = page.evaluate(
-            "[...document.querySelectorAll('[data-testid=\"drawer-hints\"] .drawer__hint')]"
+            "[...document.querySelectorAll('[data-testid=drawer-hints] [data-testid]')]"
             "  .filter(h => h.dataset.on !== 'true' && !h.inert).length"
         )
         check(f"🔴 沒露臉的都退出 Tab 序（{hidden_focusable} 個漏網）", hidden_focusable == 0)
@@ -560,7 +565,7 @@ try:
 
         print("== 同時只留一個抽屜 ==")
         open_drawer(page, "e1")
-        page.evaluate("""() => document.querySelector('.shell').inert = false""")
+        page.evaluate("""() => document.querySelector('[data-testid=shell]').inert = false""")
         page.click('[data-testid="row-open-e2"]', force=True)
         page.wait_for_selector('[data-testid="drawer"]')
         page.wait_for_timeout(700)
