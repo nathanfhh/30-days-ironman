@@ -44,6 +44,10 @@ def record_into(root: str) -> list[str]:
     written: list[str] = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
+        # 錄製環境的指紋。golden_check 拿它決定「這台機器能不能比截圖」（見
+        # golden_scenes.screenshot_comparable 的說明）。
+        os.makedirs(root, exist_ok=True)
+        _write(os.path.join(root, G.META_NAME), G.meta_text(browser), written, root)
         for name, _desc, run in G.SCENES:
             out = os.path.join(root, name)
             os.makedirs(out, exist_ok=True)
@@ -60,7 +64,7 @@ def record_into(root: str) -> list[str]:
                 _write(os.path.join(out, f"dom.{vp}.txt"), G.dom_text(page), written, root)
 
                 if vp == G.SHOT_VIEWPORT:
-                    _write(os.path.join(out, "network.txt"), G.network_text(reqs, BASE), written, root)
+                    _write(os.path.join(out, "network.txt"), G.network_text(page, reqs, BASE), written, root)
                     # ⚠ animations="disabled"：把還在跑的 CSS 動畫定住。context 已經開了
                     #   reduced-motion，這是第二道（有幾個動畫刻意不受 reduced-motion 影響，
                     #   例如 .lamp 的呼吸燈）。

@@ -46,7 +46,7 @@ config.GITLAB_HOST = "gitlab.example.test"
 
 from fake_ttyd import STUB  # noqa: E402
 
-from server import auth, sessions as sessions_mod, version, web  # noqa: E402
+from server import auth, version, web  # noqa: E402
 from server.app import app  # noqa: E402
 from server.db import init_db, reset_engine, session_scope  # noqa: E402
 from server.models import SessionHistory, Session as SessionRow, User  # noqa: E402
@@ -91,10 +91,12 @@ def pin_all() -> None:
         ]
     }
 
-    # 3. 憑證狀態每 15 秒輪詢一次會改寫招牌徽章。資料本身是固定的（下面 seed 決定），
-    #    但輪詢回來的時刻不是，所以直接讓它回一份固定的結果。
-    _real_cred = sessions_mod.credentials_state
-    sessions_mod.credentials_state = lambda uid: _real_cred(uid)  # 佔位：值本來就只看 DB
+    # 3. 這一版錄的是哪一套前端。scaffold 併進來之後 `config.UI` 會決定要出 legacy 還是
+    #    Vue，golden 錄的**永遠是 legacy**（它就是規格本身）。明寫出來，免得哪天預設值
+    #    翻過去，「看到紅就重錄」會把 Vue 版錄成規格，那條防線當場反過來替回歸背書。
+    config.UI = "legacy"
+
+    # 4. 週期性的計時器不跑，見 FREEZE_TIMERS_JS。
 
 
 class _FakeContainer:
@@ -436,9 +438,26 @@ SCENES = [
 ]
 
 
+FREEZE_TIMERS_JS = """
+// 週期性的東西一律不跑：列表每 15 秒重抓一次（sessions.html），抽屜的提示每 6 秒換一條
+// （app.js 的 hintTimer）。錄製與比對都要求畫面停在一個**確定**的狀態，而這兩個計時器
+// 隨時可能在快照的前一刻把畫面換掉。慢一點的機器上尤其容易跨過去，而那種紅燈看起來
+// 像功能壞了。
+// ⚠ 只擋長間隔（>= 5 秒）。短的 setInterval 有正經用途，一律擋掉會把功能弄壞，
+//   而那會讓 golden 錄到一個實際上不存在的畫面——比不穩定更糟。
+(() => {
+  const real = window.setInterval;
+  window.setInterval = function (fn, ms, ...rest) {
+    if (typeof ms === "number" && ms >= 5000) return 0;
+    return real.call(this, fn, ms, ...rest);
+  };
+})();
+"""
+
+
 def new_context(browser, viewport_key: str):
     """每一場都開一個乾淨的 context：登入狀態、localStorage、主題都不會互相汙染。"""
-    return browser.new_context(
+    ctx = browser.new_context(
         viewport=VIEWPORTS[viewport_key],
         timezone_id="Asia/Taipei",
         locale="zh-TW",
@@ -449,6 +468,8 @@ def new_context(browser, viewport_key: str):
         device_scale_factor=1,
         color_scheme="dark",
     )
+    ctx.add_init_script(FREEZE_TIMERS_JS)
+    return ctx
 
 
 def prepare_page(page) -> list:
@@ -463,29 +484,37 @@ def prepare_page(page) -> list:
     return reqs
 
 
-def network_text(reqs: list, base: str) -> str:
+def network_text(page, reqs: list, base: str) -> str:
     """把收到的請求整理成可比對的文字。
 
-    ⚠ 分成兩段是刻意的：
-      · **文件與 API** 依序列出。這一段才是要守的東西（Vue 版有沒有多打或少打一發），
-        而且它由應用邏輯決定，順序是確定的。
-      · **靜態資源**排序後列出。它們是瀏覽器排的，同一份頁面兩次載入的先後可以不同
-        （字體、CSS、JS 誰先回來不歸我們管）。照原順序記的話會隨機紅，而隨機紅的
-        golden 最後只會被人加到忽略清單裡。排序之後仍然守得住「少載了一個檔案」。
-    ⚠ query 一律丟掉：`asset_url()` 會帶一個由檔案 mtime 算出來的 `?v=`，那在每一次
-      checkout 之後都不一樣。
+    ⚠ 分成三段是刻意的：
+      · **文件與 API** 依序列出，**連 query 一起**。這一段才是要守的東西：篩選條件、
+        `limit`／`offset`、時間範圍全在 query 裡，而那正是 Vue 版最容易做錯的地方
+        （少帶一個參數、把 offset 算錯，畫面看起來還是一張表，資料卻是另一批）。
+      · **靜態資源**排序後列出，**query 丟掉**。順序是瀏覽器排的，同一份頁面兩次載入
+        誰先回來不歸我們管；照原順序記會隨機紅，而隨機紅的 golden 最後只會被人加到
+        忽略清單裡。query 丟掉是因為 `asset_url()` 帶的 `?v=` 是檔案 mtime 算的，
+        每次 checkout 之後都不一樣。排序之後仍然守得住「少載了一個檔案」。
+      · **場景就緒時的網址**。`?tab=past` 與篩選條件是用 `replaceState` 寫進網址的，
+        **不會產生任何請求**，所以前兩段完全看不到它們。而「條件的唯一真相在網址」
+        正是這個前端的核心設計（見 sessions.html 的註解），漏掉它等於沒有守到。
     """
     docs, assets = [], []
     for method, url in reqs:
         if not url.startswith(base):
             continue
-        path = url[len(base) :].split("?", 1)[0] or "/"
-        line = f"{method} {path}"
-        (assets if path.startswith("/static/") else docs).append(line)
-    out = ["# 文件與 API（依序）"]
+        rest = url[len(base) :] or "/"
+        path = rest.split("?", 1)[0] or "/"
+        if path.startswith("/static/"):
+            assets.append(f"{method} {path}")
+        else:
+            docs.append(f"{method} {rest}")
+    here = page.evaluate("() => location.pathname + location.search")
+    out = ["# 文件與 API（依序，含 query）"]
     out += docs
-    out += ["", "# 靜態資源（排序後，見 golden_scenes.network_text 的說明）"]
+    out += ["", "# 靜態資源（排序後、去掉 query，見 golden_scenes.network_text 的說明）"]
     out += sorted(set(assets))
+    out += ["", "# 場景就緒時的網址（replaceState 寫進去的條件不會產生請求）", here]
     return "\n".join(out) + "\n"
 
 
@@ -550,6 +579,58 @@ _DOM_JS = r"""(attrs) => {
 def dom_text(page) -> str:
     """帶白名單屬性的元素，一行一個，依 DOM 順序。逐字比對，不設閾值。"""
     return page.evaluate(_DOM_JS, DOM_ATTRS).rstrip("\n") + "\n"
+
+
+# ── 錄製環境的指紋 ───────────────────────────────────────────────────────────
+#
+# 截圖是**平台相依**的：golden 在 macOS 錄（字體是 PingFang TC），同一份程式碼在
+# ubuntu runner 上算繪出來的字完全是另一組像素。沒有這道 gate 的話，CI 的 `--all`
+# job 一跑 golden_check，十二條截圖必紅——而那不是回歸，是兩台機器的字體不一樣。
+#
+# ⚠ 這道 gate 的方向要對：**平台不同時只跳過截圖，aria／dom／network 照比**。
+#   那三份是文字，與字體無關，跨平台完全可比；把整支 golden_check 跳掉才是把
+#   CI 上唯一守得住介面的東西關掉。
+# ⚠ 跳過時要**明說**，不可以靜靜地少比三十六條。看不見的跳過就是假綠燈。
+META_NAME = "META"
+
+
+def meta_text(browser) -> str:
+    import platform
+
+    return (
+        f"ui={getattr(config, 'UI', 'legacy')}\n"
+        f"platform={platform.system()} {platform.machine()}\n"
+        f"chromium={browser.version}\n"
+        f"device_scale_factor=1\n"
+        f"color_scheme=dark\n"
+        f"viewports={','.join(VIEWPORTS)}\n"
+    )
+
+
+def meta_path() -> str:
+    return os.path.join(GOLDEN_DIR, META_NAME)
+
+
+def screenshot_comparable(browser) -> tuple[bool, str]:
+    """現在這台機器能不能拿來比截圖？回 (能不能, 說明)。"""
+    try:
+        want = open(meta_path(), encoding="utf-8").read()
+    except OSError:
+        return False, "golden 裡沒有 META（用舊版錄的，重錄一次就有）"
+    now = meta_text(browser)
+    if want == now:
+        return True, ""
+    wl, nl = dict(_kv(want)), dict(_kv(now))
+    diff = [f"{k}：golden={wl.get(k)!r} 現在={nl.get(k)!r}" for k in wl if wl.get(k) != nl.get(k)]
+    diff += [f"{k}：golden 沒有這一項，現在={nl[k]!r}" for k in nl if k not in wl]
+    return False, "；".join(diff)
+
+
+def _kv(text: str):
+    for line in text.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            yield k, v
 
 
 def scene_dir(name: str) -> str:

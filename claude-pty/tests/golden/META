@@ -1,0 +1,6 @@
+ui=legacy
+platform=Darwin arm64
+chromium=151.0.7922.34
+device_scale_factor=1
+color_scheme=dark
+viewports=1280x800,390x844

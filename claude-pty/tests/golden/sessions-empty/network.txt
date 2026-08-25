@@ -1,11 +1,11 @@
-# 文件與 API（依序）
+# 文件與 API（依序，含 query）
 GET /login
 POST /api/auth/login
 GET /
 GET /api/catalog
-GET /api/sessions
+GET /api/sessions?offset=0
 
-# 靜態資源（排序後，見 golden_scenes.network_text 的說明）
+# 靜態資源（排序後、去掉 query，見 golden_scenes.network_text 的說明）
 GET /static/css/app.css
 GET /static/images/01-circuit-board-transparent.webp
 GET /static/js/app.js
@@ -14,3 +14,6 @@ GET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2
 GET /static/vendor/fonts/instrument-serif-1.woff2
 GET /static/vendor/fonts/instrument-serif-3.woff2
 GET /static/vendor/fonts/instrument-serif.css
+
+# 場景就緒時的網址（replaceState 寫進去的條件不會產生請求）
+/

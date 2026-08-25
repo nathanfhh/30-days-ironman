@@ -19,18 +19,32 @@
   · **網路序列**：文件與 API 的呼叫順序。多打一發、少打一發、換了端點都看得到。
   · **截圖**：看起來還不還是同一個東西。
 
-## 截圖的兩道閘（單靠比例會漏掉真的改動）
+## 截圖的兩道閘：比例，加上「有沒有一整塊變了」
 
-一開始只有「像素差比例 <= 1%」。實測發現它抓不到東西：把抽屜面板的底色整個換掉，
-全頁只差 **0.04%**，因為那塊底色幾乎被 iframe 與標題列蓋滿。1% 的全頁比例等於允許
-一塊 158x158 的區域整個換掉還是綠的，那條閘形同虛設。
+比例這一道單獨用是抓不到東西的。實測：把抽屜面板的底色**整個換掉**，全頁只差
+**0.04%**（那塊底色幾乎被 iframe 與標題列蓋滿）。1% 的全頁比例等於允許一塊 158x158
+的區域整個換掉還是綠的。
 
-所以改成兩道，兩道都要過：
+後來改成數「強差異像素」的絕對數量，仍然不夠：一顆 chip 的顏色只挪 20 階、一顆 7px
+的狀態燈換色，數量都太小。**問題不在數量，在形狀。** 反鋸齒的差異是沿著字緣的
+一兩像素細線，真的改動則是一整塊。所以第二道改成問形狀：
 
-  · **比例** <= `PIXEL_TOLERANCE`（1%，Nathan 給的數字）。守的是「整頁大面積改變」。
-  · **強差異像素數** <= `STRONG_PIXEL_LIMIT`。只數「單一通道差超過 `STRONG_DELTA`」的
-    像素。反鋸齒在字緣造成的是幾階灰，過不了這道濾網；換顏色、位移、少一個元件則
-    一定過得了。這一道才是真正在抓改動的那一道。
+  · **比例** <= `PIXEL_TOLERANCE`（1%）。守的是整頁大面積改變。
+  · **有沒有任何一塊實心 `BLOCK`x`BLOCK` 的強差異**。作法是把強差異畫成遮罩，再做一次
+    `BLOCK`x`BLOCK` 的侵蝕（`MinFilter`）：侵蝕之後還剩下任何一點，就代表原圖存在一塊
+    完全由強差異構成的 5x5。細線侵蝕完什麼都不剩，實心塊剩得下來。
+  · **強差異像素總數** <= `STRONG_PIXEL_LIMIT`。這一道是給**細但廣**的改動用的。
+
+第三道不是湊數，是實測補上的：把 chip 的 1px 邊框顏色挪 20 階，前兩道**都放過**
+（1px 的線永遠湊不出實心 5x5，總量也遠低於 1%），而它其實改到了畫面上每一顆 chip。
+三道各接一種形狀：大面積、局部一整塊、細而廣。
+
+因為形狀那一道擋得住反鋸齒，`STRONG_DELTA` 就可以壓得很低（8 階，而不是原本的 32），
+小幅度的真差異才抓得到。實測乾淨的一輪是 0 塊、0 個強差異像素。
+
+⚠ 用侵蝕而不是連通元件標記：一來它是 C 實作的一次卷積，2.5M 像素跑得動；二來連通元件
+  的**外接矩形**會被細線騙過去——整行文字位移一像素會產生一條 500x8 的細長元件，
+  外接矩形遠大於 5x5，但它並不是「一塊」。
 
 ⚠ 尺寸不同一律是失敗，不做縮放後再比：版面高度變了正是要抓的事，縮放會把它抹平成
   一片模糊的小差異，然後落在閾值以內。
@@ -58,13 +72,18 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 
 # 允許的像素差比例（Nathan 給的數字）。同一台機器上實測是 0.00%。
 PIXEL_TOLERANCE = 0.01
-# 單一通道差超過這個才算「真的不一樣」。反鋸齒在字緣是幾階灰，過不了。
-STRONG_DELTA = 32
-# 強差異像素的絕對上限。400 個大約是 20x20，比任何一個看得出來的介面改動都小，
-# 又比零星的算繪飄動大。實測：乾淨的一輪是 0 個，換一個底色是四位數。
+# 單一通道差超過這個才算「真的不一樣」。壓得低是因為擋反鋸齒的工作交給下面那道
+# 形狀規則了，這裡不必再靠高門檻去擋它。
+STRONG_DELTA = 8
+# 「一塊」的邊長。實心 5x5 比任何一個看得出來的介面改動都小（7px 的狀態燈就有 5x5），
+# 又比反鋸齒的一兩像素細線大得多。
+BLOCK = 5
+# 強差異像素的總數上限。給「細但廣」的改動用（1px 邊框、分隔線），那一類湊不出實心塊。
+# 實測：乾淨的一輪是 0 個，把 chip 的 1px 邊框挪 20 階是四位數。
 STRONG_PIXEL_LIMIT = 400
 
 _fails = 0
+skipped_shots: list[str] = []
 DIFF_DIR = tempfile.mkdtemp(prefix="golden-diff-")
 
 
@@ -89,7 +108,7 @@ def text_diff_hint(want: str, got: str) -> str:
 
 def compare_png(golden_path: str, now_bytes: bytes, scene: str) -> tuple[bool, str]:
     """回 (過不過, 說明)。差異圖寫進 DIFF_DIR。"""
-    from PIL import Image, ImageChops
+    from PIL import Image, ImageChops, ImageFilter
 
     a = Image.open(golden_path).convert("RGB")
     b = Image.open(_bytes_io(now_bytes)).convert("RGB")
@@ -99,21 +118,27 @@ def compare_png(golden_path: str, now_bytes: bytes, scene: str) -> tuple[bool, s
         return False, f"尺寸就不一樣了：golden {a.size} vs 現在 {b.size}"
     diff = ImageChops.difference(a, b)
     total = a.size[0] * a.size[1]
-    changed = strong = 0
-    for px in diff.getdata():
-        m = max(px)
-        if m:
-            changed += 1
-            if m > STRONG_DELTA:
-                strong += 1
+    # 每像素取三通道最大差（不是轉灰階：轉灰階是加權平均，純藍換成純紅會被平掉）
+    r, g, bl = diff.split()
+    worst = ImageChops.lighter(ImageChops.lighter(r, g), bl)
+    changed = total - worst.histogram()[0]
     ratio = changed / total
-    why = f"差 {ratio:.2%}、強差異 {strong} 個"
-    if ratio > PIXEL_TOLERANCE or strong > STRONG_PIXEL_LIMIT:
+    mask = worst.point(lambda v: 255 if v > STRONG_DELTA else 0)
+    strong = mask.histogram()[255]
+    # 侵蝕：只有「實心 BLOCKxBLOCK 的強差異」活得下來，細線一律歸零。
+    blocks = mask.filter(ImageFilter.MinFilter(BLOCK))
+    box = blocks.getbbox()  # 全黑時回 None
+    why = f"差 {ratio:.2%}、實心 {BLOCK}x{BLOCK} 塊 {'有' if box else '無'}、強差異 {strong} 個"
+    if ratio > PIXEL_TOLERANCE or box is not None or strong > STRONG_PIXEL_LIMIT:
         out = os.path.join(DIFF_DIR, f"{scene}.diff.png")
         # 差異放大成可見的：原圖的差通常只有幾階灰，直接存會看起來全黑。
         diff.point(lambda v: min(255, v * 8)).save(out)
         Image.open(_bytes_io(now_bytes)).save(os.path.join(DIFF_DIR, f"{scene}.now.png"))
-        return False, f"{why}（上限 {PIXEL_TOLERANCE:.0%} / {STRONG_PIXEL_LIMIT} 個）；差異圖 {out}"
+        where = f"，第一塊在 {box[:2]}" if box else ""
+        return False, (
+            f"{why}{where}（上限 {PIXEL_TOLERANCE:.0%}／不得有實心塊／強差異 {STRONG_PIXEL_LIMIT} 個）"
+            f"；差異圖 {out}"
+        )
     return True, why
 
 
@@ -134,6 +159,14 @@ try:
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
+        shots_ok, why_not = G.screenshot_comparable(browser)
+        print(f"== 環境：比的是 {getattr(G.config, 'UI', 'legacy')} 版 ==")
+        if shots_ok:
+            print("  截圖：與錄製環境相同，照比")
+        else:
+            # ⚠ 明說。靜靜少比十二條就是假綠燈，而那正是這支存在的理由的反面。
+            print(f"  ⚠ 截圖跳過：平台不同（{why_not}）")
+            print("    aria／DOM／網路照比，它們是文字，與字體算繪無關，跨平台完全可比。")
         for name, desc, run in G.SCENES:
             print(f"== {name}：{desc} ==")
             d = G.scene_dir(name)
@@ -158,17 +191,23 @@ try:
 
                 if vp == G.SHOT_VIEWPORT:
                     want_net = open(os.path.join(d, "network.txt"), encoding="utf-8").read()
-                    got_net = G.network_text(reqs, BASE)
+                    got_net = G.network_text(page, reqs, BASE)
                     if not check("網路呼叫一致", want_net == got_net):
                         print(f"        {text_diff_hint(want_net, got_net)}")
-                    shot = page.screenshot(full_page=True, animations="disabled")
-                    ok, why = compare_png(os.path.join(d, f"screen.{vp}.png"), shot, name)
-                    check(f"截圖一致（{vp}，{why}）", ok)
+                    if shots_ok:
+                        shot = page.screenshot(full_page=True, animations="disabled")
+                        ok, why = compare_png(os.path.join(d, f"screen.{vp}.png"), shot, name)
+                        check(f"截圖一致（{vp}，{why}）", ok)
+                    else:
+                        skipped_shots.append(name)
                 ctx.close()
         browser.close()
 finally:
     G.cleanup()
 
+if skipped_shots:
+    print(f"\n⚠ 這一輪沒有比截圖（平台與錄製時不同）：{len(skipped_shots)} 場")
+    print("   要在這台機器上也守住視覺，就在這台機器重錄一份 golden。")
 if _fails:
     print(f"\n差異圖與當下的截圖都在 {DIFF_DIR}")
     print("⚠ 確認那是你要的改動再重錄（tests/golden_record.py）。看到紅燈就順手重錄，")
