@@ -114,7 +114,39 @@ for leaked in ("credentials", "limits", "gitlab", "username", "is_admin", "cli_t
 
 print("== /api/account/bootstrap：形狀與值 ==")
 acct = c.get("/api/account/bootstrap").get_json()
-check(f"頂層欄位剛好四個（得到 {sorted(acct)}）", set(acct) == {"default_cli", "credentials", "limits", "gitlab"})
+check(
+    f"頂層欄位剛好五個（得到 {sorted(acct)}）",
+    set(acct) == {"user", "default_cli", "credentials", "limits", "gitlab"},
+)
+
+# ── user：與 /api/auth/me 是同一個出口 ────────────────────────────────────────
+#
+# 合進來的理由是「冷載入不要為了同一個畫面往返兩次」（見 app.account_bootstrap 的說明）。
+# 而合併最容易壞的方式是**在這裡另外拼一份**：兩份一開始長得一樣，某天 `_to_dict` 加了
+# 一個欄位而這裡沒跟上，畫面就變成「有一邊怪怪的」，沒有任何東西會紅。
+# ⚠ 所以這一條比的是**逐欄相同**，不是「有 user 這個鍵」。
+me = c.get("/api/auth/me").get_json()["user"]
+_u = acct["user"]
+_only_me = {k: me[k] for k in me if k not in _u or _u[k] != me[k]}
+_only_acct = {k: _u[k] for k in _u if k not in me}
+check(
+    f"user 與 /api/auth/me 逐欄相同（只在 me：{_only_me or '無'}；只在 bootstrap：{_only_acct or '無'}）",
+    _u == me,
+)
+# ⚠ 這條看起來像上一條的重複，其實守的是另一件事：上一條在兩邊**都少掉**同一個欄位時
+#   仍然是綠的（兩個空字典也相等）。所以這裡獨立釘住「該有的欄位真的在」。
+check(
+    f"user 的欄位齊全（得到 {sorted(_u)}）",
+    set(_u) == {"id", "username", "is_admin", "password_version", "ttyd_bin", "gitlab_pat_configured", "created_at"},
+)
+# ⚠ 多一個出口就是多一個洩漏面。`_to_dict` 只給「設過沒」這個布林，明文與密文都不出去
+#   （那條規矩守在 auth._to_dict 那一行），這裡再確認一次它沒有被繞過。
+check("PAT 只給狀態不給值（布林）", isinstance(_u["gitlab_pat_configured"], bool))
+check(
+    f"整份回應裡沒有任何密文或雜湊欄位（得到 {sorted(_u)}）",
+    not any(k.endswith("_enc") or "password_hash" in k for k in _u),
+)
+
 check("default_cli 讀 config.DEFAULT_CLI（不是第二份寫死的字面量）", acct["default_cli"] == config.DEFAULT_CLI)
 check(
     "credentials 以 cli 為鍵（形狀與 /api/sessions 搭順風車那份相同）",
@@ -171,11 +203,22 @@ check(
 
 
 print("== 不重複既有出口：兩個真相來源就是遲早分岔 ==")
+#
+# ⚠ 這一節的判準是「**有沒有第二個真相來源**」，不是「有沒有出現這個字」。
+#   `user` 現在**是**在這裡（2026-08-26 的裁示：SPA 冷載入不要為了同一個畫面往返兩次），
+#   但它不是第二份，它就是 `/api/auth/me` 回的同一個 `g.user`，上面那條「逐欄相同」
+#   釘住了這件事。所以這三條改成守它們真正在守的東西：
+#     · user 在，但必須與 /api/auth/me 同源（上面已驗）；
+#     · gitlab_pat_configured **只能活在 user 裡**，不可以在頂層再放一份；
+#     · ttyd 的**選項清單**仍然只屬於 /api/prefs（user.ttyd_bin 是這個人自己的值，同源）。
 _acct_raw = c.get("/api/account/bootstrap").get_data(as_text=True)
-check("不夾帶使用者本人（那是 /api/auth/me）", "user" not in acct)
-check("不夾帶 PAT 設過沒（那是 /api/auth/me 的 gitlab_pat_configured）", "gitlab_pat_configured" not in _acct_raw)
+check("使用者本人在（冷載入不必再打一發 /api/auth/me）", "user" in acct)
+check(
+    "PAT 設過沒只活在 user 裡，頂層沒有第二份",
+    "gitlab_pat_configured" in acct["user"] and "gitlab_pat_configured" not in set(acct) - {"user"},
+)
 check("不夾帶模型清單（那是 /api/catalog）", "models" not in _acct_raw and "claude_models" not in _acct_raw)
-check("不夾帶 ttyd 選項（那是 /api/prefs）", "ttyd" not in _acct_raw)
+check("不夾帶 ttyd 的選項清單（那是 /api/prefs；user.ttyd_bin 是這個人自己的值）", "ttyd_choices" not in _acct_raw)
 # 反向：委派出去的東西必須真的有人給，否則 SPA 會少一塊而這裡還是綠的。
 _me = c.get("/api/auth/me").get_json()["user"]
 check("/api/auth/me 給得出 gitlab_pat_configured（委派的對象真的在）", "gitlab_pat_configured" in _me)

@@ -487,6 +487,7 @@ def account_bootstrap():
 
     | 回傳欄位 | 模板裡的樣子 |
     |---|---|
+    | `user` | `_masthead.html` 的名字與 admin 徽章、account 的管理員區塊（同 `/api/auth/me`） |
     | `default_cli` | `_masthead.html` 的 `data-cli` |
     | `credentials` | `_masthead.html` 的 `#cred-data`（同 `/api/sessions` 搭順風車那份） |
     | `limits.name_max` | sessions 的名稱欄 `maxlength` 與重新命名對話框 |
@@ -494,9 +495,14 @@ def account_bootstrap():
     | `limits.min_password_length` | account 改密碼欄的標籤與 `MIN_PW` |
     | `gitlab.*` | account 的 GitLab 區塊（是否顯示、主機名、代理錯誤） |
 
-    ⚠ **PAT 設過沒不在這裡**：那是 `/api/auth/me` 的 `gitlab_pat_configured`（`auth._to_dict`
-      是它唯一的出口，那條規矩只要守住那一行）。這裡再放一份就變成兩個真相來源。
-      **明文與密文一律不出去**，同 `/api/users/me/token` 的既有做法。
+    ⚠ `user` 就是 `/api/auth/me` 回的**同一個物件**（`g.user`，由 `auth._to_dict` 產生）。
+      **不是在這裡另外拼一份**：拼一份就是第二個真相來源，而分岔的那天沒有人會發現，
+      畫面只是「有一邊怪怪的」。PAT 設過沒（`gitlab_pat_configured`）因此順著它一起出來，
+      出口仍然只有 `_to_dict` 那一行，明文與密文一律不出去。
+      `tests/test_bootstrap.py` 有一條「與 `/api/auth/me` 逐欄相同」把這件事釘住。
+    ⚠ 為什麼要合進來：SPA 冷載入帳號頁時，`user` 與下面這些是**同一個時間點**要的東西，
+      拆成兩發等於為了同一個畫面往返兩次（實測 vue 版每頁多打兩發 `/api/auth/me`）。
+      `/api/auth/me` **保留不動**：登入之後想單獨重新確認身分的路徑仍然需要它。
     ⚠ `limits` **不隨權限改變形狀**：`username_max` 今天只印在 account 的管理員區塊裡，
       這裡卻對所有登入者都給。這是刻意的：它是一個表單長度常數，不是誰的資料，而讓
       回傳形狀依角色而異會把一個 `undefined` 分支推給每一個取用它的地方。真正該 gate 的
@@ -506,6 +512,7 @@ def account_bootstrap():
     """
     gitlab_on = config.gitlab_enabled()
     return jsonify(
+        user=g.user,
         default_cli=config.DEFAULT_CLI,
         credentials=sessions_mod.credentials_state(g.user["id"]),
         limits={
