@@ -65,7 +65,10 @@ if _fatal:
     raise SystemExit(1)
 
 # 不需登入的端點：登入 API、登入頁、靜態資源、健康檢查。其餘一律過 gate。
-_PUBLIC_ENDPOINTS = {"login", "web.login_page", "web.healthz", "static"}
+# ⚠ `web.spa_asset` 是 Vue 版的 JS/CSS（`/assets/*`）。它必須公開——登入頁本身就是那包
+#   SPA，擋掉的話沒登入的人只看得到一片白。它只吐 build 產物，不含任何使用者資料，
+#   與 `static` 同一個性質。
+_PUBLIC_ENDPOINTS = {"login", "web.login_page", "web.healthz", "static", "web.spa_asset"}
 
 
 @app.errorhandler(SessionNotFound)

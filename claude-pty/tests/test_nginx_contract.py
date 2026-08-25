@@ -88,6 +88,50 @@ check(
     _up is not None and "client_max_body_size 12m;" in _up.group(1),
 )
 
+print("== 前端切換：頁面路由不寫死在主檔，assets 直出且長快取 ==")
+# ⚠ 這一節守的是「切換器只加分支、不動舊路」。把 try_files 直接寫進 nginx.conf 的話，
+#   正式站在 **legacy 模式下也會吐 SPA**——而 legacy 才是預設（計畫的決定 3）。
+check(
+    "頁面路由由外部檔案帶進來（legacy 是空的，落到 location /）",
+    "include /etc/nginx/claude-pty-ui/*.conf;" in code,
+)
+_assets = re.search(r"location /assets/ \{([^}]*)\}", code)
+check("/assets/ 有自己的 location（不 proxy 給 Flask）", _assets is not None)
+check(
+    "從檔案系統直出（root），不是 proxy_pass",
+    _assets is not None and "root /usr/share/nginx/html;" in _assets.group(1) and "proxy_pass" not in _assets.group(1),
+)
+check(
+    "長快取（Vite 把內容雜湊寫進檔名，改版就換檔名）",
+    _assets is not None and "expires 1y;" in _assets.group(1) and "immutable" in _assets.group(1),
+)
+
+_ui_dir = os.path.join(_repo, "deploy", "nginx-ui")
+_legacy = os.path.join(_ui_dir, "legacy", "ui.conf")
+_vue = os.path.join(_ui_dir, "vue", "ui.conf")
+check("legacy 的片段存在", os.path.isfile(_legacy))
+check("vue 的片段存在", os.path.isfile(_vue))
+if os.path.isfile(_legacy):
+    _legacy_code = "\n".join(
+        ln for ln in open(_legacy, encoding="utf-8").read().splitlines() if not ln.lstrip().startswith("#")
+    )
+    # 🔴 legacy 的片段**必須一條指令都沒有**。有任何 location 都代表舊路被改了形狀，
+    #    而那正是「兩版並存期間 legacy 行為一個字不變」的反面。
+    check("🔴 legacy 片段沒有任何指令（舊路完全不受影響）", _legacy_code.strip() == "")
+if os.path.isfile(_vue):
+    _vue_code = "\n".join(
+        ln for ln in open(_vue, encoding="utf-8").read().splitlines() if not ln.lstrip().startswith("#")
+    )
+    for _page in ("/", "/login", "/account"):
+        # 精確比對（`location =`）：前綴比對會把 /static/* 的字體與圖示一起吃掉
+        check(
+            f"vue 片段有 {_page} 的精確路由",
+            re.search(rf"location = {re.escape(_page)} \{{", _vue_code) is not None,
+        )
+    check("三條都回 index.html", _vue_code.count("try_files $uri /index.html;") == 3)
+    # 殼被快取的話，改版後拿到的舊殼會去要一個已經不存在的 /assets/*.js——一片白畫面
+    check("🔴 SPA 的殼不可快取（no-store）", _vue_code.count('add_header Cache-Control "no-store" always;') == 3)
+
 print("== session 編號不可猜 ==")
 # 路由只認 [A-Za-z0-9]+；sid 本體是 uuid4 的 hex 截 12 碼（48 bits 隨機）。
 # 這裡釘住「隨機來源沒有被換成可預測的東西」——流水號或時間戳都會讓
