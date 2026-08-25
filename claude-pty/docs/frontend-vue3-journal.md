@@ -77,3 +77,151 @@ Nathan：不看 debug log；「就算多等幾十 ms 我也不會發覺，而且
 ### 階段 1.5 派工（同一 agent）
 
 要求先用 Playwright 重現（攔 `POST /resize`、對 `term.cols/rows`、記錄送出時間點相對抽屜動畫結束；可暫時把 transition 拉長放大時序），再修，再連跑 3 次。
+
+### 階段 4 前半完成：骨架與部署鏈
+
+這一刀只做「骨架與部署鏈」：工具鏈、兩個頁面、Flask／nginx／Dockerfile／CI 的切換與閘門。
+**功能刻意不完整**——帳號頁與終端抽屜留殼，理由見下面的「留了哪些殼、為什麼」。
+
+#### 目錄與工具鏈
+
+```
+claude-pty/frontend/
+  package.json  package-lock.json      # npm；lockfile 進版控
+  vite.config.ts  tsconfig.json  env.d.ts
+  .oxlintrc.json  .prettierrc.json  .prettierignore
+  index.html                            # 對應舊版 base.html 的 <head>
+  vitest.setup.ts
+  src/
+    main.ts  App.vue  router.ts
+    api/client.ts                       # 舊版 app.js 的 api()
+    lib/  anchor  dialog  filters  range  sessions  storage  theme  time  toast
+    composables/useClipTips.ts          # 舊版的 markClipped
+    components/  AppFooter AppMasthead AppShell BrandMark CreatePanel DialogHost
+                 FilterBar ManifestList MetricTime PasswordInput RangePicker
+                 SessionChips SettingsModal SitePicker SiteSwitch TerminalDrawer ToastStack
+    views/  LoginView SessionsView AccountView
+    __tests__/  lib.spec.ts  components.spec.ts  views.spec.ts
+```
+
+裝到的版本（`npm ci` 的實際結果）：vue 3.5.41、vite 7.3.6、vue-router 4.6.4、pinia 3.0.4、
+typescript 5.9.3、vue-tsc 3.3.11、vitest 3.2.7、@vue/test-utils 2.4.6、jsdom 26、
+oxlint 1.80.0、prettier 3.9.6。build 輸出 `server/static/dist/`（gitignore）。
+
+Pinia **只有一個 store**（`stores/site`）：身分與憑證狀態被招牌、建立表單、列表三個互不相鄰
+的地方讀，而它們的更新來源是同一個（列表輪詢順風車帶回來的 `credentials`）。其餘狀態
+（清單、篩選、表單）都只有一個擁有者，放進 store 只會讓「誰改了它」變難回答。
+
+#### CSS：引用原檔，不複製
+
+`src/main.ts` 直接 `import "../../server/static/css/app.css"`，Vite 打包成帶雜湊的
+`/assets/*.css`。**不複製成第二份**——階段 4 的前提是 CSS 一字不改，複製等於同一份樣式有兩個
+真相，而截圖 golden 分不出「樣式改了」與「複本沒跟上」。字體與 Font Awesome 仍由
+`/static/vendor/…` 供應（原檔，不該被雜湊改名），在 `index.html` 以絕對路徑 `<link>` 進來；
+Vite build 時會說「這兩個檔案在 build 期不存在，保持原樣交給 runtime 解析」，那正是要的。
+
+#### 開關：`CLAUDE_PTY_UI=legacy|vue`
+
+- Flask（`config.UI`，預設 legacy）：vue 模式下 `/`、`/login`、`/account` 回
+  `server/static/dist/index.html`，`/assets/*` 由 `web.spa_asset` 供應（**公開端點**——登入頁
+  本身就是那包 SPA，擋掉的話沒登入的人只看得到一片白）。殼一律 `no-store`：不明講的話
+  `SEND_FILE_MAX_AGE_DEFAULT`（一年）會留在回應上，改版後拿到的舊殼會去要一個已經不存在的
+  `/assets/*.js`——一片白畫面，沒有任何線索。
+- legacy 模式的每一條路徑**一個字都沒動**：切換器只加新的分支。
+- 不認得的值當 legacy，並在 `preflight` 喊出來；`UI=vue` 但 dist 不存在也喊（不喊的話症狀是
+  三個頁面全部 404，看起來像路由壞掉）。
+
+#### dist 怎麼進 nginx：COPY 進 image，不是 bind mount
+
+`deploy/Dockerfile` 多了兩個 stage：
+
+- `frontend`（node:24-slim）：先只複製 `package.json` 與 lockfile 再 `npm ci`（原始碼改了不必
+  重裝），然後 `npm run build`，最後 `test -f …/dist/index.html`——vite 的退出碼可靠，但
+  「build 成功卻沒有 index.html」（改錯 outDir）是靜悄悄的。
+- `nginx`（**具名 stage，只有 `--target nginx` 會 build**）：把上一階段的 dist COPY 進
+  `/usr/share/nginx/html`。compose 的 nginx 服務因此從 `image:` 改成 `build: … target: nginx`。
+
+為什麼不 bind mount：host 上沒 build 過的目錄會被 docker 建成一個**空目錄頂替**，症狀是整站
+404 而不是「你忘了 build」；而且正式站的產物該跟著 image 走版本，不該取決於部署那台機器當下
+的工作區。`nginx.conf` 仍然是 mount 的（改設定不必重 build）。控制平面 image 也 COPY 同一份
+dist——dev 與 e2e 走的是 in-thread Flask 那條路。
+
+#### nginx 的頁面路由：外部片段，不寫死
+
+`nginx.conf` 只加了兩塊：`/assets/` 直出（`expires 1y` + `immutable`，Vite 把內容雜湊寫進檔名）
+與一行 `include /etc/nginx/claude-pty-ui/*.conf;`。三條頁面路由放在
+`deploy/nginx-ui/{legacy,vue}/ui.conf`，由 compose 的 `CLAUDE_PTY_NGINX_UI` 決定掛哪一個。
+
+**為什麼不照派工說的直接寫進 `nginx.conf`**：nginx 讀不到 Flask 那邊的 `CLAUDE_PTY_UI`，
+直接把 `try_files` 放進主檔的話，**正式站在 legacy 模式下也會吐 SPA**——而 legacy 才是預設
+（計畫的決定 3），派工第 4 點也要求「legacy 模式行為一個字不變」。兩者只能靠「掛哪一份片段」
+分開。legacy 那一份**一條指令都沒有**（`test_nginx_contract` 有一條在守這件事），三條路照舊
+落到 `location /` proxy 給 Flask。
+
+`tests/test_nginx_contract.py` 補了 12 條 check：include 在不在、`/assets/` 是 root 直出而不是
+proxy、長快取、兩份片段都在、legacy 片段真的是空的、vue 片段三條精確路由 + `try_files` +
+`no-store`。
+
+#### run-all.sh 與 CI
+
+`run-all.sh` 多一段「前端六關」，順序是便宜的先擋：`npm ci` → oxlint → `prettier --check` →
+`vue-tsc` → `vitest --coverage`（行覆蓋率門檻 70%）→ `vite build`。缺 node/npm 就整段跳過並
+**講出來**（同 app.js 語法檢查的做法）；`frontend/package-lock.json` 不見了則是**紅燈**而不是
+跳過——那不是「環境沒裝」，是 repo 壞了。
+
+build 也要跑，因為型別過得了不代表打包得出來（outDir 寫錯、import 到 root 外面沒放行、CSS 原
+檔被搬走），而產物不進版控，「沒有人 build 過」在部署之前不會有任何跡象。
+
+CI：兩個吃 run-all.sh 的 job 都加了 npm 快取；`deploy-image` job 多兩步——`--target nginx` 單獨
+build 一次（buildkit 只 build 目標依賴到的 stage，不單獨來一次的話那一段永遠沒被驗過）並確認
+`index.html` 與 `assets/` 真的在裡面，以及控制平面 image 裡也有同一份 dist。
+
+#### 1:1 的對照
+
+DOM 結構、class、`data-testid` 逐項對照舊版模板與 `app.js`。這一刀涵蓋的頁面上，testid 一個不
+少（登入 4、招牌 6、頁尾 2、sessions 28，加上 picker／switch／rangepicker／toast／modal／
+settings-modal 的動態那幾組）。帳號頁那 23 個與抽屜那 12 個隨它們的元件一起留到後半。
+
+驗證方式：寫了一支臨時的 Playwright 腳本（**不進 commit**），**同一支對 legacy 與 vue 各跑一
+次**——30 條 check 在兩版都過，只有「帳號頁是殼」那一條在 legacy 下不成立（本來就該不成立）。
+這比只驗 vue 版強：它證明的是「同一組抓手、同一串操作，兩版行為一致」。
+
+過程中被這支對照抓到一條真的不一致：**看歷史時建立表單要 `hidden`，不是從 DOM 上拿掉**。
+舊版是 `document.getElementById("create-panel").hidden = past`，我第一版寫成 `v-if`，於是
+`#create-panel` 在歷史那一頁整個不存在——e2e 與 aria golden 是拿舊版那份來比的。已改回。
+
+#### 踩到的坑
+
+- **`:inert="false"` 仍然是 inert。** `inert` 不在 Vue 認得的布林屬性清單裡
+  （itemscope/allowfullscreen/formnovalidate/ismap/nomodule/novalidate/readonly），所以 false
+  會照字面渲染成 `inert="false"`，而 HTML 的規則是**屬性存在就是 inert**。症狀是篩選列展開了
+  卻整塊點不到，而 DOM 看起來是對的。改成展開時回 `undefined`；單元測試有一條在守。
+- **`since=custom` 不可以進網址。** 「這一格停在自訂範圍」是畫面狀態不是查詢條件，後端把
+  `since` 當天數解析，送過去會 400。舊版本來就是用 DOM 的 `hidden` 記這件事，這一版用元件的
+  local ref，並且「帶著 from/to 進來時它要自己成立」。
+- 密碼錯是 **400**（`auth.AuthError` 的處理器）不是 401。401 的意思是「cookie 沒了」，由
+  `api()` 統一接走導回登入頁——在登入頁上把它當成密碼錯會是另一回事。
+
+#### SPA 化學到的兩件化簡（都刪了舊版的程式碼，不是搬過來）
+
+- **navseg 的滑動不再需要「記住上一頁停在哪」**（舊版 `initNavSeg` + sessionStorage）。換頁不再
+  整份 HTML 重來，招牌的 DOM 一直是同一份，`data-active` 一改 CSS 的 transition 自己就跑。
+- **憑證徽章的翻頁動畫（`swapCred`）拿掉**：它只在**換 agent** 時才跑，而這套東西只驅動 claude
+  一種 CLI，`switched` 恆為 false——留著等於留一段永遠不執行的程式碼。
+
+順帶發現舊版 `sessions.html` 的 `const CLAUDE_MODELS = new Set({{ claude_models | tojson }})`
+**宣告了但沒有任何地方用**（列表的 chip 直接讀 `p.model`）。Vue 版沒有搬它；階段 5 拆舊時
+連同模板那一行一起清掉。
+
+#### 留了哪些殼、為什麼
+
+| 殼 | 為什麼現在做不了 |
+| --- | --- |
+| 帳號頁（`AccountView`） | 舊版 651 行、**28 處 Jinja 注入**，正是階段 3 要改成 API 的東西。在那些端點出現之前搬過來，等於在前端重寫一份猜出來的伺服端狀態 |
+| 終端抽屜（`TerminalDrawer`） | 目前實際上打不開：`behindProxy` 沒有 API 可問，預設 false，而 false 這條路本來就是「開新分頁」。後半連同 `useTerminalSize` composable（階段 1.5 的成果）一起搬 |
+| 頁尾的版本與 commit | `build_info()` 只有 Jinja 拿得到 |
+| 登入頁的插畫 | `web.LOGIN_ART` 每次隨機挑一張，SPA 拿不到那份清單 |
+| `name_max` / `gitlab_enabled` / `behind_proxy` / `persist_dir` | 同上，都是 Jinja 注入的伺服端事實 |
+
+這幾項全部集中在 `stores/site.ts` 的 `META_DEFAULTS` 與 `loadMeta()`，帶著
+`TODO(階段 3)`：那支端點一上線，**只有那一個函式要改**，其餘畫面一個字都不必動。
