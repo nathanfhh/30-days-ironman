@@ -136,7 +136,17 @@ describe("LoginView", () => {
   beforeEach(() => {
     installFetch({
       "/api/auth/login": { body: { user: { id: 1, username: "alice", is_admin: false } } },
-      "/api/auth/me": { body: { user: { id: 1, username: "alice", is_admin: false } } },
+      // ⚠ 登入之後打的是這一條（身分已經從登入的回應收下了，這裡只是把 meta 填好）。
+      //   **沒有 `/api/auth/me`**：多打一發的話這張表就會炸，那正是我們要的守衛。
+      "/api/account/bootstrap": {
+        body: {
+          user: { id: 1, username: "alice", is_admin: false },
+          default_cli: "claude",
+          credentials: {},
+          limits: { name_max: 25, username_max: 32, min_password_length: 8 },
+          gitlab: { enabled: false, host: null, proxy_error: null },
+        },
+      },
     });
   });
 
@@ -169,6 +179,8 @@ describe("LoginView", () => {
       body: { username: "alice", password: "s3cret" },
     });
     expect(useSiteStore().user?.username).toBe("alice");
+    // ⚠ 身分來自登入的回應本身，不再多問一次
+    expect(calls.some((c) => c.url === "/api/auth/me")).toBe(false);
     expect(router.currentRoute.value.path).toBe("/");
     expect(toasts[0].title).toContain("歡迎回來");
   });
