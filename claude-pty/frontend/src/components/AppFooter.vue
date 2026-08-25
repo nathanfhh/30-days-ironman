@@ -42,8 +42,12 @@ const built = computed(() => store.meta.buildBuiltAt);
       </span>
     </div>
     <div v-if="built" class="footer__built">
-      建置於 <time class="footer__at" :datetime="built">{{ absTime(built) }}</time>
-      <span class="footer__rel" :data-for="built">（{{ relTime(built) }}）</span>
+      <!-- ⚠ `</time>` 與 `<span>` 之間那一個空白是**有意義的**：舊版模板兩者之間是換行，
+           渲染出來就是一個空白，整行因此寬 215px。Vue 的 `whitespace: 'condense'` 會把
+           「只有空白＋換行」的文字節點整個摺掉，少了它整行變成 211px——十五場截圖全紅，
+           而且紅的位置在頁尾、看起來像是別的東西壞了。用 `{{ " " }}` 明寫，它不會被摺。 -->
+      建置於 <time class="footer__at" :datetime="built">{{ absTime(built) }}</time
+      >{{ " " }}<span class="footer__rel" :data-for="built">（{{ relTime(built) }}）</span>
     </div>
   </footer>
 </template>

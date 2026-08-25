@@ -42,10 +42,16 @@ router.afterEach((to) => {
 
 router.beforeEach(async (to: RouteLocationNormalized) => {
   const store = useSiteStore();
-  if (!store.identityLoaded) await store.loadIdentity();
+  /* ⚠ **登入頁不問「我是誰」。** 那一頁本來就是給沒登入的人看的，那一發必定 401——
+   *   白花一趟往返、在 console 留一行紅字，而且 401 的統一處理是「導回登入頁」，
+   *   在登入頁上等於什麼都沒做。
+   *   「已登入者不該停在登入頁」不必靠它：伺服器在吐這個殼**之前**就會先導走
+   *   （見 web.login_page），而 SPA 內部從別的頁走過來時身分已經在記憶體裡。 */
   if (to.path === "/login") {
-    // 已登入者不該停在登入頁——與「未登入訪問管理頁 → 導向 /login」互為對稱
     return store.user ? { path: "/" } : true;
   }
+  // 一個 app 生命週期問一次就夠（`identityLoaded` 擋著）。cookie 中途失效時，
+  // api() 收到 401 會把人導回登入頁，那才是重新確認身分的入口。
+  if (!store.identityLoaded) await store.loadIdentity();
   return store.user ? true : { path: "/login" };
 });

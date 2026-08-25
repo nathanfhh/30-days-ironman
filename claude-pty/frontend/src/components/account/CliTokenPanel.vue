@@ -65,9 +65,15 @@ async function clear(): Promise<void> {
         <span v-else class="chip" data-tone="error">未設定</span>
       </span>
     </div>
+    <!-- ⚠ `</code>` 與那個全形逗號之間**不可以有空白**。prettier 會把 `</code>` 斷到行尾，
+         而下一行以逗號開頭的文字節點不是「只有空白」，所以 Vue 的 condense 只把換行摺成
+         **一個空白**、不會拿掉——畫面上就是 `setup-token ，把輸出`，整段跟著位移，
+         帳號頁的截圖因此紅（0.44%、6754 個強差異像素）。
+         `</code
+      >` 這個寫法是 prettier 自己用來避免多出空白的那一招，照它做。 -->
     <p class="panel__lede">
       在 host 上執行
-      <code data-copy title="點一下複製">claude setup-token</code> ，把輸出貼進來。之後開的 session
+      <code data-copy title="點一下複製">claude setup-token</code>，把輸出貼進來。之後開的 session
       用它 登入；<strong>token 過期不會有預告</strong>——症狀是新開的 session 停在登入提示，
       遇到就重跑一次指令、把新的貼回這裡（已在跑的 session 不受影響）。
     </p>
