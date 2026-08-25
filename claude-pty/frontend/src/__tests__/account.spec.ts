@@ -222,6 +222,11 @@ describe("AccountView：一般使用者", () => {
           credentials: CREDENTIALS(true),
           limits: { name_max: 25, username_max: 32, min_password_length: 8 },
           gitlab: { enabled: false, host: null, proxy_error: null },
+          // ⚠ 這兩個 2026-08-26（裁示 L4）從公開的 /api/bootstrap 搬進來。假的回應少給
+          //   的話 `fetchAccountMeta` 會在拆 `d.build.modules` 時拋，而外層那個 catch 會
+          //   把它吞掉，症狀是「憑證 chip 沒轉綠」，完全看不出是回應缺欄位。
+          persist_dir: "/home/nathan/persistent-data",
+          build: { modules: [], built_at: null },
         },
       },
     });

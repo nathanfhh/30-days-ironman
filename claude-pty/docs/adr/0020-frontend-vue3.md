@@ -91,6 +91,13 @@
 - **已登入者冷載入 `/login` 由 SPA 的守衛導回**（`frontend/src/router.ts` 的 `beforeEach`）。
   Flask 的 302（`web.login_page`）**只在 dev 與 e2e 路徑生效** —— 正式部署那條路由由 nginx
   直接吐 `index.html`，請求根本不會走到 Flask。
+- **已收緊：版號與主機路徑登入後才給。** `/api/bootstrap`（公開）原本回四件事，其中
+  `build`（模組版本與 commit）與 `persist_dir`（宿主機上的絕對路徑）是**主機的內部事實**，
+  對未登入的人只有一個用途：把「該打哪一個已知漏洞」印在門口。2026-08-26 兩者搬進
+  `/api/account/bootstrap`，公開那條只剩 `behind_proxy` 與 `login_art`。
+  **畫面同一刀一起收**：登入頁的頁尾整段不畫（`AppFooter.vue` 的 `v-if`）。只收 API
+  不收畫面、或反過來，都只是讓人以為收緊了。代價寫在下一節：`login-empty` 與
+  `login-error` 兩場的 golden 因此重錄過一次。
 
 ### 已知不涵蓋的
 

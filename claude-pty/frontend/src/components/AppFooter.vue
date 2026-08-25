@@ -1,12 +1,22 @@
 <script setup lang="ts">
 /*
- * 頁尾：線上跑的到底是哪一版。三個頁面（登入 / session / 帳號）都有——「我看到的是不是
- * 最新的」在哪一頁都會問。
+ * 頁尾：線上跑的到底是哪一版。**登入之後**的每一頁都有：「我看到的是不是最新的」在哪
+ * 一頁都會問。
  *
- * ⚠ 值一律由 server 端算好（舊版是 `build_info()`，見 server/version.py）。問不到就留白
- *   並在 tooltip 講原因：猜一個看起來合理的值比空白糟得多，空白會讓人去查、錯的值會讓人
- *   停止查。
- * 值來自 `/api/bootstrap`（公開，登入頁也要）。拿不到就留白——那正是上面那句話的兌現。
+ * ⚠ **登入頁沒有頁尾**（2026-08-26 裁示 L4：版號與主機路徑登入前不得取得）。值來自
+ *   `/api/account/bootstrap`，那條要登入；未登入時 `buildModules` 是空陣列，這裡整段
+ *   不畫。
+ *
+ *   為什麼是「整段不畫」而不是「留一條只有品牌的頁尾」：legacy 的頁尾裡**只有**這些版本
+ *   膠囊，沒有品牌、沒有其他內容（見 `server/templates/base.html`，2026-08-26 刪）。
+ *   擺一個品牌上去是**新增**一個舊版沒有的東西；而只留空殼也不行：`.footer` 有
+ *   `border-top`，空的話登入表單下方會浮出一條沒有內容的橫線，那同樣是舊版沒有的樣子。
+ *   兩個選項裡「不畫」才是**沒有多出東西**的那一個。
+ *
+ * ⚠ 值一律由 server 端算好（見 server/version.py）。**問得到但答不出來**時仍然留白並在
+ *   tooltip 講原因（`版本未知` / `commit 未知`）：猜一個看起來合理的值比空白糟得多，
+ *   空白會讓人去查、錯的值會讓人停止查。那與「未登入所以不給」是兩件事：後者連頁尾
+ *   都沒有，不會有人以為系統答不出自己的版本。
  * ⚠ 相對時間由前端補（伺服端跑在 UTC，排出來的時間不屬於任何人）。
  */
 import { computed } from "vue";
@@ -18,13 +28,16 @@ const store = useSiteStore();
 
 const modules = computed(() => store.meta.buildModules);
 /* 建置時間單獨一行：它是**整包**的屬性，不屬於任何一個模組。
-   ⚠ 讀 `build.built_at` 而不是 `modules[0].built_at`——`/api/bootstrap` 特地把它提到最外層，
-     docstring 也寫明理由：留在列裡的話遲早會有人把它畫成「claude-pty 這一列的時間」。 */
+   ⚠ 讀 `build.built_at` 而不是 `modules[0].built_at`：`/api/account/bootstrap` 特地把它提到
+     最外層，docstring 也寫明理由：留在列裡的話遲早會有人把它畫成「claude-pty 這一列的時間」。 */
 const built = computed(() => store.meta.buildBuiltAt);
+/* 有沒有東西可畫。⚠ 兩個都看：`built` 是可以單獨缺席的（build arg 沒給就是 null），
+   那時仍然要畫出那一排膠囊。只有兩個都沒有才代表「這一頁不給」。 */
+const hasBuild = computed(() => modules.value.length > 0 || Boolean(built.value));
 </script>
 
 <template>
-  <footer class="footer" data-testid="footer">
+  <footer v-if="hasBuild" class="footer" data-testid="footer">
     <div class="footer__row">
       <span
         v-for="(m, i) in modules"

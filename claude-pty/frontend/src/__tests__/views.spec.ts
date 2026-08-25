@@ -85,6 +85,20 @@ const CATALOG = {
   },
 };
 
+/** 頁尾那一排。**登入後才給**（2026-08-26 裁示 L4）。 */
+const BUILD = {
+  modules: [
+    {
+      name: "claude-pty",
+      version: "0.2.0",
+      commit: "abc1234",
+      built_at: "2026-08-20T10:00:00+00:00",
+      detail: "控制平面本體。",
+    },
+  ],
+  built_at: "2026-08-20T10:00:00+00:00",
+};
+
 /** 一份完整的 `/api/account/bootstrap` 回應。 */
 const accountBootstrapBody = (user: unknown) => ({
   user,
@@ -92,6 +106,8 @@ const accountBootstrapBody = (user: unknown) => ({
   credentials: CREDENTIALS,
   limits: { name_max: 25, username_max: 32, min_password_length: 8 },
   gitlab: { enabled: false, host: null, proxy_error: null },
+  persist_dir: "/home/nathan/persistent-data",
+  build: BUILD,
 });
 
 const listBody = (rows: Record<string, unknown>[], total = rows.length) => ({
@@ -201,6 +217,33 @@ describe("LoginView", () => {
     await w.find('[data-testid="login-username"]').setValue("a");
     await w.find('[data-testid="login-password"]').setValue("1");
     expect(w.find("#login-btn").attributes("disabled")).toBeUndefined();
+  });
+
+  it("🔴 登入頁沒有頁尾：版號登入後才給（裁示 L4）", async () => {
+    const w = await mountAt("/login");
+    expect(router.currentRoute.value.path).toBe("/login");
+    // ⚠ 查的是**整段不在**，不是「頁尾在但裡面空的」。空的頁尾會留下 `.footer` 的
+    //   border-top，那是一條浮在登入表單下方、legacy 從來沒有過的橫線。
+    expect(w.find('[data-testid="footer"]').exists()).toBe(false);
+    expect(w.findAll('[data-testid="footer-mod"]')).toHaveLength(0);
+    // ⚠ 反向：不是因為前端沒去問，是因為那條端點回 401。前端仍然照打不誤。
+    expect(calls.some((c) => c.url === "/api/account/bootstrap")).toBe(true);
+    // ⚠ 而且公開那條**一個版本字樣都沒被要到**：store 裡是預設值。
+    const store = useSiteStore();
+    expect(store.meta.buildModules).toEqual([]);
+    expect(store.meta.buildBuiltAt).toBeNull();
+    expect(store.meta.persistDir).toBe("");
+  });
+
+  it("🔴 登入成功之後頁尾才出現（同一個 App，換的是有沒有那條回應）", async () => {
+    const w = await mountAt("/login");
+    expect(w.find('[data-testid="footer"]').exists()).toBe(false);
+    await w.find('[data-testid="login-username"]').setValue("alice");
+    await w.find('[data-testid="login-password"]').setValue("s3cret");
+    await w.find("#login-form").trigger("submit");
+    await flushPromises();
+    expect(w.find('[data-testid="footer"]').exists()).toBe(true);
+    expect(w.find('[data-testid="footer-mod"]').text()).toContain("0.2.0");
   });
 
   it("送出成功就進控制台，並把身分載回來", async () => {

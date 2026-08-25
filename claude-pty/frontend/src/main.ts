@@ -26,8 +26,10 @@ setUnauthorizedHandler(() => {
   void router.push("/login");
 });
 
-// 公開的伺服端事實（behind_proxy / persist_dir / 頁尾版本 / 登入頁插畫）。**不等身分**：
-// 登入頁的頁尾與插畫需要它，而那一頁本來就是未登入的人在看。
+// 公開的伺服端事實（behind_proxy / 登入頁插畫）。**不等身分**：登入頁的插畫需要它，
+// 而那一頁本來就是未登入的人在看。
+// ⚠ 版號與主機路徑**不在這一發裡**（2026-08-26 裁示 L4：登入前不得取得），它們跟著
+//   `/api/account/bootstrap` 一起回來。
 // 不 await：它失敗或慢都不該擋住第一次繪製（拿不到就留白，見 store 的說明）。
 void useSiteStore().loadPublicMeta();
 

@@ -65,9 +65,12 @@ if _fatal:
     raise SystemExit(1)
 
 # 不需登入的端點：登入 API、登入頁、靜態資源、健康檢查，以及畫面外殼的啟動資料。
-# ⚠ `bootstrap` 公開是**照著登入頁現在的樣子畫的，不是放寬**：它回的四件事今天就印在
-#   未登入者拿得到的 /login 上（頁尾在 base.html，三頁共用）。要收緊得先收緊登入頁，
-#   不是先收緊這一條：兩邊不一致的話，收緊的那一邊只會讓人以為收緊了。
+# ⚠ `bootstrap` 公開的**範圍在 2026-08-26 收緊過**：它現在只回 `behind_proxy` 與
+#   `login_art` 兩件事，版號（`build`）與主機路徑（`persist_dir`）搬進要登入的
+#   `/api/account/bootstrap`。原本公開的理由是「這幾件事今天就印在未登入者拿得到的
+#   /login 上」，而那個理由的前提是登入頁該印它們；裁示把前提改掉了（登入頁的頁尾不再
+#   顯示版本，見 frontend/src/components/AppFooter.vue），所以 API 跟著收。
+#   **兩邊要一起收**：只收 API 不收畫面、或反過來，都只是讓人以為收緊了。
 #   需要登入才看得到的東西一律不在那條裡，見 `/api/account/bootstrap`。
 # ⚠ `web.spa_asset` 是 Vue 版的 JS/CSS（`/assets/*`），同樣必須公開——登入頁本身就是那包
 #   SPA，擋掉的話沒登入的人只看得到一片白。它只吐 build 產物，不含任何使用者資料，
@@ -424,13 +427,15 @@ def _check_model_effort(raw: dict) -> None:
 
 # --- 畫面的啟動資料 ---------------------------------------------------------------
 #
-# 這兩條是為了讓畫面不必再靠 Jinja 注入拿伺服端狀態（前端改 SPA 的階段 3）。舊模板此刻
-# 仍然照舊注入、照舊運作，這裡只是把同一批事實再開一個 JSON 出口，兩邊值相同（測試
-# tests/test_bootstrap.py 直接拿 HTML 與 JSON 對）。
+# 這兩條是為了讓畫面不必再靠 Jinja 注入拿伺服端狀態（前端改 SPA 的階段 3）。模板已於
+# 2026-08-26 隨 legacy 退場，這兩條現在是 SPA 唯一的來源。
 #
-# ⚠ **分界線是 gate，不是頁面。** 未登入者今天看得到的（`<html>` 的兩個屬性、頁尾版本、
-#   登入插畫）走公開那條；要登入才看得到的（限制值、GitLab 主機、憑證狀態）走另一條。
-#   照頁面切的話，登入頁需要的東西會被關在 401 後面，而 SPA 的登入畫面就少一塊。
+# ⚠ **分界線是 gate，不是頁面。** 未登入的畫面畫得對就好的（`<html data-behind-proxy>`、
+#   登入插畫）走公開那條；**要先證明你是誰才給的**（限制值、GitLab 主機、憑證狀態，
+#   以及 2026-08-26 搬過去的版號與主機路徑）走另一條。
+#   照頁面切的話，登入頁需要的東西會被關在 401 後面，而 SPA 的登入畫面就少一塊；
+#   照主詞切的話（「機器的事實」對「帳號的處境」），`build` 會自己佔一條端點，而登入後
+#   的每一頁都得為那個分類的整齊多打一發。切在 gate 上，兩件事都不會發生。
 # ⚠ **已經有出口的一律不重複**：使用者本人與權限（含 gitlab_pat_configured）在
 #   /api/auth/me、模型清單在 /api/catalog、ttyd 選項在 /api/prefs。重複一份的代價不是
 #   流量，是兩份會分岔，而分岔的那天沒有人會發現，畫面只是「有一邊怪怪的」。
@@ -440,42 +445,39 @@ def _check_model_effort(raw: dict) -> None:
 def bootstrap():
     """**公開**：畫面外殼在知道「你是誰」之前就要畫對的東西。
 
-    這四件事**在知道你是誰之前**就要畫對，所以這條端點是公開的。
+    這兩件事**在知道你是誰之前**就要畫對，所以這條端點是公開的。
 
     | 回傳欄位 | 畫面上的樣子 |
     |---|---|
     | `behind_proxy` | 開終端要用抽屜還是新分頁（跨 origin 的 direct_url 會被 CSP 擋） |
-    | `persist_dir` | 抽屜標題列講「哪個目錄寫了會留著」 |
-    | `build` | 頁尾那一排模組版本與 commit |
     | `login_art` | 登入頁左下角那張插畫的網址 |
 
-    ⚠ 這張表原本寫的是「**模板裡的樣子**」（`<html data-behind-proxy>` 之類）。模板在
-      2026-08-26 隨 legacy 一起刪了，欄位沒變、消費者換成 SPA，所以只改了描述的角度。
+    ⚠ **`persist_dir` 與 `build` 在 2026-08-26 搬去 `/api/account/bootstrap`**（裁示 L4）。
+      它們是**主機的內部事實**：宿主機上的一個絕對路徑，以及「這台在跑哪一版 claude-pty、
+      哪一版 ttyd」。對未登入的人那兩件事沒有任何用途，只有一個效果：把「該打哪一個
+      已知漏洞」直接印在門口。原本公開的理由是「登入頁的頁尾今天就印著它們」，而那個
+      理由的前提是**登入頁該印**；前提被改掉了（登入頁的頁尾不再顯示版本，見
+      `frontend/src/components/AppFooter.vue`），所以這條跟著收。
+      **兩邊一起收才是真的收**：只收 API 不收畫面、或反過來，都只是讓人以為收緊了。
 
-    ⚠ `build.built_at` **提到最外層**，不留在第一列裡。它是**整包**的屬性、不屬於任何
-      一個模組（base.html 也是這樣讀的：`modules[0].built_at` 之後單獨畫一行）。留在
-      列裡的話，前端遲早會有人把它畫成「claude-pty 這一列的時間」。
     ⚠ `login_art` 每次呼叫重挑一張（同登入頁，見 `web.login_art`）：「每次載入換一張」
       是這張圖的行為。所以這條**不可以被快取**，也不要拿它的值去做等值比較。
-    ⚠ 版本資訊來自 `version.summary()`，那支有 lru_cache（它會跑 subprocess 問 ttyd 版本）。
-      沒有快取的話這條公開端點就是一個「打一次生幾個行程」的入口。
     """
-    mods = version.summary()["modules"]
     art = login_art()
     resp = jsonify(
         behind_proxy=config.BEHIND_PROXY,
-        persist_dir=config.DATA_BIND,
-        build={"modules": mods, "built_at": mods[0]["built_at"] if mods else None},
         login_art=url_for("static", filename=f"images/{art}") if art else None,
     )
     # ⚠ **只有這一條需要 no-store，所以寫在這裡而不是放寬 `_security_headers`。**
     #   那支對 JSON 一律不設 Cache-Control 是對的（其餘 API 是每次都問的即時狀態，
     #   本來就沒有人會快取），為了一條端點把整個 /api/* 都標成不可快取，是拿一個
     #   全域的決定去解一個局部的問題。
-    #   這一條特別，理由有二：它是**公開**的 GET（中間任何一層都可能想順手存一份），
-    #   而它回的兩件事都會過期——`login_art` 每次要換一張（被快取就變成同一張圖），
-    #   `build` 在改版後必須跟著變（被快取就會繼續宣告一個已經不在跑的 commit，
-    #   而頁尾整段存在的理由正是回答「線上跑的到底是哪一版」）。
+    #   這一條特別：它是**公開**的 GET（中間任何一層都可能想順手存一份），而它回的
+    #   `login_art` 每次要換一張，被快取就變成同一張圖，那張圖「每次載入換一張」的
+    #   行為當場消失。
+    #   ⚠ `build` 搬走之後這裡少了一個理由（改版後必須跟著變），**但 no-store 要留著**：
+    #     剩下的那一個理由自己就成立。搬走的那一份現在活在 `/api/account/bootstrap`，
+    #     而那條是**帶 cookie 的私有回應**，中間層本來就不會替它存一份。
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
@@ -497,6 +499,19 @@ def account_bootstrap():
     | `limits.username_max` | account 新增帳號欄的 `maxlength` 與 `title` |
     | `limits.min_password_length` | account 改密碼欄的標籤與 `MIN_PW` |
     | `gitlab.*` | account 的 GitLab 區塊（是否顯示、主機名、代理錯誤） |
+    | `persist_dir` | 抽屜標題列講「哪個目錄寫了會留著」 |
+    | `build` | 頁尾那一排模組版本與 commit |
+
+    ⚠ **`persist_dir` 與 `build` 是 2026-08-26 從公開的 `/api/bootstrap` 搬進來的**
+      （裁示 L4：版號與主機路徑是機敏資訊，登入前不得取得）。它們與這條端點原本那些
+      不同性質：那些是「**這個帳號**的處境」，這兩個是「**這台機器**的事實」，對誰都
+      一樣。放在同一條裡是**照 gate 切、不照主詞切**：它們要的是「先證明你是誰」，
+      而這條端點就是那道 gate 之後的第一發，登入後的每一頁本來就都會打它。為它們另開
+      第三條端點，等於為了分類的整齊讓每一頁多一次往返。
+    ⚠ `build.built_at` **提到最外層**，不留在第一列裡。它是**整包**的屬性、不屬於任何
+      一個模組。留在列裡的話，前端遲早會有人把它畫成「claude-pty 這一列的時間」。
+    ⚠ 版本資訊來自 `version.summary()`，那支有 lru_cache（它會跑 subprocess 問 ttyd 版本）。
+      沒有快取的話，登入後的每一次換頁都是一個「打一次生幾個行程」的入口。
 
     ⚠ `user` 就是 `/api/auth/me` 回的**同一個物件**（`g.user`，由 `auth._to_dict` 產生）。
       **不是在這裡另外拼一份**：拼一份就是第二個真相來源，而分岔的那天沒有人會發現，
@@ -514,9 +529,12 @@ def account_bootstrap():
       `{% if gitlab_enabled %}`），為一個不會被顯示的值多打一次 DB 沒有意義。
     """
     gitlab_on = config.gitlab_enabled()
+    mods = version.summary()["modules"]
     return jsonify(
         user=g.user,
         default_cli=config.DEFAULT_CLI,
+        persist_dir=config.DATA_BIND,
+        build={"modules": mods, "built_at": mods[0]["built_at"] if mods else None},
         credentials=sessions_mod.credentials_state(g.user["id"]),
         limits={
             "name_max": config.NAME_MAX,
