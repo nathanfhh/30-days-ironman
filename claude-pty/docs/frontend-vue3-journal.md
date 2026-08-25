@@ -129,3 +129,29 @@ Nathan：不看 debug log；「就算多等幾十 ms 我也不會發覺，而且
 **已知沒驗到的一段**：替身終端的 `fit()` 是同步且純依 `window.innerWidth` 算的，天生不會
 有「字體到位後 cell 尺寸才變」這一類真 xterm 才有的晚到變化。這次的閘門對那一類也有幫助，
 但替身證明不了，所以沒有寫成斷言、也沒有在 commit 訊息裡宣稱。要驗得接真的 ttyd。
+
+### 階段 1.5 完成：`8873988`，而且我的診斷被量出來是錯的
+
+- 我原本的判斷是「fit 落在抽屜滑入中途，量到中途寬度」。agent 寫了逐幀探針（每個 rAF 記 iframe 的 clientWidth／innerWidth／rect.left／term.cols），常態 240ms 三次、拉長到 800ms 兩次，**五次版面尺寸一格都沒動，只有 rect.left 在跑**。原因 `app.css:2224` 自己就寫著：滑入用 `transform: translateX()`，transform 不影響版面尺寸。「中途寬度」這件事不存在。
+- 站得住的問題是**順序**：送出時機純由 300ms debounce 決定，跟動畫誰先誰後沒人管。拉到 800ms 就現形：那一發在動畫結束前 577ms 就送了。常態 240ms 下剛好落在動畫之後幾十毫秒，是巧合不是設計；reduced-motion、慢機器、有人調長動畫都會翻盤。
+- 另量到：只用 CSS 把面板 90vw 改 50vw（不碰視窗），iframe 內確實收到 resize 並重送一發。既有事件鏈沒斷，ResizeObserver 是補強不是救命繩。
+- 修法：ResizeObserver 掛 `.drawer__frame` 逼 fit 並記 `lastBoxAt`；送出前兩道閘：`getAnimations().finished` 全 resolve（無動畫即 `Promise.all([])`，reduced-motion 直接過；被取消時 `.catch` 收成不必再等）且距上次盒子變化 ≥150ms；每次排程帶 token，閘門期間有新變化就作廢舊的；`close()` 時 disconnect。黏著 redraw 旗標、healGlyphScale、字級、5 秒放棄、sizeDebug 全保留；CSS 未動。
+- 新 e2e 斷言：測試自己把 transition 拉到 800ms（`add_style_tag`，量完移除），比對最後一發送出時刻與動畫結束時刻。修前 `-577ms`，修後三次 `+2ms／+3ms／+3ms`。避開了一個假綠：`data-open` 下一幀才打上，那一刻 `getAnimations()` 多半是空陣列，若就此算「動畫結束」斷言恆真；所以先等動畫真的出現再等 finished。
+- 沒宣稱的：替身終端的 fit 是同步依 innerWidth 算，驗不到真 xterm「字體到位後 cell 尺寸才變」那一類；閘門對它應該有幫助，但沒有斷言。
+- 教訓記一條：**先量再判**。我這次是讀碼推理就下了診斷，agent 用探針推翻了它；修法方向沒錯，理由錯了。Day 29 那句「量出來的比查得到的可靠」，在自己身上又應驗一次。
+
+### fable 快審 1／1b
+
+一條中度：`html_interpolations()` 只認 `${...}`，串接與直接指派兩種漏法反而看不見，「收緊」實際是收窄。排 1c 修。其餘六項（斷言未改弱、testid 等價、XSS 面、paintDays 語意、diff 落點、實跑 quick）查過成立。
+
+### fable 快審 1／1b：一條中度發現已修（`1c`）
+
+`html_interpolations()` 為了修誤報而只認 `${...}`，把 `el.innerHTML = "<b>" + title + "</b>"`
+與 `el.innerHTML = title` 兩種形狀**放走了**（舊守衛抓得到）。判準改成「該賦值去掉字串
+字面量之後仍含 `\btitle\b`」，插值／串接／直接指派三種都抓，`data-testid="toast-title"`
+這種只活在字面量裡的仍不誤報。反向 case 從一條擴成三條真陽性加一條不誤報；docstring 列明
+已知不涵蓋的形狀（`insertAdjacentHTML`／`outerHTML`、`[^;]*` 被 HTML entity 的分號截斷、
+巢狀樣板會多報）。另外對真 `app.js` 逐一注入三種形狀做變異測試，三種都如期紅。
+
+教訓記一筆：**修一條守衛的誤報時要兩個方向一起驗。**只顧誤報那一邊，會把真陽性一起關掉，
+而畫面上兩者長得一模一樣（都是綠的）。
