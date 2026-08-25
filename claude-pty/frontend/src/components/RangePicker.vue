@@ -56,7 +56,12 @@ const view = ref<Date>(rpMonth(new Date()));
 const picking = ref<"from" | "to">("from");
 const hover = ref<Date | null>(null);
 const open = ref(false);
-const drop = ref<"up" | "down">("down");
+// 同 SitePicker：`data-drop` 是展開時才寫上去的，沒展開過就沒有這個屬性。
+const drop = ref<"up" | "down" | undefined>(undefined);
+// 面板的骨架畫過就留著，收合只是 hidden（舊版 renderPanel() 只在 open() 裡呼叫，
+// close() 不清 innerHTML）。
+const hasOpened = ref(false);
+const panelRows = computed(() => (hasOpened.value ? [0] : []));
 
 const committedFrom = computed(() => rpParse(props.modelValue.from));
 const committedTo = computed(() => rpParse(props.modelValue.to));
@@ -194,7 +199,7 @@ function editField(which: "from" | "to", kind: "date" | "time", value: string): 
 const place = (): void => {
   if (!trigger.value || !panel.value) return;
   anchorPanel(trigger.value, panel.value, { mount: mount.value });
-  drop.value = (mount.value?.dataset.drop as "up" | "down") ?? "down";
+  drop.value = mount.value?.dataset.drop as "up" | "down" | undefined;
 };
 
 // 與 picker 同一套：捲動時**重新定位而不是關掉**（理由見 SitePicker.onScroll）
@@ -209,6 +214,7 @@ function onScroll(e: Event): void {
 function openPanel(): void {
   if (mount.value?.closest('[data-disabled="1"]')) return;
   open.value = true;
+  hasOpened.value = true;
   dFrom.value = committedFrom.value;
   dTo.value = committedTo.value;
   picking.value = "from";
@@ -289,20 +295,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div
-    ref="mount"
-    id="pick-range"
-    class="picker rangepick"
-    data-testid="pick-range"
-    :data-drop="drop"
-  >
+  <!-- ⚠ 掛載點**沒有** `data-testid`：`createRangePicker` 與 `createPicker` 不一樣，它只給
+       trigger 與 panel 掛 testid，不會 `mount.dataset.testid = mount.id`。多掛一個等於憑空
+       多一個抓手，而 golden 比的是 DOM。 -->
+  <div ref="mount" id="pick-range" class="picker rangepick" :data-drop="drop">
     <button
       ref="trigger"
       type="button"
       class="picker__button rangepick__trigger"
-      data-testid="range-trigger"
       aria-haspopup="dialog"
       :aria-expanded="open ? 'true' : 'false'"
+      data-testid="range-trigger"
       @click="open ? close() : openPanel()"
       @keydown="onTriggerKeydown"
     >
@@ -319,7 +322,8 @@ onBeforeUnmount(() => {
       :hidden="!open"
       @keydown="onPanelKeydown"
     >
-      <template v-if="open">
+      <!-- 同 SitePicker：用 v-for 而不是 v-if，才不會在面板裡留一個空註解節點當錨點。 -->
+      <template v-for="_ in panelRows" :key="0">
         <div class="rangepick__heads">
           <label class="rangepick__head">
             <input
@@ -370,6 +374,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="rangepick__nav"
+                  data-move="-12"
                   aria-label="上一年"
                   data-testid="range-prev-year"
                   @click="moveView(-12)"
@@ -379,6 +384,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="rangepick__nav"
+                  data-move="-1"
                   aria-label="上個月"
                   data-testid="range-prev-month"
                   @click="moveView(-1)"
@@ -386,15 +392,14 @@ onBeforeUnmount(() => {
                   <i class="fa-solid fa-angle-left"></i>
                 </button>
               </span>
-              <span class="rangepick__month">
-                {{ view.getFullYear() }} 年 {{ view.getMonth() + 1 }} 月
-              </span>
+              <!-- prettier-ignore --><span class="rangepick__month">{{ view.getFullYear() }} 年 {{ view.getMonth() + 1 }} 月</span>
               <span class="rangepick__navs"></span>
             </div>
             <div class="rangepick__dow">
               <span v-for="d in RP_DOW" :key="d">{{ d }}</span>
             </div>
             <div class="rangepick__grid">
+              <!-- prettier-ignore -->
               <button
                 v-for="c in leftCells"
                 :key="c.key"
@@ -410,26 +415,24 @@ onBeforeUnmount(() => {
                 :data-day="c.ymd"
                 :disabled="c.disabled"
                 :data-testid="c.other ? 'range-day-other' : 'range-day'"
+                tabindex="-1"
                 :data-edge="String(c.edge)"
                 :data-in="String(c.inside)"
-                tabindex="-1"
                 @click="pickDay(c.ymd)"
                 @mouseover="onHover(c.ymd)"
               >
-                {{ c.day }}
-              </button>
+                {{ c.day }}</button>
             </div>
           </div>
           <div class="rangepick__cal" data-testid="range-cal">
             <div class="rangepick__calhead">
               <span class="rangepick__navs"></span>
-              <span class="rangepick__month">
-                {{ rightView.getFullYear() }} 年 {{ rightView.getMonth() + 1 }} 月
-              </span>
+              <!-- prettier-ignore --><span class="rangepick__month">{{ rightView.getFullYear() }} 年 {{ rightView.getMonth() + 1 }} 月</span>
               <span class="rangepick__navs">
                 <button
                   type="button"
                   class="rangepick__nav"
+                  data-move="1"
                   aria-label="下個月"
                   data-testid="range-next-month"
                   :disabled="atMax"
@@ -440,6 +443,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="rangepick__nav"
+                  data-move="12"
                   aria-label="下一年"
                   data-testid="range-next-year"
                   :disabled="atMax"
@@ -453,6 +457,7 @@ onBeforeUnmount(() => {
               <span v-for="d in RP_DOW" :key="d">{{ d }}</span>
             </div>
             <div class="rangepick__grid">
+              <!-- prettier-ignore -->
               <button
                 v-for="c in rightCells"
                 :key="c.key"
@@ -468,19 +473,19 @@ onBeforeUnmount(() => {
                 :data-day="c.ymd"
                 :disabled="c.disabled"
                 :data-testid="c.other ? 'range-day-other' : 'range-day'"
+                tabindex="-1"
                 :data-edge="String(c.edge)"
                 :data-in="String(c.inside)"
-                tabindex="-1"
                 @click="pickDay(c.ymd)"
                 @mouseover="onHover(c.ymd)"
               >
-                {{ c.day }}
-              </button>
+                {{ c.day }}</button>
             </div>
           </div>
         </div>
         <div class="rangepick__foot">
           <span class="rangepick__hint">{{ hint }}</span>
+          <!-- prettier-ignore -->
           <button
             type="button"
             class="btn"
@@ -488,8 +493,8 @@ onBeforeUnmount(() => {
             data-testid="range-clear"
             @click="clear"
           >
-            <i class="fa-solid fa-eraser"></i> 清除
-          </button>
+            <i class="fa-solid fa-eraser"></i> 清除</button>
+          <!-- prettier-ignore -->
           <button
             type="button"
             class="btn btn--primary"
@@ -497,8 +502,7 @@ onBeforeUnmount(() => {
             data-testid="range-ok"
             @click="commit"
           >
-            <i class="fa-solid fa-check"></i> 確定
-          </button>
+            <i class="fa-solid fa-check"></i> 確定</button>
         </div>
       </template>
     </div>

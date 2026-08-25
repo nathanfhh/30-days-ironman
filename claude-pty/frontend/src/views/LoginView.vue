@@ -7,8 +7,9 @@
  *   登入頁的話，只要哪天調高了 MIN_PASSWORD_LENGTH，所有在舊政策下建立的帳號就再也按不下
  *   這顆按鈕——而後端明明還驗得過他們的密碼。
  *
- * ⚠ TODO(階段 3)：左下角的插畫由伺服端每次隨機挑一張（`web.LOGIN_ART`），SPA 拿不到那份
- *   清單，所以現在不畫。舊版的模板本來就有 `{% if art %}` 這條分支，少了圖版面仍然成立。
+ * 左下角的插畫由伺服端每次隨機挑一張（`web.login_art()`），網址從 `/api/bootstrap` 來
+ * （公開那一條——這一頁本來就是未登入的人在看）。沒有圖時不畫，版面仍然成立（舊版模板
+ * 也是 `{% if art %}`）。
  */
 import { computed, onMounted, ref, useTemplateRef } from "vue";
 import { useRouter } from "vue-router";
@@ -59,6 +60,14 @@ onMounted(() => userField.value?.focus());
         <p class="gate__kicker">控制平台</p>
         <h1 class="gate__mark" data-testid="brand-mark">claude<em>-pty</em></h1>
       </div>
+      <!-- 插畫是氣氛，不是資訊：aria-hidden 讓螢幕閱讀器直接跳過，別唸一段沒有意義的描述 -->
+      <img
+        v-if="store.meta.loginArt"
+        class="gate__art"
+        aria-hidden="true"
+        alt=""
+        :src="store.meta.loginArt"
+      />
     </aside>
 
     <section class="gate__main">
@@ -66,6 +75,7 @@ onMounted(() => userField.value?.focus());
         <!-- 標題就該長得像標題：顯示字體 + 一道強調色短線，而不是跟欄位標籤同一個字級 -->
         <h2 class="gate__heading">身分驗證</h2>
 
+        <!-- prettier-ignore -->
         <div
           class="notice"
           data-tone="error"
@@ -73,11 +83,12 @@ onMounted(() => userField.value?.focus());
           data-testid="login-error"
           :hidden="!error"
         >
-          {{ error }}
-        </div>
+          {{ error }}</div>
 
         <div class="field">
           <label class="label label--field" for="username">使用者名稱</label>
+          <!-- ⚠ `autofocus` 屬性照舊版留著。onMounted 的 focus() 是 SPA 這邊的補強（換路由
+               回來時沒有新文件、瀏覽器不會再跑一次 autofocus），但屬性本身是 DOM 的一部分。 -->
           <input
             ref="userField"
             id="username"
@@ -87,6 +98,7 @@ onMounted(() => userField.value?.focus());
             data-testid="login-username"
             autocomplete="username"
             required
+            autofocus
           />
         </div>
         <div class="field">
@@ -101,6 +113,7 @@ onMounted(() => userField.value?.focus());
           />
         </div>
 
+        <!-- prettier-ignore -->
         <button
           class="btn btn--primary"
           type="submit"
@@ -108,8 +121,7 @@ onMounted(() => userField.value?.focus());
           :disabled="!canSubmit || submitting"
           style="width: 100%; padding: var(--space-3)"
         >
-          <i class="fa-solid fa-right-to-bracket"></i> 進入控制台
-        </button>
+          <i class="fa-solid fa-right-to-bracket"></i> 進入控制台</button>
       </form>
     </section>
   </main>

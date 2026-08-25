@@ -223,7 +223,8 @@ describe("SessionsView", () => {
   const setUser = (): void => {
     const store = useSiteStore();
     store.user = { id: 1, username: "alice", is_admin: true };
-    store.loadMeta();
+    // 兩條 bootstrap 由 installFetch 的假表供應；這裡直接把預設值放好即可
+    store.applyMetaToRoot();
   };
 
   it("進頁就畫出招牌、建立表單與清單", async () => {

@@ -43,6 +43,9 @@ const error = ref<string | null>(null);
 const swapping = ref(false);
 const listUpdated = ref("");
 const filtersOpen = ref(false);
+/** 使用者動過那顆篩選鍵沒有。只影響 `#filter-bar` 要不要寫 `inert`——舊版是「點過才寫」，
+ *  見 FilterBar 裡的說明。 */
+const filtersToggled = ref(false);
 const drawer = ref<{ sid: string; label: string; path: string; flavor: string | null } | null>(
   null,
 );
@@ -93,7 +96,13 @@ async function refresh(retried = false, auto = false): Promise<void> {
   }
 }
 
-const pagerHidden = computed(() => total.value <= (pageSize.value ?? 0) && offset.value === 0);
+/* 只有一頁就不佔版面。
+   ⚠ **讀取失敗時也要收起來**（舊版的 catch 裡就是 `pager.hidden = true`）：清單已經換成
+     一句錯誤訊息，底下卻還掛著「1–10 / 共 25 筆」，那個數字講的是上一次成功的結果，
+     而畫面其他部分都在說「現在讀不到」。 */
+const pagerHidden = computed(
+  () => error.value !== null || (total.value <= (pageSize.value ?? 0) && offset.value === 0),
+);
 const pageFrom = computed(() => (total.value ? offset.value + 1 : 0));
 const pageTo = computed(() => offset.value + rows.value.length);
 
@@ -245,7 +254,11 @@ let timer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   // 一進來就有條件（從書籤或分享的連結進來）的話，把篩選列展開——收合著會讓人
   // 以為看到的是全部
-  if (activeCount.value) filtersOpen.value = true;
+  // 舊版是直接 `filterToggle.click()`，所以那一下等同「使用者點過」（inert 會被寫上）。
+  if (activeCount.value) {
+    filtersOpen.value = true;
+    filtersToggled.value = true;
+  }
   void refresh();
   // 狀態會漂移（container 自行結束），定期對齊。auto=true 讓它在使用者正操作列表時讓路。
   timer = setInterval(() => void refresh(false, true), 15000);
@@ -277,6 +290,7 @@ watch(showHistory, () => {
              篩選鍵貼著頁籤放：兩者是同一件事的兩個維度，而且它控制的面板就在正下方。 -->
         <div class="section-head__lead">
           <div class="tabs" role="tablist" aria-label="Session 檢視">
+            <!-- prettier-ignore -->
             <button
               class="tabs__tab"
               role="tab"
@@ -286,8 +300,8 @@ watch(showHistory, () => {
               @click="selectTab(false)"
               @keydown="onTabKeydown"
             >
-              <i class="fa-solid fa-play"></i> 執行中
-            </button>
+              <i class="fa-solid fa-play"></i> 執行中</button>
+            <!-- prettier-ignore -->
             <button
               class="tabs__tab"
               role="tab"
@@ -297,8 +311,7 @@ watch(showHistory, () => {
               @click="selectTab(true)"
               @keydown="onTabKeydown"
             >
-              <i class="fa-solid fa-clock-rotate-left"></i> 已結束
-            </button>
+              <i class="fa-solid fa-clock-rotate-left"></i> 已結束</button>
           </div>
           <!-- 收合時仍要看得出「你正在看的是被篩過的資料」——那是最容易誤判的地方，
                所以生效數字直接掛在按鈕上，而不是只在展開後才看得到。 -->
@@ -309,7 +322,7 @@ watch(showHistory, () => {
             aria-controls="filter-bar"
             data-testid="filter-toggle"
             :data-active="activeCount ? '1' : ''"
-            @click="filtersOpen = !filtersOpen"
+            @click="((filtersOpen = !filtersOpen), (filtersToggled = true))"
           >
             <i class="fa-solid fa-filter"></i> 篩選<span id="filter-count">{{
               activeCount ? ` · ${activeCount}` : ""
@@ -318,13 +331,13 @@ watch(showHistory, () => {
         </div>
         <div class="section-head__actions">
           <span class="section-head__note" id="list-updated">{{ listUpdated }}</span>
+          <!-- prettier-ignore -->
           <button class="btn" id="refresh-btn" @click="refresh()">
-            <i class="fa-solid fa-rotate"></i> 重新整理
-          </button>
+            <i class="fa-solid fa-rotate"></i> 重新整理</button>
         </div>
       </div>
 
-      <FilterBar :open="filtersOpen" @changed="onFiltersChanged" />
+      <FilterBar :open="filtersOpen" :toggled="filtersToggled" @changed="onFiltersChanged" />
 
       <ManifestList
         :rows="rows"
@@ -342,13 +355,11 @@ watch(showHistory, () => {
 
       <!-- 只有一頁就不佔版面 -->
       <div class="pager" id="pager" :hidden="pagerHidden">
+        <!-- prettier-ignore -->
         <button class="btn" id="prev-btn" :disabled="offset <= 0" @click="prevPage">
-          <i class="fa-solid fa-chevron-left"></i> 上一頁
-        </button>
-        <span class="pager__status" id="pager-status" data-testid="pager-status">
-          <b>{{ pageFrom }}</b
-          >–<b>{{ pageTo }}</b> / 共 <b>{{ total }}</b> 筆
-        </span>
+          <i class="fa-solid fa-chevron-left"></i> 上一頁</button>
+        <!-- prettier-ignore -->
+        <span class="pager__status" id="pager-status" data-testid="pager-status"><b>{{ pageFrom }}</b>–<b>{{ pageTo }}</b> / 共 <b>{{ total }}</b> 筆</span>
         <button class="btn" id="next-btn" :disabled="pageTo >= total" @click="nextPage">
           下一頁 <i class="fa-solid fa-chevron-right"></i>
         </button>

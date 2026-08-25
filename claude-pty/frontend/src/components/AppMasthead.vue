@@ -13,7 +13,7 @@
  *   2. 憑證徽章的翻頁動畫（舊版 swapCred）拿掉：它只在**換 agent** 時才跑，而這套東西
  *      只驅動 claude 一種 CLI，`switched` 恆為 false——留著等於留一段永遠不執行的程式碼。
  */
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { anchorPanel } from "@/lib/anchor";
@@ -33,6 +33,7 @@ const router = useRouter();
 const activeSeg = computed(() => (route.path === "/account" ? "account" : "sessions"));
 
 const cred = computed(() => store.credentials[store.meta.defaultCli]);
+watch(() => store.credentials, syncCredData, { deep: true });
 
 const theme = ref("instrument");
 const themeOptions: PickerOption[] = THEMES.map((t) => ({
@@ -134,7 +135,30 @@ function onThemeChange(detail: { value: string; origin: PickerOrigin | null }): 
   void applyTheme(detail.value, detail.origin);
 }
 
+/* ⚠ `#cred-data` 是舊版 `_masthead.html` 的 `<script type="application/json">`：伺服端把
+ *   憑證狀態塞在頁面裡，`app.js` 進站時讀它，之後才由列表輪詢覆蓋。
+ *
+ *   這一版**沒有任何讀者**（值走 `/api/account/bootstrap` 與列表的順風車），節點留著純粹
+ *   是為了 DOM 與舊版一致。Vue 的模板編譯器不吐 `<script>`，所以只能自己建。
+ *   ⚠ 這是一個明知沒有用途的相容節點，階段 5 拆舊時**要連同模板那一行一起刪**。
+ */
+let credDataEl: HTMLScriptElement | null = null;
+
+function syncCredData(): void {
+  if (!credDataEl) return;
+  credDataEl.textContent = JSON.stringify(store.credentials);
+}
+
 onMounted(async () => {
+  const nav = document.querySelector(".masthead__nav");
+  if (nav && !document.getElementById("cred-data")) {
+    credDataEl = document.createElement("script");
+    credDataEl.type = "application/json";
+    credDataEl.id = "cred-data";
+    // 舊版的位置：`.masthead__nav` 的第一個子節點（在憑證徽章之前）
+    nav.insertBefore(credDataEl, nav.firstChild);
+    syncCredData();
+  }
   theme.value = await initTheme();
   document.addEventListener("click", onDocClick, true);
   document.addEventListener("keydown", onDocKeydown);
@@ -142,6 +166,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  credDataEl?.remove();
+  credDataEl = null;
   document.removeEventListener("click", onDocClick, true);
   document.removeEventListener("keydown", onDocKeydown);
   globalThis.removeEventListener("resize", onResize);
@@ -156,19 +182,30 @@ onBeforeUnmount(() => {
       <span class="navseg" role="group" aria-label="主要區域" :data-active="activeSeg">
         <span class="navseg__thumb" aria-hidden="true"></span>
         <!-- 兩格的字數刻意相當（四個中文字），等寬才不會看起來是硬撐出來的 -->
-        <RouterLink
-          to="/"
-          data-seg="sessions"
-          :aria-current="activeSeg === 'sessions' ? 'page' : undefined"
-        >
-          <i class="fa-solid fa-terminal"></i>工作階段
+        <!-- ⚠ 用 `custom` 自己畫 `<a>`，不要讓 RouterLink 代勞：它會自動掛
+             `router-link-active` / `router-link-exact-active` 兩個 class，而舊版那兩顆連結
+             只有 `data-seg` 與 `aria-current`。多出來的 class 會讓 golden 的 DOM 對不上，
+             而且 `.navseg a` 的樣式規則本來就沒有預期它們存在。
+             這樣寫仍然是 SPA 導覽（navigate 保留了修飾鍵開新分頁的行為）。 -->
+        <RouterLink to="/" custom v-slot="{ href, navigate }">
+          <!-- prettier-ignore -->
+          <a
+            :href="href"
+            data-seg="sessions"
+            :aria-current="activeSeg === 'sessions' ? 'page' : undefined"
+            @click="navigate"
+          >
+            <i class="fa-solid fa-terminal"></i>工作階段</a>
         </RouterLink>
-        <RouterLink
-          to="/account"
-          data-seg="account"
-          :aria-current="activeSeg === 'account' ? 'page' : undefined"
-        >
-          <i class="fa-solid fa-id-badge"></i>帳號管理
+        <RouterLink to="/account" custom v-slot="{ href, navigate }">
+          <!-- prettier-ignore -->
+          <a
+            :href="href"
+            data-seg="account"
+            :aria-current="activeSeg === 'account' ? 'page' : undefined"
+            @click="navigate"
+          >
+            <i class="fa-solid fa-id-badge"></i>帳號管理</a>
         </RouterLink>
       </span>
     </div>
@@ -176,26 +213,39 @@ onBeforeUnmount(() => {
       <!-- 憑證徽章：這個人設定 CLI 憑證了沒。沒設的話新 session 一開場就停在登入提示，
            所以狀態常駐在招牌上、紅著提醒。圖示與顏色全由 CSS 依 data-state 決定——
            這裡只負責給 state / label / detail 三個值，不挑圖示。 -->
-      <RouterLink
-        v-if="cred"
-        id="cred-badge"
-        class="cred tip tip--wide tip--left"
-        data-testid="cred-badge"
-        role="status"
-        to="/account"
-        :data-cli="store.meta.defaultCli"
-        :data-state="cred.state"
-        :data-tip="cred.detail"
-      >
-        <span class="cred__brand" aria-hidden="true">
-          <BrandMark :name="cred.brand" cls="cred__brand-svg" />
-        </span>
-        <span class="cred__label">{{ cred.label }}</span>
+      <!-- ⚠ **首幀就要在**，不 v-if。舊版是伺服端渲染的，這顆膠囊從第一次繪製就佔著位置；
+           等 /api/account/bootstrap 回來才長出來的話，招牌會先窄一截再撐開。
+           class 也固定寫死（`cred tip tip--wide tip--left`）——舊版沒有任何條件式 class。 -->
+      <RouterLink to="/account" custom v-slot="{ href, navigate }">
+        <!-- 屬性順序照舊版模板（class 在 id 之前）：順序對 HTML 沒有語意，但逐字比對
+             DOM 時它是唯一還會亮的差異，留著只會讓真的差異被雜訊蓋住。 -->
+        <a
+          class="cred tip tip--wide tip--left"
+          id="cred-badge"
+          data-testid="cred-badge"
+          role="status"
+          :href="href"
+          :data-cli="store.meta.defaultCli"
+          :data-state="cred?.state"
+          :data-tip="cred?.detail"
+          @click="navigate"
+        >
+          <!-- `data-brand` 是舊版 paintCred() 拿來判斷「品牌換了才重畫 SVG」的欄位。
+               這一版不需要那個最佳化（Vue 自己會 diff），但屬性照留：它是 DOM 的一部分。 -->
+          <span class="cred__brand" aria-hidden="true" :data-brand="cred?.brand">
+            <BrandMark v-if="cred" :name="cred.brand" cls="cred__brand-svg" />
+          </span>
+          <span class="cred__label">{{ cred?.label }}</span>
+        </a>
       </RouterLink>
       <!-- 不標「主題」二字：picker 自己的按鈕上就有調色盤圖示與目前主題名。
            無障礙靠 aria-label（掛在按鈕與清單上，不是外層——外層沒有 role）。 -->
+      <!-- ⚠ 掛載點是 `<span>` 不是 `<div>`：舊版是 `<span id="theme-picker">`，被
+           `createPicker` 就地改成 `.picker`。`.masthead__nav` 是 flex，兩者的排版結果一樣，
+           但 golden 比的是 DOM。 -->
       <SitePicker
         id="theme-picker"
+        tag="span"
         v-model="theme"
         :options="themeOptions"
         aria-label="介面主題"
@@ -215,13 +265,13 @@ onBeforeUnmount(() => {
           @keydown="onBtnKeydown"
         >
           <span class="whoami__avatar" aria-hidden="true">
-            {{ (store.user?.username ?? "").slice(0, 1).toUpperCase() }}
-          </span>
+            {{ (store.user?.username ?? "").slice(0, 1).toUpperCase() }}</span
+          >
           <span class="whoami__name">{{ store.user?.username }}</span>
           <!-- 不掛 tooltip：「admin」這個字自己就說完了 -->
+          <!-- prettier-ignore -->
           <span v-if="store.user?.is_admin" class="whoami__badge">
-            <i class="fa-solid fa-user-shield"></i>admin
-          </span>
+            <i class="fa-solid fa-user-shield"></i>admin</span>
           <i class="fa-solid fa-chevron-down whoami__caret" aria-hidden="true"></i>
         </button>
         <div
@@ -233,6 +283,7 @@ onBeforeUnmount(() => {
           data-testid="account-menu"
           @keydown="onMenuKeydown"
         >
+          <!-- prettier-ignore -->
           <button
             class="menu__item"
             type="button"
@@ -241,10 +292,10 @@ onBeforeUnmount(() => {
             data-testid="menu-settings"
             @click="onMenuClick('settings')"
           >
-            <i class="fa-solid fa-sliders"></i>設定
-          </button>
+            <i class="fa-solid fa-sliders"></i>設定</button>
           <!-- 登出單獨一區：它結束整個工作階段，與上面那個不是同一種份量。 -->
           <div class="menu__sep" role="separator"></div>
+          <!-- prettier-ignore -->
           <button
             class="menu__item menu__item--danger"
             type="button"
@@ -253,8 +304,7 @@ onBeforeUnmount(() => {
             data-testid="menu-logout"
             @click="onMenuClick('logout')"
           >
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>登出
-          </button>
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>登出</button>
         </div>
       </span>
     </nav>

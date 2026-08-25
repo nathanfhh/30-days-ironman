@@ -75,16 +75,17 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
         aria-modal="true"
         aria-labelledby="settings-modal-title"
       >
+        <!-- prettier-ignore -->
         <h2 class="modal__title" data-testid="modal-title" id="settings-modal-title">
-          <i class="fa-solid fa-sliders"></i> 設定
-        </h2>
+          <i class="fa-solid fa-sliders"></i> 設定</h2>
         <div class="settings">
           <section class="settings__row" data-testid="settings-row">
             <div class="settings__head">
               <span class="settings__label" data-testid="settings-label">終端程式</span>
               <span class="settings__note" data-testid="settings-note">
-                新開的 session 立刻套用；已經開著的那一場，要把終端分頁全部關掉、下次再開才會換
-              </span>
+                新開的 session
+                立刻套用；已經開著的那一場，要把終端分頁全部關掉、下次再開才會換</span
+              >
             </div>
             <!-- 下拉本身就顯示著現值，不另外印「目前：Rust」——那是同一件事寫兩次 -->
             <SitePicker
@@ -94,20 +95,20 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
               :options="options"
               @change="save($event.value)"
             />
+            <!-- prettier-ignore -->
             <p
               class="settings__note"
               data-testid="settings-note"
               style="margin: var(--space-2) 0 0"
             >
               兩顆有一個實質差異：網頁標題 Rust 版由伺服器端決定，C 版是在瀏覽器端蓋掉的。
-              在意這一點就選 Rust 版。
-            </p>
+              在意這一點就選 Rust 版。</p>
           </section>
         </div>
         <div class="modal__actions">
+          <!-- prettier-ignore -->
           <button ref="closeBtn" class="btn" data-act="close" @click="emit('close')">
-            <i class="fa-solid fa-xmark"></i> 關閉
-          </button>
+            <i class="fa-solid fa-xmark"></i> 關閉</button>
         </div>
       </div>
     </div>

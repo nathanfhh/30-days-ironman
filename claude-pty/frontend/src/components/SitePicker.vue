@@ -36,11 +36,16 @@ const props = withDefaults(
     options: PickerOption[];
     modelValue: string;
     search?: boolean;
+    /** ⚠ **刻意沒有預設值。** 舊版的 `data-loading` 只在有人動過 `.disabled` 的 picker 上
+     *  才存在（模型與思考深度那兩顆，等目錄載入時鎖起來），其餘的掛載點連這個屬性都沒有。
+     *  給了預設 false 的話每一顆都會長出 `data-loading=""`，golden 的 DOM 就對不上。 */
     disabled?: boolean;
     /** picker 外面沒有文字標籤時（招牌上的主題）用它命名按鈕與清單。 */
     ariaLabel?: string;
+    /** 掛載點的標籤名。舊版是就地改造模板裡既有的元素，而招牌上那一個是 `<span>`。 */
+    tag?: string;
   }>(),
-  { search: false, disabled: false, ariaLabel: "" },
+  { search: false, disabled: undefined, ariaLabel: "", tag: "div" },
 );
 
 const emit = defineEmits<{
@@ -51,12 +56,34 @@ const emit = defineEmits<{
 const mount = useTemplateRef<HTMLElement>("mount");
 const button = useTemplateRef<HTMLButtonElement>("button");
 const menu = useTemplateRef<HTMLElement>("menu");
-const searchInput = useTemplateRef<HTMLInputElement>("searchInput");
+/* ⚠ 搜尋框**不用 template ref**：它現在住在 `v-for` 裡，而 v-for 裡的 ref 收成的是
+   **陣列**——`searchInput.value?.focus()` 於是變成「對一個陣列呼叫 focus」，執行期直接
+   拋 TypeError（改成 v-for 之後被 vitest 的 unhandled error 當場抓到）。
+   從選單元素查一次乾淨得多，也不必去記住那個陣列語意。 */
+const searchEl = (): HTMLInputElement | null =>
+  menu.value?.querySelector<HTMLInputElement>('input[type="search"]') ?? null;
 
 const open = ref(false);
 const active = ref(0);
 const query = ref("");
-const drop = ref<"up" | "down">("down");
+/* ⚠ 起始是 `undefined` 而不是 "down"：`data-drop` 是 `anchorPanel` 在**展開時**才寫上去的
+   （見 lib/anchor），沒展開過的 picker 身上根本沒有這個屬性。 */
+const drop = ref<"up" | "down" | undefined>(undefined);
+/* ⚠ 選單的內容一旦畫過就**留著**，收合只是 `hidden`。舊版 `renderMenu()` 只在 open() 裡
+   呼叫，關閉時不清 innerHTML——所以「沒展開過是空的 `<ul>`、展開過就一直有內容」是它的
+   實際形狀，兩種狀態都要照抄。整段 v-if 掉的話，關起來之後 DOM 會比舊版少一截。 */
+const hasOpened = ref(false);
+
+/* 展開之後才有內容；沒展開過的 `<ul>` 是空的（見 hasOpened）。用陣列而不是布林，
+   是為了讓樣板只有 `v-for`——理由見樣板裡那段註解。 */
+const shownOptions = computed(() => (hasOpened.value ? visible.value : []));
+const searchRows = computed(() => (hasOpened.value && props.search ? [0] : []));
+const emptyRows = computed(() => (hasOpened.value && !visible.value.length ? [0] : []));
+
+// 舊版只有被鎖過的 picker 身上才有 `data-loading`（見 disabled 這個 prop 的說明）。
+const loadingAttr = computed(() =>
+  props.disabled === undefined ? undefined : props.disabled ? "1" : "",
+);
 
 const current = computed(
   () => props.options.find((o) => o.value === props.modelValue) ?? props.options[0],
@@ -71,7 +98,7 @@ const visible = computed(() => {
 const place = (): void => {
   if (!button.value || !menu.value) return;
   anchorPanel(button.value, menu.value, { mount: mount.value, matchWidth: true });
-  drop.value = (mount.value?.dataset.drop as "up" | "down") ?? "down";
+  drop.value = mount.value?.dataset.drop as "up" | "down" | undefined;
 };
 
 function onScroll(e: Event): void {
@@ -92,6 +119,7 @@ function openMenu(): void {
      停用必須同時對兩種輸入方式成立。 */
   if (props.disabled || mount.value?.closest('[data-disabled="1"]')) return;
   open.value = true;
+  hasOpened.value = true;
   query.value = ""; // 每次重新展開都從完整清單開始，不要留著上次打的字
   active.value = Math.max(
     0,
@@ -100,9 +128,10 @@ function openMenu(): void {
   void nextTick(() => {
     place();
     if (props.search) {
-      searchInput.value?.focus();
-      const len = searchInput.value?.value.length ?? 0;
-      searchInput.value?.setSelectionRange(len, len);
+      const el = searchEl();
+      el?.focus();
+      const len = el?.value.length ?? 0;
+      el?.setSelectionRange(len, len);
     }
   });
   /* 選單是 fixed 定位的，頁面一捲它就會留在原地、跟按鈕脫節。
@@ -195,22 +224,23 @@ defineExpose({ open, close });
 </script>
 
 <template>
-  <div
+  <component
+    :is="tag"
     ref="mount"
     :id="id"
     class="picker"
     :data-testid="id"
     :data-drop="drop"
-    :data-loading="disabled ? '1' : ''"
+    :data-loading="loadingAttr"
   >
     <button
       ref="button"
       type="button"
       class="picker__button"
-      :data-testid="`${id}-button`"
-      :aria-label="ariaLabel || undefined"
       aria-haspopup="listbox"
       :aria-expanded="open ? 'true' : 'false'"
+      :data-testid="`${id}-button`"
+      :aria-label="ariaLabel || undefined"
       :disabled="disabled"
       @click="open ? close() : openMenu()"
       @keydown="onButtonKeydown"
@@ -224,42 +254,45 @@ defineExpose({ open, close });
       ref="menu"
       class="picker__menu"
       role="listbox"
-      :aria-label="ariaLabel || undefined"
-      :data-testid="`${id}-menu`"
       :hidden="!open"
+      :data-testid="`${id}-menu`"
+      :aria-label="ariaLabel || undefined"
     >
-      <template v-if="open">
-        <li v-if="search" class="picker__search">
-          <input
-            ref="searchInput"
-            v-model="query"
-            class="input input--sm"
-            type="search"
-            :data-testid="`${id}-search`"
-            placeholder="輸入名稱篩選"
-            aria-label="篩選選項"
-            @input="active = 0"
-            @keydown="onSearchKeydown"
-          />
-        </li>
-        <li
-          v-for="(o, i) in visible"
-          :key="o.value"
-          class="picker__option"
-          role="option"
-          :data-value="o.value"
-          :data-testid="`${id}-opt-${o.value || 'any'}`"
-          :aria-selected="o.value === modelValue"
-          :data-active="i === active"
-          @click="pick(o.value, { x: $event.clientX, y: $event.clientY })"
-        >
-          <BrandMark v-if="o.brand" :name="o.brand" />
-          <i v-else class="picker__icon" :class="o.icon || 'fa-solid fa-circle'"></i>
-          <span>{{ o.label }}</span>
-          <span v-if="o.hint" class="picker__hint">{{ o.hint }}</span>
-        </li>
-        <li v-if="!visible.length" class="picker__empty">找不到符合的項目</li>
-      </template>
+      <!-- ⚠ 三個 `v-for` 而不是 `v-if`：沒有 v-else 的 v-if 會在 DOM 上留一個空的註解節點
+           當錨點，而舊版那個 ul 在沒展開過時是**完全空的**。v-for 的 Fragment 錨點是空白
+           文字節點，outerHTML 看不到，所以兩邊逐字一樣。
+           （⚠ 這段註解裡刻意不寫出那個註解節點的字面形狀：HTML 註解遇到第一個結束序列就
+             收掉，寫進去會把這段註解截斷、整個樣板解析失敗。我剛踩過。） -->
+      <li v-for="_ in searchRows" :key="'search'" class="picker__search">
+        <input
+          v-model="query"
+          class="input input--sm"
+          type="search"
+          :data-testid="`${id}-search`"
+          placeholder="輸入名稱篩選"
+          aria-label="篩選選項"
+          @input="active = 0"
+          @keydown="onSearchKeydown"
+        />
+      </li>
+      <li
+        v-for="(o, i) in shownOptions"
+        :key="o.value"
+        class="picker__option"
+        role="option"
+        :data-value="o.value"
+        :data-testid="`${id}-opt-${o.value || 'any'}`"
+        :aria-selected="o.value === modelValue"
+        :data-active="i === active"
+        @click="pick(o.value, { x: $event.clientX, y: $event.clientY })"
+      >
+        <BrandMark v-if="o.brand" :name="o.brand" />
+        <i v-else class="picker__icon" :class="o.icon || 'fa-solid fa-circle'"></i>
+        <span>{{ o.label }}</span>
+        <!-- v-for 而不是 v-if：沒有 hint 的選項不該多一個註解錨點（理由同上面那段）。 -->
+        <span v-for="h in o.hint ? [o.hint] : []" :key="h" class="picker__hint">{{ h }}</span>
+      </li>
+      <li v-for="_ in emptyRows" :key="'empty'" class="picker__empty">找不到符合的項目</li>
     </ul>
-  </div>
+  </component>
 </template>

@@ -38,41 +38,62 @@ export interface BuildModule {
   built_at: string | null;
 }
 
-/*
- * ⚠ TODO(階段 3)：以下這幾項今天是 Jinja 注入的伺服端事實，**還沒有對應的 API**
- *   （計畫的階段 3 就是在做這件事：50 處注入改 endpoint）。SPA 拿不到伺服端渲染，
- *   所以在那支端點出現之前先用這裡的預設值，並且**只有一個地方要改**：
- *   `loadMeta()` 換成打那支端點即可。
+/**
+ * 伺服端環境事實。來源是階段 3 開的兩條 bootstrap endpoint，**分界線是 gate 不是頁面**：
  *
- *   目前受影響的畫面（已在日誌與回報中列出）：
- *     · `name_max`      建立表單與改名對話框的長度上限（config.NAME_MAX）
- *     · `gitlab_enabled` 列表 GitLab 標記的 gate（config.gitlab_enabled()）
- *     · `behind_proxy`  終端要開抽屜還是新分頁（config.BEHIND_PROXY）
- *     · `persist_dir`   抽屜標題列的「哪個目錄寫了會留著」（config.DATA_BIND）
- *     · `build_info`    頁尾的版本與 commit（server/version.py）
- *     · 登入頁的插畫（`web.LOGIN_ART` 每次隨機挑一張）
+ *   · `/api/bootstrap`（公開）——未登入者今天也看得到的東西：`<html>` 的兩個屬性、頁尾
+ *     版本、登入頁的插畫。登入頁需要它們，所以它不能被關在 401 後面。
+ *   · `/api/account/bootstrap`（需登入）——「這個帳號的處境」：憑證狀態、長度限制、GitLab。
+ *
+ * ⚠ `buildBuiltAt` 是**整包**的屬性、不屬於任何一個模組，所以獨立一個欄位而不是讀
+ *   `buildModules[0].built_at`。端點的 docstring 特地把它提到最外層並寫明理由：留在列裡
+ *   的話遲早會有人把它畫成「claude-pty 這一列的時間」。
  */
 export interface SiteMeta {
   behindProxy: boolean;
   persistDir: string;
-  nameMax: number;
-  gitlabEnabled: boolean;
-  defaultCli: string;
   buildModules: BuildModule[];
+  /** 整包的建置時間（`build.built_at`），不是任何一個模組的。 */
+  buildBuiltAt: string | null;
+  /** 登入頁插畫的**完整網址**（伺服端每次呼叫重挑一張），沒有圖就 null。 */
   loginArt: string | null;
+  defaultCli: string;
+  nameMax: number;
+  usernameMax: number;
+  minPasswordLength: number;
+  gitlabEnabled: boolean;
+  gitlabHost: string | null;
+  gitlabProxyError: string | null;
 }
 
 const META_DEFAULTS: SiteMeta = {
   behindProxy: false,
   persistDir: "",
-  // ⚠ 暫時值。真值是 config.NAME_MAX（目前 25）；階段 3 之後由 API 給，
-  //   在那之前這裡寫死一份**只影響前端的提示與 maxlength**，後端仍然會擋。
-  nameMax: 25,
-  gitlabEnabled: false,
-  defaultCli: "claude",
   buildModules: [],
+  buildBuiltAt: null,
   loginArt: null,
+  defaultCli: "claude",
+  nameMax: 25,
+  usernameMax: 32,
+  minPasswordLength: 8,
+  gitlabEnabled: false,
+  gitlabHost: null,
+  gitlabProxyError: null,
 };
+
+interface PublicBootstrap {
+  behind_proxy: boolean;
+  persist_dir: string;
+  build: { modules: BuildModule[]; built_at: string | null };
+  login_art: string | null;
+}
+
+interface AccountBootstrap {
+  default_cli: string;
+  credentials: Credentials;
+  limits: { name_max: number; username_max: number; min_password_length: number };
+  gitlab: { enabled: boolean; host: string | null; proxy_error: string | null };
+}
 
 export const useSiteStore = defineStore("site", () => {
   const user = ref<User | null>(null);
@@ -81,11 +102,15 @@ export const useSiteStore = defineStore("site", () => {
   /** 進頁那一發 `/api/auth/me` 有沒有回來過。router 的守衛靠它決定要不要等。 */
   const identityLoaded = ref(false);
 
-  /** 我是誰。401 由 api() 統一導回登入頁，這裡只負責把身分放好。 */
+  /** 我是誰。401 由 api() 統一導回登入頁，這裡只負責把身分放好。
+   *
+   * ⚠ 拿到身分就順手把 `/api/account/bootstrap` 也帶回來：招牌在 sessions 與 account
+   *   兩頁都有，兩頁都需要憑證狀態與長度限制。分開讓呼叫端各自記得打，遲早會有一頁忘記。 */
   async function loadIdentity(): Promise<User | null> {
     try {
       const d = await api<{ user: User }>("/api/auth/me");
       user.value = d.user;
+      await loadAccountMeta();
       return d.user;
     } catch {
       user.value = null;
@@ -96,12 +121,46 @@ export const useSiteStore = defineStore("site", () => {
   }
 
   /**
-   * 伺服端環境事實。**現在沒有這支 API**（見上方 TODO），所以它只是把預設值放好；
-   * 階段 3 的端點一上線就在這裡換掉，其餘畫面一個字都不必動。
+   * 公開的那一條。**進站就打**，不等身分——登入頁的頁尾與插畫需要它。
+   *
+   * ⚠ 失敗不可以擋住畫面：這幾個值全是「畫得更完整」用的，拿不到就退回預設（頁尾留白、
+   *   沒有插畫），登入與列表照樣能用。舊版模板拿不到 `build_info()` 時的行為也是留白。
    */
-  function loadMeta(): void {
-    meta.value = { ...META_DEFAULTS };
+  async function loadPublicMeta(): Promise<void> {
+    try {
+      const d = await api<PublicBootstrap>("/api/bootstrap");
+      meta.value = {
+        ...meta.value,
+        behindProxy: d.behind_proxy,
+        persistDir: d.persist_dir,
+        buildModules: d.build.modules,
+        buildBuiltAt: d.build.built_at,
+        loginArt: d.login_art,
+      };
+    } catch {
+      /* 留白，不猜值——猜一個看起來合理的版本號比空白糟得多 */
+    }
     applyMetaToRoot();
+  }
+
+  /** 需要登入的那一條。`loadIdentity()` 拿到身分之後才有意義。 */
+  async function loadAccountMeta(): Promise<void> {
+    try {
+      const d = await api<AccountBootstrap>("/api/account/bootstrap");
+      meta.value = {
+        ...meta.value,
+        defaultCli: d.default_cli,
+        nameMax: d.limits.name_max,
+        usernameMax: d.limits.username_max,
+        minPasswordLength: d.limits.min_password_length,
+        gitlabEnabled: d.gitlab.enabled,
+        gitlabHost: d.gitlab.host,
+        gitlabProxyError: d.gitlab.proxy_error,
+      };
+      setCredentials(d.credentials);
+    } catch {
+      /* 同上：拿不到就用預設，畫面不至於壞掉 */
+    }
   }
 
   /**
@@ -133,7 +192,8 @@ export const useSiteStore = defineStore("site", () => {
     meta,
     identityLoaded,
     loadIdentity,
-    loadMeta,
+    loadPublicMeta,
+    loadAccountMeta,
     applyMetaToRoot,
     setCredentials,
     logout,
