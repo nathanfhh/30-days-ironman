@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 
 import App from "@/App.vue";
+import { authGuard } from "@/router";
 import LoginView from "@/views/LoginView.vue";
 import SessionsView from "@/views/SessionsView.vue";
 import { applyTheme, paintTheme, persistTheme, setThemeVars, THEME_STORAGE_KEY } from "@/lib/theme";
@@ -84,6 +85,15 @@ const CATALOG = {
   },
 };
 
+/** 一份完整的 `/api/account/bootstrap` 回應。 */
+const accountBootstrapBody = (user: unknown) => ({
+  user,
+  default_cli: "claude",
+  credentials: CREDENTIALS,
+  limits: { name_max: 25, username_max: 32, min_password_length: 8 },
+  gitlab: { enabled: false, host: null, proxy_error: null },
+});
+
 const listBody = (rows: Record<string, unknown>[], total = rows.length) => ({
   sessions: rows,
   total,
@@ -93,7 +103,7 @@ const listBody = (rows: Record<string, unknown>[], total = rows.length) => ({
 });
 
 function makeRouter(): Router {
-  return createRouter({
+  const r = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: SessionsView },
@@ -101,6 +111,10 @@ function makeRouter(): Router {
       { path: "/account", component: { template: "<div />" } },
     ],
   });
+  // ⚠ 掛的是正式版那一支守衛，不是照抄一份：照抄的複本遲早與正式版漂走，而漂走的那天
+  //   測試仍然全綠。
+  r.beforeEach(authGuard);
+  return r;
 }
 
 let router: Router;
@@ -134,20 +148,42 @@ async function mountAt(path: string): Promise<VueWrapper> {
 
 describe("LoginView", () => {
   beforeEach(() => {
+    /* 假後端要**照真的那樣有狀態**：還沒登入時 `/api/account/bootstrap` 是 401，登入之後
+       才回身分。無條件回身分的話，守衛會把每一支登入頁的測試都導去 `/`，而那正是這一版
+       新加的行為——測試得分得出「沒登入停在這裡」與「已登入被導走」。
+       ⚠ 表裡**沒有 `/api/auth/me`**：多打一發的話這張表就會炸，那是刻意的守衛。 */
+    let loggedIn = false;
     installFetch({
-      "/api/auth/login": { body: { user: { id: 1, username: "alice", is_admin: false } } },
-      // ⚠ 登入之後打的是這一條（身分已經從登入的回應收下了，這裡只是把 meta 填好）。
-      //   **沒有 `/api/auth/me`**：多打一發的話這張表就會炸，那正是我們要的守衛。
-      "/api/account/bootstrap": {
-        body: {
-          user: { id: 1, username: "alice", is_admin: false },
-          default_cli: "claude",
-          credentials: {},
-          limits: { name_max: 25, username_max: 32, min_password_length: 8 },
-          gitlab: { enabled: false, host: null, proxy_error: null },
-        },
+      "/api/auth/login": () => {
+        loggedIn = true;
+        return { body: { user: { id: 1, username: "alice", is_admin: false } } };
       },
+      "/api/account/bootstrap": () =>
+        loggedIn
+          ? { body: accountBootstrapBody({ id: 1, username: "alice", is_admin: false }) }
+          : { status: 401, body: { error: "未登入" } },
     });
+  });
+
+  it("🔴 已登入者冷載入 /login 要被導回 /（舊版是伺服端一句 302）", async () => {
+    installFetch({
+      "/api/account/bootstrap": {
+        body: accountBootstrapBody({ id: 1, username: "alice", is_admin: false }),
+      },
+      "/api/catalog": { body: CATALOG },
+      "/api/sessions": { body: listBody([]) },
+    });
+    await mountAt("/login");
+    // ⚠ 正式部署由 nginx 直接吐 index.html，Flask 那句 302 根本不會跑到——前端不接的話，
+    //   已經登入的人會停在登入表單前面。
+    expect(router.currentRoute.value.path).toBe("/");
+  });
+
+  it("沒登入時停在登入頁（探測的 401 是答案，不是錯誤）", async () => {
+    installFetch({ "/api/account/bootstrap": { status: 401, body: { error: "未登入" } } });
+    const w = await mountAt("/login");
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(w.find('[data-testid="login-username"]').exists()).toBe(true);
   });
 
   it("兩欄都填才按得下去（省掉一次注定失敗的往返）", async () => {
@@ -173,8 +209,8 @@ describe("LoginView", () => {
     await w.find('[data-testid="login-password"]').setValue("s3cret");
     await w.find("#login-form").trigger("submit");
     await flushPromises();
-    expect(calls[0]).toMatchObject({
-      url: "/api/auth/login",
+    // ⚠ 不是 `calls[0]`：守衛在進登入頁時已經探測過一次（那一發是 401，見上面的假後端）。
+    expect(calls.find((c) => c.url === "/api/auth/login")).toMatchObject({
       method: "POST",
       body: { username: "alice", password: "s3cret" },
     });
@@ -234,7 +270,8 @@ describe("SessionsView", () => {
 
   const setUser = (): void => {
     const store = useSiteStore();
-    store.user = { id: 1, username: "alice", is_admin: true };
+    // adoptIdentity 而不是直接指派：它同時標記「已經問過了」，守衛才不會再探測一次
+    store.adoptIdentity({ id: 1, username: "alice", is_admin: true });
     // 兩條 bootstrap 由 installFetch 的假表供應；這裡直接把預設值放好即可
     store.applyMetaToRoot();
   };

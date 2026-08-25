@@ -31,11 +31,20 @@ export function setUnauthorizedHandler(fn: Unauthorized): void {
 export interface ApiOptions {
   method?: string;
   body?: unknown;
+  /**
+   * 收到 401 時要不要走那個統一的「導回登入頁」。預設要。
+   *
+   * ⚠ **身分探測要關掉它。** 進頁的守衛會先問一次「我是誰」，而在登入頁上那一發本來就會
+   *   401——那是**答案**（你還沒登入），不是錯誤。讓它去 push 一次 `/login` 的話，等於在一
+   *   個正在前往 `/login` 的導覽中間再開一次導覽，把當下這次打斷。守衛自己已經照「有沒有
+   *   拿到身分」決定去哪，不需要別人代勞。
+   */
+  handleUnauthorized?: boolean;
 }
 
 export async function api<T = unknown>(
   path: string,
-  { method = "GET", body }: ApiOptions = {},
+  { method = "GET", body, handleUnauthorized = true }: ApiOptions = {},
 ): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -53,7 +62,7 @@ export async function api<T = unknown>(
   });
 
   if (res.status === 401) {
-    onUnauthorized();
+    if (handleUnauthorized) onUnauthorized();
     throw new ApiError("未登入", 401);
   }
   if (!res.ok) {

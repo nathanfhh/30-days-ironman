@@ -7,9 +7,10 @@ import LoginView from "@/views/LoginView.vue";
  * 三條路由，與舊版三個頁面一一對應（`/`、`/login`、`/account`）。網址一個字都不換：
  * 書籤、e2e 的 `page.goto`、nginx 的 try_files 都吃同一組。
  *
- * ⚠ 進頁的守衛只做一件事：**還不知道自己是誰的時候先問一次 `/api/auth/me`**，401 就去
- *   登入頁。這是 SPA 版的 authn gate；真正的 gate 仍然在後端（每一支 `/api/*` 都過），
- *   前端這一層只是省掉「先畫一頁再被踢走」的閃動，不是安全邊界。
+ * ⚠ 進頁的守衛只做一件事：**還不知道自己是誰的時候先問一次**（`/api/account/bootstrap`，
+ *   身分與這個帳號的處境同一條回應），401 就去登入頁。這是 SPA 版的 authn gate；真正的
+ *   gate 仍然在後端（每一支 `/api/*` 都過），前端這一層只是省掉「先畫一頁再被踢走」的
+ *   閃動，不是安全邊界。
  */
 export const router = createRouter({
   history: createWebHistory(),
@@ -40,18 +41,32 @@ router.afterEach((to) => {
   if (typeof title === "string") document.title = title;
 });
 
-router.beforeEach(async (to: RouteLocationNormalized) => {
+/**
+ * 進頁的守衛。**抽成具名的匯出函式而不是就地寫在 `beforeEach` 裡**：它是這個 SPA 對
+ * 「你是誰、該去哪」唯一的判斷，值得單獨測——而測試那邊自己建的 router 掛得上同一支，
+ * 驗到的就是正式版跑的那一份，不是照抄一份會漂走的複本。
+ */
+export async function authGuard(to: RouteLocationNormalized) {
   const store = useSiteStore();
-  /* ⚠ **登入頁不問「我是誰」。** 那一頁本來就是給沒登入的人看的，那一發必定 401——
-   *   白花一趟往返、在 console 留一行紅字，而且 401 的統一處理是「導回登入頁」，
-   *   在登入頁上等於什麼都沒做。
-   *   「已登入者不該停在登入頁」不必靠它：伺服器在吐這個殼**之前**就會先導走
-   *   （見 web.login_page），而 SPA 內部從別的頁走過來時身分已經在記憶體裡。 */
+  /* 一個 app 生命週期問一次就夠（`identityLoaded` 擋著）。cookie 中途失效時，api() 收到
+   * 401 會把人導回登入頁，那才是重新確認身分的入口。
+   *
+   * ⚠ **登入頁也要問。** 曾經在這裡跳過它，理由是「那一頁本來就是給沒登入的人看的，那一發
+   *   必定 401」——而那個理由漏掉了一種人：**已經登入、然後直接冷載入 `/login` 的**。
+   *   舊版對他是伺服端一句 302 回 `/`；跳過探測的話，他會停在登入表單前面。
+   *   而伺服端那句 302 在正式部署上**不會發生**：nginx 直接把 `index.html` 從磁碟吐出來
+   *   （`deploy/nginx-ui/vue/ui.conf` 的 `location = /login`），根本不經過 Flask。
+   *   代價是沒登入的人在登入頁上多一趟往返、拿一個 401。那一發的 401 是**答案**不是錯誤，
+   *   所以探測不走全域的「導回登入頁」（見 store 的 `probe`）——否則會在一個正在前往
+   *   `/login` 的導覽中間再開一次導覽。
+   * ⚠ 這裡是 `await`，所以探測沒回來之前**不會有任何頁面被畫出來**：已登入者看到的是一瞬間
+   *   的空白然後直接到 `/`，不是「先看到登入表單再被彈走」。 */
+  if (!store.identityLoaded) await store.loadIdentity();
   if (to.path === "/login") {
+    // 已登入者不該停在登入頁——與「未登入訪問管理頁 → 導向 /login」互為對稱
     return store.user ? { path: "/" } : true;
   }
-  // 一個 app 生命週期問一次就夠（`identityLoaded` 擋著）。cookie 中途失效時，
-  // api() 收到 401 會把人導回登入頁，那才是重新確認身分的入口。
-  if (!store.identityLoaded) await store.loadIdentity();
   return store.user ? true : { path: "/login" };
-});
+}
+
+router.beforeEach(authGuard);
