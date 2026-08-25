@@ -112,7 +112,11 @@ def login_page():
     return render_template(
         "login.html",
         behind_proxy=config.BEHIND_PROXY,
-        min_password_length=config.MIN_PASSWORD_LENGTH,
+        # ⚠ **這裡刻意不給 `min_password_length`。** 登入頁本來就不檢查密碼長度（見
+        #   login.html 的說明：長度是「建立／變更密碼」時的政策，搬到登入頁的話，調高
+        #   政策之後所有舊帳號都會按不下送出鈕，而後端明明還驗得過他們的密碼）。
+        #   這個參數以前傳著卻沒有人用，而沒人用的參數不是無害的：它讓下一個人以為登入
+        #   頁需要這個值，於是把它加進**公開**的 /api/bootstrap，那才是真的放寬曝光面。
         # 每次載入隨機挑一張——在伺服端選，頁面第一次繪製就是最終畫面，
         # 不會出現「先空著、JS 載入後才蹦出一張圖」的跳動。
         art=login_art(),
