@@ -159,11 +159,9 @@ jobs:
       # node 管前端那六關（npm ci / oxlint / prettier / vue-tsc / vitest / vite build），
       # 而最後一關 build 出來的 dist 正是所有瀏覽器測試要吃的東西。沒有它的話 run-all.sh
       # 會把六關與每一支瀏覽器測試都跳過並講出來，而那一輪等於什麼都沒測到。
-      - uses: aquasecurity/setup-trivy@v0.2.3
+      - uses: aquasecurity/setup-trivy@v0.3.1
         # 前端相依掃描（run-all.sh 的 trivy 那關）要 runner 上真的有 trivy；沒有的話它會
         # 「跳過並講出來」，而跳過在 CI 上要被下面那道上限擋住。裝了它，掃描才是真的跑。
-        with:
-          cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -208,11 +206,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       # 這個 job 跑 `run-all.sh --all`，前端那六關也在裡面（見 claude-pty job 的說明）。
-      - uses: aquasecurity/setup-trivy@v0.2.3
+      - uses: aquasecurity/setup-trivy@v0.3.1
         # 前端相依掃描（run-all.sh 的 trivy 那關）要 runner 上真的有 trivy；沒有的話它會
         # 「跳過並講出來」，而跳過在 CI 上要被下面那道上限擋住。裝了它，掃描才是真的跑。
-        with:
-          cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
