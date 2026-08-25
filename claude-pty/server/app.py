@@ -453,12 +453,22 @@ def bootstrap():
     """
     mods = version.summary()["modules"]
     art = login_art()
-    return jsonify(
+    resp = jsonify(
         behind_proxy=config.BEHIND_PROXY,
         persist_dir=config.DATA_BIND,
         build={"modules": mods, "built_at": mods[0]["built_at"] if mods else None},
         login_art=url_for("static", filename=f"images/{art}") if art else None,
     )
+    # ⚠ **只有這一條需要 no-store，所以寫在這裡而不是放寬 `_security_headers`。**
+    #   那支對 JSON 一律不設 Cache-Control 是對的（其餘 API 是每次都問的即時狀態，
+    #   本來就沒有人會快取），為了一條端點把整個 /api/* 都標成不可快取，是拿一個
+    #   全域的決定去解一個局部的問題。
+    #   這一條特別，理由有二：它是**公開**的 GET（中間任何一層都可能想順手存一份），
+    #   而它回的兩件事都會過期——`login_art` 每次要換一張（被快取就變成同一張圖），
+    #   `build` 在改版後必須跟著變（被快取就會繼續宣告一個已經不在跑的 commit，
+    #   而頁尾整段存在的理由正是回答「線上跑的到底是哪一版」）。
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.get("/api/account/bootstrap")

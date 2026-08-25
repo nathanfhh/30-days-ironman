@@ -173,3 +173,40 @@ CI 那條 `git ls-files -co --exclude-standard '*.py' | xargs ruff format --chec
 CI 的格式閘在這個分支上本來是紅的。它落在本階段允許的 diff 範圍內、修法是跑一次
 formatter、對行為零影響，所以一起收掉了。`frontend-vue3` 那邊若也修了同一處，衝突就是
 這兩行。
+
+### fable 快審階段 3：三處一行修正
+
+`46850d9` 審過的結論是可 merge，但點出三處，都不是形狀問題而是**同源問題**。
+
+1. **`credentials_state()` 的字典鍵還是字面量 `"claude"`。** 上一刀宣稱「三處同源」，但那
+   只做到了 `default_cli` 這一半：鍵仍然寫死，改掉 `config.DEFAULT_CLI` 之後會變成
+   「用 A 當鍵、拿 B 去查」。而且原本那條測試（`set(credentials) == {config.DEFAULT_CLI}`）
+   **是恆真的**，兩邊讀同一個常數，等於拿它自己比自己，看不出這件事。
+   修法：鍵改讀常數；`_CLAUDE_BASE` 這個模組層常數改成 `_claude_base()`，`cli` 在呼叫時
+   才讀（在 import 時抄一份的話，測試同樣驗不出分岔）。`sessions.py` 的 re-export 跟著改名。
+   測試改成把常數 monkeypatch 成 `not-claude` 跑一次，四處（字典鍵、狀態裡的 `cli`、
+   `default_cli`、招牌的 `data-cli`）都要跟著走。
+   **變異驗證**：把鍵改回字面量，這一節如期三條紅，其中招牌那條是 `_masthead.html` 當場
+   `UndefinedError`（它拿 `default_cli` 去 `credentials` 裡查，查不到就炸）。那個炸法本身
+   就是答案，所以測試把它接住印成一行說明再記 FAIL，不讓它把整支測試帶走，而
+   monkeypatch 用 `try/finally` 還原：不然後面幾十條會對著一個被改壞的常數跑。
+
+2. **`/api/bootstrap` 補 `Cache-Control: no-store`**，只動這條，不放寬 `_security_headers`。
+   那支對 JSON 一律不設 Cache-Control 是對的（其餘 API 是每次都問的即時狀態），為一條
+   端點把整個 `/api/*` 標成不可快取，是拿全域的決定解局部的問題。這條特別的理由有二：
+   它是**公開**的 GET（中間任何一層都可能想順手存一份），而它回的兩件事都會過期
+   （`login_art` 每次要換一張、`build` 在改版後必須跟著變，而頁尾存在的理由正是回答
+   「線上跑的到底是哪一版」）。**變異驗證**：拿掉那一行，斷言如期紅。
+
+3. **`web.login_page()` 的死參數 `min_password_length` 刪掉**（沒碰模板）。它傳著卻沒有人
+   用，而沒人用的參數不是無害的：它讓下一個人以為登入頁需要這個值，於是把它加進**公開**
+   的 `/api/bootstrap`，那才是真的放寬曝光面。原地留了註解講這件事。
+
+順手：「權限」那一節的六條 `admin_only not in acct` 查的是**頂層鍵**，同樣恆真（沒有人會
+把 `users` 放在頂層，真要漏也是漏在巢狀結構裡）。改查整段 JSON 字串 `_acct_raw`。
+
+這三處加起來的教訓是同一個：**斷言的兩邊如果來自同一份值，它就不是斷言。** 要嘛換一邊
+的來源（拿 HTML 對 JSON），要嘛動一動輸入再看它會不會紅。
+
+驗證：76 → 82 條 check、0 失敗；`tests/run-all.sh` 37 支 0 失敗，跳過清單逐字相同；
+`ruff@0.16.3 check .` 與 CI 那條 format 閘都綠。

@@ -59,6 +59,9 @@ print("== gate：公開那條真的公開，要登入那條真的 401 ==")
 r = anon.get("/api/bootstrap")
 check("未登入 GET /api/bootstrap → 200（刻意公開，見 _PUBLIC_ENDPOINTS 的說明）", r.status_code == 200)
 check("回的是 JSON", r.is_json)
+# ⚠ 這條回的兩件事都會過期：login_art 每次要換一張，build 在改版後必須跟著變。
+#   它又是公開的 GET，中間任何一層都可能想順手存一份。
+check("公開那條帶 Cache-Control: no-store", r.headers.get("Cache-Control") == "no-store")
 r401 = anon.get("/api/account/bootstrap")
 check("未登入 GET /api/account/bootstrap → 401", r401.status_code == 401)
 check("401 是 JSON 不是導向登入頁（/api/* 的既有語意）", r401.is_json and "error" in r401.get_json())
@@ -117,6 +120,37 @@ check(
     "credentials 以 cli 為鍵（形狀與 /api/sessions 搭順風車那份相同）",
     set(acct["credentials"]) == {config.DEFAULT_CLI},
 )
+# ⚠ 上面那條單獨看是**恆真的**：兩邊都讀同一個常數，等於拿它自己比自己。真正要守的是
+#   「四個地方（字典鍵、狀態裡的 cli、default_cli、招牌的 data-cli）同源」，所以把常數
+#   換成別的值跑一次——有任何一處是寫死的 "claude"，這裡就會紅。
+_orig_cli = config.DEFAULT_CLI
+try:
+    config.DEFAULT_CLI = "not-claude"
+    _probe = c.get("/api/account/bootstrap").get_json()
+    check("換掉 config.DEFAULT_CLI → default_cli 跟著走", _probe["default_cli"] == "not-claude")
+    check(
+        "換掉 config.DEFAULT_CLI → credentials 的鍵跟著走（鍵不是寫死的 claude）",
+        set(_probe["credentials"]) == {"not-claude"},
+    )
+    # ⚠ 用 `.get()` 不用下標：上一條紅掉時鍵就不存在，下標會讓整支測試當場 KeyError 收攤，
+    #   後面幾十條一條都跑不到，診斷從「這兩條錯了」退化成「它爆了」。
+    check(
+        "換掉 config.DEFAULT_CLI → 憑證狀態裡的 cli 也跟著走（不是 import 時抄的那份）",
+        _probe["credentials"].get("not-claude", {}).get("cli") == "not-claude",
+    )
+    # ⚠ 同理要接住 render 的例外：四處不同源時 `_masthead.html` 是**當場炸掉**（它拿
+    #   default_cli 去 credentials 裡查，查不到就 UndefinedError）。那個炸法本身就是答案，
+    #   但不能讓它把整支測試帶走。
+    try:
+        _masthead_ok = 'data-cli="not-claude"' in c.get("/").get_data(as_text=True)
+    except Exception as _e:
+        _masthead_ok = False
+        print(f"        （render 直接炸了：{type(_e).__name__}，那正是四處分岔在正式環境的症狀）")
+    check("換掉 config.DEFAULT_CLI → 招牌的 data-cli 也跟著走（模板讀的是同一個常數）", _masthead_ok)
+finally:
+    # ⚠ 一定要 finally：上面任何一條炸掉都不可以讓後面幾十條對著一個被改壞的常數跑。
+    config.DEFAULT_CLI = _orig_cli
+check("還原之後回到原值", c.get("/api/account/bootstrap").get_json()["default_cli"] == _orig_cli)
 check(
     "每份憑證狀態自己說得出 cli/brand/ok/state/label/detail（畫面不挑圖示、不拼文案）",
     set(acct["credentials"][config.DEFAULT_CLI]) >= {"cli", "brand", "ok", "state", "label", "detail"},
@@ -158,8 +192,13 @@ check("管理員拿到 200", ca.get("/api/account/bootstrap").status_code == 200
 check("管理員與一般使用者的頂層欄位相同", set(acct_admin) == set(acct))
 check("limits 也相同（刻意：長度常數不是誰的資料）", acct_admin["limits"] == acct["limits"])
 check(f"一般使用者的 payload 不含管理員的名字（{ADMIN}）", ADMIN not in _acct_raw)
+# ⚠ 查 `_acct_raw`（整段 JSON 字串）而不是 `acct`（頂層鍵）：查頂層鍵的話這六條是**恆真的**
+#   ——沒有人會把 users 放在頂層，真要漏也是漏在巢狀結構裡，而那正是查不到的地方。
 for admin_only in ("users", "total", "orphans", "views", "pid", "port"):
-    check(f"payload 不夾帶管理員限定的 {admin_only!r}（在 /api/users 與 /api/ttyd/inspect）", admin_only not in acct)
+    check(
+        f"payload 一個字都不夾帶管理員限定的 {admin_only!r}（在 /api/users 與 /api/ttyd/inspect）",
+        admin_only not in _acct_raw,
+    )
 
 
 print("== 憑證狀態：跟著 DB 走，而且明文一個字都不出去 ==")
