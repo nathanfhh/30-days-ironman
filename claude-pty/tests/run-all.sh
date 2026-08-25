@@ -19,6 +19,10 @@ cd "$(dirname "$0")/.."
 DEPS=(--with flask --with docker --with sqlalchemy --with argon2-cffi
       --with psutil --with cryptography
       --with websocket-client --with pexpect --with playwright
+      # ⚠ 只有 golden_check 用得到：它要把兩張 PNG 逐像素比。同 playwright／pexpect，
+      #   是只在這裡出現的測試期工具，**刻意不是**專案相依（進了 pyproject 就會跟著
+      #   進正式 image，而正式環境一張圖都不需要比）。
+      --with pillow
       # ⚠ 只有 test_locked_runtime 用得到，而且**刻意不是**專案相依：它是 deploy 那道閘
       #   拿來照規格評估 requirement marker 的工具，進了 pyproject 就會跟著進正式 image。
       #   同 playwright／pexpect／websocket-client，都是只在這裡出現的測試期工具。
@@ -144,7 +148,7 @@ run_one() {
   base="$(basename "${f}" .py)"
   # ⚠ 先判「這個模式要不要跑它」再判環境缺什麼：反過來的話 --e2e 模式下每支非 e2e 測試
   #   都會被報成「沒有 ttyd」，而那不是它被跳過的原因。
-  if [ "${want_e2e}" -eq 2 ] && [[ "${base}" != e2e_* ]]; then
+  if [ "${want_e2e}" -eq 2 ] && [[ "${base}" != e2e_* ]] && [[ "${base}" != golden_* ]]; then
     skipped+=("${base}（--e2e 只跑瀏覽器測試）"); return
   fi
   if in_list "${base}" "${NEEDS_DOCKER[@]}" && [ "${want_docker}" -eq 0 ]; then
@@ -164,7 +168,8 @@ run_one() {
   if in_list "${base}" "${NEEDS_CLAUDE_CRED[@]}" && [ "${have_claude_cred}" -eq 0 ]; then
     skipped+=("${base}（host 上沒有 claude 憑證可複製進沙盒）"); return
   fi
-  if [[ "${base}" == e2e_* ]] && [ "${have_browser}" -eq 0 ]; then
+  # golden_check 也開真的瀏覽器（它就是拿畫面跟 tests/golden/ 錄下來的比），同一道 gate。
+  if { [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; } && [ "${have_browser}" -eq 0 ]; then
     skipped+=("${base}（playwright 缺這版的瀏覽器：playwright install chromium-headless-shell）"); return
   fi
   printf '\n\033[1m== %s\033[0m\n' "${base}"
@@ -258,7 +263,10 @@ else
   front_gate "前端 build（vite）" npm run --silent build
 fi
 
-for f in tests/test_*.py tests/e2e_*.py; do
+# ⚠ `golden_check.py` 要逐一列名，不能靠 glob：同一個目錄下的 `golden_record.py`（錄）
+#   與 `golden_scenes.py`（場景定義）都不是測試，一條斷言都沒有，被撿走只會空跑。
+#   `fake_ttyd.py`／`fake_gitlab.py` 同理，它們的檔名本來就避開了上面兩個 glob。
+for f in tests/test_*.py tests/e2e_*.py tests/golden_check.py; do
   run_one "${f}"
 done
 

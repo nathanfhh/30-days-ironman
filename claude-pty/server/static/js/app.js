@@ -1181,9 +1181,98 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
   };
 
   let sizeTimer = null;
+  // iframe 盒子的觀察者。抽屜關掉時要拆，不然它會跟著被移除的節點一起留在記憶體裡。
+  let frameRO = null;
   // 這一輪要不要順便叫 TUI 重畫。做成「黏著的旗標」而不是參數：debounce 會把多次呼叫
   // 併成一次送出，若開啟時那次帶著 redraw 卻被後續的 onResize 併掉，重繪就悄悄不見了。
   let wantRedraw = false;
+  // 每次排程給一個號碼。等閘門的期間若又有新的尺寸變化，舊的那一發要作廢：
+  // 不然「只送最後一次」會在等待期間破功，變成前後兩發、後到的反而是舊尺寸。
+  let sizeToken = 0;
+
+  /* ── 送出之前的兩道閘 ───────────────────────────────────────────────────────
+   * 等的是兩個**事實**，不是一個猜出來的毫秒數：
+   *
+   *   1. 抽屜的滑入動畫真的結束了。時長寫在 CSS（`.drawer__panel` 的 240ms），而
+   *      prefers-reduced-motion 下它整個不存在。在 JS 這邊複製一份數字等於把同一個
+   *      常數放兩個地方，改 CSS 的人不會知道要同步；問 `getAnimations()` 則是問
+   *      瀏覽器「現在還有沒有在動」，兩種情況都答得對。
+   *   2. iframe 的盒子連續 SETTLE_MS 沒有再變。fit 只有在盒子變的時候才會重跑，
+   *      盒子還在動就送，送出去的是中途的格數，而**之後沒有任何人會再送一次**。
+   *
+   * ⚠ 為什麼不是「開啟後固定等 400ms」：那個數字在快的機器上是白等、在慢的機器上
+   *   還是太早，而且它與 CSS 裡的 240ms 是兩份會各自漂走的常數。等事實不會漂。
+   * ⚠ 澄清一個**不是**原因的猜測（2026-08-25 用 Playwright 逐幀量過）：滑入是
+   *   `transform: translateX()`，它不影響版面尺寸，整段動畫期間 iframe 的
+   *   clientWidth/innerWidth 一格都沒動（1295×834 從第一幀到最後一幀）。所以
+   *   「fit 量到中途寬度」這件事並沒有發生。這道閘要解決的是**順序不確定**：
+   *   送出的時機目前由一個 300ms 的 debounce 決定，它與動畫誰先誰後沒有人管，
+   *   prefers-reduced-motion、慢機器、或哪天有人調長動畫都會換一個結果。
+   */
+  const SETTLE_MS = 150;
+  /* 只等「滑入」那一個過渡，其餘一律忽略。
+   *
+   * ⚠ `getAnimations()` 回的是這個元素上**所有**的動畫。哪天有人在面板上加一個
+   *   `animation: … infinite`（呼吸燈、載入中的脈動、無限旋轉的圖示都算），它的
+   *   `finished` **永遠不會 resolve**，於是 /resize 從此再也送不出去。症狀會是
+   *   「PTY 尺寸完全不同步了」，而肇因是一條看起來與尺寸毫不相干的 CSS 裝飾。
+   * ⚠ `transitionProperty` 只有 CSSTransition 有（CSSAnimation 給的是 animationName），
+   *   所以光看它就分得出來；`instanceof` 只是再確認一次，取不到那個全域就不強求。
+   * ⚠ 同一條規矩在 close() 那邊已經有先例：它的 transitionend 也是濾
+   *   `propertyName === "transform"`，理由同樣是「別的過渡不算數」。
+   */
+  const isSlide = (a) =>
+    a.transitionProperty === "transform"
+    && (typeof CSSTransition === "undefined" || a instanceof CSSTransition);
+  const drawerSettled = () => {
+    const panel = wrap.querySelector(".drawer__panel");
+    const anims = (panel?.getAnimations?.() ?? []).filter(isSlide);
+    // 沒有動畫在跑（reduced-motion，或早就跑完了）＝已經停定，Promise.all([]) 立刻 resolve。
+    // ⚠ 要 .catch：動畫被取消時 finished 會 reject（連點兩次、抽屜當場被關掉），
+    //   而「不必再等了」正是那時候該有的結論，不是一個未處理的例外。
+    return Promise.all(anims.map((a) => a.finished.catch(() => {})));
+  };
+  // 盒子最後一次變動的時刻。由下面的 ResizeObserver 維護。
+  let lastBoxAt = 0;
+  const boxSettled = () => new Promise((resolve) => {
+    const tick = () => {
+      const quiet = performance.now() - lastBoxAt;
+      if (closing || quiet >= SETTLE_MS) resolve();
+      else setTimeout(tick, SETTLE_MS - quiet);
+    };
+    tick();
+  });
+
+  const sendSize = () => {
+    const term = frame.contentWindow?.term;
+    if (!term) return;
+    // 修在讀尺寸**之前**：萬一哪天重量字級也改了欄列數，要送出去的是修好之後的值。
+    // 掛在這裡而不是另外開一個計時器或監聽器，是因為這條路本來就涵蓋了全部的時機：
+    // 開抽屜必定走一次，之後改字級、拖視窗、瀏覽器縮放、把視窗拖到另一個 dpi 的螢幕
+    // ——每一種都會改變 cell 大小 → xterm 重新 fit → onResize → 走到這裡。
+    healGlyphScale(term);
+    const { cols, rows } = term;
+    const body = { rows, cols, redraw: wantRedraw };
+    sizeDebug("送出", `${cols}x${rows}`, "redraw=", wantRedraw,
+              "iframe=", `${frame.clientWidth}x${frame.clientHeight}`,
+              "fontSize=", term.options?.fontSize);
+    // ⚠ 旗標要等**送出成功**才清。抽屜剛開的那一刻 session 可能還在 creating，正是這
+    //   一發最容易失敗的時候；先清掉的話重繪就永遠不會再有第二次機會，而失敗本身被
+    //   下面的 .catch 靜靜吞掉——那就違背了它做成「黏著旗標」的整個理由。
+    //
+    // ⚠ 曾經想改成「尺寸也不再變才清」來對付「第一發送的是還沒 fit 的舊尺寸」——
+    //   **那是錯的、而且不必要**（2026-07-27，被 e2e_drawer 當場打紅）：
+    //     不必要——第二發若是**不同**尺寸，docker resize 本來就會產生真的 SIGWINCH，
+    //             TUI 自己就重畫了，不需要旗標。
+    //     錯的——拖視窗期間每一發的尺寸都不同，那個條件永遠不成立，於是每一發都重複
+    //           要求重繪。真正沒有 SIGWINCH 的是「尺寸沒變」那一種，而那一種伺服端
+    //           自己判斷得出來（見 sessions.resize 的 `unchanged`），不必前端猜。
+    // 路徑片段用 encodeURIComponent（不是 esc——那是 HTML 逸出，用在網址上是錯的編碼）
+    api(`/api/sessions/${encodeURIComponent(sid)}/resize`, { method: "POST", body })
+      .then(() => { wantRedraw = false; })
+      .catch(() => {});     // 純視覺，失敗不打擾使用者（session 可能剛好結束了）
+  };
+
   const syncSize = ({ redraw = false } = {}) => {
     wantRedraw = wantRedraw || redraw;
     // 拖視窗、連按字級都會連續觸發，debounce 之後只送最後一次。
@@ -1191,34 +1280,13 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
     //   一路回報中途值，抓走的那個會蓋掉最終值——實測 xterm 已經是 254×82、PTY 卻停在
     //   158×43，畫面右邊一大塊 TUI 不會畫（2026-07-26）。
     clearTimeout(sizeTimer);
+    const token = ++sizeToken;
     sizeTimer = setTimeout(() => {
-      const term = frame.contentWindow?.term;
-      if (!term) return;
-      // 修在讀尺寸**之前**：萬一哪天重量字級也改了欄列數，要送出去的是修好之後的值。
-      // 掛在這裡而不是另外開一個計時器或監聽器，是因為這條路本來就涵蓋了全部的時機：
-      // 開抽屜必定走一次，之後改字級、拖視窗、瀏覽器縮放、把視窗拖到另一個 dpi 的螢幕
-      // ——每一種都會改變 cell 大小 → xterm 重新 fit → onResize → 走到這裡。
-      healGlyphScale(term);
-      const { cols, rows } = term;
-      const body = { rows, cols, redraw: wantRedraw };
-      sizeDebug("送出", `${cols}x${rows}`, "redraw=", wantRedraw,
-                "iframe=", `${frame.clientWidth}x${frame.clientHeight}`,
-                "fontSize=", term.options?.fontSize);
-      // ⚠ 旗標要等**送出成功**才清。抽屜剛開的那一刻 session 可能還在 creating，正是這
-      //   一發最容易失敗的時候；先清掉的話重繪就永遠不會再有第二次機會，而失敗本身被
-      //   下面的 .catch 靜靜吞掉——那就違背了它做成「黏著旗標」的整個理由。
-      //
-      // ⚠ 曾經想改成「尺寸也不再變才清」來對付「第一發送的是還沒 fit 的舊尺寸」——
-      //   **那是錯的、而且不必要**（2026-07-27，被 e2e_drawer 當場打紅）：
-      //     不必要——第二發若是**不同**尺寸，docker resize 本來就會產生真的 SIGWINCH，
-      //             TUI 自己就重畫了，不需要旗標。
-      //     錯的——拖視窗期間每一發的尺寸都不同，那個條件永遠不成立，於是每一發都重複
-      //           要求重繪。真正沒有 SIGWINCH 的是「尺寸沒變」那一種，而那一種伺服端
-      //           自己判斷得出來（見 sessions.resize 的 `unchanged`），不必前端猜。
-      // 路徑片段用 encodeURIComponent（不是 esc——那是 HTML 逸出，用在網址上是錯的編碼）
-      api(`/api/sessions/${encodeURIComponent(sid)}/resize`, { method: "POST", body })
-        .then(() => { wantRedraw = false; })
-        .catch(() => {});     // 純視覺，失敗不打擾使用者（session 可能剛好結束了）
+      Promise.all([drawerSettled(), boxSettled()]).then(() => {
+        // 等的期間又有人排了新的一發，或抽屜已經關了：這一發作廢。
+        if (token !== sizeToken || closing) return;
+        sendSize();
+      });
     }, 300);
   };
   // ⚠ `load` 觸發時 ttyd 自己的 JS 還沒跑完，window.term 還不存在——直接取會拿到
@@ -1267,6 +1335,27 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
     //   （使用者回報「大多時候都是錯的」，2026-07-26）。
     sizeDebug("接上 onResize；此刻 term=", `${term.cols}x${term.rows}`,
               "iframe=", `${frame.clientWidth}x${frame.clientHeight}`);
+    /* 盒子一變就逼 xterm 重新 fit，並記下變動的時刻（上面的 boxSettled 要用）。
+     *
+     * ⚠ 為什麼需要它：**ttyd 綁的只有 `window.resize`**，沒有任何人在看 iframe 這個
+     *   元素的盒子。Chromium 目前在元素尺寸改變時也會在 iframe 內補發一次 resize
+     *   （2026-08-25 實測：只用 CSS 把面板從 90vw 改成 50vw，iframe 內確實收到了），
+     *   但那是實作行為不是規格保證，而這條路壞掉的症狀是「PTY 靜靜停在舊格數」：
+     *   沒有錯誤、沒有跡象，只有畫面不對。與其賭它，不如自己看著。
+     * ⚠ observe() 會立刻回呼一次（帶當下尺寸），那正好把 lastBoxAt 初始化成「現在」，
+     *   所以 boxSettled 從掛上的那一刻起就有一個有意義的起點。
+     */
+    lastBoxAt = performance.now();
+    let lastBox = "";
+    frameRO = new ResizeObserver(() => {
+      const box = `${frame.clientWidth}x${frame.clientHeight}`;
+      if (box === lastBox) return;      // 只在真的變了才算，避免自己觸發自己
+      lastBox = box;
+      lastBoxAt = performance.now();
+      sizeDebug("iframe 盒子變成", box);
+      frame.contentWindow?.dispatchEvent(new Event("resize"));
+    });
+    frameRO.observe(frame);
     term.onResize((d) => {             // 值在 syncSize 裡才讀，見上
       sizeDebug("xterm 自己 fit 成", `${d.cols}x${d.rows}`,
                 "iframe=", `${frame.clientWidth}x${frame.clientHeight}`);
@@ -1339,6 +1428,7 @@ function terminalDrawer({ sid, label, path, flavor = null, trigger = null }) {
     closing = true;
     cancelAnimationFrame(raf);
     clearTimeout(sizeTimer);      // 抽屜都關了就別再送尺寸
+    frameRO?.disconnect();        // 盒子的觀察者同理（節點馬上就要被移除了）
     clearInterval(hintTimer);     // 輪播同理——不清的話它會一直跑到頁面關掉為止
     delete wrap.dataset.open;
     if (openDrawer && openDrawer.el === wrap) openDrawer = null;
