@@ -103,7 +103,13 @@ check(
 )
 check(
     "長快取（Vite 把內容雜湊寫進檔名，改版就換檔名）",
-    _assets is not None and "expires 1y;" in _assets.group(1) and "immutable" in _assets.group(1),
+    _assets is not None and "max-age=31536000" in _assets.group(1) and "immutable" in _assets.group(1),
+)
+# 🔴 `expires` 自己就會送一個 Cache-Control。兩個一起用＝同一個標頭回兩份，而「聽哪一份」
+#    是實作決定的——一個要快取一年的資源不該讓那件事變成問題。
+check(
+    "🔴 沒有 expires（它會與 add_header 各送一份 Cache-Control）",
+    _assets is not None and "expires" not in _assets.group(1),
 )
 
 _ui_dir = os.path.join(_repo, "deploy", "nginx-ui")
@@ -128,7 +134,34 @@ if os.path.isfile(_vue):
             f"vue 片段有 {_page} 的精確路由",
             re.search(rf"location = {re.escape(_page)} \{{", _vue_code) is not None,
         )
-    check("三條都回 index.html", _vue_code.count("try_files $uri /index.html;") == 3)
+    # 🔴 **這一條抓的是「三個頁面全部 404」。** `try_files $uri /index.html;` 的最後一個
+    #    參數是 URI，nginx 會做**內部轉向**：把 `/index.html` 當成新請求重跑一次 location
+    #    比對，而它不符合上面三條精確比對，於是落到 `location /` 被 proxy 給 Flask——
+    #    Flask 沒有這條路由，回 404。正解是最後一個參數用 `=404`，讓 `/index.html` 被當成
+    #    **檔案路徑**直接送出，完全不重新比對。
+    check("三條都直接送檔，不做內部轉向", _vue_code.count("try_files /index.html =404;") == 3)
+    check(
+        "🔴 沒有留下會內部轉向的寫法（那會讓三個頁面全部 404）",
+        "try_files $uri /index.html" not in _vue_code,
+    )
+    # 這三條路不經 Flask，`_security_headers` 那支 after_request 完全沒機會跑。
+    _app_src = open(os.path.join(_repo, "server", "app.py"), encoding="utf-8").read()
+    for _hdr, _needle in (
+        ("Content-Security-Policy", "frame-ancestors 'none'"),
+        ("X-Content-Type-Options", "nosniff"),
+        ("Referrer-Policy", "same-origin"),
+        ("X-Frame-Options", "DENY"),
+    ):
+        check(
+            f"🔴 nginx 直出的殼也要有 {_hdr}（不經 Flask＝那支 after_request 不會跑）",
+            _vue_code.count(f'add_header {_hdr} "') == 3 and _needle in _vue_code,
+        )
+        # 值不可以與 Flask 那份分岔：兩條路對同一個頁面該給同一組標頭。
+        check(f"　└ 值與 server/app.py 對得上（{_needle}）", _needle in _app_src)
+    check(
+        "🔴 每一條 add_header 都帶 always（預設只對 2xx/3xx 生效）",
+        _vue_code.count("add_header") == _vue_code.count("always;"),
+    )
     # 殼被快取的話，改版後拿到的舊殼會去要一個已經不存在的 /assets/*.js——一片白畫面
     check("🔴 SPA 的殼不可快取（no-store）", _vue_code.count('add_header Cache-Control "no-store" always;') == 3)
 
