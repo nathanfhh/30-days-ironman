@@ -261,22 +261,70 @@ toast_body = re.search(r"function toast\(.*?\n\}", js, re.DOTALL)
 check("toast() 存在", bool(toast_body))
 
 
-def html_interpolations(fn_src: str, var: str) -> list[str]:
-    r"""fn_src 的 innerHTML 賦值裡，**插值**（`${...}`）中出現 var 的那些。
+def _code_only(chunk: str) -> str:
+    """把 JS 片段裡的**字串字面量**拿掉，只留下會被求值的部分。
 
-    ⚠ 只認插值，不認「這段字串裡有沒有出現這幾個字」。原本寫的是
-      `innerHTML\s*[+]?=\s*[^;]*\btitle\b`，它會把樣板裡任何含 title 的**字面量**
-      一起判成漏洞：`data-testid="toast-title"` 就這樣紅過一次（`-` 不是 word
-      character，所以 `\btitle\b` 照樣命中）。
-    ⚠ 為什麼要修而不是把那顆 testid 改名：一條會對正確程式碼喊狼來了的守衛，下場是被
-      繞過或刪掉，不是被修好。而繞過之後它還掛在那裡，看起來仍像有人在守。
-    ⚠ `[^}]*` 對付不了巢狀樣板，這與同檔上面那圈模板掃描是同一個取捨（見 206-207 行的
-      說明）：寧可對巢狀漏看，也不要製造誤報。
+    · `'...'` 與 `"..."` 整段拿掉，裡面全是字面文字。
+    · 樣板字串只拿掉字面文字，`${...}` 裡面是程式碼，要留著。
+
+    這一步是「插入」與「剛好含這幾個字」的分界線：`data-testid="toast-title"` 過完這道
+    之後什麼都不剩，`"<b>" + title` 則會剩下 `+ title`。
     """
-    out = []
+    out, i, n = [], 0, len(chunk)
+    while i < n:
+        c = chunk[i]
+        if c in "'\"":
+            i += 1
+            while i < n and chunk[i] != c:
+                i += 2 if chunk[i] == "\\" else 1
+            i += 1
+        elif c == "`":
+            i += 1
+            while i < n and chunk[i] != "`":
+                if chunk[i] == "\\":
+                    i += 2
+                elif chunk.startswith("${", i):
+                    depth, i = 1, i + 2
+                    start = i
+                    while i < n and depth:
+                        depth += {"{": 1, "}": -1}.get(chunk[i], 0)
+                        i += 1
+                    out.append(f" {chunk[start:i - 1]} ")   # 前後留空白，別把兩個字黏成一個
+                else:
+                    i += 1
+            i += 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def html_insertions(fn_src: str, var: str) -> list[str]:
+    r"""fn_src 裡把 var **插進** innerHTML 的那幾處賦值。
+
+    判準是「這個賦值去掉字串字面量之後，還含不含 `\bvar\b`」，所以三種形狀都算：
+      · 插值            `el.innerHTML = ` + "`" + `<div>${title}</div>` + "`" + `;`
+      · 串接            `el.innerHTML = "<b>" + title + "</b>";`
+      · 直接指派        `el.innerHTML = title;`
+
+    ⚠ 這一版修的是 1b 那次收緊收過頭：當時只認 `${...}`，串接與直接指派兩種**反而漏了**
+      （舊的 `innerHTML\s*[+]?=\s*[^;]*\btitle\b` 抓得到）。把誤報修掉的同時放走三分之二
+      的真陽性，比原本更糟。修守衛時要兩個方向一起驗，下面三條 _LEAKY 就是為此。
+    ⚠ 而 `data-testid="toast-title"` 仍然不會誤報：它只活在字串字面量裡，`_code_only`
+      之後什麼都不剩。原本那條會中，是因為 `-` 不是 word character，`\btitle\b` 照樣命中。
+
+    **已知不涵蓋的形狀**（誠實列出來，別讓它看起來像掃完了）：
+      · `insertAdjacentHTML()` / `outerHTML` / `document.write()`：只掃 `innerHTML`。
+      · `[^;]*` 在第一個分號就截斷，所以賦值裡帶分號的東西會把它切一半，最典型的是
+        HTML entity（`&amp;`、`&#39;`）；分號**後面**那半段的插入會看不到。
+      · 巢狀樣板字串的內層字面量：`_code_only` 進了 `${...}` 就整段當程式碼，裡面若又有
+        一層樣板，它的字面文字會被當成程式碼看待（會多報，不會漏報）。
+    """
+    hits = []
     for chunk in re.findall(r"innerHTML\s*[+]?=\s*([^;]*)", fn_src, re.DOTALL):
-        out += [m for m in re.findall(r"\$\{[^}]*\}", chunk) if re.search(rf"\b{var}\b", m)]
-    return out
+        if re.search(rf"\b{var}\b", _code_only(chunk)):
+            hits.append(" ".join(chunk.split())[:120])
+    return hits
 
 
 if toast_body:
@@ -288,20 +336,23 @@ if toast_body:
             f"toast() 以 textContent 寫入 {var}（TEXT_SINKS 白名單的前提）",
             re.search(rf"\.textContent = {var}\b", src) is not None,
         )
-        leaked = html_interpolations(src, var)
-        check(f"toast() 不把 {var} 塞進 innerHTML（插值處 {leaked or '無'}）", not leaked)
+        leaked = html_insertions(src, var)
+        check(f"toast() 不把 {var} 塞進 innerHTML（插入處 {leaked or '無'}）", not leaked)
 
-# 🔴 收緊之後這條守衛還抓不抓得到？拿兩段假 toast 餵同一支偵測器：一段真的漏、一段
-#    只是字面量裡出現那個字。兩個方向都要對，否則「收緊」等於「關掉」。
-_LEAKY = 'function toast(title) {\n  el.innerHTML = `<div>${title}</div>`;\n}'
-check(
-    f"🔴 而且它真的抓得到（把 ${{title}} 插進 innerHTML 要命中：{html_interpolations(_LEAKY, 'title')}）",
-    html_interpolations(_LEAKY, "title") == ["${title}"],
-)
+# 🔴 這條守衛自己也要被守。兩個方向都得驗，只驗一邊的話「收緊」與「關掉」看起來一樣。
+#    真陽性列三種形狀，因為 1b 那次就是只顧了其中一種、把另外兩種放走了。
+_LEAKY = {
+    "插值": 'function toast(title) {\n  el.innerHTML = `<div>${title}</div>`;\n}',
+    "串接": 'function toast(title) {\n  el.innerHTML = "<b>" + title + "</b>";\n}',
+    "直接指派": "function toast(title) {\n  el.innerHTML = title;\n}",
+}
+for shape, sample in _LEAKY.items():
+    found = html_insertions(sample, "title")
+    check(f"🔴 {shape}要抓得到（{found or '漏掉了'}）", bool(found))
 _LITERAL = 'function toast(title) {\n  el.innerHTML = `<div data-testid="toast-title"></div>`;\n}'
 check(
-    "🟡 而且不對字面量誤報（data-testid=\"toast-title\" 不是插值）",
-    html_interpolations(_LITERAL, "title") == [],
+    '🟡 而且不對字面量誤報（data-testid="toast-title" 只是字面文字，不是插入）',
+    html_insertions(_LITERAL, "title") == [],
 )
 
 # chips() 是唯一把 profile 值寫進 HTML 的地方，確認它內部有逸出
