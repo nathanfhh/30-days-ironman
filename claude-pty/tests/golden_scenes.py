@@ -94,12 +94,12 @@ def pin_all() -> None:
         ]
     }
 
-    # 3. 這一版錄的是哪一套前端。scaffold 併進來之後 `config.UI` 會決定要出 legacy 還是
-    #    Vue，golden 錄的**永遠是 legacy**（它就是規格本身）。明寫出來，免得哪天預設值
-    #    翻過去，「看到紅就重錄」會把 Vue 版錄成規格，那條防線當場反過來替回歸背書。
-    config.UI = "legacy"
-
-    # 4. 週期性的計時器不跑，見 FREEZE_TIMERS_JS。
+    # 3. 週期性的計時器不跑，見 FREEZE_TIMERS_JS。
+    #
+    # ⚠ `config.UI` **不在這裡釘**。錄的時候永遠是 legacy（規格本身），但**比**的時候要比
+    #   當下在測的那一版：`CLAUDE_PTY_UI=vue` 跑 golden_check 就是拿 Vue 版去對規格，
+    #   那正是這整套 golden 存在的理由。在共用的地方寫死 legacy 會讓 vue 模式變成
+    #   「legacy 跟自己比」，永遠是綠的。所以 legacy 那一行寫在 golden_record.main() 裡。
 
 
 class _FakeContainer:
@@ -383,10 +383,16 @@ def scene_sessions_settings(page, base):
 def scene_sessions_toast(page, base):
     _login(page, base, "golden-admin")
     page.locator('[data-testid="session-row"]').first.wait_for(timeout=8000)
-    # 先把登入那則「歡迎回來」清掉，再發一則內容固定的：錄的是 toast 這個元件長什麼樣，
-    # 不是「剛好還沒消失的那則過場」。
+    # 先把登入那則「歡迎回來」清掉：錄的是 toast 這個元件長什麼樣，不是「剛好還沒消失
+    # 的那則過場」。
     page.evaluate("() => document.querySelectorAll('[data-testid=toast]').forEach((t) => t.remove())")
-    page.evaluate("() => toast('已更新設定', 'success', { body: '新開的 session 立刻套用' })")
+    # ⚠ 用**真的 UI 動作**把 toast 叫出來，不是 `page.evaluate` 去呼叫全域的 `toast()`。
+    #   呼叫全域函式等於把場景綁在 legacy 的實作上：Vue 版沒有那個全域，這一場會在
+    #   「還沒開始比」的地方就炸掉，而炸掉的原因與介面像不像一點關係都沒有。
+    #   終止 → 取消是使用者真的走得到的一條路，兩版都必須走得通。
+    page.click(f'button[data-act="kill"][data-id="{SESSION_ROWS[0][0]}"]')
+    page.locator('[data-testid="modal"]').wait_for(timeout=4000)
+    page.click('[data-testid="modal"] [data-act="cancel"]')
     page.locator('[data-testid="toast"]').wait_for(state="visible", timeout=4000)
     _settle(page, keep_toasts=True)
 
@@ -433,9 +439,7 @@ def scene_sessions_filter_applied(page, base):
     page.click('[data-testid="pick-fnet-button"]')
     page.click('[data-testid="pick-fnet-opt-unrestricted"]')
     # 條件生效之後清單會重畫。等「只剩一列」而不是睡一段時間：那才是這一場的定義。
-    page.wait_for_function(
-        "() => document.querySelectorAll('[data-testid=session-row]').length === 1", timeout=8000
-    )
+    page.wait_for_function("() => document.querySelectorAll('[data-testid=session-row]').length === 1", timeout=8000)
     _settle(page)
 
 
@@ -443,9 +447,24 @@ def scene_sessions_toast_error(page, base):
     _login(page, base, "golden-admin")
     page.locator('[data-testid="session-row"]').first.wait_for(timeout=8000)
     page.evaluate("() => document.querySelectorAll('[data-testid=toast]').forEach((t) => t.remove())")
-    # 走 app 自己的 toastError()，不是自己拼一個 danger toast：那條路才是失敗時真正跑的。
-    page.evaluate("() => toastError('終止 Session', new Error('這個 session 的 container 已經結束了'))")
-    page.locator('[data-testid="toast"]').wait_for(state="visible", timeout=4000)
+    # 同上：走真的 UI 動作。讓 DELETE 回 409，再真的按下終止並確認，錯誤 toast 就是
+    # 使用者會看到的那一則（前端的錯誤處理自己拼的，不是我們餵進去的字串）。
+    page.route(
+        "**/api/sessions/*",
+        lambda route, request: (
+            route.fulfill(
+                status=409,
+                content_type="application/json",
+                body='{"error":"這個 session 的 container 已經結束了"}',
+            )
+            if request.method == "DELETE"
+            else route.fallback()
+        ),
+    )
+    page.click(f'button[data-act="kill"][data-id="{SESSION_ROWS[0][0]}"]')
+    page.locator('[data-testid="modal"]').wait_for(timeout=4000)
+    page.click('[data-testid="modal"] [data-act="ok"]')
+    page.locator('[data-testid="toast"][data-level="danger"]').wait_for(state="visible", timeout=4000)
     _settle(page, keep_toasts=True)
 
 
@@ -620,25 +639,48 @@ def network_text(page, reqs: list, base: str) -> str:
 #   · 內容或設定的回音（data-label / data-name / data-container / data-persist-path /
 #     data-cli / data-behind-proxy / data-for / data-theme / data-sid）：可見的部分
 #     aria 與截圖已經蓋著了，這裡再記一份只是同一件事寫兩遍。
-#   · `disabled` / `aria-expanded` / `aria-selected`：**aria 快照已經記了**
-#     （`[disabled]` / `[expanded]` / `[selected]`）。同一個事實兩個來源比一個更糟：
-#     改動時兩邊都要更新，而只更新一邊沒有人會發現。
+#   · `disabled` / `aria-expanded`：**aria 快照已經記了**（`[disabled]` / `[expanded]`）。
+#     同一個事實兩個來源比一個更糟：改動時兩邊都要更新，而只更新一邊沒有人會發現。
+#   · `aria-selected` **兩邊都記**，這是刻意的例外。aria 快照只看得見**可見**的元素，而
+#     picker 的選單收起來之後就不在 aria 樹裡了，收起來的那份 DOM 正是選中狀態最容易
+#     過期的地方（2026-08-26 抓到一個：選完之後 renderMenu() 不會再跑，aria-selected
+#     停在上一個值）。可見的那些重複一次無害，隱藏的那些只有這裡看得到。
 #   · `aria-checked` **有記**，因為實測 aria 快照裡一個 `[checked]` 都沒有（開關那三顆
 #     用的是 role=switch，Playwright 沒有把它的勾選狀態畫進去）。那是真的缺口。
 #   · `hidden` **有記**：它區分得出「沒有渲染」與「渲染了但藏起來」，而 Vue 版把
 #     `v-if` 寫成 `v-show`（或反過來）正是這個差別，aria 只看得到前者。
 DOM_ATTRS = [
     # 身分：誰是誰、按下去會觸發什麼
-    "data-testid", "data-act", "data-id", "data-seg", "data-edit", "data-move",
-    "data-day", "data-value",
+    "data-testid",
+    "data-act",
+    "data-id",
+    "data-seg",
+    "data-edit",
+    "data-move",
+    "data-day",
+    "data-value",
     # 狀態：畫面此刻在說什麼
-    "data-tone", "data-kind", "data-state", "data-stale", "data-level",
-    "data-on", "data-in", "data-edge", "data-active", "data-open",
-    "data-disabled", "data-empty", "aria-checked", "hidden", "inert",
+    "data-tone",
+    "data-kind",
+    "data-state",
+    "data-stale",
+    "data-level",
+    "data-on",
+    "data-in",
+    "data-edge",
+    "data-active",
+    "data-open",
+    "data-disabled",
+    "data-empty",
+    "aria-checked",
+    "aria-selected",
+    "hidden",
+    "inert",
     # id 與 aria-controls 是**成對**的契約：aria-controls 指的那個 id 必須真的存在。
     # 只記其中一半的話，Vue 版把 id 改名而 aria-controls 沒跟著改，這裡看起來一切正常，
     # 而螢幕閱讀器會指到一個不存在的東西。
-    "id", "aria-controls",
+    "id",
+    "aria-controls",
     # title：原生 tooltip。與 data-tip 同理，滑過去才看得到（截圖蓋不到），
     # 也不是可及名稱（aria 蓋不到）。
     "title",
@@ -711,12 +753,13 @@ def screenshot_comparable(browser) -> tuple[bool, str]:
     except OSError:
         return False, "golden 裡沒有 META（用舊版錄的，重錄一次就有）"
     now = meta_text(browser)
-    if want == now:
-        return True, ""
     wl, nl = dict(_kv(want)), dict(_kv(now))
-    diff = [f"{k}：golden={wl.get(k)!r} 現在={nl.get(k)!r}" for k in wl if wl.get(k) != nl.get(k)]
-    diff += [f"{k}：golden 沒有這一項，現在={nl[k]!r}" for k in nl if k not in wl]
-    return False, "；".join(diff)
+    # ⚠ `ui` **不列入比較**。golden 錄的永遠是 legacy，而拿 Vue 版去比它正是這套東西的用途；
+    #   把 ui 也當成環境指紋的話，vue 模式下每一張截圖都會被判成「平台不同」而跳過，
+    #   等於把最該比的那一次比對關掉。ui 那一行是**說明錄的是哪一版**，不是 gate。
+    keys = [k for k in set(wl) | set(nl) if k != "ui"]
+    diff = [f"{k}：golden={wl.get(k)!r} 現在={nl.get(k)!r}" for k in sorted(keys) if wl.get(k) != nl.get(k)]
+    return (False, "；".join(diff)) if diff else (True, "")
 
 
 def _kv(text: str):

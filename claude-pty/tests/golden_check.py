@@ -136,8 +136,7 @@ def compare_png(golden_path: str, now_bytes: bytes, scene: str) -> tuple[bool, s
         Image.open(_bytes_io(now_bytes)).save(os.path.join(DIFF_DIR, f"{scene}.now.png"))
         where = f"，第一塊在 {box[:2]}" if box else ""
         return False, (
-            f"{why}{where}（上限 {PIXEL_TOLERANCE:.0%}／不得有實心塊／強差異 {STRONG_PIXEL_LIMIT} 個）"
-            f"；差異圖 {out}"
+            f"{why}{where}（上限 {PIXEL_TOLERANCE:.0%}／不得有實心塊／強差異 {STRONG_PIXEL_LIMIT} 個）；差異圖 {out}"
         )
     return True, why
 
