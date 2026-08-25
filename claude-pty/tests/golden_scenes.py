@@ -587,6 +587,61 @@ def prepare_page(page) -> list:
     return reqs
 
 
+# 靜態資源那一段的標題。`strip_assets()` 靠它把整段切掉，所以只有一份定義。
+ASSETS_HEADER = "# 靜態資源（排序後、去掉 query，見 golden_scenes.network_text 的說明）"
+URL_HEADER = "# 場景就緒時的網址（replaceState 寫進去的條件不會產生請求）"
+
+
+# 跨版比對時，某一版**依設計**就是會多打的呼叫。
+#
+# ⚠ 這是**規格的一部分，不是容忍額度**。階段 3 刻意把模板注入的伺服端狀態改成兩條
+#   bootstrap API，所以 Vue 版一定會多這兩發；legacy 那些值是 Jinja 直接印進 HTML 的。
+# ⚠ 清單要**窄而且吵**：只列這兩條，而且 golden_check 每次都把它印出來。看不見的白名單
+#   會慢慢變成一個沒有人記得為什麼在那裡的東西，然後有人往裡面再加一條。
+# ⚠ 階段 5 把 golden 重錄成 Vue 版之後，這份清單就該整個消失（那時兩邊是同一版）。
+UI_EXTRA_CALLS = {"vue": ["GET /api/bootstrap", "GET /api/account/bootstrap"]}
+
+
+def strip_expected_extra_calls(text: str, ui: str) -> str:
+    """把「這一版依設計就會多打」的那幾發拿掉，其餘逐字比。"""
+    drop = set(UI_EXTRA_CALLS.get(ui, []))
+    return "\n".join(ln for ln in text.splitlines() if ln not in drop).rstrip("\n") + "\n"
+
+
+def strip_navigations(text: str) -> str:
+    """把「文件」那幾發（`GET /`、`GET /login`、`GET /account`）拿掉，只留 API。
+
+    ⚠ **跨版比對時才用。** SPA 的換頁是 router 在前端做的，不會再跟伺服器要一次 HTML；
+      legacy 是 `location.href = "/"`，一定會有那一發。這個差異是兩種架構的定義，
+      不是誰做錯了，留著它只會讓每一場都紅在同一件已知的事上。
+    ⚠ 換頁「到底有沒有到對的地方」沒有因此失守：那是最後那一段「場景就緒時的網址」在守的，
+      它跨版是逐字比的，而且目前全綠。
+    """
+    keep = []
+    for ln in text.splitlines():
+        parts = ln.split(" ", 1)
+        if len(parts) == 2 and parts[0].isupper() and not parts[1].startswith("/api/"):
+            continue
+        keep.append(ln)
+    return "\n".join(keep).rstrip("\n") + "\n"
+
+
+def strip_assets(text: str) -> str:
+    """把靜態資源那一段拿掉，只留文件與 API、以及最終網址。
+
+    ⚠ **跨 UI 比對時才用。** legacy 載的是 `app.js` 與 `app.css`，Vue 版載的是
+      `assets/index-<hash>.js`；兩份清單本來就不可能一樣，而那個差異與「介面像不像」
+      毫無關係。同一版之內它仍然守得住「少載了一個檔案」，所以不是刪掉，是跨版時才略過。
+    """
+    lines = text.splitlines()
+    try:
+        a = lines.index(ASSETS_HEADER)
+        b = lines.index(URL_HEADER)
+    except ValueError:
+        return text
+    return "\n".join(lines[:a] + lines[b:]).rstrip("\n") + "\n"
+
+
 def network_text(page, reqs: list, base: str) -> str:
     """把收到的請求整理成可比對的文字。
 
@@ -608,16 +663,19 @@ def network_text(page, reqs: list, base: str) -> str:
             continue
         rest = url[len(base) :] or "/"
         path = rest.split("?", 1)[0] or "/"
-        if path.startswith("/static/"):
+        # ⚠ `/assets/` 也是靜態資源：那是 Vite 打包出來的產物（`index-<hash>.js`），
+        #   檔名帶內容雜湊、每次 build 都不一樣。不歸類的話它會落進「文件與 API」那一段，
+        #   而那一段是逐字比的。
+        if path.startswith(("/static/", "/assets/")):
             assets.append(f"{method} {path}")
         else:
             docs.append(f"{method} {rest}")
     here = page.evaluate("() => location.pathname + location.search")
     out = ["# 文件與 API（依序，含 query）"]
     out += docs
-    out += ["", "# 靜態資源（排序後、去掉 query，見 golden_scenes.network_text 的說明）"]
+    out += ["", ASSETS_HEADER]
     out += sorted(set(assets))
-    out += ["", "# 場景就緒時的網址（replaceState 寫進去的條件不會產生請求）", here]
+    out += ["", URL_HEADER, here]
     return "\n".join(out) + "\n"
 
 
@@ -677,6 +735,11 @@ DOM_ATTRS = [
     "hidden",
     "inert",
     # id 與 aria-controls 是**成對**的契約：aria-controls 指的那個 id 必須真的存在。
+    # ⚠ 但 id **只記被指到的那些**（見 _DOM_JS 的 referenced）。無條件記所有 id 的話，
+    #   SPA 的掛載點 `<div id="app">` 會變成 dom.txt 的第一行，於是每一場的第一行都
+    #   `golden='div testid=shell' vs 現在='div id=app'`，十八場全紅——而那不是回歸，
+    #   是 Vue 版必然會有的一層外殼。那正是我在這個檔頭寫過的「多包一層 wrapper 就整份紅」，
+    #   我自己加 id 的時候又把它放了回來（2026-08-26 對 vue 模式跑第一輪時現形）。
     # 只記其中一半的話，Vue 版把 id 改名而 aria-controls 沒跟著改，這裡看起來一切正常，
     # 而螢幕閱讀器會指到一個不存在的東西。
     "id",
@@ -690,12 +753,24 @@ DOM_ATTRS = [
 ]
 
 _DOM_JS = r"""(attrs) => {
+  // 被 aria-controls / aria-labelledby / aria-describedby / label[for] 指到的 id。
+  // 只有這些 id 是**契約**（指過去必須指得到）；其餘的 id 是實作細節，記了只會讓
+  // 「多包一層有 id 的外殼」變成整份紅。
+  const referenced = new Set();
+  const REFS = ["aria-controls", "aria-labelledby", "aria-describedby", "for"];
+  for (const el of document.querySelectorAll("[" + REFS.join("],[") + "]")) {
+    for (const a of REFS) {
+      const v = el.getAttribute(a);
+      if (v) v.split(/\s+/).forEach((x) => x && referenced.add(x));
+    }
+  }
   const out = [];
   for (const el of document.querySelectorAll("*")) {
     const parts = [];
     for (const a of attrs) {
       // inert 是 property，反映到同名屬性；直接問 property 比較可靠。
       if (a === "inert") { if (el.inert) parts.push("inert"); continue; }
+      if (a === "id" && !referenced.has(el.id)) continue;
       if (!el.hasAttribute(a)) continue;
       // 只剝 data- 前綴。aria-* 原樣保留：剝掉的話 aria-checked 會變成 checked，
       // 哪天有人加一個 data-checked 就撞名了，而撞名之後兩件事在檔案裡長得一模一樣。
@@ -740,6 +815,14 @@ def meta_text(browser) -> str:
         f"color_scheme=dark\n"
         f"viewports={','.join(VIEWPORTS)}\n"
     )
+
+
+def golden_ui() -> str:
+    """golden 是錄哪一版的（META 的 ui= 那一行）。沒有 META 就當 legacy。"""
+    try:
+        return dict(_kv(open(meta_path(), encoding="utf-8").read())).get("ui", "legacy")
+    except OSError:
+        return "legacy"
 
 
 def meta_path() -> str:

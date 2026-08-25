@@ -103,13 +103,36 @@ _pw_dir="$(uv run "${DEPS[@]}" python -m playwright install --dry-run chromium-h
            | awk '/Install location:/ {print $3; exit}')"
 [ -n "${_pw_dir}" ] && [ -d "${_pw_dir}" ] && have_browser=1
 
-mode="${1:-quick}"
+# --- 參數 -------------------------------------------------------------------
+#
+# 模式（quick / --all / --e2e）與「測哪一版前端」是**兩個獨立的維度**，所以分開收：
+#   tests/run-all.sh --ui vue          # legacy 的 python 測試照跑，瀏覽器那些對 Vue 版跑
+#   tests/run-all.sh --all --ui vue
+#
+# ⚠ 預設**永遠是 legacy**。兩版並存期間 legacy 那條路的行為必須一個字都不變，
+#   預設值一翻過去，所有既有的紅綠就不再是在講同一件事了（同 config.py 的紀律）。
+mode="quick"
+ui_mode="legacy"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    quick|--quick|--all|--e2e) mode="$1" ;;
+    --ui) shift; ui_mode="${1:-}" ;;
+    --ui=*)      ui_mode="${1#--ui=}" ;;
+    *) echo "不認得的參數：$1（只收 --all / --e2e / --ui <legacy|vue>）" >&2; exit 2 ;;
+  esac
+  shift
+done
 case "${mode}" in
   quick|--quick) want_docker=0; want_e2e=1 ;;
   --all)         want_docker=1; want_e2e=1 ;;
   --e2e)         want_docker=1; want_e2e=2 ;;   # 2 ＝只跑 e2e
-  *) echo "不認得的參數：${mode}（只收 --all / --e2e）" >&2; exit 2 ;;
 esac
+case "${ui_mode}" in
+  legacy|vue) ;;
+  *) echo "不認得的 --ui：${ui_mode}（只收 legacy 或 vue）" >&2; exit 2 ;;
+esac
+# 透傳給每一支測試：server/config.py 讀 CLAUDE_PTY_UI 決定 web.py 出哪一套前端。
+export CLAUDE_PTY_UI="${ui_mode}"
 
 # --- 先清掉 bytecode 快取 -----------------------------------------------------
 #
@@ -312,6 +335,28 @@ PYEOF
       echo "   ↑ 前端相依掃描失敗"
     fi
     rm -f "${_trivy_out}"
+  fi
+fi
+
+# vue 模式的保險絲：跑到這裡還沒有 dist 就補 build 一次。
+#
+# 正常情況上面那段前端六關的最後一關就是 build，所以到這裡 dist 已經在了。但它有兩條
+# 會被整段跳過的路：`--e2e` 模式（那一段自己會跳），以及 host 上沒有 npm。
+# legacy 模式下跳過沒差（只有 e2e_vue_smoke 需要 dist，它進跳過清單、看得見）；
+# **vue 模式下缺 dist 等於每一支瀏覽器測試都跳過，那一輪什麼都沒測到而畫面上是綠的**。
+# ⚠ 只在真的缺的時候 build：build 要十幾秒，而多數時候它已經在了。
+# ⚠ 沒有 npm 就照既有風格跳過**並講出來**，不可以靜靜地讓後面每一支都以「缺 dist」跳過。
+if [ "${ui_mode}" = "vue" ] && [ ! -f server/static/dist/index.html ]; then
+  if command -v npm >/dev/null 2>&1 && [ -f frontend/package-lock.json ]; then
+    printf '\n\033[1m== vue 模式：dist 還沒 build，先補一次 ==\033[0m\n'
+    if (cd frontend && npm ci --no-audit --no-fund >/dev/null 2>&1 && npm run --silent build); then
+      echo "  PASS  dist 建好了"
+    else
+      fails=$((fails + 1))
+      echo "   ↑ 前端 build 失敗，vue 模式的瀏覽器測試會全部跳過"
+    fi
+  else
+    skipped+=("vue 模式的 dist（host 上沒有 npm 或缺 lockfile，裝 node 24）")
   fi
 fi
 

@@ -164,6 +164,47 @@ jobs:
       - run: ./tests/run-all.sh
         working-directory: claude-pty
 
+  claude-pty-vue:
+    # Vue 版：同一套 e2e 與 golden，改跑 `CLAUDE_PTY_UI=vue`。
+    #
+    # ⚠ **現在是 continue-on-error。** Vue 版還沒補完（AccountView 與 TerminalDrawer 在做），
+    #   所以這個 job 現在必定是紅的。它存在的用途是**看得見還差多少**，不是擋 merge。
+    # ⚠ 什麼時候改成擋門：階段 5「四關全過」的那一刻，也就是這個 job 自然全綠的第一天。
+    #   把 continue-on-error 拿掉是那次的一部分，不是另一件事。留著它而忘記拿掉，
+    #   等於養一個永遠不會擋任何東西的綠勾。
+    # ⚠ 截圖在這裡會被平台 gate 跳過（golden 錄在 macOS、runner 是 Linux，字體不同）。
+    #   跳過會明講，比的是 aria／DOM／API 那三份——它們是文字，跨平台完全可比。
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: claude-pty/frontend/package-lock.json
+      - name: playwright 瀏覽器
+        # 這個 job 的全部價值就在瀏覽器測試上，沒裝的話 run-all.sh 會把它們全部跳過，
+        # 而 continue-on-error 讓那種「什麼都沒跑」看起來與「跑完了」一模一樣。
+        run: uv run --with playwright python -m playwright install --with-deps chromium-headless-shell
+      - name: 全套（vue 模式）
+        working-directory: claude-pty
+        run: |
+          set -o pipefail
+          ./tests/run-all.sh --ui vue 2>&1 | tee /tmp/pty-vue.log
+      - name: 摘要
+        if: always()
+        working-directory: claude-pty
+        run: |
+          {
+            echo "### Vue 版與 golden 的差距"
+            echo
+            echo '```'
+            grep -E "^  FAIL|^跑了|^跳過 " /tmp/pty-vue.log | head -60
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
   dev-container:
     # build image ＋ 全套（含那 13 支要 docker 的）。
     # ⚠ 這裡的 image 是從當下的原始碼現 build 的，所以「image 比它的原始碼還舊」在 CI 上

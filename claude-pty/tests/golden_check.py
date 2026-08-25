@@ -106,6 +106,23 @@ def text_diff_hint(want: str, got: str) -> str:
     return "長度不同但每一行都相同（結尾的空白行）"
 
 
+def _only(a: str, b: str) -> list[str]:
+    """a 有而 b 沒有的行（保持 a 的順序，註解與空行不算）。"""
+    bl = [x for x in b.splitlines() if x.strip() and not x.startswith("#")]
+    seen: dict[str, int] = {}
+    for x in bl:
+        seen[x] = seen.get(x, 0) + 1
+    out = []
+    for x in a.splitlines():
+        if not x.strip() or x.startswith("#"):
+            continue
+        if seen.get(x):
+            seen[x] -= 1
+        else:
+            out.append(x)
+    return out
+
+
 def compare_png(golden_path: str, now_bytes: bytes, scene: str) -> tuple[bool, str]:
     """回 (過不過, 說明)。差異圖寫進 DIFF_DIR。"""
     from PIL import Image, ImageChops, ImageFilter
@@ -159,7 +176,24 @@ try:
     with sync_playwright() as p:
         browser = p.chromium.launch()
         shots_ok, why_not = G.screenshot_comparable(browser)
-        print(f"== 環境：比的是 {getattr(G.config, 'UI', 'legacy')} 版 ==")
+        golden_ui = G.golden_ui()
+        now_ui = getattr(G.config, "UI", "legacy")
+        same_ui = golden_ui == now_ui
+        print(f"== 環境：golden 錄的是 {golden_ui} 版，現在比的是 {now_ui} 版 ==")
+        if not same_ui:
+            # ⚠ 這正是這套 golden 的用途（拿新版去對舊版這份規格），不是異常，所以照比。
+            #   只有靜態資源那一段跨版沒有意義：legacy 載 app.js／app.css，Vue 載
+            #   assets/index-<hash>.js，兩份清單本來就不可能一樣。
+            print("  跨版比對：API 呼叫、最終網址、aria、DOM、截圖照比。")
+            print("    略過靜態資源（legacy 載 app.js、Vue 載 assets/index-<hash>.js，本來就不同）")
+            print("    略過文件請求（SPA 換頁不跟伺服器要 HTML；換到哪裡由最後那段網址守著）")
+            extra = G.UI_EXTRA_CALLS.get(now_ui, [])
+            if extra:
+                # ⚠ 印出來。這不是容忍額度，是**已經決定過的規格差異**，看不見的話它會
+                #   慢慢變成一個沒有人記得為什麼在那裡的白名單。
+                print(f"  {now_ui} 版預期會多打這幾發（階段 3 把 Jinja 注入改成 API 的結果）：")
+                for c in extra:
+                    print(f"    {c}")
         if shots_ok:
             print("  截圖：與錄製環境相同，照比")
         else:
@@ -176,7 +210,17 @@ try:
                 ctx = G.new_context(browser, vp)
                 page = ctx.new_page()
                 reqs = G.prepare_page(page)
-                run(page, BASE)
+                # ⚠ 一場開不起來**不可以把整支打斷**。原本沒有這層 try，於是 vue 模式下
+                #   抽屜那場一逾時，後面三場（drawer-open／account-user／account-admin）
+                #   就完全沒有比到，而畫面上只看得到一段 traceback ——「那三場過了嗎」
+                #   與「那三場根本沒跑」在輸出裡長得一模一樣。
+                try:
+                    run(page, BASE)
+                except Exception as ex:  # noqa: BLE001 —— 任何一種開不起來都算這一場紅
+                    check(f"{name} 這一場開得起來（{vp}）", False)
+                    print(f"        {type(ex).__name__}: {str(ex).splitlines()[0][:160]}")
+                    ctx.close()
+                    continue
 
                 want = open(os.path.join(d, f"aria.{vp}.txt"), encoding="utf-8").read()
                 got = page.locator("body").aria_snapshot().rstrip("\n") + "\n"
@@ -191,8 +235,20 @@ try:
                 if vp == G.SHOT_VIEWPORT:
                     want_net = open(os.path.join(d, "network.txt"), encoding="utf-8").read()
                     got_net = G.network_text(page, reqs, BASE)
+                    if not same_ui:
+                        want_net, got_net = G.strip_assets(want_net), G.strip_assets(got_net)
+                        want_net, got_net = G.strip_navigations(want_net), G.strip_navigations(got_net)
+                        got_net = G.strip_expected_extra_calls(got_net, now_ui)
                     if not check("網路呼叫一致", want_net == got_net):
-                        print(f"        {text_diff_hint(want_net, got_net)}")
+                        # ⚠ 網路這一段印的是**集合差**，不是第一行差異。少打一發會讓後面
+                        #   每一行都對不齊，「第一行差異」那種提示只會指到位移，看不出
+                        #   真正多了什麼、少了什麼。
+                        for tag, only in (
+                            ("golden 有、現在沒有", _only(want_net, got_net)),
+                            ("現在有、golden 沒有", _only(got_net, want_net)),
+                        ):
+                            for ln in only:
+                                print(f"        {tag}：{ln}")
                 if vp == G.SHOT_VIEWPORT or name in G.MOBILE_SHOT:
                     if shots_ok:
                         shot = page.screenshot(full_page=True, animations="disabled")

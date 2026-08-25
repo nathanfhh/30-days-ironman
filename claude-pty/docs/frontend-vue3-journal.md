@@ -887,3 +887,67 @@ gate；當成環境指紋的話，vue 模式下每一張截圖都會被判成「
 驗收：`--verify` 110 檔逐位一致；跨行程 `golden_check` 全 PASS；`run-all.sh quick`
 **39 支** 0 失敗（多的那支是 scaffold 帶進來的 `e2e_vue_smoke`，dist 已 build 所以它跑得起來），
 跳過清單與基線逐字相同。
+
+### 階段 4 後半（二）：讓測試對 vue 模式跑，與第一份紅燈清單
+
+**`run-all.sh --ui vue`。** 模式（quick／--all／--e2e）與「測哪一版前端」是兩個獨立的維度，
+所以參數分開收，`--ui` 透傳成 `CLAUDE_PTY_UI` 給每一支測試。預設永遠是 legacy：兩版並存
+期間 legacy 那條路的行為必須一個字都不變，預設值一翻，所有既有的紅綠就不再是在講同一件事。
+
+加了一道 dist 保險絲：前端六關的最後一關就是 build，正常情況跑到測試迴圈時 dist 已經在了，
+但那一段有兩條會被整段跳過的路（`--e2e` 模式、host 沒有 npm）。legacy 模式下跳過沒差
+（只有 `e2e_vue_smoke` 要 dist），**vue 模式下缺 dist 等於每一支瀏覽器測試都跳過，那一輪
+什麼都沒測到而畫面上是綠的**。
+
+#### 我修的（測試耦合 legacy）
+
+1. **`id` 白名單太寬。** SPA 的掛載點 `<div id="app">` 變成 dom.txt 的第一行，於是十八場
+   每一場的第一行都紅在同一件事上。那正是我在 `golden_scenes` 檔頭寫過的「多包一層
+   wrapper 就整份紅」，而我自己加 `id` 的時候又把它放了回來。改成**只記被
+   `aria-controls`／`aria-labelledby`／`aria-describedby`／`for` 指到的 id** ——那些才是
+   契約（指過去必須指得到），其餘的 id 是實作細節。
+2. **靜態資源跨版比對沒有意義。** legacy 載 `app.js`／`app.css`，Vue 載
+   `assets/index-<hash>.js`，兩份清單本來就不可能一樣。跨版時略過那一段；同一版之內
+   仍然守得住「少載了一個檔案」。
+3. **文件請求同理。** SPA 換頁是 router 在前端做的，不會再跟伺服器要一次 HTML。
+   跨版時略過，換頁到底有沒有到對的地方由「場景就緒時的網址」那一段守著（跨版全綠）。
+4. **`golden_check` 會被一場開不起來的場景整支打斷。** vue 模式下抽屜那場一逾時，
+   後面三場就完全沒有比到，而輸出裡「那三場過了」與「那三場根本沒跑」長得一模一樣。
+   每一場包 try，開不起來就記成那一場紅並繼續。修完之後多出六條紅 ——那六條**本來就在**，
+   只是先前看不見。
+5. **網路的差異改印集合差**，不是第一行差異：少打一發會讓後面每一行都對不齊，
+   「第一行差異」只會指到位移，看不出真正多了什麼、少了什麼。
+
+#### 一個判斷（可以推翻）
+
+`UI_EXTRA_CALLS`：Vue 版依設計會多打 `/api/bootstrap` 與 `/api/account/bootstrap`
+（階段 3 把 Jinja 注入改成 API 的直接結果）。這**不是容忍額度，是規格的一部分**，所以
+列成一份窄而且吵的清單：只有這兩條，而且 `golden_check` 每次都把它印出來。階段 5 把
+golden 重錄成 Vue 版之後，這份清單應該整個消失。
+
+#### 給 lane C 的紅燈清單（我沒有碰 frontend/src）
+
+| # | 差異 | 證據 | 影響 |
+|---|---|---|---|
+| A1 | AccountView 還沒搬 | `[data-testid="token-state"]`、`pw-form` 逾時 | e2e_account 全紅、e2e_flow 停在改密碼、golden 兩場開不起來 |
+| A2 | TerminalDrawer 還沒搬 | `drawer-pending` 停在「還沒搬到這一版」 | e2e_drawer 全紅、golden 一場開不起來 |
+| A3 | picker 選完之後 `data-active` 沒更新 | golden `opt-any active=false` vs vue `active=true` | 2 場 DOM |
+| A4 | 對話框開著時，觸發它的那顆列按鈕沒有 disabled | aria `[disabled]` 少了；截圖 x1003..1095 y918..978 | 2 場 aria ＋ 截圖 |
+| A5 | 頁尾 `<time>` 與「（N 秒前）」之間少一個空白 | 整行 215px → 211px，兩邊都置中於 636 | **15 場截圖**（頁尾在每一頁） |
+| A6 | 每頁多打兩發 `GET /api/auth/me` | 登入頁 1 發、登入後每頁 2 發，共 28 發 | 15 場網路 |
+
+A3 與我今天在 legacy 修的是**同一個 bug**（`renderMenu()` 只在展開時跑），修法可以直接抄。
+A5 是十五場截圖唯一的原因：差異只有一條 216x13 的帶狀，文字一模一樣，只是整行窄了 4px。
+A6 我沒有放進 `UI_EXTRA_CALLS` ——「每頁兩發」看起來像重複抓取，那是要問的事，不是要
+容忍的事。確認是刻意的再放進去。
+
+#### CI
+
+新增 `claude-pty-vue` job，`--ui vue` 跑 quick ＋ golden。**現在是 `continue-on-error`**：
+Vue 還沒補完，這個 job 必定紅，它的用途是看得見還差多少，不是擋 merge。什麼時候拿掉：
+階段 5 四關全過、這個 job 自然全綠的第一天 ——留著它而忘記拿掉，等於養一個永遠不會擋
+任何東西的綠勾。截圖在 CI 上會被平台 gate 跳過（golden 錄在 macOS、runner 是 Linux），
+比的是 aria／DOM／API 那三份，跳過會明講。
+
+驗收：legacy `run-all.sh quick` **39 支 0 失敗**、跳過清單與基線逐字相同；
+legacy `golden_check` 全綠；vue 模式 52 條 PASS、38 條紅（就是上面那六項）。
