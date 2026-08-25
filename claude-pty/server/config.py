@@ -102,6 +102,13 @@ CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_MODEL = os.environ.get("CLAUDE_PTY_DEFAULT_MODEL", "opus")
 DEFAULT_EFFORT = os.environ.get("CLAUDE_PTY_DEFAULT_EFFORT", "high")
 
+# 這套東西只驅動一種 CLI，而「哪一種」是**憑證狀態與招牌徽章的鍵**（見
+# credentials.credentials_state 的形狀 `{cli: state}`）。
+# ⚠ 放這裡而不是各自寫死：招牌模板、憑證狀態、啟動資料 API 三個地方都要用同一個字，
+#   而 `app.js` 的註解本來就寫著「data-cli 由伺服端以 config.DEFAULT_CLI 種下」，
+#   那句話在這個常數存在之前是假的（web.py 自己寫死一份），現在它是真的。
+DEFAULT_CLI = "claude"
+
 # 第二層 docker 能力所需的基礎設施參照（env 給不了的部分，ADR 0006）。
 # 所有走 docker API 的呼叫的上限（秒）。docker-py 預設是 **60**，而那個值在這裡是錯的：
 # 一顆卡住的容器（實測 2026-07-27：卡在 `removing` 40 分鐘，daemon 對它的 inspect/logs
