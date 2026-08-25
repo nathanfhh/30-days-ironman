@@ -194,12 +194,13 @@ try:
                     got_net = G.network_text(page, reqs, BASE)
                     if not check("網路呼叫一致", want_net == got_net):
                         print(f"        {text_diff_hint(want_net, got_net)}")
+                if vp == G.SHOT_VIEWPORT or name in G.MOBILE_SHOT:
                     if shots_ok:
                         shot = page.screenshot(full_page=True, animations="disabled")
-                        ok, why = compare_png(os.path.join(d, f"screen.{vp}.png"), shot, name)
+                        ok, why = compare_png(os.path.join(d, f"screen.{vp}.png"), shot, f"{name}.{vp}")
                         check(f"截圖一致（{vp}，{why}）", ok)
                     else:
-                        skipped_shots.append(name)
+                        skipped_shots.append(f"{name} {vp}")
                 ctx.close()
         browser.close()
 finally:

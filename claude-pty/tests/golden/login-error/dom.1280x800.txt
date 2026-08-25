@@ -1,7 +1,9 @@
 h1 testid=brand-mark
-div testid=login-error tone=error
-input testid=login-username
-input testid=login-password
+form id=login-form
+div testid=login-error tone=error id=login-error
+input testid=login-username id=username
+input testid=login-password id=password
+button id=login-btn
 footer testid=footer
 span testid=footer-mod tip=控制平面本體。
 span testid=footer-mod tip=ttyd-rust：目前用於網頁終端的執行檔。
