@@ -16,10 +16,10 @@ import AppShell from "@/components/AppShell.vue";
   <AppShell>
     <section class="panel">
       <h2 class="panel__title">帳號管理</h2>
+      <!-- prettier-ignore -->
       <p class="empty">
         這一頁還沒搬到這一版（階段 4 後半，要等階段 3 的 endpoint）。目前請切回舊介面
-        （`CLAUDE_PTY_UI=legacy`）使用。
-      </p>
+        （`CLAUDE_PTY_UI=legacy`）使用。</p>
     </section>
   </AppShell>
 </template>

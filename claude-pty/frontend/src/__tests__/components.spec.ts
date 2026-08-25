@@ -206,8 +206,8 @@ describe("FilterBar", () => {
     await router.isReady();
   });
 
-  const mountBar = (open = true) =>
-    mount(FilterBar, { props: { open }, global: { plugins: [router] } });
+  const mountBar = (open = true, toggled = true) =>
+    mount(FilterBar, { props: { open, toggled }, global: { plugins: [router] } });
 
   it("五個欄位標籤都有 tooltip（篩的是什麼要講得出來）", () => {
     const w = mountBar();
@@ -225,6 +225,12 @@ describe("FilterBar", () => {
     // ⚠ `inert="false"` 仍然是 inert。這一條守的就是那個。
     expect(w.find('[data-testid="filter-bar"]').attributes("inert")).toBeUndefined();
     expect(w.find("#filter-shell").attributes("data-open")).toBe("1");
+  });
+
+  it("**沒點過那顆篩選鍵就不寫 inert**（舊版只在 setFiltersOpen 裡設，首載身上沒有）", () => {
+    const w = mountBar(false, false);
+    expect(w.find("#filter-shell").attributes("data-open")).toBe("0");
+    expect(w.find('[data-testid="filter-bar"]').attributes("inert")).toBeUndefined();
   });
 
   it("選一個條件就寫進網址並通知上層重抓", async () => {

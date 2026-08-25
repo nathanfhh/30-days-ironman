@@ -81,20 +81,21 @@ watch(
           />
         </div>
         <div class="modal__actions">
+          <!-- prettier-ignore -->
           <button
             v-if="!d.viewOnly"
             class="btn"
             data-act="cancel"
             @click="settleDialog(d.id, null)"
           >
-            <i class="fa-solid fa-xmark"></i> 取消
-          </button>
+            <i class="fa-solid fa-xmark"></i> 取消</button>
           <button
             class="btn"
             :class="d.danger ? 'btn--danger' : 'btn--primary'"
             data-act="ok"
             @click="settleDialog(d.id, answer(d))"
           >
+            <!-- prettier-ignore -->
             <i
               class="fa-solid"
               :class="d.confirmIcon || (d.danger ? 'fa-circle-stop' : 'fa-check')"

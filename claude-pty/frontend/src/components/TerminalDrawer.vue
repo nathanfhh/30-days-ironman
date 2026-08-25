@@ -54,9 +54,9 @@ const emit = defineEmits<{ close: [] }>();
           </div>
         </header>
         <div class="drawer__body">
+          <!-- prettier-ignore -->
           <p class="drawer__pending" data-testid="drawer-pending">
-            終端抽屜還沒搬到這一版（階段 4 後半）。這一場的終端請用「新分頁」開：{{ path }}
-          </p>
+            終端抽屜還沒搬到這一版（階段 4 後半）。這一場的終端請用「新分頁」開：{{ path }}</p>
         </div>
       </section>
     </div>

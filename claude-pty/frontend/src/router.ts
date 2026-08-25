@@ -14,10 +14,30 @@ import LoginView from "@/views/LoginView.vue";
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/", name: "sessions", component: () => import("@/views/SessionsView.vue") },
-    { path: "/login", name: "login", component: LoginView },
-    { path: "/account", name: "account", component: () => import("@/views/AccountView.vue") },
+    {
+      path: "/",
+      name: "sessions",
+      component: () => import("@/views/SessionsView.vue"),
+      meta: { title: "Sessions · claude-pty" },
+    },
+    { path: "/login", name: "login", component: LoginView, meta: { title: "登入 · claude-pty" } },
+    {
+      path: "/account",
+      name: "account",
+      component: () => import("@/views/AccountView.vue"),
+      meta: { title: "帳號 · claude-pty" },
+    },
   ],
+});
+
+/* 分頁標題。舊版是每個模板自己的 `{% block title %}`（見 base.html），SPA 沒有那一步，
+ * 所以掛在路由上——**三個字串逐字照舊**（`Sessions · claude-pty` 的 S 是大寫、分隔號是
+ * 全形間隔號 U+00B7 前後各一個空格）。
+ * ⚠ 掛 afterEach 不是 beforeEach：標題該在**到了**那一頁之後才換。導覽被守衛擋下來時
+ *   （未登入被送回 /login）標題若已經先改成目的地，畫面與分頁標籤會各說各話。 */
+router.afterEach((to) => {
+  const title = to.meta.title;
+  if (typeof title === "string") document.title = title;
 });
 
 router.beforeEach(async (to: RouteLocationNormalized) => {

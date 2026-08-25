@@ -9,6 +9,7 @@
 import { computed, onMounted, ref } from "vue";
 
 import { api } from "@/api/client";
+import { relTime } from "@/lib/time";
 import { lsJson, lsSet } from "@/lib/storage";
 import { dismissToast, toast, toastError } from "@/lib/toast";
 import { useSiteStore } from "@/stores/site";
@@ -65,7 +66,10 @@ const catalog = ref<Catalog | null>(null);
 // 目錄還在路上時，模型與思考深度**還不是使用者的選擇**——初值是寫死的預設。
 const catalogLoading = ref(true);
 const modelSource = ref("");
-const modelSourceTone = ref("");
+/* ⚠ 起始 `undefined`＝屬性不存在。舊版模板裡的 `#model-source` 與 `#effort-note` 身上
+   沒有 `data-tone`，是 `rebuildModelPickers()` / `paintEffortNote()` 跑過之後才寫上去的
+   （而且沒有 tone 時寫的是空字串，屬性仍然在）。三種狀態都要照抄：沒有屬性 → `""` → 值。 */
+const modelSourceTone = ref<string | undefined>(undefined);
 
 // AI Agent：目前只有 Claude。畫成選單而不是一行字，是因為它是「這一場跑的是誰」的答案，
 // 而那一格在版面上撐著第一列的主詞。值不參與 payload——這裡是顯示，不是設定來源。
@@ -119,6 +123,10 @@ const effortNote = computed(() => {
   if (!m) return "";
   return effort.value !== m.default_effort ? `● 非預設（此模型預設 ${m.default_effort}）` : "";
 });
+// 同 modelSourceTone：目錄還沒有結果之前，這個屬性根本不存在。
+const effortNoteTone = computed(() =>
+  currentModel.value === undefined ? undefined : effortNote.value ? "accent" : "",
+);
 
 function remember(): void {
   lastPick.claude = { model: model.value, effort: effort.value };
@@ -176,8 +184,10 @@ function rebuildModels(): void {
   modelSource.value =
     cat.source === "fallback"
       ? "離線後備清單，可能過時"
-      : cat.source === "stale"
-        ? `目錄取自 ${cat.fetched_at ?? "未知時間"}，尚未更新`
+      : // ⚠ 講「多久以前」，不是把 ISO 原樣印出來。伺服端跑在 UTC，排出來的時間不屬於
+        //   任何人；而這一句的用途是「這份有多舊」，相對時間才答得了。
+        cat.source === "stale" && cat.fetched_at
+        ? `目錄取自 ${relTime(cat.fetched_at)}，尚未更新`
         : "";
   modelSourceTone.value = cat.source === "fallback" ? "warn" : "";
 }
@@ -290,7 +300,7 @@ onMounted(async () => {
             class="field__hint"
             id="effort-note"
             data-testid="effort-note"
-            :data-tone="effortNote ? 'accent' : ''"
+            :data-tone="effortNoteTone"
             >{{ effortNote }}</span
           >
         </div>
@@ -371,8 +381,8 @@ onMounted(async () => {
         />
         <span class="field__hint">
           預設不讓憑證進容器的環境變數。此法官方無文件、實測可用；若新 session
-          開始要求登入，改用環境變數。
-        </span>
+          開始要求登入，改用環境變數。</span
+        >
       </div>
       <div class="form-actions form-actions--center">
         <button
@@ -382,12 +392,12 @@ onMounted(async () => {
           id="create-btn"
           :disabled="catalogLoading || submitting"
         >
+          <!-- prettier-ignore -->
           <template v-if="catalogLoading">
-            <i class="fa-solid fa-spinner fa-spin"></i> 載入模型清單…
-          </template>
+            <i class="fa-solid fa-spinner fa-spin"></i> 載入模型清單…</template>
+          <!-- prettier-ignore -->
           <template v-else-if="submitting">
-            <i class="fa-solid fa-spinner fa-spin"></i> 建立中…
-          </template>
+            <i class="fa-solid fa-spinner fa-spin"></i> 建立中…</template>
           <template v-else> <i class="fa-solid fa-plus"></i> 建立 Session </template>
         </button>
       </div>

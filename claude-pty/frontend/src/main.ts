@@ -26,9 +26,10 @@ setUnauthorizedHandler(() => {
   void router.push("/login");
 });
 
-// 伺服端環境事實（behind_proxy / persist_dir / 頁尾版本…）。目前只是把預設值放好，
-// 階段 3 的端點一上線就在 store 裡換掉。
-useSiteStore().loadMeta();
+// 公開的伺服端事實（behind_proxy / persist_dir / 頁尾版本 / 登入頁插畫）。**不等身分**：
+// 登入頁的頁尾與插畫需要它，而那一頁本來就是未登入的人在看。
+// 不 await：它失敗或慢都不該擋住第一次繪製（拿不到就留白，見 store 的說明）。
+void useSiteStore().loadPublicMeta();
 
 // 上一頁寄放的通知（登出、與 legacy 版互跳）
 drainPendingToast();

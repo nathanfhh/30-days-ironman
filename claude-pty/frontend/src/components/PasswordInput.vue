@@ -70,6 +70,7 @@ defineExpose({ reset });
       :spellcheck="false"
       autocorrect="off"
       autocapitalize="off"
+      data-pw-toggle="1"
     />
     <!-- ⚠ 刻意**留在 Tab 順序裡**：純鍵盤與螢幕閱讀器使用者才是最需要「看一眼自己打對沒」
          的人。名稱固定、狀態交給 aria-pressed（兩個都變的話會被唸成「隱藏密碼，已按下」）。 -->

@@ -1,6 +1,12 @@
 <script setup lang="ts">
 /*
- * toast 的 DOM。掛在 <body> 底下（Teleport）——與抽屜同層而 z-index 較高，所以蓋得住
+ * toast 的 DOM。掛在 <body> 底下（Teleport），**常駐**——舊版是第一則 toast 才
+ * `document.body.appendChild` 一個空的堆疊，這一版一開始就在。差別只在「一則都沒有時
+ * body 尾巴多一個空的 div」：它沒有尺寸、沒有 aria 角色、也不吃點擊，畫面與快照都看不到，
+ * 換來的是 aria-live 區域從第一幀就存在（螢幕閱讀器對「後來才插入的 live region」
+ * 支援度不一）。
+ *
+ * 原本掛在 <body> 底下（Teleport）——與抽屜同層而 z-index 較高，所以蓋得住
  * 抽屜；抽屜把 `.shell` 設成 inert，但 toast 不在 `.shell` 裡，仍然點得到
  * （e2e_drawer 有一條在守這件事）。
  *
@@ -38,7 +44,7 @@ function onTransitionEnd(item: ToastItem): void {
 
 <template>
   <Teleport to="body">
-    <div v-if="toasts.length" id="toast-stack" class="toast-stack" aria-live="polite">
+    <div id="toast-stack" class="toast-stack" aria-live="polite">
       <div
         v-for="t in toasts"
         :key="t.id"

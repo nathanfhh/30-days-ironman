@@ -127,6 +127,7 @@ const emptyText = computed(() =>
           </div>
         </div>
         <div class="manifest__status" data-testid="session-status" data-state="ended">
+          <!-- prettier-ignore -->
           <i class="fa-solid fa-clock-rotate-left"></i
           >{{ END_REASON[s.ended_reason ?? ""] || s.ended_reason || "" }}
         </div>
@@ -246,6 +247,7 @@ const emptyText = computed(() =>
           <MetricTime :iso="s.last_active_at" />
         </div>
         <div class="manifest__actions">
+          <!-- prettier-ignore -->
           <button
             class="btn"
             data-act="open"
@@ -255,8 +257,8 @@ const emptyText = computed(() =>
             title="開啟終端（按住 ⌘/Ctrl 改開新分頁）"
             @click="emit('open', s, $event)"
           >
-            <i class="fa-solid fa-terminal"></i> 終端
-          </button>
+            <i class="fa-solid fa-terminal"></i> 終端</button>
+          <!-- prettier-ignore -->
           <button
             class="btn btn--danger"
             data-act="kill"
@@ -265,8 +267,7 @@ const emptyText = computed(() =>
             :data-container="s.container || ''"
             @click="emit('kill', s)"
           >
-            <i class="fa-solid fa-circle-stop"></i> 終止
-          </button>
+            <i class="fa-solid fa-circle-stop"></i> 終止</button>
         </div>
       </article>
     </template>

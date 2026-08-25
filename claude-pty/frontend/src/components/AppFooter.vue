@@ -6,9 +6,7 @@
  * ⚠ 值一律由 server 端算好（舊版是 `build_info()`，見 server/version.py）。問不到就留白
  *   並在 tooltip 講原因：猜一個看起來合理的值比空白糟得多，空白會讓人去查、錯的值會讓人
  *   停止查。
- * ⚠ TODO(階段 3)：`build_info()` 目前**只有 Jinja 拿得到**，SPA 沒有對應端點，所以這一列
- *   現在是空的。這正是「空白會讓人去查」的情況，而且它是設計上的暫時狀態，不是意外——
- *   端點一上線，`stores/site` 的 `loadMeta()` 填 `buildModules` 即可，這個元件不必改。
+ * 值來自 `/api/bootstrap`（公開，登入頁也要）。拿不到就留白——那正是上面那句話的兌現。
  * ⚠ 相對時間由前端補（伺服端跑在 UTC，排出來的時間不屬於任何人）。
  */
 import { computed } from "vue";
@@ -19,8 +17,10 @@ import { useSiteStore } from "@/stores/site";
 const store = useSiteStore();
 
 const modules = computed(() => store.meta.buildModules);
-// 建置時間單獨一行：它是整包的屬性，不屬於任何一個模組。
-const built = computed(() => modules.value[0]?.built_at ?? null);
+/* 建置時間單獨一行：它是**整包**的屬性，不屬於任何一個模組。
+   ⚠ 讀 `build.built_at` 而不是 `modules[0].built_at`——`/api/bootstrap` 特地把它提到最外層，
+     docstring 也寫明理由：留在列裡的話遲早會有人把它畫成「claude-pty 這一列的時間」。 */
+const built = computed(() => store.meta.buildBuiltAt);
 </script>
 
 <template>

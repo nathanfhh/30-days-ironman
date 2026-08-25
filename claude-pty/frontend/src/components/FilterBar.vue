@@ -25,7 +25,11 @@ import { activeFilterKeys, ANY, CUSTOM, FILTER_KEYS, queryString } from "@/lib/f
 import RangePicker, { type RangeValue } from "./RangePicker.vue";
 import SitePicker, { type PickerOption } from "./SitePicker.vue";
 
-const props = defineProps<{ open: boolean }>();
+const props = defineProps<{
+  open: boolean;
+  /** 使用者有沒有真的動過那顆篩選鍵。決定 `inert` 要不要寫（見下方）。 */
+  toggled: boolean;
+}>();
 const emit = defineEmits<{ changed: [] }>();
 
 const route = useRoute();
@@ -131,7 +135,15 @@ const TEL_OPTIONS = tri("有送", "沒送");
      所以 `:inert="false"` 會照字面渲染成 `inert="false"`——而 HTML 的規則是**屬性存在
      就是 inert**，值是什麼都一樣。症狀是篩選列展開了卻整塊點不到，而 DOM 看起來是對的。
      單元測試抓到的（2026-08-25）。 */
-const inert = computed(() => (props.open ? undefined : true));
+/* ⚠ 展開時要回傳 `undefined` 而**不是** false：`inert` 不在 Vue 認得的布林屬性清單裡，
+     `:inert="false"` 會照字面渲染成 `inert="false"`，而 HTML 的規則是**屬性存在就是
+     inert**。症狀是篩選列展開了卻整塊點不到，而 DOM 看起來是對的（單元測試抓到的）。
+   ⚠ **首次載入也不寫。** 舊版的 `filterBar.inert` 只在 `setFiltersOpen()` 裡設，而那支
+     只有點了篩選鍵才會跑——剛進站、篩選列收著的時候舊版身上**沒有**這個屬性。無條件寫
+     的話 golden 的第一幀就對不上。
+     （那確實是舊版的一個小洞：沒點過就 Tab 得進收合的區域。但那是舊版的行為，1:1 這個
+     階段不在這裡改；要修是階段 5 拆舊之後、而且該連舊版一起修。） */
+const inert = computed(() => (props.toggled && !props.open ? true : undefined));
 </script>
 
 <template>
@@ -218,6 +230,7 @@ const inert = computed(() => (props.open ? undefined : true));
           <span class="section-head__note" id="filter-summary" data-testid="filter-summary">{{
             summary
           }}</span>
+          <!-- prettier-ignore -->
           <button
             class="btn btn--sm"
             id="filter-clear"
@@ -225,8 +238,7 @@ const inert = computed(() => (props.open ? undefined : true));
             data-testid="filter-clear"
             @click="clearFilters"
           >
-            <i class="fa-solid fa-eraser"></i> 清除全部條件
-          </button>
+            <i class="fa-solid fa-eraser"></i> 清除全部條件</button>
         </div>
       </div>
     </div>
