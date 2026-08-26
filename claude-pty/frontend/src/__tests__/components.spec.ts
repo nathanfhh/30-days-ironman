@@ -336,6 +336,22 @@ describe("RangePicker", () => {
   });
 });
 
+/** 依路徑回應的假後端，並記下打了哪些路徑。 */
+function fakeApi(routes: Record<string, { status?: number; body?: unknown }>): string[] {
+  const seen: string[] = [];
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input).split("?")[0];
+    seen.push(path);
+    const r = routes[path];
+    if (!r) return new Response("{}", { status: 404 });
+    return new Response(JSON.stringify(r.body ?? {}), {
+      status: r.status ?? 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+  return seen;
+}
+
 describe("stores/site", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
@@ -363,22 +379,6 @@ describe("stores/site", () => {
     persist_dir: "/home/nathan/persistent-data",
     build: BUILD,
   });
-
-  /** 依路徑回應的假後端，並記下打了哪些路徑。 */
-  function fakeApi(routes: Record<string, { status?: number; body?: unknown }>): string[] {
-    const seen: string[] = [];
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const path = String(input).split("?")[0];
-      seen.push(path);
-      const r = routes[path];
-      if (!r) return new Response("{}", { status: 404 });
-      return new Response(JSON.stringify(r.body ?? {}), {
-        status: r.status ?? 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
-    return seen;
-  }
 
   it("loadIdentity 失敗時把身分清掉，但仍然標記問過了", async () => {
     fakeApi({ "/api/account/bootstrap": { status: 500 } });

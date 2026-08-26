@@ -292,6 +292,14 @@ describe("LoginView", () => {
   });
 });
 
+const setUser = (): void => {
+  const store = useSiteStore();
+  // adoptIdentity 而不是直接指派：它同時標記「已經問過了」，守衛才不會再探測一次
+  store.adoptIdentity({ id: 1, username: "alice", is_admin: true });
+  // 兩條 bootstrap 由 installFetch 的假表供應；這裡直接把預設值放好即可
+  store.applyMetaToRoot();
+};
+
 describe("SessionsView", () => {
   beforeEach(() => {
     installFetch({
@@ -310,14 +318,6 @@ describe("SessionsView", () => {
       },
     });
   });
-
-  const setUser = (): void => {
-    const store = useSiteStore();
-    // adoptIdentity 而不是直接指派：它同時標記「已經問過了」，守衛才不會再探測一次
-    store.adoptIdentity({ id: 1, username: "alice", is_admin: true });
-    // 兩條 bootstrap 由 installFetch 的假表供應；這裡直接把預設值放好即可
-    store.applyMetaToRoot();
-  };
 
   it("進頁就畫出招牌、建立表單與清單", async () => {
     setUser();
