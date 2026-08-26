@@ -35,23 +35,28 @@ def login_art() -> str | None:
     """這次要顯示哪一張插畫的檔名；沒有圖就 `None`。
 
     **每次呼叫重挑一張**：「每次載入換一張」是這張圖的行為，不是啟動時定案的設定。
-    抽出來是為了讓登入頁與 `/api/bootstrap` 共用同一個決定：兩邊各寫一份 `random.choice`
-    的話，哪天有人給其中一邊加了條件（例如「沒有圖時改畫別的」），另一邊不會跟著變，
-    而畫面上看不出兩者已經是兩套規則。
+
+    ⚠ 抽成一支函式原本是為了讓伺服端算繪的登入頁與 `/api/bootstrap` 共用同一個決定。
+      模板已於 2026-08-26 隨 legacy 退場，**現在只剩 `/api/bootstrap` 一個呼叫端**。
+      仍然不把它 inline 回去：那是這張圖「怎麼挑」的唯一出口，而 `LOGIN_ART`
+      （啟動時掃一次）與「每次重挑」這兩件事該待在一起。
     """
     return random.choice(LOGIN_ART) if LOGIN_ART else None
 
 
-# --- Vue 版（階段 4）：同樣三條網址，回的是 SPA 的殼 -------------------------------
+# --- 三條頁面網址，回的都是 SPA 的殼 ----------------------------------------------
 #
 # ⚠ **這條路只在 dev 與 e2e 用。** 正式部署由 nginx 直接 serve `server/static/dist/`
 #   （`/assets/` 長快取、三條頁面路由 try_files 回 index.html，見 deploy/nginx.conf 與
-#   它旁邊的 nginx-ui/）。留這條的理由是 e2e 跑的是 in-thread Flask、沒有 nginx——
+#   它旁邊的 nginx-ui/）。留這條的理由是 e2e 跑的是 in-thread Flask、沒有 nginx，
 #   兩邊都要走得通，不然「測試綠了但部署是另一條路」。
 #
-# ⚠ 兩種 UI 的 gate **完全相同**：`/` 與 `/account` 不在 `_PUBLIC_ENDPOINTS` 裡，未登入
-#   照樣被導回 `/login`。SPA 自己進頁再打一次 `/api/auth/me` 是為了拿身分，不是授權——
-#   授權永遠在後端（每一支 `/api/*` 都過同一道 gate）。
+# ⚠ **殼是公開的，授權不在這裡。** `/` 與 `/account` 不在 `_PUBLIC_ENDPOINTS` 裡，未登入
+#   照樣被導回 `/login`；但那只是「不要讓人對著一個永遠拿不到資料的畫面發呆」，不是授權。
+#   授權永遠在後端：每一支 `/api/*` 都過同一道 gate。
+#   ⚠ SPA 冷載入時打的是 `/api/account/bootstrap`（**不是** `/api/auth/me`），身分與
+#     「這個帳號的處境」在同一發回應裡；那一發回 401 就代表沒登入，守衛據此導去 `/login`。
+#     它同樣是為了拿身分，不是為了授權。
 
 
 def _spa_shell():

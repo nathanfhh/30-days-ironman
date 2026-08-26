@@ -460,7 +460,7 @@ def bootstrap():
       `frontend/src/components/AppFooter.vue`），所以這條跟著收。
       **兩邊一起收才是真的收**：只收 API 不收畫面、或反過來，都只是讓人以為收緊了。
 
-    ⚠ `login_art` 每次呼叫重挑一張（同登入頁，見 `web.login_art`）：「每次載入換一張」
+    ⚠ `login_art` 每次呼叫重挑一張（見 `web.login_art`）：「每次載入換一張」
       是這張圖的行為。所以這條**不可以被快取**，也不要拿它的值去做等值比較。
     """
     art = login_art()

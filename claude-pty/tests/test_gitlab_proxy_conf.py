@@ -373,9 +373,22 @@ with app.test_client() as cli:
         "account",
         "GitlabPatPanel.vue",
     )
+
+    def _read_if_exists(path: str) -> str:
+        """檔案在就讀出來，不在就回空字串。
+
+        ⚠ **短路要留著**：元件搬走或改名時 `os.path.isfile` 是 False，那時不可以去 open 它
+          （會 FileNotFoundError，整支當場收攤，後面幾十條一條都跑不到）。回空字串的話
+          下面那條 `in` 會是 False，也就是**紅**，而紅正是那時該有的答案。
+        """
+        if not os.path.isfile(path):
+            return ""
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
     check(
         "🔴 畫面講得出輪替語意那條準則（最容易被誤解的一件事）",
-        os.path.isfile(_panel) and "要隔離那場，就終止那場" in open(_panel, encoding="utf-8").read(),
+        "要隔離那場，就終止那場" in _read_if_exists(_panel),
     )
 
     # 🔴 列表要能讀到**兩個**事實。單獨任一個都會說謊：只看快照，使用者清掉 token 之後
