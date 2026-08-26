@@ -100,11 +100,17 @@ def archive(sids, reason: str, actor: dict | None = None) -> int:
     # 觸發），它會活著卻沒有任何機制找得到——_clean_views 只走 views 列、_remove_orphans
     # 只管 container，沒有人依 port 或 process 掃描。那個 port 就此永久消失。
     # 放在這裡而不是各呼叫端：四個出口只有 list() 漏了，靠「每個呼叫端記得」擋不住。
+    # ⚠ **mitmweb 的 relay 更非收不可。** ttyd 帶 `-q`（最後一個 client 斷線就自退），
+    # 所以漏收只是延遲；socat 是 `TCP-LISTEN,fork`，**沒有 client 時照樣在那裡聽著**，
+    # 永遠不會自己結束。而 `views.inspect_ttyd` 那種對帳頁只掃 ttyd 的名字，看不到它。
+    from .mitm_views import close_mitm_views
     from .views import close_views
 
     for sid in sids:
         with suppress(Exception):
             close_views(sid)  # 等冪：沒有 view 就回 0
+        with suppress(Exception):
+            close_mitm_views(sid)  # 同上
     try:
         return _archive_txn(sids, reason, actor)
     except IntegrityError:

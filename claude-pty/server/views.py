@@ -415,8 +415,8 @@ def _spawn_detached(argv: list[str]) -> int:
 _OUR_TTYD_NAMES = frozenset(config.TTYD_BINS)
 
 
-def _is_our_ttyd(pid: int | None) -> bool:
-    """確認該 pid 真的是我們起的 ttyd。
+def _is_ours(pid: int | None, names: frozenset[str]) -> bool:
+    """確認該 pid 真的是我們起的那種程序（`names` ＝ 允許的 argv[0] basename）。
 
     PID 會被回收再利用：ttyd 退出後、殘留記錄清掉前，同一個號碼可能已是別的程序。
     只憑「pid 存在」就送 SIGTERM 會誤殺無關程序（review H8）。故先比對 cmdline。
@@ -447,7 +447,18 @@ def _is_our_ttyd(pid: int | None) -> bool:
         return False  # 程序已不存在
     except (psutil.AccessDenied, OSError):
         return True  # 問不到（權限等）：無法佐證，不因此誤判為死
-    return bool(argv) and os.path.basename(argv[0]) in _OUR_TTYD_NAMES
+    return bool(argv) and os.path.basename(argv[0]) in names
+
+
+def _is_our_ttyd(pid: int | None) -> bool:
+    """`_is_ours` 綁在 ttyd 白名單上的那一版（這個模組唯一會起的東西）。
+
+    ⚠ 參數化出去的是**名字集合**，不是「要不要檢查」——`mitm_views` 起的是 socat，
+      它同樣需要這一整套把關（PID 回收、psutil 缺席時的降級），只是白名單不同。
+      複製一份的話，兩份會各自漂：這裡修過的三個坑（basename 而非子字串、
+      問不到時回 True、沒有 psutil 時回 True）在另一份不會自動成立。
+    """
+    return _is_ours(pid, _OUR_TTYD_NAMES)
 
 
 def _gone(pid: int, proc: "psutil.Process | None") -> bool:
@@ -490,8 +501,9 @@ def _await_gone(pid: int, proc: "psutil.Process | None", timeout: float) -> bool
         time.sleep(0.05)
 
 
-def _kill(pid: int | None) -> bool:
-    """收掉這顆 ttyd。**回傳「這個 pid 上原本那個程序已經不在了」**。
+def _kill(pid: int | None, names: frozenset[str] | None = None) -> bool:
+    """收掉這顆 ttyd（`names` 換成別的白名單就能收別種，見 mitm_views）。
+    **回傳「這個 pid 上原本那個程序已經不在了」**。
 
     ⚠ 以前這裡整段吞掉例外、也不回報。於是 `close_views` 對一個 `PermissionError` 的
       ttyd 照樣刪掉 DB 那一列並計入「已收」——程序還活著、記錄沒了、之後再也沒有人會
@@ -523,8 +535,8 @@ def _kill(pid: int | None) -> bool:
     """
     if not pid:
         return True  # 沒有 pid＝沒有東西要收
-    if not _is_our_ttyd(pid):
-        return True  # 不是我們的 ttyd（已退出、號碼被回收）＝沒事
+    if not _is_ours(pid, names or _OUR_TTYD_NAMES):
+        return True  # 不是我們的程序（已退出、號碼被回收）＝沒事
     # 先綁住身分再送訊號：之後每一次「它還在嗎」問的都是這一個程序，不是這個號碼。
     # （這一步保護的是**等待**，不是訊號投遞本身，見上面那段。）
     proc = None
@@ -553,14 +565,15 @@ def _kill(pid: int | None) -> bool:
     return _await_gone(pid, proc, config.VIEW_KILL_GRACE)
 
 
-def _process_alive(pid: int | None) -> bool:
+def _process_alive(pid: int | None, names: frozenset[str] | None = None) -> bool:
     if not pid:
         return False
     try:
         os.kill(pid, 0)  # 只探測存在性，不送信號
     except (ProcessLookupError, OSError):
         return False
-    return _is_our_ttyd(pid)  # 存在還不夠：得確認是我們的 ttyd 而非被回收的號碼（review H8）
+    # 存在還不夠：得確認是我們的程序而非被回收的號碼（review H8）
+    return _is_ours(pid, names or _OUR_TTYD_NAMES)
 
 
 def _probe_host() -> str:

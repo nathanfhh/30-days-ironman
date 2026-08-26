@@ -701,6 +701,40 @@ MIN_PASSWORD_LENGTH = int(os.environ.get("CLAUDE_PTY_MIN_PASSWORD_LENGTH", "8"))
 TTYD_PORT_MIN = int(os.environ.get("CLAUDE_PTY_TTYD_PORT_MIN", "41000"))
 TTYD_PORT_MAX = int(os.environ.get("CLAUDE_PTY_TTYD_PORT_MAX", "41100"))
 
+# --- mitmweb UI 的 relay（ADR 0021）------------------------------------------------
+
+# relay 的 port 範圍。分配由 `mitm_views.port` 的 UNIQUE 仲裁，與 ttyd 是**兩張表**。
+#
+# ⚠ **兩個範圍必須不重疊，這是設計的一部分而不是巧合。** 兩張表各自的 UNIQUE 只在自己
+#   表內仲裁：範圍重疊時，ttyd 與 relay 可以各自「合法」宣告同一個 port，兩邊的 INSERT
+#   都會成功，然後晚起的那個綁不上去。（那時 readiness 檢查會擋下來、換下一個 port，
+#   所以不會有人被導到錯的服務上——但那是安全網，不是設計。）
+#   一張表放兩種東西才是真正一勞永逸的解法，那要改 `views` 既有的 UNIQUE 約束，而輕量
+#   升級（db._add_missing_columns）加不了約束，得引入 alembic——見 ADR 0021 的取捨。
+MITM_PORT_MIN = int(os.environ.get("CLAUDE_PTY_MITM_PORT_MIN", "41200"))
+MITM_PORT_MAX = int(os.environ.get("CLAUDE_PTY_MITM_PORT_MAX", "41300"))
+
+# session 容器**內**的 mitmweb UI port。
+# ⚠ 這個值與 dev-container/entrypoint.sh 的 `CAPTURE_WEB_PORT` 是同一件事，兩邊寫死。
+#   對不上的症狀是 relay 連進去被 refuse（畫面 502 → 導回首頁），完全不像「port 寫錯」。
+#   test_mitm_relay 有一條零偏差斷言釘著（同 CAPTURE_DIR 的作法）。
+MITM_WEB_PORT = int(os.environ.get("CLAUDE_PTY_MITM_WEB_PORT", "8081"))
+
+# relay 每條連線實際執行的橋接腳本（住在套件裡，所以容器內外同一個路徑推導方式）。
+# ⚠ 它**必須是可執行的**：socat 的 EXEC 走 execvp，不經 shell。
+MITM_BRIDGE = os.environ.get(
+    "CLAUDE_PTY_MITM_BRIDGE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "mitm_bridge.sh"),
+)
+
+# client 走了之後，橋接程序還願意等對面把回應吐完的秒數。
+#
+# ⚠ **這個上限不是效能調校，是防漏。** 橋接在 stdin EOF（＝ client 不在了）之後會對
+#   mitmweb 半關閉，然後繼續讀——沒有上限的話，對面若不主動關（WebSocket 就是這種），
+#   那個行程會永遠停在 recv 上，而它跑在**使用者的 session 容器裡**。實測（2026-08-26）
+#   三條閒置長連線關掉之後不收，容器裡就多三顆 python3。
+MITM_LINGER = float(os.environ.get("CLAUDE_PTY_MITM_LINGER", "10"))
+
 # --- reconciler（ADR 0008 階段 5）------------------------------------------------
 RECONCILE_INTERVAL = int(os.environ.get("CLAUDE_PTY_RECONCILE_INTERVAL", "30"))
 
