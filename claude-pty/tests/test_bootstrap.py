@@ -61,8 +61,9 @@ print("== gate：公開那條真的公開，要登入那條真的 401 ==")
 r = anon.get("/api/bootstrap")
 check("未登入 GET /api/bootstrap → 200（刻意公開，見 _PUBLIC_ENDPOINTS 的說明）", r.status_code == 200)
 check("回的是 JSON", r.is_json)
-# ⚠ 這條回的兩件事都會過期：login_art 每次要換一張，build 在改版後必須跟著變。
-#   它又是公開的 GET，中間任何一層都可能想順手存一份。
+# ⚠ 這條回的 login_art 每次要換一張（被快取就變成同一張圖），而它又是公開的 GET，
+#   中間任何一層都可能想順手存一份。
+#   （`build` 也會過期，但它 2026-08-26 搬去要登入那條了，那條是帶 cookie 的私有回應。）
 check("公開那條帶 Cache-Control: no-store", r.headers.get("Cache-Control") == "no-store")
 r401 = anon.get("/api/account/bootstrap")
 check("未登入 GET /api/account/bootstrap → 401", r401.status_code == 401)

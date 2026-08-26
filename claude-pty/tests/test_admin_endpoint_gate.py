@@ -43,7 +43,8 @@ _repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(_repo, "server", "app.py")
 FRONTEND = os.path.join(_repo, "frontend", "src")
 
-app_src = open(APP, encoding="utf-8").read()
+with open(APP, encoding="utf-8") as _f:
+    app_src = _f.read()
 
 print("== 前端打的 admin 端點，後端必須掛著 @admin_only ==")
 
@@ -58,7 +59,8 @@ for root, _dirs, files in os.walk(FRONTEND):
     for name in files:
         if not name.endswith((".ts", ".vue")):
             continue
-        text = open(os.path.join(root, name), encoding="utf-8").read()
+        with open(os.path.join(root, name), encoding="utf-8") as _f:
+            text = _f.read()
         found |= set(re.findall(r'["\'](/api/ttyd/[a-z]+)["\']', text))
 
 check(f"前端打的 ttyd 端點抓得出來（找到 {sorted(found) or '無'}）", bool(found))

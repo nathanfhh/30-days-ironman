@@ -7,7 +7,8 @@ import { defineConfig } from "vite";
 /*
  * ⚠ build 的產物直接落在 `server/static/dist/`（見 outDir）。
  *
- * 理由：dev 與 e2e 由 in-thread 的 Flask serve 這份 dist（`CLAUDE_PTY_UI=vue`），
+ * 理由：dev 與 e2e 由 in-thread 的 Flask serve 這份 dist（管兩版的 `CLAUDE_PTY_UI` 切換器
+ * 已隨 legacy 於 2026-08-26 一起移除，現在只有一種 UI），
  * 而 Flask 的 static 根就是 `server/static/`——產物放在別處的話，那條路要另外開一個
  * 只在 dev 才存在的路由，而「只在測試環境存在的路徑」正是最容易與 prod 分岔的東西。
  * prod 由 nginx 直出同一份（node 階段 build → COPY 進 nginx image，見 deploy/Dockerfile）。
