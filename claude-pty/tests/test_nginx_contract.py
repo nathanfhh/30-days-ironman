@@ -76,6 +76,16 @@ check(
     re.search(r"location ~ \^/session/\(\?<\w+>\[A-Za-z0-9\]\+\)/mitm\$ \{\s*\n\s*return 308 ", code) is not None,
 )
 check("WebSocket 升級（mitmweb 的 /updates）", code.count('proxy_set_header Connection "upgrade";') >= 2)
+# 🔴 **`$http_host` 不是 `$host`。** `$host` 依定義不含 port，而 mitmweb 跑在 tornado 上，
+#    `WebSocketHandler.check_origin` 拿瀏覽器的 `Origin`（一定帶 port）比對請求的 `Host`。
+#    抹掉 port 就永遠對不上，每一次 WS 握手回 403，而頁面照樣載入、靜態資源全部 200，
+#    只是流量清單永遠不會更新（2026-08-26 用真瀏覽器打出來的）。
+_mitm_loc = re.search(r"location ~ \^/session/\(\?<claude_pty_mitm_sid>[^\n]*\{([\s\S]*?)\n    \}", code)
+check("mitm 的代理 location 抓得到", _mitm_loc is not None)
+check(
+    "🔴 Host 用 $http_host（保留 port，否則 WS 握手一律 403）",
+    _mitm_loc is not None and "proxy_set_header Host $http_host;" in _mitm_loc.group(1),
+)
 _mitm_ep = re.search(r"error_page ([\d ]+)= @view_denied;[\s\S]*?\$mitm_port", code)
 check(
     "🔴 5xx 也接得到（沒開錄製時 /api/auth/mitm 回 404，auth_request 會把它當 5xx）",

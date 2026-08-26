@@ -97,7 +97,7 @@ socat 是 `TCP-LISTEN,fork`，沒有 client 時照樣在那裡聽著，永遠不
 `reconciler._clean_views` 也一併掃 `mitm_views`：那些 socat 是控制平面的子孫程序，
 control 容器一重建就全沒了，DB 卻還留著幾列佔著 port。
 
-## 與原規劃不同的四處（實作時實測推翻）
+## 與原規劃不同的五處（實作時實測推翻）
 
 ### 1. relay 綁 `config.TTYD_BIND`，不是 127.0.0.1
 
@@ -134,6 +134,19 @@ socat 的 `EXEC:` **依空白切詞、沒有引號機制**；`SYSTEM:` 更糟，
 另加一個 `MITM_LINGER`（預設 10 秒）上限：半關閉之後對面若不主動關（WebSocket 就是這種），
 主緒會永遠停在 `recv` 上，而**那個行程跑在使用者的 session 容器裡**。
 實測三條閒置長連線關掉之後不收，容器裡就多三顆 python3。
+
+### 5. WebSocket 那條要 `proxy_set_header Host $http_host;`
+
+規劃裡沒有這一條，是**用真瀏覽器打出來的**（2026-08-26，隔離的 nginx ＋ socat ＋ 真 mitmweb）。
+
+nginx 全站設的是 `proxy_set_header Host $host;`，而 `$host` 依定義**不含 port**。
+mitmweb 跑在 tornado 上，`WebSocketHandler.check_origin` 拿瀏覽器送的 `Origin`
+（一定帶 port，例如 `http://example:8080`）比對請求的 `Host`。抹掉 port 就永遠對不上，
+**每一次 WS 握手都被回 403**。
+
+症狀特別惡劣：頁面照樣載入、標題是 mitmproxy、靜態資源全部 200、畫面看起來完全正常，
+只是那個流量清單永遠不會更新。同一發握手把 Host 換成帶 port 的立刻變成
+`101 Switching Protocols`。ttyd 那條路由不受影響：它預設不做 origin 檢查。
 
 ## 為什麼是新的 `mitm_views` 表，而不是在 `views` 加一個 kind 欄位
 
