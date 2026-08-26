@@ -20,7 +20,7 @@ from functools import wraps
 from flask import Flask, g, jsonify, request, session, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from . import auth, config, version, views
+from . import auth, config, crypto, mitm_views, version, views
 from . import sessions as sessions_mod
 from .db import init_db
 from .sessions import (
@@ -30,6 +30,7 @@ from .sessions import (
     SessionNotFound,
     _as_bool,
 )
+from .mitm_views import MitmViewError
 from .views import ViewError
 from .web import login_art, redirect_to_login, web
 
@@ -107,6 +108,11 @@ def _session_error(e: SessionError):
 
 @app.errorhandler(ViewError)
 def _view_error(e: ViewError):
+    return jsonify(error=str(e)), 400
+
+
+@app.errorhandler(MitmViewError)
+def _mitm_view_error(e: MitmViewError):
     return jsonify(error=str(e)), 400
 
 
@@ -779,6 +785,53 @@ def auth_check():
     if row["user_id"] != g.user["id"] and not g.user["is_admin"]:
         return "", 403
     return "", 204
+
+
+@app.get("/api/auth/mitm")
+def auth_mitm():
+    """nginx `auth_request` 掛載點：這一場的 mitmweb UI（ADR 0021）。
+
+    結構刻意與 `auth_view()` 一致（同一套 `_owned`、同樣的 BEHIND_PROXY gate、同樣的
+    「沒有活著的就當場建」），差別只有兩個：
+
+      · 多回一個 `X-Mitm-Token`。**token 從頭到尾不進瀏覽器**——nginx 拿它組
+        `Authorization: Bearer`，使用者不必知道、也複製不走。它不是查出來的，是用
+        SECRET_KEY 對 sid **當場重算**的（crypto.mitm_web_password），與建容器時送進去的
+        那一串是同一個公式，所以 DB 一個欄位都不用加。
+      · 沒有開錄製的 session 回 **404 不是 403**。403 等於承認「有這個東西、只是不給你」，
+        而這一場根本沒有 mitmweb 可看。（nginx 的 auth_request 只認 2xx/401/403，其餘一律
+        當 5xx——而 `error_page 401 403 500 502 503 504` 會把它接到 @view_denied 導回首頁，
+        正是我們要的畫面。）
+
+    ⚠ **同樣是有副作用的 GET**（沒有活著的 relay 時會生一顆 socat），理由與 auth_view 逐字
+      相同：動詞不是我們選的，auth_request 只發 GET。所以生東西那一段一樣 gate 在
+      `BEHIND_PROXY` 上——開發部署沒有 nginx 擋著，一個 top-level 導覽就會帶著 Lax cookie
+      走進來。前端在那個模式下也不顯示按鈕（抽屜本身就只在 behindProxy 時才開）。
+    """
+    sid = request.args.get("session", "")
+    try:
+        session_info = _owned(sid)
+    except SessionError:
+        return "", 403
+    if not (session_info.get("profile") or {}).get("capture"):
+        return "", 404  # 這一場沒有在錄，沒有 UI 可看——不承認有這個東西
+    alive = mitm_views.list_mitm_views(sid)
+    if not alive:
+        if not config.BEHIND_PROXY:
+            # 沒有 nginx 擋在前面（開發部署）：查得到就回、查不到就 403，不生任何東西。
+            return "", 403
+        try:
+            # ⚠ 只吃 DB 裡的 container id。使用者輸入不進入這條路徑的任何位置。
+            relay = mitm_views.open_mitm_view(sid, session_info.get("container_id") or "")
+        except MitmViewError:
+            return "", 403
+        manager.touch(sid)
+    else:
+        relay = alive[0]
+    resp = app.make_response(("", 200))
+    resp.headers["X-Mitm-Port"] = str(relay["port"])
+    resp.headers["X-Mitm-Token"] = crypto.mitm_web_password(sid)
+    return resp
 
 
 @app.get("/api/prefs")
