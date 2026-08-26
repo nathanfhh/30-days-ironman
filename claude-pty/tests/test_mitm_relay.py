@@ -51,12 +51,12 @@ def check(label, ok):
 #
 # 只做 relay 對外的形狀：listen 在指定的 port、對任何連線回一個帶 `Server: mitmproxy`
 # 的 HTTP 回應（＝ `_is_mitmweb_serving` 的判準），並把收到的 argv 寫下來供斷言。
-# **不模擬 docker exec 那一段**——那一段由 test_mitm_bridge 對真的容器驗。
+# **不模擬 docker exec 那一段**：那一段由 test_mitm_bridge 對真的容器驗。
 #
 # ⚠ **必須用 `exec -a socat` 換掉 argv[0]，不可以只把檔名取作 socat。** 帶 shebang 的
 #   腳本被 exec 時，核心組出來的 argv[0] 是**直譯器**（`#!/usr/bin/env python3` → `python3`），
 #   於是 `views._is_ours` 的 basename 比對永遠不成立、`_process_alive` 一律回 False，
-#   症狀是 `_wait_ready` 立刻逾時、整個範圍掃完報「無可用 port」——看起來完全像 port 的
+#   症狀是 `_wait_ready` 立刻逾時、整個範圍掃完報「無可用 port」，看起來完全像 port 的
 #   問題（2026-08-26 實際踩到）。同 test_ttyd_identity 的手法，也同它那個 bash 的理由：
 #   `exec -a` 是 bash builtin，dash 沒有。
 _IMPL = os.path.join(_tmp, "fake_socat_impl.py")

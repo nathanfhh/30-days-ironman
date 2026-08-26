@@ -794,18 +794,18 @@ def auth_mitm():
     結構刻意與 `auth_view()` 一致（同一套 `_owned`、同樣的 BEHIND_PROXY gate、同樣的
     「沒有活著的就當場建」），差別只有兩個：
 
-      · 多回一個 `X-Mitm-Token`。**token 從頭到尾不進瀏覽器**——nginx 拿它組
+      · 多回一個 `X-Mitm-Token`。**token 從頭到尾不進瀏覽器**：nginx 拿它組
         `Authorization: Bearer`，使用者不必知道、也複製不走。它不是查出來的，是用
         SECRET_KEY 對 sid **當場重算**的（crypto.mitm_web_password），與建容器時送進去的
         那一串是同一個公式，所以 DB 一個欄位都不用加。
       · 沒有開錄製的 session 回 **404 不是 403**。403 等於承認「有這個東西、只是不給你」，
         而這一場根本沒有 mitmweb 可看。（nginx 的 auth_request 只認 2xx/401/403，其餘一律
-        當 5xx——而 `error_page 401 403 500 502 503 504` 會把它接到 @view_denied 導回首頁，
+        當 5xx，而 `error_page 401 403 500 502 503 504` 會把它接到 @view_denied 導回首頁，
         正是我們要的畫面。）
 
     ⚠ **同樣是有副作用的 GET**（沒有活著的 relay 時會生一顆 socat），理由與 auth_view 逐字
       相同：動詞不是我們選的，auth_request 只發 GET。所以生東西那一段一樣 gate 在
-      `BEHIND_PROXY` 上——開發部署沒有 nginx 擋著，一個 top-level 導覽就會帶著 Lax cookie
+      `BEHIND_PROXY` 上：開發部署沒有 nginx 擋著，一個 top-level 導覽就會帶著 Lax cookie
       走進來。前端在那個模式下也不顯示按鈕（抽屜本身就只在 behindProxy 時才開）。
     """
     sid = request.args.get("session", "")
@@ -814,7 +814,7 @@ def auth_mitm():
     except SessionError:
         return "", 403
     if not (session_info.get("profile") or {}).get("capture"):
-        return "", 404  # 這一場沒有在錄，沒有 UI 可看——不承認有這個東西
+        return "", 404  # 這一場沒有在錄，沒有 UI 可看，不承認有這個東西
     alive = mitm_views.list_mitm_views(sid)
     if not alive:
         if not config.BEHIND_PROXY:

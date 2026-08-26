@@ -138,8 +138,8 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     # socat：mitmweb UI 的 relay（ADR 0021）。它 listen 在內部 port，每條連線 fork 一次
     # `docker exec` 進 session 容器接那顆綁在容器 loopback 的 mitmweb。
     # ⚠ **不必比照 ttyd 那套 sha256 流程**：那是給「從 GitHub release 直接下載的裸 binary」
-    #   用的（沒有任何佐證）。socat 走 Debian 的套件庫，完整性由 InRelease 的 GPG 簽章保護
-    #   ——與這一整份 Dockerfile 對其他 apt 套件的處置一致。
+    #   用的（沒有任何佐證）。socat 走 Debian 的套件庫，完整性由 InRelease 的 GPG 簽章保護，
+    #   與這一整份 Dockerfile 對其他 apt 套件的處置一致。
     # ⚠ 也**不 purge**：它是執行期的東西，不是 build 期的工具。
     && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli socat \
     && case "$(dpkg --print-architecture)" in \

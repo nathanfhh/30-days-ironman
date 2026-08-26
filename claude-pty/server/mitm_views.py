@@ -4,7 +4,7 @@
                  → 每條連線 fork 一次 `docker exec` 進 session 容器接它 loopback 的 mitmweb
     session 收掉    → `sessions.archive()` 連帶把這顆 socat 收掉
 
-形狀刻意與 `views.py`（ttyd）一模一樣，而且**能共用的都直接用它的**——`_spawn_detached`
+形狀刻意與 `views.py`（ttyd）一模一樣，而且**能共用的都直接用它的**：`_spawn_detached`
 （double-fork，理由見那邊）、`_kill`／`_process_alive`（PID 回收的身分綁定）、`_port_open`。
 那幾支各自都修過三、四個很難查的坑；複製一份等於接手維護第二份會漂的副本。
 
@@ -59,7 +59,7 @@ def open_mitm_view(session_id: str, container_id: str) -> dict:
         row_id = _claim_port(session_id, port)
         if row_id is _PEER:
             # 別的 worker 已為同一 session 建了 relay（session_id UNIQUE）。換 port 沒有
-            # 意義（撞的不是 port），等它就緒後沿用——完全比照 views.open_view 的分岔。
+            # 意義（撞的不是 port），等它就緒後沿用，完全比照 views.open_view 的分岔。
             other = _await_peer(session_id)
             if other is not None:
                 return other
@@ -92,7 +92,7 @@ def close_mitm_views(session_id: str) -> int:
 
     ⚠ **這一支是必要的，不像 ttyd 有 `-q` 可以自退。** socat 是 `TCP-LISTEN,fork`：
       沒有任何 client 時它照樣在那裡聽著，永遠不會自己結束。session 收掉之後沒有人再
-      呼叫它，而那個 port 會一直被佔住——`views.inspect_ttyd` 那種對帳頁也看不到它
+      呼叫它，而那個 port 會一直被佔住，`views.inspect_ttyd` 那種對帳頁也看不到它
       （它只掃 ttyd 的名字）。所以生命週期必須明確地掛在 archive 上。
     """
     closed = 0
@@ -204,12 +204,12 @@ def _socat_argv(port: int, container_id: str) -> list[str]:
       所以要執行的東西收進 `mitm_bridge.sh`，這裡只留「路徑 + 三個沒有空白的參數」。
 
     ⚠ `bind` 用 **`config.TTYD_BIND`**，不是 127.0.0.1。nginx 是**另一個容器**，它走
-      `control:<port>` 連過來——綁 control 容器的 loopback 的話那條路根本到不了
+      `control:<port>` 連過來，綁 control 容器的 loopback 的話那條路根本到不了
       （容器化時 TTYD_BIND 是 0.0.0.0，只在內部網路上；非容器化時是 loopback，那時
       nginx 也在同一台）。就緒探測則一律從 127.0.0.1 探（見 views._probe_host）。
 
     ⚠ `reuseaddr`：relay 收掉後那個 port 會在 TIME_WAIT 停留，沒有它的話「關掉再開」
-      會在同一個 port 上綁失敗，然後整個範圍往後挪一格——看起來像 port 洩漏。
+      會在同一個 port 上綁失敗，然後整個範圍往後挪一格，看起來像 port 洩漏。
     """
     return [
         "socat",
@@ -230,7 +230,7 @@ def _is_mitmweb_serving(port: int) -> bool:
     """確認該 port 上的服務真的是「經 relay 接到的 mitmweb」。
 
     ⚠ **只檢查「port 開著」不夠，而且這裡的代價比終端那邊高得多。** nginx 會對這條路徑
-      注入 `Authorization: Bearer <這一場的密碼>`——port 上若是別的服務（我們的 socat 其實
+      注入 `Authorization: Bearer <這一場的密碼>`：port 上若是別的服務（我們的 socat 其實
       綁失敗正在退出），我們就是把那串密碼直接遞給它。所以要驗明正身才寫 pid 進 DB。
 
     ⚠ 判準看 `server` 標頭、狀態碼放寬到「回得出 HTTP 就算」：這道探測**不帶授權**，
@@ -249,7 +249,7 @@ def _is_mitmweb_serving(port: int) -> bool:
 
 
 def _pid_exists(pid: int) -> bool:
-    """這個號碼上還有東西嗎——**只問存在性，不問身分**。見 `_wait_ready`。"""
+    """這個號碼上還有東西嗎：**只問存在性，不問身分**。見 `_wait_ready`。"""
     try:
         os.kill(pid, 0)  # 只探測存在性，不送信號
     except (ProcessLookupError, OSError):
@@ -267,10 +267,10 @@ def _wait_ready(port: int, pid: int, timeout: float = 20.0) -> bool:
       指向 port**，而真正的原因是幾毫秒的 exec 空窗（2026-08-26 用一個啟動較慢的替身
       socat 撞出來；真 binary 也有同一個窗口，只是通常搶得贏）。
       身分比對該待的地方是 `_kill()`（送 SIGTERM 之前），那裡它是必要的；這裡它只會製造
-      偽陰性——「這個 port 上服務的是不是我們要的東西」由下面 `_is_mitmweb_serving` 回答，
+      偽陰性：「這個 port 上服務的是不是我們要的東西」由下面 `_is_mitmweb_serving` 回答，
       那是比 argv 更直接的證據。
 
-    ⚠ 逾時比 ttyd 那邊（5 秒）寬得多：這一發探測要**整條路走完**——socat fork、
+    ⚠ 逾時比 ttyd 那邊（5 秒）寬得多：這一發探測要**整條路走完**：socat fork、
       `docker exec` 起一個行程（實測數百毫秒起跳）、python 連上容器 loopback、mitmweb 回應。
       而 mitmweb 本身也可能還在啟動（session 剛建好時）。
     """

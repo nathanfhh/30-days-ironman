@@ -7,7 +7,7 @@
 # ## 為什麼要有這個檔，而不是把整條指令寫進 socat 的位址
 #
 # socat 的 `EXEC:` **依空白切詞、沒有引號機制**，`SYSTEM:` 則會先被 socat 自己解一次
-# 引號再交給 /bin/sh——兩者都塞不進一條「帶引號的內層 shell 指令」（2026-08-26 實測：
+# 引號再交給 /bin/sh，兩者都塞不進一條「帶引號的內層 shell 指令」（2026-08-26 實測：
 # `SYSTEM:sh -c 'echo A B'` 的引號被 socat 吃掉，變成 `sh -c echo A B`，印出空行）。
 # 把指令收進檔案之後，socat 那一側就只剩「路徑 + 三個沒有空白的參數」，引號問題消失，
 # 而檔案裡是一般的 shell，愛怎麼引就怎麼引。
@@ -23,7 +23,7 @@
 #
 # `bash -c 'exec 3<>/dev/tcp/…; cat <&0 >&3 & cat <&3'` 這種寫法沒有**半關閉**：
 # client 送完請求把寫入端關掉時（curl 之類會這樣做），要嘛把讀方向一起砍掉（回應被截斷，
-# 實測第一發請求就空的），要嘛永遠不收。python 分得開這兩件事——stdin EOF 只 shutdown
+# 實測第一發請求就空的），要嘛永遠不收。python 分得開這兩件事：stdin EOF 只 shutdown
 # 寫入端，讀繼續。session 容器裡本來就有 python3（mitmproxy 就是 python）。
 set -eu
 

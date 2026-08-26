@@ -1,4 +1,4 @@
-"""橋接腳本 ⇄ 真的 mitmweb（ADR 0021）——**需要 docker 與 build 好的 image**。
+"""橋接腳本 ⇄ 真的 mitmweb（ADR 0021），**需要 docker 與 build 好的 image**。
 
     uv run --with docker python tests/test_mitm_bridge.py
 
@@ -8,11 +8,11 @@
 
 守四件會靜靜壞掉的事：
 
-  · **半關閉**。client 送完請求把寫入端關掉時，橋接不可以把讀方向一起砍掉——砍了的話
+  · **半關閉**。client 送完請求把寫入端關掉時，橋接不可以把讀方向一起砍掉：砍了的話
     回應被截斷，而畫面上只是「空白的 mitmweb」。用 bash 的 `/dev/tcp` 寫時實測第一發
     請求就是空的（2026-08-26）。
   · **Bearer 明文就是 web_password**。整個設計靠這一條：nginx 注入、使用者不必知道。
-  · **沒帶就要被擋**，而且是 403 不是 401（12.2.3 實測）——就緒探測的判準依賴這件事。
+  · **沒帶就要被擋**，而且是 403 不是 401（12.2.3 實測），就緒探測的判準依賴這件事。
   · **收得乾淨**。橋接跑在**使用者的 session 容器裡**，漏一個就是漏在別人家裡。
 """
 
@@ -54,10 +54,10 @@ def through_bridge(cid: str, request: str) -> str:
     """把一發 HTTP 請求經橋接腳本送進容器內的 mitmweb，回傳原始回應。
 
     ⚠ **寫完不可以立刻關掉 stdin。** `subprocess.run(input=...)` 會在資料寫完的那一刻
-      就把管線關掉，而 `docker exec -i` 這時可能還沒把 stdin 串流接上 dockerd——接上時
+      就把管線關掉，而 `docker exec -i` 這時可能還沒把 stdin 串流接上 dockerd：接上時
       看到的只有 EOF，請求整個掉了（回應是空的，rc=0，stderr 一個字都沒有）。
       2026-08-26 實測：這樣寫穩定失敗，而 shell 的 `printf | 腳本` 只是**碰巧**贏得那場
-      競賽。這是 docker exec 的性質，不是橋接的問題——**nginx 不會這樣做**，它送完請求
+      競賽。這是 docker exec 的性質，不是橋接的問題：**nginx 不會這樣做**，它送完請求
       是把連線留著等回應的。
       所以：寫、flush、等一下讓串流接上、再關寫入端（那才是要測的半關閉那條路）。
     """
@@ -120,9 +120,9 @@ try:
     print("\n== 帶 Bearer：明文的 web_password 就是通行證 ==")
     ok_body = through_bridge(cid, f"GET / HTTP/1.0\nHost: localhost\nAuthorization: Bearer {PASSWORD}\n\n")
     check("拿得到回應（半關閉之後讀方向仍然活著）", ok_body.startswith("HTTP/1."))
-    check("🔴 200（Bearer 明文比對成立——整個設計靠這一條）", " 200 " in ok_body.splitlines()[0])
+    check("🔴 200（Bearer 明文比對成立，整個設計靠這一條）", " 200 " in ok_body.splitlines()[0])
     check("回應來自 mitmproxy", "server: mitmproxy" in ok_body.lower())
-    # 新分頁而不是 iframe，是因為它自己送這個標頭——這裡把那個前提釘住。
+    # 新分頁而不是 iframe，是因為它自己送這個標頭，這裡把那個前提釘住。
     check("🔴 帶著 X-Frame-Options: DENY（所以只能新分頁，不可以 iframe）", "x-frame-options: deny" in ok_body.lower())
 
     print("\n== 沒帶／帶錯：要被擋，而且是 403 ==")
@@ -139,7 +139,7 @@ try:
 
         ⚠ 樣式要**錨在行首**。`grep -c "python3 -c"` 會把自己的命令列也數進去
           （`ps -eo args=` 的輸出裡就有那個 `bash -c ... grep ... 'python3 -c'`），
-          於是這道檢查在完全乾淨的容器上也回 2——一個永遠紅、而且看起來像真的有殘留的
+          於是這道檢查在完全乾淨的容器上也回 2：一個永遠紅、而且看起來像真的有殘留的
           假警報（2026-08-26 撞到）。橋接的 args 以 `python3 -c` 起頭，包裝的 bash 與
           grep 都不是，錨住行首就分得開。
         """

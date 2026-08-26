@@ -585,12 +585,12 @@ def _stamp_ready_backstop(live: dict, isolated) -> int:
 
 
 def _clean_views() -> int:
-    """移除程序已不存在的 view / mitm relay 記錄。pid 尚未寫入且在寬限期內者不動——那是
+    """移除程序已不存在的 view / mitm relay 記錄。pid 尚未寫入且在寬限期內者不動：那是
     別的 worker 正在進行中的 port 宣告（ADR 0008 階段 3 抓到的跨 worker race）。
 
     ⚠ **mitm relay 也走這裡，而且它更需要。** 那些 socat 是控制平面的子孫程序：
       control **容器**一重建就全沒了，DB 卻還留著那幾列佔著 port。ttyd 那邊有同樣的性質，
-      差別在 relay 沒有任何「使用中」的訊號可以靠——它沒有 `-q`，也不在 inspect_ttyd 的
+      差別在 relay 沒有任何「使用中」的訊號可以靠：它沒有 `-q`，也不在 inspect_ttyd 的
       掃描範圍內。少了這一段，每一次 redeploy 都會在 mitm_views 的 port 範圍裡吃掉幾格
       （症狀是很久以後某一場開不出流量畫面，而畫面上只說「無可用 port」）。
     """

@@ -32,7 +32,7 @@ const props = defineProps<{
   label: string;
   path: string;
   flavor?: string | null;
-  /* 這一場有沒有開流量錄製（`profile.capture`）。沒開就沒有 mitmweb 可看——
+  /* 這一場有沒有開流量錄製（`profile.capture`）。沒開就沒有 mitmweb 可看，
      那時**按鈕整顆不畫**，不是畫一顆按了會失敗的（後端對那種 session 回 404）。 */
   capture?: boolean;
 }>();

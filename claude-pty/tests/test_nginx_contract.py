@@ -66,7 +66,7 @@ check(
 _mitm_pass = re.search(r"proxy_pass http://\$mitm_upstream:\$mitm_port(\S*);", code)
 check("port 真的被用在 proxy_pass（取回來卻沒用＝路由斷掉）", _mitm_pass is not None)
 # 🔴 proxy_pass 帶變數時，**原本的 query string 不會自動接上**。少了 $is_args$args，
-#    SPA 靠 query 傳的篩選條件會整個消失——請求成功、答案卻是別的問題，畫面上看不出來。
+#    SPA 靠 query 傳的篩選條件會整個消失：請求成功、答案卻是別的問題，畫面上看不出來。
 check(
     "🔴 帶上 $is_args$args（否則 query string 被丟掉，而且是無聲的）",
     _mitm_pass is not None and _mitm_pass.group(1).endswith("$is_args$args"),
@@ -82,7 +82,7 @@ check(
     _mitm_ep is not None and bool(set(_mitm_ep.group(1).split()) & {"500", "502", "503", "504"}),
 )
 # 🔴 **順序**：nginx 取第一個命中的 regex location，而 `^/session/<sid>/` 也吃得下
-#    `/session/<sid>/mitm/…`。排錯的話這兩條一條都不會被走到，而且沒有任何錯誤——
+#    `/session/<sid>/mitm/…`。排錯的話這兩條一條都不會被走到，而且沒有任何錯誤：
 #    使用者按下「流量畫面」看到的會是終端。
 _i_bare = code.find("/mitm$")
 _i_rest = code.find("/mitm(?<")

@@ -1,4 +1,4 @@
-"""`NCR_MITM_WEB_PASSWORD` 的兩個方向（ADR 0021）——**需要 docker 與 build 好的 image**。
+"""`NCR_MITM_WEB_PASSWORD` 的兩個方向（ADR 0021），**需要 docker 與 build 好的 image**。
 
     uv run --with docker python tests/test_entrypoint_mitm_password.py
 
@@ -10,7 +10,7 @@
 
 所以這裡對著**真的容器**問 mitmweb 自己的 argv，不是比對我們自己寫的字串。
 
-同時守反向那一半：**人自己開容器時逐字不變**——現產亂數、而且那行帶 token 的 URL
+同時守反向那一半：**人自己開容器時逐字不變**：現產亂數、而且那行帶 token 的 URL
 照印。少了它，上面那條就只是在描述現況，證不了「這個 env 是控制平面專用的」。
 """
 
@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 from server.sessions import DRIVER_MARKER  # noqa: E402
 
 # 控制平面會送的那種值：24 字元、base64url 字母表、不以 `$` 開頭。
-# ⚠ 不從 crypto.mitm_web_password 取——那支的正確性是 test_secret_key 的事；這裡要驗的是
+# ⚠ 不從 crypto.mitm_web_password 取：那支的正確性是 test_secret_key 的事；這裡要驗的是
 #   「entrypoint 收到什麼就用什麼」，用一個一眼認得出來的字面值反而看得清楚。
 GIVEN = "TESTmitmPASSWORD00000abc"
 
@@ -111,7 +111,7 @@ try:
     print("\n== 控制平面那條路：env 給什麼，mitmweb 就收什麼 ==")
     log_a, ok_a = boot(NAME_A, {**BASE_ENV, "NCR_MARK": "1", "NCR_MITM_WEB_PASSWORD": GIVEN}, DRIVER_MARKER)
     check("容器起得來且抵達就緒標記", ok_a)
-    # 直接問 mitmweb 自己的 argv——比對我們寫的字串等於自己出題自己改答案。
+    # 直接問 mitmweb 自己的 argv：比對我們寫的字串等於自己出題自己改答案。
     cmdline = run(
         "docker",
         "exec",
@@ -125,7 +125,7 @@ try:
         cmdline == f"web_password={GIVEN}",
     )
     # NCR_MARK 有值＝控制平面那條路：token 由 nginx 以 Bearer 注入，使用者不必知道，
-    # 而 `docker logs` 是控制平面讀得到的——少印一行就少一個外洩點。
+    # 而 `docker logs` 是控制平面讀得到的，少印一行就少一個外洩點。
     check("🔴 這條路不把帶 token 的 URL 印進 docker logs", "即時畫面" not in log_a)
     check("　└ 而且 log 裡整串 token 一次都沒出現", GIVEN not in log_a)
     check("錄製本身照常開始（不是靠不錄來達成上面兩條）", "● 錄製中 →" in log_a)

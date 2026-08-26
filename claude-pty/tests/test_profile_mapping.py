@@ -163,13 +163,13 @@ check(
     env.get("NCR_CAPTURE_SCOPE") in ("all", "model", "1", "2"),
 )
 # mitmweb 的網頁密碼（ADR 0021）：控制平面送進去、/api/auth/mitm 之後重算，兩端要算出同一串。
-# ⚠ 這裡**不抄一份公式**，而是問 crypto 本身——抄一份的話，改公式時這條會繼續比對舊的，
+# ⚠ 這裡**不抄一份公式**，而是問 crypto 本身：抄一份的話，改公式時這條會繼續比對舊的，
 #   而症狀（按了按鈕就跳回首頁）跟「密碼對不上」一點都不像。
 from server.crypto import mitm_web_password as _mitm_pw  # noqa: E402
 
 check("capture 開著時帶 NCR_MITM_WEB_PASSWORD", env.get("NCR_MITM_WEB_PASSWORD") == _mitm_pw("sidC"))
 # 🔴 **這一場的密碼要綁這一場。** 一個「所有 session 共用一串」的錯誤實作在上面那條會全綠
-#    （公式兩邊都用同一個），只有跨場比對才看得出來——而共用的後果是任一場的 token
+#    （公式兩邊都用同一個），只有跨場比對才看得出來，而共用的後果是任一場的 token
 #    打得開全部場次那個顯示未脫敏即時流量的畫面。
 check(
     "🔴 換一場就換一串（不是全站共用一個密碼）",

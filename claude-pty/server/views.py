@@ -453,7 +453,7 @@ def _is_ours(pid: int | None, names: frozenset[str]) -> bool:
 def _is_our_ttyd(pid: int | None) -> bool:
     """`_is_ours` 綁在 ttyd 白名單上的那一版（這個模組唯一會起的東西）。
 
-    ⚠ 參數化出去的是**名字集合**，不是「要不要檢查」——`mitm_views` 起的是 socat，
+    ⚠ 參數化出去的是**名字集合**，不是「要不要檢查」：`mitm_views` 起的是 socat，
       它同樣需要這一整套把關（PID 回收、psutil 缺席時的降級），只是白名單不同。
       複製一份的話，兩份會各自漂：這裡修過的三個坑（basename 而非子字串、
       問不到時回 True、沒有 psutil 時回 True）在另一份不會自動成立。

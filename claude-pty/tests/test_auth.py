@@ -275,7 +275,7 @@ from server import crypto as _crypto  # noqa: E402
 from server import mitm_views as _mitm  # noqa: E402
 
 # ⚠ 這兩場**掛在專屬使用者名下，不掛 alice**。下面「改密碼要收掉終端」那一段斷言的是
-#   `close_user_views` 收到的**完整清單**，而它是「這個人擁有的每一場」——把 session 加到
+#   `close_user_views` 收到的**完整清單**，而它是「這個人擁有的每一場」：把 session 加到
 #   alice 頭上會讓那條在一個完全無關的地方紅掉（本次實際踩到）。
 _mitm_user = auth.create_user("mitmowner", "mitmowner-password-1")
 

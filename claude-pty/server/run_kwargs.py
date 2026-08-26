@@ -271,7 +271,7 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         if os.path.isdir(config.CLAUDE_MITM_SELF):  # redact addon 在才掛（否則 entrypoint fail-closed 跳過）
             volumes[config.CLAUDE_MITM_HOST] = {"bind": config.MITM_ADDON_BIND, "mode": "ro"}
         # mitmweb 的網頁密碼（ADR 0021）：由 SECRET_KEY 對 sid 導出，兩端各算各的算出同一串，
-        # `/api/auth/mitm` 之後重算並交給 nginx 以 Bearer 注入——DB 一個欄位都不用加。
+        # `/api/auth/mitm` 之後重算並交給 nginx 以 Bearer 注入，DB 一個欄位都不用加。
         #
         # ⚠ **只跟 capture 成對送。** capture 關著時 entrypoint 根本不會走到 start_capture，
         #   送了就是一封死信：沒有任何行為，卻讓「這個 env 代表什麼」多一種說法。

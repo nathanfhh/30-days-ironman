@@ -124,11 +124,11 @@ def mitm_web_password(session_id: str) -> str:
     兩端各算各的、算出同一串，所以**一個欄位都不用加**，也沒有「存了忘了輪替」的問題。
 
     ⚠ **不用 `NCR_SESSION_ID`（Claude Code 的 sessionId）**，雖然它看起來現成。兩個理由：
-      1. 它是 entrypoint **在容器內自己產的**（讀 /proc 的 uuid），控制平面不知道它——
+      1. 它是 entrypoint **在容器內自己產的**（讀 /proc 的 uuid），控制平面不知道它：
          要用就得反過來由控制平面餵進去，兩條路徑（網頁／人自己開）都得改。
       2. 它是**可枚舉的**：capture 落盤目錄名就是 sessionId，而 `ncr/` 根是 per-user
          共用掛載，同一個人開的任何一顆容器裡的 agent 都 `ls` 得出全部場次的 id。
-         這個 UI 顯示的是**未脫敏的即時流量**——「token＝sessionId」等於一旦哪天有條路
+         這個 UI 顯示的是**未脫敏的即時流量**：「token＝sessionId」等於一旦哪天有條路
          讓兄弟容器碰得到 8081，全部場次一次交出去。HMAC 導出沒有這個性質：知道一場的
          推不出別場的，洩漏半徑小得多。
 
@@ -141,7 +141,7 @@ def mitm_web_password(session_id: str) -> str:
         `${token:0:24}`，長度對齊才不會兩邊各留一半。
 
     ⚠ 換掉 `SECRET_KEY` ＝ **所有還開著的 session 的這個密碼一起作廢**（容器裡的 mitmweb
-      還記著舊的，控制平面已經在算新的）。那是刻意的——一次作廢全部正是這個設計買到的
+      還記著舊的，控制平面已經在算新的）。那是刻意的：一次作廢全部正是這個設計買到的
       東西；代價是那些場次的 UI 要等 session 換一顆容器才會通。cookie 本來就會跟著
       SECRET_KEY 一起失效，所以這不是新增的失效模式，只是多一項。
     """
