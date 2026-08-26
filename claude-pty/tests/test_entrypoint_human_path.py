@@ -125,12 +125,21 @@ try:
     child.sendline("n")  # 不錄製（測試不依賴 mitm addon）
 
     # 3) telemetry 只有在 OTEL_EXPORTER_OTLP_ENDPOINT 有值時才問
-    idx = child.expect(["送 Jaeger\\? \\[Y/n\\]:", "網路能力：完全開放", pexpect.TIMEOUT], timeout=30)
+    #
+    # ⚠ **「沒問」的哨兵必須是 telemetry 那一段之後才印的東西。** 這裡原本用的是
+    #   `網路能力：完全開放`（entrypoint.sh L426），而它印在**錄製選單之前**：上面那句
+    #   `child.expect("錄製本場流量")` 早就把它連同前面的畫面一起吃掉了，所以這個分支
+    #   **永遠不可能成立**。於是每一台沒設 OTEL endpoint 的機器都在這裡默默付一次 30 秒
+    #   逾時，然後把逾時報成一行「照設計不問」的 SKIP（2026-08-27 在開發機上量到：
+    #   那 30 秒佔了第一段的大半，而畫面上完全看不出來）。
+    #   `● session id` 是 entrypoint.sh L551/L553 印的，位置在 telemetry 那一段**之後**、
+    #   CLI 啟動之前，兩種寫法（自產／呼叫端指定）都吃得到，是這裡唯一站得住的哨兵。
+    idx = child.expect([r"送 Jaeger\? \[Y/n\]:", "● session id", pexpect.TIMEOUT], timeout=30)
     if idx == 0:
         check("③ telemetry 選單出現（endpoint 有設時）", True)
         child.sendline("n")
     elif idx == 1:
-        # 沒設 OTEL endpoint 就直接印結論行，照設計不問。這是**正當的跳過**。
+        # 沒設 OTEL endpoint 就直接走到 session id 那一行，照設計不問。**正當的跳過**。
         print("  SKIP  ③ telemetry 選單（未設 OTEL endpoint，照設計不問）")
     else:
         # 🔴 **逾時不可以跟「照設計不問」共用同一個分支。** 兩者的意思相反：一個是
