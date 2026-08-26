@@ -28,6 +28,19 @@ export function setUnauthorizedHandler(fn: Unauthorized): void {
   onUnauthorized = fn;
 }
 
+/**
+ * 走同一條「登入沒了」的路，給**不經過 `api()` 的呼叫端**用。
+ *
+ * ⚠ 目前只有一個：抽屜的檔案上傳（multipart，見 TerminalDrawer 的 uploadFile）。它不能走
+ *   `api()`，因為 Content-Type 要交給瀏覽器組 boundary。但「401 一律導回登入頁」是全站的
+ *   規格，不是 `api()` 這個函式的性質。手寫 fetch 的那條路自己 return 掉的話，使用者按上傳
+ *   會得到一句「上傳失敗／未登入」然後**繼續留在一個進不去任何頁面的畫面上**。
+ * ⚠ 匯出的是「通知」不是處理器本身：呼叫端不該拿得到那個 handler 去存起來或換掉它。
+ */
+export function notifyUnauthorized(): void {
+  onUnauthorized();
+}
+
 export interface ApiOptions {
   method?: string;
   body?: unknown;

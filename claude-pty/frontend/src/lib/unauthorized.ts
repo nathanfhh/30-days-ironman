@@ -19,8 +19,8 @@ import { useSiteStore } from "@/stores/site";
  *      `identityLoaded` 也跟著翻回 false，下一次守衛才會重新探測。
  *   2. **只導一次**。cookie 一失效，當下所有在飛的請求會**同時**拿到 401（列表輪詢、憑證
  *      徽章、帳號頁那幾條），每一發都 push 的話 vue-router 會對重複導覽出 warning，而且
- *      後一發會把前一發打斷。旗子在導覽真正結束之後才放下；之後若又來一發 401，那是另一
- *      件事，該再講一次。
+ *      後一發會把前一發打斷。同一輪靠旗子擋，導覽結束之後遲到的那幾發靠「已經在登入頁上
+ *      就不做」那一關擋（見下面），兩道各擋一種，少哪一道都會多一則重複的通知。
  *   3. 講一句話，而且**只有這一句**。各呼叫端那些「◯◯失敗／未登入」由 `toastError` 統一
  *      吞掉（見 lib/toast），否則畫面上會堆著三四則毫無資訊的字，真正該讀的那則被埋在裡面。
  *
@@ -32,6 +32,18 @@ import { useSiteStore } from "@/stores/site";
 export function createUnauthorizedHandler(router: Router): () => void {
   let redirecting = false;
   return () => {
+    /* 已經在登入頁上了就整段不做，**連身分都不清**。兩個理由：
+     *
+     *   · **遲到的 401**。導覽完成之後才回來的那幾發（輪詢在被導走的前一刻剛送出、
+     *     AccountView 最慢的那條）不該再發一則一模一樣的通知、再 push 一次同一個路由。
+     *     旗子擋不到它們：那時 push 已經 resolve、旗子早就放下了。
+     *   · **剛登入成功的那個窗口**。登入的回應收下身分（`adoptIdentity`）到 `push("/")`
+     *     完成之間，人還站在 `/login` 上。這中間若有別的請求 401（例如上一輪還沒回來的
+     *     那一發），清身分會把剛收下的那份洗掉，使用者按了「進入控制台」卻留在原地。
+     *
+     * ⚠ 旗子仍然要留著：**同一輪的並行 401** 那時 push 還沒 resolve、`currentRoute`
+     *   還停在來源頁，過得了上面這一關，靠旗子擋。 */
+    if (router.currentRoute.value.path === "/login") return;
     useSiteStore().dropIdentity();
     if (redirecting) return;
     redirecting = true;

@@ -1015,6 +1015,36 @@ describe("401 之後回得去登入頁", () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
+  it("🔴 登出收到 401 就交給全域處理器，不再自己 push 一次", async () => {
+    /* 401 是登出最常見的失敗原因（cookie 早就失效了），而 `api()` 已經把它交給全域處理器：
+       身分清了、通知發了、/login 也導了。doLogout 再走一次等於 push 同一個路由第二次。 */
+    setUser();
+    const w = await mountAt("/");
+    setUnauthorizedHandler(createUnauthorizedHandler(router));
+    installFetch({ "/api/auth/logout": { status: 401, body: { error: "未登入" } } });
+    const push = vi.spyOn(router, "push");
+    await w.find('[data-testid="account-btn"]').trigger("click");
+    await w.find('[data-testid="menu-logout"]').trigger("click");
+    await flushPromises();
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(useSiteStore().user).toBeNull();
+    // 說的是「登入已失效」那一則，不是「登出失敗／未登入」
+    expect(toasts.map((t) => t.title)).toEqual(["登入已失效，請重新登入"]);
+  });
+
+  it("🔴 登出成功那則用 toast 不是 toastAfterNav（SPA 內換頁沒有人來取寄放）", async () => {
+    setUser();
+    const w = await mountAt("/");
+    installFetch({ "/api/auth/logout": { status: 204 } });
+    await w.find('[data-testid="account-btn"]').trigger("click");
+    await w.find('[data-testid="menu-logout"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(toasts.map((t) => t.title)).toContain("已登出");
+    expect(sessionStorage.getItem("claude-pty:pending-toast")).toBeNull();
+  });
+
   it("🔴 登出失敗也要照樣離開（同一個坑：只 push 會被守衛彈回 `/`）", async () => {
     setUser();
     const w = await mountAt("/");
@@ -1028,18 +1058,64 @@ describe("401 之後回得去登入頁", () => {
     expect(toasts.map((t) => t.title)).toContain("登出失敗");
   });
 
-  it("導覽結束之後旗子放下：之後再失效一次，還是會再導一次", async () => {
+  it("🔴 遲到的 401（人已經在 /login 上了）不再 toast、不再 push", async () => {
+    /* 旗子只擋得到同一輪的並行：它在 push resolve 的那一刻就放下了。而「在被導走的前一刻
+       剛送出去」的那幾發（列表輪詢、帳號頁最慢的那條）是**導覽結束之後**才回來的，那時
+       旗子早就沒了。少了「已經在登入頁上就不做」那一關，使用者會在登入頁上再看到一則
+       一模一樣的通知，而且被 push 到自己已經站著的路由（fable 快審 2026-08-26）。 */
     setUser();
     await mountAt("/");
     authed = false;
     const onUnauthorized = createUnauthorizedHandler(router);
     onUnauthorized();
     await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(toasts.filter((t) => t.title === "登入已失效，請重新登入")).toHaveLength(1);
+
+    const push = vi.spyOn(router, "push");
+    onUnauthorized(); // 遲到的第一發
+    onUnauthorized(); // 遲到的第二發
+    await flushPromises();
+    expect(push).not.toHaveBeenCalled();
+    expect(toasts.filter((t) => t.title === "登入已失效，請重新登入")).toHaveLength(1);
+  });
+
+  it("🔴 站在 /login 上的 401 不可以把剛收下的身分洗掉", async () => {
+    /* 登入的回應把身分收下（`adoptIdentity`）到 `push("/")` 完成之間，人還在 /login。
+       這中間若有別的請求 401（上一輪還沒回來的那一發），清身分會把剛收下的那份洗掉，
+       使用者按了「進入控制台」卻留在原地。 */
+    authed = false; // 還沒登入，所以守衛會讓他停在登入頁
+    const w = await mountAt("/login");
+    expect(w.find('[data-testid="login-username"]').exists()).toBe(true);
+    const store = useSiteStore();
+    store.adoptIdentity({ id: 1, username: "alice", is_admin: true });
+    createUnauthorizedHandler(router)();
+    await flushPromises();
+    expect(store.user).not.toBeNull();
+    expect(store.identityLoaded).toBe(true);
+  });
+
+  it("重新登入之後再失效一次，還是會再導一次（旗子與那一關都不會卡住第二輪）", async () => {
+    setUser();
+    await mountAt("/");
+    authed = false;
+    const onUnauthorized = createUnauthorizedHandler(router);
+    onUnauthorized();
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/login");
+
+    // 真的離開登入頁（重新登入），不是硬 push：守衛會把沒有身分的人原地送回來
+    authed = true;
+    useSiteStore().adoptIdentity({ id: 1, username: "alice", is_admin: true });
     await router.push("/");
     await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/");
+
+    authed = false;
     const push = vi.spyOn(router, "push");
     onUnauthorized();
     await flushPromises();
     expect(push).toHaveBeenCalledTimes(1);
+    expect(router.currentRoute.value.path).toBe("/login");
   });
 });

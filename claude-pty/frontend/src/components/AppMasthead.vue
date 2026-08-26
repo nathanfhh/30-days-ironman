@@ -38,9 +38,10 @@ let lastSeg: string | null = null;
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+import { ApiError } from "@/api/client";
 import { anchorPanel } from "@/lib/anchor";
 import { applyTheme, initTheme, prefersReducedMotion, THEMES } from "@/lib/theme";
-import { toastAfterNav, toastError } from "@/lib/toast";
+import { toast, toastError } from "@/lib/toast";
 import { useSiteStore } from "@/stores/site";
 
 import BrandMark from "./BrandMark.vue";
@@ -143,18 +144,27 @@ async function doLogout(): Promise<void> {
   try {
     await store.logout();
   } catch (ex) {
-    // 登出失敗也要照樣離開：cookie 可能早就失效了（那正是常見的失敗原因），
-    // 把人留在一個進不去任何頁面的畫面上更糟。
-    // ⚠ **要離開就得先把身分清掉。** 只 push 的話守衛看到 `store.user` 還在，會判他仍然
-    //   登入著並把這次導覽彈回 `/`，「照樣離開」這句話就不成立了（與 401 那條路同一個
-    //   坑，見 lib/unauthorized）。失敗原因是 401 時全域處理器已經清過一次，這裡再清一次
-    //   是安全的；而 500 那種失敗只有這裡清得到。
-    store.dropIdentity();
+    /* ⚠ **401 到此為止。** 那是最常見的失敗原因（cookie 早就失效了），而它已經被
+     *   `api()` 交給全域處理器：身分清了、通知發了、`/login` 也導了。這裡再做一次等於
+     *   push 同一個路由第二次（vue-router 會對重複導覽出 warning），而且第二發會把第一
+     *   發打斷。`toastError` 對 401 本來就不出聲，所以連那一則都不會少。 */
+    if (ex instanceof ApiError && ex.status === 401) return;
+    /* 其餘的失敗（500、網路斷）沒有人代勞，這裡自己走完：登出失敗也要照樣離開，把人留在
+     * 一個進不去任何頁面的畫面上更糟。
+     * ⚠ **要離開就得先把身分清掉。** 只 push 的話守衛看到 `store.user` 還在，會判他仍然
+     *   登入著並把這次導覽彈回 `/`，「照樣離開」這句話就不成立了（與 401 那條路同一個
+     *   坑，見 lib/unauthorized）。 */
     toastError("登出", ex);
+    store.dropIdentity();
     await router.push("/login");
     return;
   }
-  toastAfterNav("已登出", "success", "工作階段已結束，session 本身仍在背景執行");
+  /* ⚠ 用 `toast()` 不是 `toastAfterNav()`。登出是 **SPA 內換頁**（下面那行 push），
+   *   `main.ts` 不會再跑一次，也就沒有人去 `drainPendingToast()`：寄放的話這則「已登出」
+   *   會一直躺在 sessionStorage 裡，直到下一次整頁重載才在一個完全無關的時機冒出來
+   *   （2026-08-26 在寫 401 的測試時，從 sessionStorage 裡撿到上一條測試留下的那一則才
+   *   發現）。SPA 之內換頁不會清掉畫面上的 toast，直接發就是對的。 */
+  toast("已登出", "success", { body: "工作階段已結束，session 本身仍在背景執行" });
   await router.push("/login");
 }
 

@@ -373,9 +373,11 @@ with sync_playwright() as pw:
     page.wait_for_selector('[data-testid="session-row"]', timeout=8000)
     check("重新登入回到清單", not page.url.endswith("/login"))
 
-    # ⚠ 等「歡迎回來」那一則自己倒數完再往下（5 秒 ＋ 離場過渡）。不等的話下面那條「畫面上
-    #   只有一則通知」會把它一起數進去，而那不是這一段在驗的東西。
-    page.wait_for_selector('[data-testid="toast"]', state="detached", timeout=12000)
+    # ⚠ 等畫面上的通知全部自己倒數完再往下（各 5 秒 ＋ 離場過渡）。不等的話下面那條「畫面上
+    #   只有一則通知」會把它們一起數進去，而那不是這一段在驗的東西。
+    # ⚠ 這時候佇列裡有兩則：上一段登出發的「已登出」與這一段登入發的「歡迎回來」（登出那則
+    #   自 2026-08-26 起是直接 toast，不再寄放到 sessionStorage），所以逾時要放得夠寬。
+    page.wait_for_selector('[data-testid="toast"]', state="detached", timeout=15000)
 
     page.context.clear_cookies()
     page.click("#refresh-btn")

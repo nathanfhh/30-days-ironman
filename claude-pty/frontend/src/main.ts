@@ -36,9 +36,12 @@ setUnauthorizedHandler(createUnauthorizedHandler(router));
 // 不 await：它失敗或慢都不該擋住第一次繪製（拿不到就留白，見 store 的說明）。
 void useSiteStore().loadPublicMeta();
 
-// 上一頁寄放的通知。SPA 之內換頁不會清掉 toast，但**離開 SPA 的那條路還在**：改完密碼是
-// 整頁跳轉回登入頁（PasswordPanel 的 `location.href`），當下發的那一則得有人接手
-// （見 lib/toast 的 toastAfterNav）。
+// 上一頁寄放的通知。
+// ⚠ **目前沒有任何呼叫端在寄放**（2026-08-26 起）：登出那則「已登出」曾經走這裡，但登出是
+//   SPA 內換頁、這個檔不會再跑一次，於是它一直躺著等到下一次整頁重載才冒出來，已改成直接
+//   `toast()`；改密碼那條整頁跳轉則是先顯示夠久再跳。留著這一行的成本是一次 sessionStorage
+//   讀取，而拿掉它的代價是「下一個寫整頁跳轉的人不會知道有這個機制」。詳見 lib/toast 的
+//   跨頁通知那一段。
 drainPendingToast();
 
 app.mount("#app");
