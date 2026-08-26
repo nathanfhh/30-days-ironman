@@ -24,6 +24,15 @@ interface Prefs {
 
 const options = ref<PickerOption[]>([]);
 const value = ref("");
+/* 最後一次**確定存進去**的值，存不進去時要轉回它。
+ *
+ * ⚠ 不可以在 `save()` 裡從 `value` 取「改之前是什麼」。SitePicker 是先
+ *   `emit("update:modelValue")` 再 `emit("change")`，而 v-model 的處理器是同步跑的，所以
+ *   進到 `save()` 的那一刻 `value` 已經是新值了：舊版那句 `const before = value.value`
+ *   記下來的是新值，於是 catch 裡的還原等於什麼都沒做。症狀是畫面停在「Rust 版」、
+ *   下一場卻開出 C 版，兩者不一致而且沒有任何跡象（單元測試當場抓到的）。
+ */
+const committed = ref("");
 const loaded = ref(false);
 const closeBtn = useTemplateRef<HTMLButtonElement>("closeBtn");
 
@@ -32,15 +41,17 @@ function onKey(e: KeyboardEvent): void {
 }
 
 async function save(next: string): Promise<void> {
-  const before = value.value;
   try {
     const saved = await api<Prefs>("/api/prefs", { method: "PATCH", body: { ttyd_bin: next } });
+    // 以伺服器回的為準（它才知道最後存進去的是什麼），畫面與事實才不會分岔
+    committed.value = saved.ttyd_bin;
+    value.value = saved.ttyd_bin;
     const label = options.value.find((o) => o.value === saved.ttyd_bin)?.label ?? saved.ttyd_bin;
     toast(
       `新開的 session 會用 ${label} 版；已經開著的那一場，要把終端分頁全部關掉、下次再開才會換`,
     );
   } catch (ex) {
-    value.value = before; // 存不進去就轉回真實值，不要留假象
+    value.value = committed.value; // 存不進去就轉回真實值，不要留假象
     toast(`設定沒存成功：${ex instanceof Error ? ex.message : String(ex)}`, "error");
   }
 }
@@ -52,6 +63,7 @@ onMounted(async () => {
     const d = await api<Prefs>("/api/prefs");
     options.value = d.ttyd_choices.map((c) => ({ value: c.value, label: c.label }));
     value.value = d.ttyd_bin;
+    committed.value = d.ttyd_bin;
     loaded.value = true;
   } catch (ex) {
     toast(`讀取設定失敗：${ex instanceof Error ? ex.message : String(ex)}`, "error");
