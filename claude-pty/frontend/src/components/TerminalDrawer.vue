@@ -22,8 +22,9 @@
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 
+import { ApiError, notifyUnauthorized } from "@/api/client";
 import { useTerminalSize } from "@/composables/useTerminalSize";
-import { toast } from "@/lib/toast";
+import { toast, toastError } from "@/lib/toast";
 import { useSiteStore } from "@/stores/site";
 
 const props = defineProps<{
@@ -148,7 +149,12 @@ async function copyPath(path: string, title = "已複製路徑"): Promise<void> 
 
 /** 上傳一個檔案到這一場的持久化目錄，成功後把容器內路徑放進剪貼簿。
  *  ⚠ 不走 api()：這裡是 multipart 不是 JSON。Content-Type 交給瀏覽器組（boundary），自己設
- *    會把 boundary 弄丟。X-Requested-With 是後端要求的反 CSRF 標頭（form 設不了）。 */
+ *    會把 boundary 弄丟。X-Requested-With 是後端要求的反 CSRF 標頭（form 設不了）。
+ *  ⚠ **但 401 要走同一條路。**「401 一律導回登入頁」是全站的規格，不是 `api()` 這個函式的
+ *    性質。少了下面那三行，cookie 中途失效時使用者按上傳會拿到一句「上傳失敗／未登入」，
+ *    然後繼續留在一個什麼都做不了的畫面上（fable 快審 2026-08-26 抓到）。
+ *    丟的是 `ApiError(…, 401)` 而不是裸 Error，`toastError` 才認得出來並把那一則吞掉：
+ *    該讀的是全域那則「登入已失效」，不是「上傳失敗」。 */
 async function uploadFile(file: File | null | undefined): Promise<void> {
   if (!file) return;
   toast("上傳中…", "info", { body: file.name, duration: 2000 });
@@ -161,14 +167,16 @@ async function uploadFile(file: File | null | undefined): Promise<void> {
       credentials: "same-origin",
       headers: { "X-Requested-With": "fetch" },
     });
+    if (res.status === 401) {
+      notifyUnauthorized();
+      throw new ApiError("未登入", 401);
+    }
     const data = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
     if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
     await copyPath(data.path ?? "", "已上傳，路徑在剪貼簿");
   } catch (ex) {
-    toast("上傳失敗", "error", {
-      body: ex instanceof Error ? ex.message : String(ex),
-      duration: 8000,
-    });
+    // 8 秒不是隨手訂的：這一則要讀的是後端說的原因（副檔名、大小、磁碟滿了）
+    toastError("上傳", ex, { duration: 8000 });
   }
 }
 

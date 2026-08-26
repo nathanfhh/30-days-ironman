@@ -86,17 +86,30 @@ export function dismissToast(id: number): void {
  *   401 不是這個動作失敗，是登入狀態沒了，那件事有它自己的一則通知與一次導覽。
  * ⚠ 擋在這裡而不是各個 catch 裡：新增一顆按鈕的人不必記得補這件事（同 SessionsView 的
  *   `handleRowError` 那條理由）。真的想在 401 時說點什麼的呼叫端，自己 `toast()` 即可。
+ * ⚠ `opts` 是為了讓「本來就手寫 toast」的呼叫端搬得過來而不必改掉它們的 duration
+ *   （抽屜的上傳失敗刻意留 8 秒，那則要讀的是後端說的原因）。`body` 不開放覆寫：它就是
+ *   後端原文，這個函式存在的理由之一就是不讓呼叫端各自改寫它。
  */
-export function toastError(action: string, err: unknown): ToastItem | undefined {
+export function toastError(
+  action: string,
+  err: unknown,
+  opts: Omit<ToastOptions, "body"> = {},
+): ToastItem | undefined {
   if (err instanceof ApiError && err.status === 401) return undefined;
   const message = err instanceof Error ? err.message : String(err);
-  return toast(`${action}失敗`, "danger", { body: message });
+  return toast(`${action}失敗`, "danger", { body: message, ...opts });
 }
 
 /* ── 跨頁通知 ─────────────────────────────────────────────────────────────────
- * SPA 之內換頁不會清掉 toast，但**離開 SPA 的那幾條路仍在**（登出後回登入頁、legacy
- * 與 vue 兩版並存期間互相跳轉）。所以這一份寄放機制原樣保留。
+ * 寄一則給「下一次整份 app 重新載入」的人（`main.ts` 進站時 `drainPendingToast()` 去取）。
  * 用 sessionStorage 而非 localStorage：訊息屬於「這個分頁的這一次操作」。
+ *
+ * ⚠ **現在沒有任何生產呼叫端。** 原本的兩個都不在了：legacy 與 vue 並存期間的互跳隨
+ *   legacy 於 2026-08-26 拆掉；登出那則「已登出」曾經寄放在這裡，但登出是 SPA 內換頁、
+ *   `main.ts` 不會再跑一次，於是那則通知一直躺著等到下一次整頁重載才在一個無關的時機
+ *   冒出來（2026-08-26 修，改成直接 `toast()`）。唯一還在的整頁跳轉是改完密碼那條
+ *   （PasswordPanel 的 `location.href`），而它選擇**先顯示夠久再跳**，也用不到寄放。
+ *   留著機制而不是刪掉，是因為「離開 SPA 的跳轉」這個形狀還在；要不要拆是另一個決定。
  */
 const PENDING_TOAST_KEY = "claude-pty:pending-toast";
 

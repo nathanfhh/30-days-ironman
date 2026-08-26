@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 
+import { setUnauthorizedHandler } from "@/api/client";
 import TerminalDrawer from "@/components/TerminalDrawer.vue";
 import { toasts } from "@/lib/toast";
 import { useSiteStore } from "@/stores/site";
@@ -133,6 +134,8 @@ const pending = (): HTMLElement => el<HTMLElement>('[data-testid="drawer-pending
 
 describe("TerminalDrawer", () => {
   beforeEach(() => {
+    // 每條測試從乾淨的 401 處理器起跑；預設值是 `location.href`，在 jsdom 裡只是雜訊
+    setUnauthorizedHandler(() => {});
     setActivePinia(createPinia());
     toasts.splice(0, toasts.length);
     localStorage.clear();
@@ -236,6 +239,32 @@ describe("TerminalDrawer", () => {
     await flushPromises();
     expect(toasts.at(-1)!.title).toBe("上傳失敗");
     expect(toasts.at(-1)!.body).toBe("副檔名不在白名單");
+  });
+
+  it("🔴 上傳收到 401 走全站那條路：導回登入頁，而且不發「上傳失敗」", async () => {
+    /* 上傳不能走 `api()`（multipart 的 boundary 要交給瀏覽器組），但「401 一律導回登入頁」
+       是全站的規格、不是 `api()` 這個函式的性質。少了那一段，cookie 中途失效時使用者會
+       拿到一句「上傳失敗／未登入」，然後繼續留在一個什麼都做不了的畫面上
+       （fable 快審 2026-08-26）。 */
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: "未登入" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    mountDrawer();
+    await flushPromises();
+    const f = await loadFrame();
+    toasts.splice(0, toasts.length); // 只看上傳這一段發了什麼
+    f.pasteInside([new File(["x"], "a.png")]);
+    await flushPromises();
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    // 該讀的是全域那則「登入已失效」，不是「上傳失敗」。剩下的只有「上傳中…」那一則。
+    expect(toasts.map((t) => t.title)).not.toContain("上傳失敗");
+    expect(toasts.map((t) => t.title)).toEqual(["上傳中…"]);
   });
 
   it("剪貼簿不可用時把路徑講出來，讓人自己輸入（總比一句「複製失敗」好）", async () => {
