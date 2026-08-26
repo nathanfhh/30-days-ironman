@@ -565,12 +565,30 @@ def _kill(pid: int | None, names: frozenset[str] | None = None) -> bool:
     return _await_gone(pid, proc, config.VIEW_KILL_GRACE)
 
 
-def _process_alive(pid: int | None, names: frozenset[str] | None = None) -> bool:
+def _pid_exists(pid: int | None) -> bool:
+    """這個號碼上還有東西嗎：**只問存在性，不問身分**。
+
+    與 `_process_alive` 的差別只有那一道身分比對，而那道比對在兩種場合下是相反的東西：
+      · 送訊號之前（`_kill`）：**必要**。PID 會被回收，認錯就是誤殺無關程序。
+      · 剛 spawn 完、等它就緒時（`_wait_ready`）：**只會製造偽陰性**。`_spawn_detached`
+        是 double-fork，`$!` 拿到的 pid 在 exec 完成之前 argv[0] 還是 `sh`。
+
+    ⚠ 這一支住在 views 而不是 mitm_views，是因為 mitm_views 的每一支同類函式都直接用
+      views 的（`_spawn_detached`／`_kill`／`_port_open`／`_probe_host`）：那幾支各自都
+      修過幾個很難查的坑，複製一份等於接手維護第二份會漂的副本。這一支原本只長在
+      mitm_views 裡，而 ttyd 這條路要的是**同一個**東西，不是它的副本。
+    """
     if not pid:
         return False
     try:
         os.kill(pid, 0)  # 只探測存在性，不送信號
     except (ProcessLookupError, OSError):
+        return False
+    return True
+
+
+def _process_alive(pid: int | None, names: frozenset[str] | None = None) -> bool:
+    if not _pid_exists(pid):
         return False
     # 存在還不夠：得確認是我們的程序而非被回收的號碼（review H8）
     return _is_ours(pid, names or _OUR_TTYD_NAMES)
@@ -616,10 +634,30 @@ def _is_ttyd_serving(port: int, session_id: str) -> bool:
 
 
 def _wait_ready(port: int, pid: int, session_id: str, timeout: float = 5.0) -> bool:
-    """等 ttyd 就緒；它先死掉、逾時、或該 port 上是別的服務都回 False。"""
+    """等 ttyd 就緒；它先死掉、逾時、或該 port 上是別的服務都回 False。
+
+    ⚠ **中止條件是「那個號碼上沒東西了」（`_pid_exists`），不是 `_process_alive`
+      （它還要比對 argv[0]）。** `_spawn_detached` 是 double-fork：`$!` 拿到的是
+      `sh -c '"$@" &'` 那個子 shell，要等它 exec 成 ttyd 之後 argv[0] 才對得上。
+      拿身分當中止條件的話，剛 spawn 的那一瞬間會被判成「它死了」→ 立刻換下一個 port
+      → 把整個範圍掃完 → 報「無可用 port」。**症狀完全指向 port**，而真正的原因是幾毫秒
+      的 exec 空窗。
+
+      2026-08-27 在本機用一個啟動較慢的 ttyd 替身（先 sleep 再 `exec -a ttyd`）穩定重現：
+      `open_view` 在 0.1 秒內掃完整段報「無可用 port」。真 binary 也有同一個窗口，只是
+      通常搶得贏。`test_view_lifecycle` 連跑十次會紅四次，探針錄到的正是
+      `WAIT_ABORT port=45000 t=0.000s argv=/bin/sh -c "$@" … sh ttyd -p 45000 …`。
+
+      身分比對該待的地方是 `_kill()`（送 SIGTERM 之前），那裡它是必要的；這裡它只會製造
+      偽陰性：「這個 port 上服務的是不是我們要的東西」由下面 `_is_ttyd_serving` 回答，
+      那是比 argv 更直接的證據，而且它連 session_id 都驗了，比 argv[0] 還嚴。
+
+    ⚠ `mitm_views._wait_ready` 早一天就修過同一個坑（ADR 0021），這裡是把同一份判斷
+      補回 ttyd 這條路，用的是同一支 `_pid_exists`。
+    """
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if not _process_alive(pid):
+        if not _pid_exists(pid):
             return False
         if _port_open(port) and _is_ttyd_serving(port, session_id):
             return True

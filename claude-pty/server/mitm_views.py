@@ -287,12 +287,13 @@ def _is_mitmweb_serving(port: int) -> bool:
 
 
 def _pid_exists(pid: int) -> bool:
-    """這個號碼上還有東西嗎：**只問存在性，不問身分**。見 `_wait_ready`。"""
-    try:
-        os.kill(pid, 0)  # 只探測存在性，不送信號
-    except (ProcessLookupError, OSError):
-        return False
-    return True
+    """這個號碼上還有東西嗎：**只問存在性，不問身分**。見 `_wait_ready`。
+
+    ⚠ 這一支搬去 `views` 了（同 `_spawn_detached`／`_kill`／`_port_open` 的理由：能共用的
+      都直接用它的）。ttyd 那條路犯的是**同一個**錯，而修法必須是同一份判斷，不是它的
+      副本。留在這裡的話，兩份會各自漂。
+    """
+    return views._pid_exists(pid)
 
 
 def _wait_ready(port: int, pid: int, timeout: float = 20.0) -> bool:
