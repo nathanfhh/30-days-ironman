@@ -1774,3 +1774,118 @@ golden 的 `drawer-open` 那一場是唯一會紅的地方。
 
 ⚠ README 沒有動：全文搜過 `bootstrap` / `persist_dir` / `login_art` / `頁尾`，**零命中**，
 那份文件從來沒有列過這兩條端點的欄位。ADR 0020 的後果節加了「已收緊」那一段。
+
+---
+
+### 08-26 Nathan 實測回報兩個 bug
+
+用瀏覽器把畫面實際點過一遍，兩個都不是測試抓得到的形狀。
+
+#### bug 1：登入態在別的分頁失效之後，401 只跳 toast、人不回登入頁
+
+**現象。** 分頁 A 開著工作階段頁，分頁 B 改密碼（後端讓這個帳號的其他 session 全部作廢）。
+A 下一次輪詢拿到 401，畫面上只出現一則「列表讀取失敗／未登入」，人還留在原頁；再按什麼都
+是 401，等於卡死。
+
+**根因不在「有沒有 push」。** `main.ts` 的 401 處理器確實 `router.push("/login")` 了，彈回來
+的是守衛：SPA 換頁時 store 是活的，`store.user` 還在、`identityLoaded` 還是 true，於是
+`authGuard` 走到「已登入者不該停在登入頁」那一條，回 `{ path: "/" }` 把這次導覽原地彈掉。
+舊版 `app.js` 是 `location.href = "/login"`，整頁重載連記憶體一起清，沒有這個問題；改成
+SPA 導向時只搬了「導覽」那一半，「清身分」那一半沒有跟上。
+
+**修法。** `stores/site.ts` 加 `dropIdentity()`（清身分與憑證、把登入後才給的 meta 還原、
+`identityLoaded` 翻回 false），401 處理器整段搬進新檔 `lib/unauthorized.ts`：清身分 → 只導
+一次（同時飛的請求會一起 401）→ 發一則「登入已失效，請重新登入」。toast 用 `toast()` 不是
+`toastAfterNav()`：後者寄在 sessionStorage 等**整份 app 重新載入**時 `drainPendingToast()`
+去取，而這裡是 SPA 內換頁，`main.ts` 不會再跑一次。各呼叫端那些「◯◯失敗／未登入」由
+`toastError()` 統一吞掉（401 不是這個動作失敗，是登入沒了）。
+
+順帶修了同一個坑的另一處：`AppMasthead` 登出失敗那條路也只 push 不清身分，於是「登出失敗
+也要照樣離開」這句註解對 500 那種失敗並不成立。
+
+**攔截條件維持 `res.status === 401` 一個數字，沒有擴大。** 401 是「我不知道你是誰了」，403
+是「我知道你是誰，但你不能做這件事」；把 403 也送去登入頁，等於叫一個登入狀態完全正常的人
+重新登入一次，而他再登入一次也還是不能做那件事。判準也不可以退化成比對錯誤訊息的字串：後端
+的中文隨時會改，而且撞字很容易發生。有一條測試守這件事，它用一發 body 寫著「未登入」的 403
+擋掉字串判斷、再用一發訊息寫著「需要管理員權限」的 401 證明處理器真的掛著；把 `client.ts`
+改成 `401 || 403`、或改成比對訊息，兩種寫法都會讓它變紅（兩種都實際跑過）。
+
+**為什麼 golden 與 e2e 都沒抓到。** 誠實講：**這個形狀本來就不在它們的守備範圍裡**。golden
+錄的是靜止的一幀，它連「按下去會發生什麼」都不看；e2e 看得到動作，但每一支都是在一個
+cookie 從頭有效到尾的情境裡跑完的，而「**登入態在中途消失**」這件事沒有任何一支製造過。
+現在 `e2e_vue_smoke` 補了一段：登入 → `context.clear_cookies()` → 按重新整理 → 斷言 URL
+變成 `/login`、登入表單真的在、通知是「登入已失效」而且畫面上只有那一則。
+
+#### bug 2：工作階段 ↔ 帳號管理切換時，thumb 沒有滑動動畫
+
+**現象。** 兩格之間切換，底色膠囊是**瞬移**過去的，不是滑。
+
+**根因分三層，只修最外面那層是不夠的**，這一段值得完整記下來，因為前兩次都是「看起來對了」
+才被瀏覽器打回票。
+
+第一層：`.navseg__thumb` 的 `transition` 在 CSS 裡是掛在 `[data-animate]` 上的（舊版
+`initNavSeg` 在換頁時把 `thumb.dataset.animate = "1"` 加上去），而 Vue 版從來沒有加過那個
+屬性。`AppMasthead` 第 11 行的註解寫著「換頁不再整份 HTML 重來，招牌的 DOM 一直是同一份，
+`data-active` 一改 CSS 的 transition 自己就跑」。
+
+第二層：**上面那句註解是錯的。** `AppShell`（招牌的家）掛在**每一個 view 裡面**
+（`SessionsView` 與 `AccountView` 各自 `<AppShell>`），所以換頁時整個招牌連同 thumb 都是
+新節點。用瀏覽器量到的：換頁前在 thumb 上做記號，換頁後那個記號不見了，不是同一個 DOM
+節點。新節點一出生就在目的地那一格，`transform` 從來沒有變過，補上 `data-animate` 也沒有
+任何東西可以過渡。所以做法必須跟舊版 `initNavSeg` 一樣：**第一幀先畫在上一格**，下一影格
+才交還給真正的那一格。記「上一格」的變數要放在**非 `setup` 的 `<script>` 區塊**裡：
+`<script setup>` 的內容會被編譯進 `setup()` 本體，寫在那裡的 `let` 是每個實例各自一份，換頁
+重掛就歸零（第一版就是這樣寫的，單元測試當場抓到）。刻意不用 sessionStorage：那份記錄會
+活過整頁重載，於是「直接開 /account」也會動一下，正是 2026-07-25 那次事故要避免的首幀動畫。
+
+第三層：**加了 `watch(activeSeg)` 順手更新「上一格」是個陷阱。** 換頁時舊招牌還沒被拆掉，
+它的 `activeSeg` 會**先**變成新的那一格、那條 watch 先跑，於是「上一格」在新招牌 setup 之前
+就被改成了目的地，`animateFrom` 一律算成 null。單元測試分頭掛兩次招牌看不到這一段（沒有
+「兩個招牌同時活著跨過一次路由變化」的時刻），是瀏覽器量出來的：`transform` 直接 0 → 130px、
+`getAnimations()` 空的、一個 `transitionrun` 都沒有。現在有一條 vitest 專門守它，做法是刻意
+讓舊招牌活過 `router.push` 再拆（把那一行加回去，那一條會紅）。
+
+第四層：**首幀畫在上一格，還是不會滑**。過渡是拿「變更前樣式」與「變更後樣式」比出來的，
+而變更前樣式要有一次樣式計算把它定下來。換頁這條路上招牌是在**同一個 task** 裡插進 DOM 的
+（router 的導覽解決之後 Vue 就掛），下一件事就是那個 `requestAnimationFrame`，中間**一次
+繪製都沒有**，瀏覽器眼中 thumb 從來沒有在上一格待過，`transform` 只是換了個初值。修法是在
+rAF 裡先讀一次 `offsetWidth` 強迫當場算一次版面，上一格那個位置才成為變更前樣式。
+
+**CSS 一個字都沒改**（這是整個改版的前提）。`prefers-reduced-motion: reduce` 時整段不做，
+重用 `lib/theme` 的 `prefersReducedMotion()`。
+
+**為什麼 golden 與 e2e 都沒抓到。** 同樣誠實講：**動畫的時間軸不在 golden 的守備範圍裡**。
+golden 比的是靜止的一幀，而 thumb 的起點與終點在兩種寫法下**完全相同**：會動與不會動，
+錄下來的畫面一模一樣。`data-animate` 也不在 DOM 快照的屬性白名單裡（`DOM_ATTRS`），所以連
+「有沒有這個屬性」都看不到。e2e 那邊則是每一條斷言都只認 `data-testid` 與網址，本來就不碰
+樣式與動畫。**golden 沒有重錄，一個檔案都沒動**：十八場都是 `page.goto` 冷載入，模組層級
+的「上一格」在重載時歸零，`data-active` 與改動前逐字相同。
+
+#### 瀏覽器實測（不是只有測試綠）
+
+| 量的東西 | 結果 |
+|---|---|
+| 清 cookie 後按重新整理 | URL `→ /login`、標題「登入 · claude-pty」、登入表單可見、session 列歸零 |
+| 那一刻畫面上的通知 | **恰好一則**：「登入已失效，請重新登入」；`sessionStorage` 的寄放區是空的 |
+| 頁尾 | 不在（登入後才給的 meta 一起還原了，裁示 L4） |
+| `/` → `/account` 的 thumb | `transform` 0 → 52px(50ms) → 120px(170ms) → 130px；`transitionrun` 與 `transitionend` 各一次 |
+| `/account` → `/` 的 thumb | 130px → 77px(50ms) → 8px(170ms) → 0；同樣各一次過渡事件 |
+| 冷載入 `/account` | 第一幀就在 130px，整段零個 `transitionrun` |
+| `prefers-reduced-motion: reduce` | `data-animate` 不在、`transition-duration` 是 `0s`、零個過渡事件、位置照樣正確 |
+
+#### 交付
+
+| 項目 | 結果 |
+|---|---|
+| 前端 vitest | **190 條全過**（原 175 ＋ 新增 15），行覆蓋 **94.69%**（門檻 90） |
+| 前端 lint／格式／型別／build | 全過 |
+| `./tests/run-all.sh`（quick） | **39 支 0 失敗**（跳過 14 支：需 docker） |
+| `./tests/run-all.sh --e2e` | **10 支 0 失敗**，`e2e_vue_smoke` 52 → 57 條 |
+| golden | **沒有重錄，零檔案變動** |
+
+⚠ **一個沒有修的既有問題（不在這兩個 bug 的範圍內，記在這裡免得下次又被當成新 bug）**：
+`AppMasthead.doLogout()` 用 `toastAfterNav("已登出", …)` 寄一則跨頁通知，然後
+`router.push("/login")`。但登出是 SPA 內換頁，`drainPendingToast()` 只在 `main.ts` 進站時跑
+一次，那一則會一直躺在 `sessionStorage` 裡，直到**下一次整頁重載**才冒出來（在一個完全無關
+的時機）。這次是在寫 401 的測試時發現的：`sessionStorage` 裡撿到上一條測試留下來的
+`{"title":"已登出"}`。要修的話就是把它換成 `toast()`，與這次 401 那則同一個理由。

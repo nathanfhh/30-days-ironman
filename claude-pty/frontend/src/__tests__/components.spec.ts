@@ -5,6 +5,7 @@ import { nextTick } from "vue";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 
 import AppFooter from "@/components/AppFooter.vue";
+import AppMasthead from "@/components/AppMasthead.vue";
 import ManifestList from "@/components/ManifestList.vue";
 import SitePicker from "@/components/SitePicker.vue";
 import SiteSwitch from "@/components/SiteSwitch.vue";
@@ -790,5 +791,143 @@ describe("ToastStack", () => {
     expect(el?.getAttribute("data-shown")).toBe("1");
     if (item) dismissToast(item.id);
     w.unmount();
+  });
+});
+
+/* ── 招牌的分段控制：thumb 要「滑」過去，不是瞬移 ─────────────────────────────────
+ * CSS 只在 `data-animate` 存在時才給 `.navseg__thumb` 一條 transition（見 app.css），而且
+ * 要有一次真的 `transform` 變化才會過渡。Vue 版一度以為「招牌的 DOM 一直是同一份、改
+ * `data-active` 就會滑」，但 `AppShell` 掛在每個 view 裡，換頁時 thumb 是**新節點**：
+ * 新節點一出生就在目的地，什麼都不會動（2026-08-26 Nathan 實測回報 thumb 瞬移）。
+ * 所以做法與舊版 initNavSeg 一樣：第一幀先畫在上一格，下一影格才交還給真正的那一格。
+ *
+ * ⚠ 這裡驗的是**屬性的時間軸**（哪一幀是哪一格、`data-animate` 什麼時候才在），不是動畫
+ *   真的跑了：jsdom 沒有排版也沒有動畫時間軸。真的有沒有滑由瀏覽器那一層看
+ *   （見 docs/frontend-vue3-journal.md 的實測紀錄）。
+ * ⚠ 「上一格是哪一格」是**模組層級**的狀態（跟著這一份 JS 活著，換頁不會丟），所以每一條
+ *   測試都自己先掛一次把它設好，不依賴執行順序。
+ */
+const mastheadRouter = (): Router =>
+  createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/", component: { template: "<div />" } },
+      { path: "/account", component: { template: "<div />" } },
+    ],
+  });
+
+/** 等一個真的影格。
+ *  ⚠ 不可以拿 `setTimeout(…, 0)` 代替：vitest 的 jsdom 是 `pretendToBeVisual`，
+ *    `requestAnimationFrame` 是 jsdom 自己那一支（約 16ms 一格），排在 0ms 的
+ *    setTimeout 會比它先跑，於是這裡看到的還是「第一幀」的樣子。 */
+const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
+
+const mountMasthead = async (path: string): Promise<VueWrapper> => {
+  const r = mastheadRouter();
+  await r.push(path);
+  await r.isReady();
+  return mount(AppMasthead, { global: { plugins: [r] } });
+};
+
+/** 掛一次再拆掉，只為了把「上一格」設成這一格（模擬使用者剛才停在那一頁）。 */
+const cameFrom = async (path: string): Promise<void> => {
+  const w = await mountMasthead(path);
+  await nextFrame();
+  w.unmount();
+};
+
+describe("AppMasthead：navseg 的 thumb", () => {
+  const realMatchMedia = globalThis.matchMedia;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    globalThis.matchMedia = realMatchMedia;
+  });
+
+  it("🔴 換頁時第一幀停在**上一格**，下一影格才滑到這一格", async () => {
+    await cameFrom("/");
+    const w = await mountMasthead("/account");
+    // 第一幀：thumb 還在「工作階段」那一格，而且沒有 transition。沒有這一半的話，新節點
+    // 一出生就在 account，`transform` 從頭到尾沒變過，CSS 沒有東西可以過渡（＝瞬移）。
+    expect(w.find(".navseg").attributes("data-active")).toBe("sessions");
+    expect(w.find(".navseg__thumb").attributes("data-animate")).toBeUndefined();
+    // 但「現在在哪一頁」一影格都不能說錯：會暫時說謊的只有 aria-hidden 的 thumb
+    expect(w.find('a[data-seg="account"]').attributes("aria-current")).toBe("page");
+    expect(w.find('a[data-seg="sessions"]').attributes("aria-current")).toBeUndefined();
+
+    await nextFrame();
+    expect(w.find(".navseg__thumb").attributes("data-animate")).toBe("1");
+    expect(w.find(".navseg").attributes("data-active")).toBe("account");
+  });
+
+  it("🔴 回程也要滑（/account → /）", async () => {
+    await cameFrom("/account");
+    const w = await mountMasthead("/");
+    expect(w.find(".navseg").attributes("data-active")).toBe("account");
+    await nextFrame();
+    expect(w.find(".navseg").attributes("data-active")).toBe("sessions");
+    expect(w.find(".navseg__thumb").attributes("data-animate")).toBe("1");
+  });
+
+  it("🔴 原地重掛（同一格）不動：第一幀就在該在的位置", async () => {
+    await cameFrom("/account");
+    const w = await mountMasthead("/account");
+    // 沒有「從別處滑過來」可言，所以第一幀就是 account，不是先跳去 sessions 再滑回來
+    expect(w.find(".navseg").attributes("data-active")).toBe("account");
+    await nextFrame();
+    expect(w.find(".navseg").attributes("data-active")).toBe("account");
+  });
+
+  it("🔴 prefers-reduced-motion: reduce 時整段不做（第一幀就定位，也不給 transition）", async () => {
+    await cameFrom("/");
+    globalThis.matchMedia = ((q: string) =>
+      ({
+        matches: q.includes("prefers-reduced-motion"),
+        media: q,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList) as typeof globalThis.matchMedia;
+    const w = await mountMasthead("/account");
+    expect(w.find(".navseg").attributes("data-active")).toBe("account");
+    await nextFrame();
+    expect(w.find(".navseg__thumb").attributes("data-animate")).toBeUndefined();
+    expect(w.find(".navseg").attributes("data-active")).toBe("account");
+  });
+
+  it("🔴 舊招牌還沒拆掉時 route 就變了，也不可以把「上一格」蓋掉", async () => {
+    /* 真實的換頁順序：router 先換路由（舊招牌還在畫面上，它的 activeSeg 先變），新的 view
+       連同新招牌才掛上來。「上一格是哪一格」若在那條 watch 裡寫，就會被舊招牌搶先改成
+       目的地，於是新招牌算出來的 `animateFrom` 永遠是 null。單元測試分頭掛兩次招牌看不
+       到這一段，是用真瀏覽器量到的（transform 直接從 0 跳到 130px，getAnimations() 空的）。 */
+    const r = mastheadRouter();
+    await r.push("/");
+    await r.isReady();
+    const old = mount(AppMasthead, { global: { plugins: [r] } });
+    await nextFrame();
+    await r.push("/account"); // 路由先變，舊招牌還在
+    await nextTick();
+    old.unmount(); // 這時候新的 view 才掛上來
+    const w = mount(AppMasthead, { global: { plugins: [r] } });
+    expect(w.find(".navseg").attributes("data-active")).toBe("sessions");
+    await nextFrame();
+    expect(w.find(".navseg").attributes("data-active")).toBe("account");
+  });
+
+  it("招牌若不重掛也接得住：route 一變 data-active 就跟著走", async () => {
+    const r = mastheadRouter();
+    await r.push("/");
+    await r.isReady();
+    const w = mount(AppMasthead, { global: { plugins: [r] } });
+    await nextFrame();
+    expect(w.find(".navseg").attributes("data-active")).toBe("sessions");
+    await r.push("/account");
+    await nextTick();
+    // transition 早就掛上了（掛載後那一影格），所以這一次值變化本身就會過渡
+    expect(w.find(".navseg__thumb").attributes("data-animate")).toBe("1");
+    expect(w.find(".navseg").attributes("data-active")).toBe("account");
   });
 });

@@ -1,3 +1,20 @@
+<script lang="ts">
+/**
+ * 上一次招牌停在哪一格。thumb 的滑動全靠它（見下面 `paintedSeg`）。
+ *
+ * ⚠ **為什麼在這個非 setup 的區塊裡**：`<script setup>` 的內容會被編譯成 `setup()` 的函式
+ *   本體，寫在那裡的 `let` 是**每個元件實例各自一份**。而招牌隨換頁重新掛載，於是那份紀錄
+ *   每次都是新的 null，等於「永遠沒有上一格」，動畫一次都不會跑。第一版就是這樣寫的，
+ *   單元測試當場抓到（2026-08-26）。只有非 setup 的 `<script>` 才是真的模組層級，跨掛載
+ *   活著。
+ * ⚠ 舊版用 sessionStorage 記，是因為它每次換頁都整份 HTML 重來、JS 狀態一併清空。這一版
+ *   **刻意不用 sessionStorage**：那份記錄會活過整頁重載，於是「直接開 /account」也會被當成
+ *   「從 / 滑過來」而動一下，正是 2026-07-25 那次事故要避免的首幀動畫（golden 在同一個
+ *   browser context 裡跨場景也會因此飄）。模組變數在重載時歸零，冷載入自然就沒有動畫。
+ */
+let lastSeg: string | null = null;
+</script>
+
 <script setup lang="ts">
 /*
  * 招牌。對照舊版 `server/templates/_masthead.html` 逐項搬過來，包含它的每一條理由：
@@ -7,17 +24,22 @@
  *     的地方只有帳號頁**。role="status" 讓輪詢改寫時螢幕閱讀器會念出來。
  *   · 身分常駐、對身分能做的事（設定、登出）收進下拉。整個膠囊就是那顆按鈕。
  *
- * 兩處與舊版不同，都是 SPA 帶來的化簡：
- *   1. thumb 的滑動不再需要「記住上一頁停在哪」（舊版 initNavSeg）。換頁不再整份 HTML
- *      重來，招牌的 DOM 一直是同一份，`data-active` 一改 CSS 的 transition 自己就跑。
- *   2. 憑證徽章的翻頁動畫（舊版 swapCred）拿掉：它只在**換 agent** 時才跑，而這套東西
- *      只驅動 claude 一種 CLI，`switched` 恆為 false——留著等於留一段永遠不執行的程式碼。
+ * 一處與舊版不同：憑證徽章的翻頁動畫（舊版 swapCred）拿掉。它只在**換 agent** 時才跑，
+ * 而這套東西只驅動 claude 一種 CLI，`switched` 恆為 false，留著等於留一段永遠不執行的
+ * 程式碼。
+ *
+ * ⚠ **thumb 的滑動則是逐條照抄舊版的 initNavSeg，一步都不能省。** 這裡的註解一度寫著
+ *   「SPA 換頁不再整份 HTML 重來，招牌的 DOM 一直是同一份，`data-active` 一改 CSS 自己就
+ *   跑」，那句話**是錯的**：`AppShell`（招牌的家）掛在每一個 view 裡面，換頁時整個招牌
+ *   連同 thumb 都是**新節點**（2026-08-26 用瀏覽器量到：換頁前後的 thumb 不是同一個 DOM
+ *   節點）。新節點一出生就在目的地那一格，沒有「值變了」可言，所以不會有任何過渡，
+ *   而使用者看到的就是瞬移。真正要做的兩件事見下面 `paintedSeg` 與 `onMounted`。
  */
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { anchorPanel } from "@/lib/anchor";
-import { applyTheme, initTheme, THEMES } from "@/lib/theme";
+import { applyTheme, initTheme, prefersReducedMotion, THEMES } from "@/lib/theme";
 import { toastAfterNav, toastError } from "@/lib/toast";
 import { useSiteStore } from "@/stores/site";
 
@@ -32,6 +54,29 @@ const router = useRouter();
 
 const activeSeg = computed(() => (route.path === "/account" ? "account" : "sessions"));
 
+/**
+ * **第一幀畫在哪一格**。上一頁停在別格就先畫在那裡，下一影格才交還給 `activeSeg`，那一次
+ * 屬性變化就是使用者看到的滑動（`--navseg-i` 換值 → `transform` 換值 → CSS 過渡）。
+ *
+ * ⚠ 不自己算 `translateX`：位置的算式只該有一份，在 CSS 的 `--navseg-i`。JS 複製一份的話，
+ *   日後改格寬或加第三格時它會靜靜地算錯（舊版 initNavSeg 的原話）。
+ * ⚠ `aria-current` 仍然跟著 `activeSeg`：那是「現在在哪一頁」的事實，一影格都不該說錯。
+ *   會暫時說謊的只有 thumb 的落點，而它 `aria-hidden`。
+ */
+const animateFrom =
+  lastSeg !== null && lastSeg !== activeSeg.value && !prefersReducedMotion() ? lastSeg : null;
+const paintedSeg = ref(animateFrom ?? activeSeg.value);
+/* 招牌若哪天不再隨換頁重掛（例如 AppShell 被提到 App.vue），這條就是接手的那一半：
+   `data-active` 仍然跟著路由走，而 `data-animate` 早在掛載後那一影格就掛上了。
+   ⚠ **這裡不可以寫 `lastSeg`。** 換頁時舊招牌還沒被拆掉，它的 `activeSeg` 會先變成新的
+     那一格、這條 watch 先跑，`lastSeg` 於是在新招牌 setup 之前就被改成了目的地，
+     `animateFrom` 一律算成 null，動畫一次都不會跑。用真瀏覽器量到的：`transform` 直接
+     從 0 跳到 130px，`getAnimations()` 是空的、一個 transitionrun 都沒有（2026-08-26）。
+     「上一格是哪一格」只由 `onMounted` 寫，那是每個招牌各自報到一次的地方。 */
+watch(activeSeg, (v) => {
+  paintedSeg.value = v;
+});
+
 const cred = computed(() => store.credentials[store.meta.defaultCli]);
 
 const theme = ref("instrument");
@@ -41,6 +86,8 @@ const themeOptions: PickerOption[] = THEMES.map((t) => ({
   icon: t.icon,
   hint: t.mode === "light" ? "亮色" : "暗色",
 }));
+
+const navThumb = useTemplateRef<HTMLElement>("navThumb");
 
 const menuOpen = ref(false);
 const accountBtn = useTemplateRef<HTMLButtonElement>("accountBtn");
@@ -140,6 +187,38 @@ function onThemeChange(detail: { value: string; origin: PickerOrigin | null }): 
 }
 
 onMounted(async () => {
+  lastSeg = activeSeg.value;
+  /* 從上一格滑到這一格。**兩個動作要在同一個影格裡、而且在第一次繪製之後**：
+   *
+   *   · `data-animate`：CSS 只在這個屬性存在時才給 `.navseg__thumb` 一條 transition
+   *     （見 app.css）。它若在第一次繪製時就在，thumb 會從 `translateX(0)` 滑進來，
+   *     正是 2026-07-25 那次「每次換頁閃一下」的事故。
+   *   · `paintedSeg`：交還給真正的那一格。這一行才是「滑」本身。
+   *
+   * ⚠ 順序無所謂但**必須同一個影格**：屬性是同步寫的，`paintedSeg` 是 Vue 的 ref、下一個
+   *   microtask 才 patch 進 DOM，兩者都落在這一影格的樣式計算之前。過渡是拿變更後的樣式
+   *   判斷的，所以 transition 有、transform 也變了，於是它跑。
+   * ⚠ `animateFrom` 是 null（冷載入、或原地重掛同一格）時這一段等於什麼都沒做：
+   *   `paintedSeg` 本來就已經是 `activeSeg`。`data-animate` 照掛不誤，讓上面那條
+   *   `watch(activeSeg)` 的路徑也有 transition 可用。
+   * ⚠ 開了「減少動態」就整段不做（與舊版 initNavSeg 的處置一致）：`animateFrom` 已經是
+   *   null，thumb 第一幀就在該在的位置，這裡再連 transition 都不給。 */
+  if (!prefersReducedMotion()) {
+    requestAnimationFrame(() => {
+      const el = navThumb.value;
+      if (!el) return;
+      /* ⚠ **先讀一次版面**。過渡是拿「變更前樣式」與「變更後樣式」比出來的，而變更前樣式
+         要有一次樣式計算把它定下來。換頁這條路上，招牌是在同一個 task 裡插進 DOM 的
+         （router 的導覽解決之後 Vue 就掛），下一件事就是這個 rAF，中間**一次繪製都沒
+         有**，於是瀏覽器眼中 thumb 從來沒有在上一格待過，`transform` 只是換了個初值，
+         沒有東西可以過渡。實測（2026-08-26，chromium）：transform 直接 0 → 130px，
+         `getAnimations()` 空的、一個 transitionrun 都沒有。
+         讀 `offsetWidth` 會強迫當場算一次版面，上一格那個位置就成了變更前樣式。 */
+      void el.offsetWidth;
+      el.dataset.animate = "1";
+      paintedSeg.value = activeSeg.value;
+    });
+  }
   theme.value = await initTheme();
   document.addEventListener("click", onDocClick, true);
   document.addEventListener("keydown", onDocKeydown);
@@ -158,8 +237,11 @@ onBeforeUnmount(() => {
     <div class="masthead__brand">
       <span class="masthead__title">claude<em>-pty</em></span>
       <span class="masthead__kicker">控制平台</span>
-      <span class="navseg" role="group" aria-label="主要區域" :data-active="activeSeg">
-        <span class="navseg__thumb" aria-hidden="true"></span>
+      <!-- ⚠ `data-active` 綁的是 `paintedSeg` 不是 `activeSeg`：thumb 的落點在換頁的第一影格
+           要停在**上一格**，下一影格才滑過來（見上面）。下面兩顆連結的 `aria-current` 仍然
+           綁 `activeSeg`：「現在在哪一頁」一影格都不該說錯。 -->
+      <span class="navseg" role="group" aria-label="主要區域" :data-active="paintedSeg">
+        <span ref="navThumb" class="navseg__thumb" aria-hidden="true"></span>
         <!-- 兩格的字數刻意相當（四個中文字），等寬才不會看起來是硬撐出來的 -->
         <!-- ⚠ 用 `custom` 自己畫 `<a>`，不要讓 RouterLink 代勞：它會自動掛
              `router-link-active` / `router-link-exact-active` 兩個 class，而舊版那兩顆連結
