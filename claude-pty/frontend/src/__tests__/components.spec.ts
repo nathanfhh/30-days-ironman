@@ -1,14 +1,16 @@
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 
 import AppFooter from "@/components/AppFooter.vue";
 import ManifestList from "@/components/ManifestList.vue";
 import SitePicker from "@/components/SitePicker.vue";
 import SiteSwitch from "@/components/SiteSwitch.vue";
-import RangePicker from "@/components/RangePicker.vue";
+import RangePicker, { type RangeValue } from "@/components/RangePicker.vue";
 import FilterBar from "@/components/FilterBar.vue";
+import { rpAddMonths, rpMonth, rpYmd } from "@/lib/range";
 import type { SessionRow } from "@/lib/sessions";
 import { useSiteStore } from "@/stores/site";
 
@@ -295,6 +297,56 @@ describe("FilterBar", () => {
   });
 });
 
+/* ── 區間選擇器的共用抓手 ────────────────────────────────────────────────────
+ * ⚠ 一律 `attachTo: document.body`：這一組有兩件事只有真的接進文件才成立，焦點
+ *   （Esc 要把焦點還給觸發鍵）與「點面板外面就收起來」（監聽掛在 document 上）。
+ *   所以每一支測完都要拆，不然下一支的 `document.body.click()` 會打到上一支留下的面板。 */
+const rangeMounted: VueWrapper[] = [];
+
+function mountRange(modelValue: RangeValue = { from: "", to: "" }): VueWrapper {
+  const w = mount(RangePicker, { props: { modelValue }, attachTo: document.body });
+  rangeMounted.push(w);
+  return w;
+}
+
+async function openRange(modelValue: RangeValue = { from: "", to: "" }): Promise<VueWrapper> {
+  const w = mountRange(modelValue);
+  await w.find('[data-testid="range-trigger"]').trigger("click");
+  await flushPromises();
+  return w;
+}
+
+/** 直接在上方的日期／時間欄位打字。⚠ VTU 的 setValue 對這兩種欄位只送 input，
+ *  而元件聽的是 change（原生選擇器就是這樣送的），所以要自己補那一發。 */
+async function typeInto(w: VueWrapper, testid: string, value: string): Promise<void> {
+  const f = w.find(`[data-testid="${testid}"]`);
+  (f.element as HTMLInputElement).value = value;
+  await f.trigger("change");
+}
+
+const monthLabels = (w: VueWrapper): string[] =>
+  w.findAll(".rangepick__month").map((e) => e.text());
+const monthLabel = (offset: number): string => {
+  const d = rpAddMonths(rpMonth(new Date()), offset);
+  return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月`;
+};
+const rangeHidden = (w: VueWrapper): boolean =>
+  w.find('[data-testid="range-panel"]').attributes("hidden") !== undefined;
+
+/** jsdom 的 getBoundingClientRect 一律回 0；要問「捲出視窗了嗎」就得自己給一個。 */
+const fakeRect = (top: number, bottom: number): DOMRect =>
+  ({
+    top,
+    bottom,
+    left: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    x: 0,
+    y: top,
+    toJSON: () => ({}),
+  }) as DOMRect;
+
 describe("RangePicker", () => {
   it("點兩天就是一段區間，按確定才送出（半截的不觸發查詢）", async () => {
     const w = mount(RangePicker, { props: { modelValue: { from: "", to: "" } } });
@@ -333,6 +385,170 @@ describe("RangePicker", () => {
     await flushPromises();
     await w.find('[data-testid="range-clear"]').trigger("click");
     expect(w.emitted("change")![0][0]).toEqual({ from: "", to: "" });
+  });
+
+  afterEach(() => {
+    for (const w of rangeMounted.splice(0)) w.unmount();
+    document.body.innerHTML = "";
+  });
+
+  it("鍵盤也打得開：Enter 展開、Esc 收起並把焦點還給觸發鍵", async () => {
+    const w = mountRange();
+    const trigger = w.find('[data-testid="range-trigger"]');
+    await trigger.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect(rangeHidden(w)).toBe(false);
+    // 已經開著時再按一次不可以重開——那會把改到一半的草稿重設掉
+    await trigger.trigger("keydown", { key: "ArrowDown" });
+    expect(rangeHidden(w)).toBe(false);
+    await w.find('[data-testid="range-panel"]').trigger("keydown", { key: "Escape" });
+    expect(rangeHidden(w)).toBe(true);
+    // 焦點要回到觸發鍵：不還的話鍵盤使用者的下一次 Tab 是從 <body> 重頭開始
+    expect(document.activeElement).toBe(trigger.element);
+  });
+
+  it("面板裡按其他鍵不會誤關（只有 Esc 收）", async () => {
+    const w = await openRange();
+    await w.find('[data-testid="range-panel"]').trigger("keydown", { key: "a" });
+    expect(rangeHidden(w)).toBe(false);
+  });
+
+  it("翻月翻年只動左邊那格，右邊永遠是它 +1；上限是「左邊停在上個月」", async () => {
+    const w = await openRange();
+    expect(monthLabels(w)).toEqual([monthLabel(-1), monthLabel(0)]);
+    // 起始視圖就已經到頂，右邊剛好是本月，不會出現一整面反灰的未來月份
+    expect(w.find('[data-testid="range-next-month"]').attributes("disabled")).toBeDefined();
+    await w.find('[data-testid="range-prev-month"]').trigger("click");
+    expect(monthLabels(w)).toEqual([monthLabel(-2), monthLabel(-1)]);
+    expect(w.find('[data-testid="range-next-month"]').attributes("disabled")).toBeUndefined();
+    await w.find('[data-testid="range-prev-year"]').trigger("click");
+    expect(monthLabels(w)[0]).toBe(monthLabel(-14));
+    await w.find('[data-testid="range-next-year"]').trigger("click");
+    expect(monthLabels(w)[0]).toBe(monthLabel(-2));
+    // 再往前翻一年會越過上限，要被夾回來而不是翻到未來
+    await w.find('[data-testid="range-next-year"]').trigger("click");
+    expect(monthLabels(w)[0]).toBe(monthLabel(-1));
+  });
+
+  it("上方欄位可以直接指定：日期與時間分兩欄，任一欄改了都組回同一個時刻", async () => {
+    const w = await openRange();
+    await typeInto(w, "range-from-date", "2025-03-04");
+    await typeInto(w, "range-from-time", "09:30");
+    await typeInto(w, "range-to-date", "2025-03-06");
+    await w.find('[data-testid="range-ok"]').trigger("click");
+    const v = w.emitted("change")![0][0] as RangeValue;
+    expect(v.from).toMatch(/^2025-03-04T09:30:00[+-]\d{2}:\d{2}$/);
+    // ⚠ 終點沒指定時間就給那一天的尾巴：給 00:00 會少掉最後一整天
+    expect(v.to).toMatch(/^2025-03-06T23:59:00[+-]\d{2}:\d{2}$/);
+  });
+
+  it("打字送進未來的日期會被夾回現在（max 屬性只擋得住原生的選擇器）", async () => {
+    const w = await openRange();
+    await typeInto(w, "range-from-date", "2099-01-01");
+    const shown = (w.find('[data-testid="range-from-date"]').element as HTMLInputElement).value;
+    expect(shown).toBe(rpYmd(new Date()));
+  });
+
+  it("只有時間、沒有日期時不自作主張補今天", async () => {
+    const w = await openRange();
+    await typeInto(w, "range-to-time", "10:00");
+    await w.find('[data-testid="range-ok"]').trigger("click");
+    expect(w.emitted("change")![0][0]).toEqual({ from: "", to: "" });
+  });
+
+  it("清掉日期欄位就是把那一端還原成不限", async () => {
+    const w = await openRange();
+    await typeInto(w, "range-from-date", "2025-03-04");
+    await typeInto(w, "range-from-date", "");
+    await w.find('[data-testid="range-ok"]').trigger("click");
+    expect(w.emitted("change")![0][0]).toEqual({ from: "", to: "" });
+  });
+
+  it("先點晚的再點早的會自動對調，不丟掉第二次點擊也不跳錯誤訊息", async () => {
+    const w = await openRange();
+    const days = w.findAll('[data-testid="range-day"]:not([disabled])');
+    const early = days[1].attributes("data-day");
+    const late = days[5].attributes("data-day");
+    await days[5].trigger("click");
+    await days[1].trigger("click");
+    await w.find('[data-testid="range-ok"]').trigger("click");
+    const v = w.emitted("change")![0][0] as RangeValue;
+    expect(v.from.startsWith(`${early}T00:00:00`)).toBe(true);
+    expect(v.to.startsWith(`${late}T23:59:00`)).toBe(true);
+  });
+
+  it("兩端都定了之後再點一天，是重新開始選一段", async () => {
+    const w = await openRange();
+    const days = w.findAll('[data-testid="range-day"]:not([disabled])');
+    await days[1].trigger("click");
+    await days[5].trigger("click");
+    expect(w.find(".rangepick__hint").text()).toContain("可再點一下重新選");
+    await days[9].trigger("click");
+    expect(w.find(".rangepick__hint").text()).toContain("再點一下選終點");
+  });
+
+  it("定了起點還沒定終點時，滑過哪一天就預覽到哪裡", async () => {
+    const w = await openRange();
+    const days = w.findAll('[data-testid="range-day"]:not([disabled])');
+    // 還沒選起點，滑過去不該有任何預覽
+    await days[4].trigger("mouseover");
+    expect(w.findAll('.rangepick__day[data-in="true"]')).toHaveLength(0);
+    await days[0].trigger("click");
+    await days[4].trigger("mouseover");
+    const inside = w.findAll('.rangepick__day[data-in="true"]').length;
+    expect(inside).toBeGreaterThan(0);
+    // 同一天再滑一次不重算（滑鼠在一格裡移動會連發好幾十次 mouseover）
+    await days[4].trigger("mouseover");
+    expect(w.findAll('.rangepick__day[data-in="true"]')).toHaveLength(inside);
+  });
+
+  it("捲動時**重新定位而不是關掉**；觸發鍵真的離開視窗才收起來", async () => {
+    const w = await openRange();
+    document.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await nextTick();
+    expect(rangeHidden(w)).toBe(false);
+    expect(w.find("#pick-range").attributes("data-drop")).toBe("down");
+    const trigger = w.find('[data-testid="range-trigger"]').element as HTMLElement;
+    trigger.getBoundingClientRect = () => fakeRect(-40, -10);
+    document.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await nextTick();
+    expect(rangeHidden(w)).toBe(true);
+  });
+
+  it("面板自己捲不算，不可以一捲就把自己關掉", async () => {
+    const w = await openRange();
+    w.find('[data-testid="range-panel"]').element.dispatchEvent(
+      new Event("scroll", { bubbles: true }),
+    );
+    await nextTick();
+    expect(rangeHidden(w)).toBe(false);
+  });
+
+  it("點面板外面就收起來，改到一半的草稿不會送出去，也不會留到下次展開", async () => {
+    const w = await openRange();
+    await w.findAll('[data-testid="range-day"]:not([disabled])')[0].trigger("click");
+    document.body.click();
+    await nextTick();
+    expect(rangeHidden(w)).toBe(true);
+    expect(w.emitted("change")).toBeUndefined();
+    await w.find('[data-testid="range-trigger"]').trigger("click");
+    await flushPromises();
+    expect(w.find(".rangepick__hint").text()).toContain("點一下選起點");
+  });
+
+  it("再按一次觸發鍵是收起來，不是重開", async () => {
+    const w = await openRange();
+    await w.find('[data-testid="range-trigger"]').trigger("click");
+    expect(rangeHidden(w)).toBe(true);
+  });
+
+  it("已經有區間時展開，視圖對齊到那一段的月份", async () => {
+    const w = await openRange({
+      from: "2025-03-04T00:00:00+08:00",
+      to: "2025-03-06T23:59:00+08:00",
+    });
+    expect(monthLabels(w)[0]).toBe("2025 年 3 月");
+    expect(w.find('[data-testid="range-trigger"]').text()).toContain("2025-03-04 00:00");
   });
 });
 

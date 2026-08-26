@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter, type Router } from "vue-router";
 
 import AccountView from "@/views/AccountView.vue";
 import App from "@/App.vue";
+import GitlabPatPanel from "@/components/account/GitlabPatPanel.vue";
 import LoginView from "@/views/LoginView.vue";
 import { toasts } from "@/lib/toast";
 import { useSiteStore } from "@/stores/site";
@@ -402,5 +403,126 @@ describe("AccountView：管理員", () => {
     await flushPromises();
     expect(w.find('[data-testid="ttyd-views"]').text()).toContain("讀不到");
     expect(w.find('[data-testid="ttyd-views"]').text()).not.toContain("41000");
+  });
+});
+
+/* ── GitLab 憑證那一塊 ────────────────────────────────────────────────────────
+ * 上面那幾支從整頁進去，守的是「畫不畫、chip 是什麼顏色」。這裡直接掛面板，守的是
+ * **存與清之後發生了什麼**：那條 PUT 帶什麼、狀態怎麼重新同源、以及失敗時畫面停在哪。
+ * 空字串＝清除，所以清除也走 PUT，沒有 DELETE 端點，這件事只有這裡問得到。
+ */
+
+/** 一份完整的 `/api/account/bootstrap`。⚠ 少給欄位的話 `fetchAccountMeta` 會在拆
+ *  `d.build.modules` 時拋，而外層的 catch 會吞掉它，症狀是「chip 沒變」，看不出原因。 */
+const patBootstrap = (configured: boolean) => ({
+  body: {
+    user: { id: 1, username: "alice", is_admin: false, gitlab_pat_configured: configured },
+    default_cli: "claude",
+    credentials: CREDENTIALS(true),
+    limits: { name_max: 25, username_max: 32, min_password_length: 8 },
+    gitlab: { enabled: true, host: "gitlab.test", proxy_error: null },
+    persist_dir: "/home/nathan/persistent-data",
+    build: { modules: [], built_at: null },
+  },
+});
+
+function mountPat(patSet: boolean): VueWrapper {
+  const store = useSiteStore();
+  store.user = { id: 1, username: "alice", is_admin: false, gitlab_pat_configured: patSet };
+  Object.assign(store.meta, { gitlabEnabled: true, gitlabHost: "gitlab.test" });
+  const w = mount(GitlabPatPanel, { attachTo: document.body });
+  mounted.push(w);
+  return w;
+}
+
+const patField = (w: VueWrapper): HTMLInputElement =>
+  w.find("#gitlab-pat").element as HTMLInputElement;
+const putPatCalls = () =>
+  calls.filter((c) => c.url === "/api/users/me/gitlab-pat" && c.method === "PUT");
+
+describe("GitlabPatPanel", () => {
+  beforeEach(() => {
+    installFetch({
+      "/api/users/me/gitlab-pat": { status: 204 },
+      "/api/account/bootstrap": patBootstrap(true),
+    });
+  });
+
+  it("已設定時 placeholder 換成遮罩，而且欄位永遠是空的", () => {
+    const w = mountPat(true);
+    expect(w.find("#gitlab-pat").attributes("placeholder")).toContain("已設定");
+    expect(patField(w).value).toBe("");
+    expect(w.find("#pat-clear").attributes("hidden")).toBeUndefined();
+  });
+
+  it("沒設定時提示怎麼取得，清除鍵收起來（沒有東西可清）", () => {
+    const w = mountPat(false);
+    expect(w.find("#gitlab-pat").attributes("placeholder")).toContain("貼上");
+    expect(w.find("#pat-clear").attributes("hidden")).toBeDefined();
+    expect(w.find("#pat-save").attributes("disabled")).toBeDefined();
+  });
+
+  it("🔴 存完是**重抓 bootstrap**，不是整頁重載；欄位要自己清掉", async () => {
+    const w = mountPat(false);
+    await w.find("#gitlab-pat").setValue("glpat-abc123");
+    expect(w.find("#pat-save").attributes("disabled")).toBeUndefined();
+    await w.find("#pat-form").trigger("submit");
+    await flushPromises();
+    expect(putPatCalls()[0].body).toEqual({ pat: "glpat-abc123" });
+    // 徽章、chip、按鈕三處都照這一發重畫，所以它非發不可
+    expect(calls.some((c) => c.url === "/api/account/bootstrap")).toBe(true);
+    // ⚠ 不清的話畫面會停在「已經存進去了，但輸入框裡還留著剛剛那把 PAT」
+    expect(patField(w).value).toBe("");
+    // 狀態同源之後 chip 自己轉綠
+    expect(w.find("#pat-state .chip").text()).toBe("已設定");
+  });
+
+  it("🔴 存失敗時**不可以**把使用者剛貼的 token 清掉，也不該去重抓狀態", async () => {
+    installFetch({
+      "/api/users/me/gitlab-pat": { status: 400, body: { error: "token 沒有 api scope" } },
+    });
+    const w = mountPat(false);
+    await w.find("#gitlab-pat").setValue("glpat-bad");
+    await w.find("#pat-form").trigger("submit");
+    await flushPromises();
+    expect(toasts.at(-1)!.title).toBe("儲存 GitLab 憑證失敗");
+    expect(toasts.at(-1)!.body).toBe("token 沒有 api scope");
+    expect(patField(w).value).toBe("glpat-bad");
+    expect(calls.some((c) => c.url === "/api/account/bootstrap")).toBe(false);
+  });
+
+  it("🔴 清除也走 PUT 送空字串（沒有 DELETE 端點），並講明代價", async () => {
+    installFetch({
+      "/api/users/me/gitlab-pat": { status: 204 },
+      "/api/account/bootstrap": patBootstrap(false),
+    });
+    const w = mountPat(true);
+    await w.find("#pat-clear").trigger("click");
+    await flushPromises();
+    expect(putPatCalls()[0].body).toEqual({ pat: "" });
+    expect(toasts.at(-1)!.level).toBe("warning");
+    expect(toasts.at(-1)!.body).toContain("再填一把回去它們會恢復");
+    // 重抓之後 chip 與清除鍵一起改
+    expect(w.find("#pat-state .chip").text()).toBe("未設定");
+    expect(w.find("#pat-clear").attributes("hidden")).toBeDefined();
+  });
+
+  it("清除失敗要說是哪個動作失敗，而且狀態維持原樣", async () => {
+    installFetch({
+      "/api/users/me/gitlab-pat": { status: 500, body: { error: "boom" } },
+    });
+    const w = mountPat(true);
+    await w.find("#pat-clear").trigger("click");
+    await flushPromises();
+    expect(toasts.at(-1)!.title).toBe("清除 GitLab 憑證失敗");
+    expect(w.find("#pat-state .chip").text()).toBe("已設定");
+  });
+
+  it("代理起不來時 chip 講的是代理，而不是「已設定」", () => {
+    const store = useSiteStore();
+    store.meta.gitlabProxyError = "host not found in upstream";
+    const w = mountPat(true);
+    expect(w.find("#pat-state .chip").text()).toBe("代理起不來");
+    expect(w.text()).toContain("host not found in upstream");
   });
 });
