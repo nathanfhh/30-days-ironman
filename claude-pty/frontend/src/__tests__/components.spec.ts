@@ -548,9 +548,22 @@ describe("RangePicker", () => {
       to: "2025-03-06T23:59:00+08:00",
     });
     expect(monthLabels(w)[0]).toBe("2025 年 3 月");
-    expect(w.find('[data-testid="range-trigger"]').text()).toContain("2025-03-04 00:00");
+    // ⚠ 觸發鍵印的是**本機時區**的時刻，不可以把 +08:00 那個字串的字面寫死進期望值：
+    //   CI 的 runner 是 UTC，同一個瞬間會印成 2025-03-03 16:00（2026-08-26 就是這樣紅的）。
+    //   期望值用同一個瞬間、同一種格式在本機算出來，測試才是在驗「畫出來的是那個時刻」，
+    //   而不是在驗「這台機器的時區剛好是台北」。
+    expect(w.find('[data-testid="range-trigger"]').text()).toContain(
+      localStamp("2025-03-04T00:00:00+08:00"),
+    );
   });
 });
+
+/** 與 RangePicker 觸發鍵同一種格式（YYYY-MM-DD HH:mm），在本機時區算出來。 */
+const pad2 = (n: number): string => String(n).padStart(2, "0");
+function localStamp(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
 
 /** 依路徑回應的假後端，並記下打了哪些路徑。 */
 function fakeApi(routes: Record<string, { status?: number; body?: unknown }>): string[] {
