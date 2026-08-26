@@ -53,14 +53,14 @@ type Cell = { kind: "chip" | "mono"; text: string; tone?: string; title?: string
 
 function aliveCell(row: ViewRow): Cell {
   if (row.alive === null) {
-    return { kind: "chip", text: "建立中", title: "pid 還沒寫回 DB（開啟中），不是死了" };
+    return { kind: "chip", text: "建立中", title: "pid 還沒寫回 DB（開啟中），不是已結束" };
   }
   if (row.alive === false) {
     return {
       kind: "chip",
-      text: "已死",
+      text: "已結束",
       tone: "danger",
-      title: "DB 有列、程序已死。它佔著 uq_views_port，這場下次開終端會拿不到 port",
+      title: "DB 有列、程序已結束。它佔著 uq_views_port，這場下次開終端會拿不到 port",
     };
   }
   return { kind: "mono", text: String(row.pid) };
