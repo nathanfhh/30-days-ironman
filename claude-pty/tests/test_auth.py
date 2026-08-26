@@ -344,6 +344,34 @@ try:
     )
     check("這幾條都沒有開 relay", _relays == [])
 
+    # 🔴 「容器裡的 mitmweb 還沒在服務」與「不給你看」不是同一件事，狀態碼要分得開。
+    #    使用者看到的畫面一樣（`error_page 401 403 500 502 503 504` 都接到 @view_denied），
+    #    分開的價值在我們自己這一側：access log 裡「還沒好、等一下再來」不該長成跟
+    #    「不准看」一樣的數字，而這條路正是最需要事後查得出原因的那一條。
+    def _not_ready(sid, cid):
+        _relays.append((sid, cid))
+        raise _mitm.MitmNotReadyError("這一場的流量畫面還沒準備好（容器裡的 mitmweb 沒有回應），請稍後再試")
+
+    _relays.clear()
+    _mitm.open_mitm_view = _not_ready
+    check(
+        "🔴 mitmweb 還沒就緒 → 503（暫時性），不是 403",
+        ca_mitm.get("/api/auth/mitm?session=capon00001").status_code == 503,
+    )
+    check("　└ 而且真的有去試（不是被別的 gate 提前擋掉）", _relays == [("capon00001", "cid-capon00001")])
+
+    # 其餘的 MitmViewError（例如真的把整段 port 用完了）維持 403：那不是「等一下再來」。
+    _relays.clear()
+
+    def _no_port(sid, cid):
+        raise _mitm.MitmViewError("41200-41300 無可用 port")
+
+    _mitm.open_mitm_view = _no_port
+    check("其他 MitmViewError 仍然是 403", ca_mitm.get("/api/auth/mitm?session=capon00001").status_code == 403)
+
+    _relays.clear()
+    _mitm.open_mitm_view = lambda sid, cid: (_relays.append((sid, cid)), {"port": 41234, "session_id": sid})[1]
+
     # 🔴 沒有 nginx 擋在前面時，這支是一個外部打得到、而且會生行程的 GET
     #    （同 auth_view 的審查 F-009）。開發部署只查詢、不生東西。
     config.BEHIND_PROXY = False

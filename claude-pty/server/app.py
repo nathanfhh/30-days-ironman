@@ -30,7 +30,7 @@ from .sessions import (
     SessionNotFound,
     _as_bool,
 )
-from .mitm_views import MitmViewError
+from .mitm_views import MitmNotReadyError, MitmViewError
 from .views import ViewError
 from .web import login_art, redirect_to_login, web
 
@@ -823,6 +823,14 @@ def auth_mitm():
         try:
             # ⚠ 只吃 DB 裡的 container id。使用者輸入不進入這條路徑的任何位置。
             relay = mitm_views.open_mitm_view(sid, session_info.get("container_id") or "")
+        except MitmNotReadyError:
+            # 容器裡的 mitmweb 還沒在服務（剛開始錄、或它 crash 了）。**這是暫時性的**，
+            # 與 403（有這個東西，但不給你）、404（這一場根本沒在錄）都不一樣，所以回 503。
+            # ⚠ 使用者看到的畫面沒有差別：`error_page 401 403 500 502 503 504` 一律接到
+            #   `@view_denied` 導回首頁（auth_request 本來就只認 2xx/401/403，其餘當 5xx）。
+            #   分開的價值在**我們自己這一側**：access log 裡「還沒好」與「不准看」不該
+            #   長成同一個數字，而這條路正是最需要事後查得出原因的那一條。
+            return "", 503
         except MitmViewError:
             return "", 403
         manager.touch(sid)

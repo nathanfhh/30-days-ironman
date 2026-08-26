@@ -82,8 +82,15 @@ with open(_IMPL, "w", encoding="utf-8") as _f:
         "srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
         "srv.bind(('127.0.0.1', port))\n"
         "srv.listen(16)\n"
+        # `FAKE_SOCAT_UPSTREAM=dead` ＝ listener 起得來，但每條連線立刻被關掉，不回任何
+        # 位元組。那正是真 socat 在「docker exec 進去 connect 127.0.0.1:8081 被 refuse」時
+        # 對外呈現的樣子（EXEC 的那一端非 0 退出，socat 就收掉這條連線）。
+        "dead = os.environ.get('FAKE_SOCAT_UPSTREAM') == 'dead'\n"
         "while True:\n"
         "    c, _ = srv.accept()\n"
+        "    if dead:\n"
+        "        c.close()\n"
+        "        continue\n"
         "    threading.Thread(target=lambda s=c: (s.recv(4096), s.sendall(\n"
         "        b'HTTP/1.1 403 Forbidden\\r\\nServer: mitmproxy 12.2.3\\r\\n\\r\\n'), s.close()),\n"
         "        daemon=True).start()\n"
@@ -96,6 +103,49 @@ os.chmod(_FAKE, 0o755)
 _ARGV_LOG = os.path.join(_tmp, "argv.log")
 os.environ["FAKE_SOCAT_ARGV"] = _ARGV_LOG
 os.environ["PATH"] = os.path.dirname(_FAKE) + os.pathsep + os.environ["PATH"]
+
+# --- 假的 docker ------------------------------------------------------------------
+#
+# `open_mitm_view` 在進 port 迴圈**之前**會先問一次「容器裡的 mitmweb 接得上嗎」，做法是
+# `docker exec <cid> python3 -c …`。這支測試沒有 docker，所以給它一個同名替身，退出碼由
+# `FAKE_DOCKER_EXIT` 決定：0 ＝上游活著（下面絕大多數情境要的），非 0 ＝接不上。
+#
+# ⚠ 用替身而不是把 `_mitmweb_reachable` 換掉（monkeypatch），是為了讓那一支**真的被執行**：
+#   它組 argv 的方式（不經 shell、container id 只當一個位置參數）也是這支測試該守的東西。
+_FAKE_DOCKER = os.path.join(_tmp, "bin", "docker")
+with open(_FAKE_DOCKER, "w", encoding="utf-8") as _f:
+    _f.write('#!/bin/bash\necho "$@" >> "${FAKE_DOCKER_ARGV}"\nexit "${FAKE_DOCKER_EXIT:-0}"\n')
+os.chmod(_FAKE_DOCKER, 0o755)
+_DOCKER_LOG = os.path.join(_tmp, "docker.log")
+os.environ["FAKE_DOCKER_ARGV"] = _DOCKER_LOG
+os.environ["FAKE_DOCKER_EXIT"] = "0"
+
+
+def socat_spawns() -> int:
+    """替身 socat 到目前為止總共被起了幾次（＝ open_mitm_view 試過幾個 port）。
+
+    ⚠ 記在檔案裡而不是數行程：要問的是「試了幾次」，而失敗的那幾顆早就被收掉了，
+      事後數行程一律得到 0，那條斷言就永遠是綠的。
+    """
+    if not os.path.exists(_ARGV_LOG):
+        return 0
+    return len([ln for ln in open(_ARGV_LOG, encoding="utf-8").read().splitlines() if ln.strip()])
+
+
+def live_fake_socats() -> int:
+    """此刻還活著的替身 socat 有幾顆（不論 exec 完了沒有）。
+
+    ⚠ 判準是 cmdline 裡有沒有這次測試的暫存目錄，不是「叫不叫 socat」：exec 之前它的
+      argv[0] 是 `/bin/bash`，只認名字的話**漏掉的正好是要抓的那一種**。
+    """
+    if views.psutil is None:
+        return 0
+    n = 0
+    for p in views.psutil.process_iter(["cmdline"]):
+        with __import__("contextlib").suppress(Exception):
+            if any(_tmp in a for a in (p.info["cmdline"] or [])):
+                n += 1
+    return n
 
 
 def seed(sid: str) -> str:
@@ -222,6 +272,95 @@ try:
     check("🔴 `_kill_spawned()` 收得掉", mitm_views._kill_spawned(_slow_pid, grace=0.2))
     check("　└ 行程真的不在了", not mitm_views._pid_exists(_slow_pid))
 
+    print("== 🔴 上游接不上時，不可以把整個 port 範圍每一個都試一遍（PR #3 Copilot）==")
+    # 容器 running、`capture` 為真，但容器裡的 mitmweb 沒在服務（crash 或還在啟動）時，
+    # 原本每一個 port 都會起一顆 socat 並等滿 `_wait_ready` 的逾時才換下一個
+    # （socat 是 `TCP-LISTEN,fork`，父程序不會自己結束，只有逾時能離開那一圈）。
+    # 2026-08-27 用三個 port 實測 60.6 秒（每個 20.2 秒），外推到出貨的 101 個 port ＝
+    # **34 分鐘**的同步 `auth_mitm` 請求佔住一條 Flask 執行緒，外加 **12,928 次 docker exec**。
+    _orig_ready = config.MITM_READY_TIMEOUT
+    config.MITM_READY_TIMEOUT = 2.0  # 只縮短「一次逾時」，要驗的是次數不是秒數
+    _sid3 = "relay0003"
+    _cid3 = seed(_sid3)
+    try:
+        print("  -- (a) 起 relay 之前先探一次上游：探不到就不該進 port 迴圈 --")
+        os.environ["FAKE_DOCKER_EXIT"] = "1"  # 容器裡的 mitmweb 接不上
+        _n0, _t0, _raised = socat_spawns(), time.time(), None
+        try:
+            mitm_views.open_mitm_view(_sid3, _cid3)
+        except mitm_views.MitmViewError as e:
+            _raised = e
+        _el = time.time() - _t0
+        check(f"回 MitmNotReadyError 而不是別的（{_raised}）", isinstance(_raised, mitm_views.MitmNotReadyError))
+        check("🔴 一顆 socat 都沒起（＝根本沒進 port 迴圈）", socat_spawns() == _n0)
+        check(f"🔴 而且很快（{_el:.2f}s）", _el < 5)
+        check("沒有留下任何列", alive_rows(_sid3) == [])
+        # 訊息本身也是交付物：原本這條路回的是「41200-41300 無可用 port」，
+        # 而 port 一個都沒少，跟 views 那個 exec 空窗是同一種「症狀指向 port」的誤導。
+        check("錯誤訊息講的是 mitmweb 沒回應，不是「無可用 port」", "無可用 port" not in str(_raised))
+        check("探測真的走了 docker exec（不是被 monkeypatch 掉）", "exec" in open(_DOCKER_LOG, encoding="utf-8").read())
+
+        print("  -- (b) 探測過了、relay 也起得來，但上游在那之後才壞：只該試一個 port --")
+        os.environ["FAKE_DOCKER_EXIT"] = "0"  # 探測那一發過得了
+        os.environ["FAKE_SOCAT_UPSTREAM"] = "dead"  # 但 relay 接不到上游
+        _n0, _t0, _raised = socat_spawns(), time.time(), None
+        try:
+            mitm_views.open_mitm_view(_sid3, _cid3)
+        except mitm_views.MitmViewError as e:
+            _raised = e
+        _el = time.time() - _t0
+        _tried = socat_spawns() - _n0
+        check(f"回 MitmNotReadyError（{_raised}）", isinstance(_raised, mitm_views.MitmNotReadyError))
+        check(f"🔴 只試了一個 port（試了 {_tried} 個）", _tried == 1)
+        check(f"🔴 耗時是一次逾時的量級，不是範圍長度乘以逾時（{_el:.2f}s）", _el < 3 * config.MITM_READY_TIMEOUT)
+        check("沒有留下任何列", alive_rows(_sid3) == [])
+        check("🔴 沒有留下 socat（起了就要收掉，不然那個 port 永遠被佔著）", live_fake_socats() == 0)
+
+        print("  -- (c) 反向：port 被**別的**服務佔住時，還是要換下一個 port --")
+        # ⚠ 這一條守的是上面那個分岔**沒有收過頭**。判準若寫成 `views._port_open(port)`，
+        #   別的服務佔住那個 port 時（我們的 socat 其實 bind 失敗已經退出）會被誤判成
+        #   「上游壞掉」而整個放棄，但那正是該換下一個 port 的情況（ADR 0021 的安全網）。
+        os.environ.pop("FAKE_SOCAT_UPSTREAM", None)
+        _squat = socket.socket()
+        _squat.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        _squat.bind(("127.0.0.1", config.MITM_PORT_MIN))
+        _squat.listen(64)
+        # ⚠ **占位的那個 socket 必須真的 accept，backlog 也不能小。** 第一版寫的是
+        #   `listen(1)` 而且沒有人收：`_port_open` 與 `_is_mitmweb_serving` 各連一次就把
+        #   accept 佇列塞滿，之後的 connect 被拒，於是那個 port 從外面看起來是**關著的**。
+        #   結果這一條在「判準只看 port 開著」的突變下照樣綠，也就是它其實沒有在驗那件事
+        #   （2026-08-27 突變驗證抓到，這正是突變驗證要抓的東西）。
+        _squat_stop = False
+
+        def _drain():
+            while not _squat_stop:
+                try:
+                    _c, _ = _squat.accept()
+                except OSError:
+                    return
+                _c.close()
+
+        _squat_thread = __import__("threading").Thread(target=_drain, daemon=True)
+        _squat_thread.start()
+        try:
+            check(
+                f"前提：被佔的那個 port 從外面看是開著的（{config.MITM_PORT_MIN}）",
+                views._port_open(config.MITM_PORT_MIN),
+            )
+            _r3 = mitm_views.open_mitm_view(_sid3, _cid3)
+            check(f"🔴 還是開起來了，而且跳過被佔的那個（got {_r3['port']}）", _r3["port"] != config.MITM_PORT_MIN)
+            check("那個 port 真的有我們的 relay 在聽", views._port_open(_r3["port"]))
+        except mitm_views.MitmViewError as e:
+            check(f"🔴 不該失敗（port 被占是該換下一個，不是放棄）：{e}", False)
+        finally:
+            _squat_stop = True
+            _squat.close()
+            mitm_views.close_mitm_views(_sid3)
+    finally:
+        config.MITM_READY_TIMEOUT = _orig_ready
+        os.environ["FAKE_DOCKER_EXIT"] = "0"
+        os.environ.pop("FAKE_SOCAT_UPSTREAM", None)
+
     print("== 收一場沒有 relay 的：等冪，回 0 ==")
     check("close_mitm_views 對沒有 relay 的 session 回 0", mitm_views.close_mitm_views("relay0002") == 0)
 
@@ -234,7 +373,10 @@ try:
     check("空的 container id → MitmViewError", _raised)
     check("而且沒有留下任何列", alive_rows("relay0002") == [])
 finally:
-    for _sid in ("relay0001", "relay0002"):
+    # ⚠ relay0003 也要在這裡收。上游那一節中途拋例外時（例如有人把修法改壞了）內層的
+    #   收尾不會跑到，那顆替身 socat 會留下來聽著 45200，**下一次跑這支測試會被它毒到**：
+    #   新起的 socat bind 失敗，而就緒探測連上的是上一輪的殘留，於是紅在完全無關的地方。
+    for _sid in ("relay0001", "relay0002", "relay0003"):
         with __import__("contextlib").suppress(Exception):
             mitm_views.close_mitm_views(_sid)
     db.reset_engine()

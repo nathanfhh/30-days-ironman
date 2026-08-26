@@ -210,6 +210,53 @@ mitmweb 跑在 tornado 上，`WebSocketHandler.check_origin` 拿瀏覽器送的 
    （`auth_view` 的既有語義），殘列由 `reconciler._clean_views` 回收。
 4. mitmweb 的 cookie 是 `Path=/`，所以那兩個 cookie 會跟著送到本站的每一條路徑。
    無害（Flask 不認得就忽略），但值得知道。
+5. **起 relay 之前多一次 `docker exec` 的探測**（見下一節）。對真容器實測 0.13 秒，
+   而且一條 relay 只付一次：之後 `list_mitm_views` 查得到活著的就直接沿用，不會再走到那一關。
+
+## 上游沒在服務時，不可以把整段 port 掃一遍（2026-08-27，PR #3 Copilot 指出）
+
+容器是 running、`profile.capture` 也是真，**不代表容器裡的 mitmweb 此刻在服務**：它可能
+crash 了，也可能 session 剛建好還在啟動。原本的 `open_mitm_view` 分不出「這個 port 不能用」
+與「上游接不上」，於是後者會走完前者的流程：每一個 port 起一顆 socat，每一顆都等滿
+`_wait_ready` 的 20 秒逾時才換下一個。
+
+socat 是 `TCP-LISTEN,fork`：**父程序不會自己結束**，所以那一圈只有逾時能離開，
+`_pid_exists` 這個中止條件永遠不會成立。
+
+實測（三個 port，假 socat 起得來但每條連線立刻關掉，＝ EXEC 那端非 0 退出時的樣子）：
+60.6 秒，**每個 port 20.2 秒**。外推到出貨的 41200-41300（101 個）：
+
+| | 修前 | 修後 |
+| --- | --- | --- |
+| 最壞耗時 | **34 分鐘**（同步請求，佔住一條 Flask 執行緒） | 一次逾時（預設 20 秒），探測擋掉時 < 1 秒 |
+| `docker exec` 次數 | **12,928**（每圈兩次：`_port_open` 與 `_is_mitmweb_serving`，每條連線 fork 一次橋接） | 1（探測）＋ 失敗那一個 port 的量 |
+| 錯誤訊息 | 「41200-41300 無可用 port」（**port 一個都沒少**） | 「容器裡的 mitmweb 沒有回應，請稍後再試」 |
+
+兩道修法，缺一不可：
+
+1. **進 port 迴圈之前先探一次上游**：`docker exec <cid> python3 -c '<connect 127.0.0.1:8081>'`，
+   接不上就直接 `MitmNotReadyError`，一顆 socat 都不起。探不動（docker 不在、容器剛好消失、
+   exec 逾時）一律當成「沒就緒」：往「不起」那一側倒的代價是使用者多按一次，往另一側倒
+   的代價是那 34 分鐘。
+   ⚠ 這一關**只驗 TCP 接得上，不驗身分**。驗身分要帶 Bearer，那等於把這一場的密碼多送進
+   容器一次；而它要回答的只是「值不值得起 relay」，真正的驗明正身仍在 `_is_mitmweb_serving`
+   （relay 起來之後，從控制平面這一側問）。
+2. **迴圈裡分辨兩種失敗**：socat 沒站起來 → 換下一個 port（原行為）；socat 站起來了、
+   是上游接不上 → 立刻收掉並回報，不再換 port。
+   ⚠ 判準是 `_process_alive(pid)`（＝那個號碼上是**我們的 socat**）**而不是**
+   `views._port_open(port)`。port 上若是別的服務，我們的 socat 其實 bind 失敗已經退出了，
+   那時 `_port_open` 仍為真；只看它會把「port 被占」誤判成上游壞掉而整個放棄，
+   但那正是該換下一個 port 的情況（上面「port 範圍不重疊」那道安全網）。
+   這一條是突變驗證抓出來的：第一版的測試用 `listen(1)` 且沒有人 accept，兩次探測就把
+   accept 佇列塞滿、port 從外面看起來是關著的，於是那條斷言在錯的實作下照樣綠。
+
+`/api/auth/mitm` 對這種情形回 **503**（暫時性）而不是 403。使用者看到的畫面沒有差別
+（`error_page 401 403 500 502 503 504` 一律接到 `@view_denied`），分開的價值在我們自己
+這一側：access log 裡「還沒好、等一下再來」不該長成跟「不准看」一樣的數字。
+
+`_wait_ready` 的逾時值一併從簽章搬到 `config.MITM_READY_TIMEOUT`（預設仍是 20 秒）：
+修好之後**這個數字就是最壞情況的全部**（先前要乘以 101），是最壞情況的數字就該看得見、
+調得動。
 
 ## 已知未做（fable 完整審點出來、這次刻意不處理的）
 
@@ -230,7 +277,8 @@ mitmweb 跑在 tornado 上，`WebSocketHandler.check_origin` 拿瀏覽器送的 
 | token 的導出性質（確定性、跨場不同、字母表、換金鑰即作廢） | `tests/test_mitm_token.py` |
 | 只跟 capture 成對送 | `tests/test_profile_mapping.py` |
 | relay 生命週期（port 仲裁、起收、archive 連帶收、殘列回收、位址不含空白） | `tests/test_mitm_relay.py`（假 socat） |
+| 上游沒在服務時不掃整段 port（探測擋下、迴圈只試一個、port 被占仍要換下一個） | `tests/test_mitm_relay.py`（假 socat ＋ 假 docker） |
 | 橋接對真 mitmweb（半關閉、Bearer、403、不留行程） | `tests/test_mitm_bridge.py`（真容器，不經 socat） |
-| `/api/auth/mitm` 的 200/404/403/401 與 BEHIND_PROXY gate | `tests/test_auth.py` |
+| `/api/auth/mitm` 的 200/404/403/401/503 與 BEHIND_PROXY gate | `tests/test_auth.py` |
 | nginx 的 location 順序、rewrite 去前綴、Bearer 注入、`Host $http_host`、對外 404 | `tests/test_nginx_contract.py` |
 | 按鈕只在有錄製時出現、開的是 `mitm/` 子路徑 | `frontend/src/__tests__/drawer.spec.ts`、`tests/golden/drawer-open/` |

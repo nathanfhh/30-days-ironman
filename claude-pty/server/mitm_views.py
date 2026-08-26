@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import socket
+import subprocess
 import time
 from contextlib import suppress
 
@@ -32,6 +33,18 @@ from .models import MitmView, utcnow
 
 class MitmViewError(RuntimeError):
     pass
+
+
+class MitmNotReadyError(MitmViewError):
+    """容器在、也在錄，但**容器裡的 mitmweb 此刻接不上**（crash，或還在啟動）。
+
+    ⚠ 這不是「沒有 port 可用」，而且兩者的正解相反：port 撞號要換下一個 port，上游接不上
+      換幾個 port 都一樣，而每換一個就多付一次 `_wait_ready` 的 20 秒逾時。分不出這兩件事
+      正是那段最壞 34 分鐘的迴圈的成因（見 `open_mitm_view`）。
+
+    ⚠ 它是 `MitmViewError` 的子類，所以既有的 `except MitmViewError` 呼叫端行為一字不變；
+      只有想分辨的地方（`app.auth_mitm` 回 503 而不是 403）才需要先接它。
+    """
 
 
 # 我們自己會起的 relay 程序名（＝ `_kill` / `_process_alive` 的身分白名單）。
@@ -53,6 +66,13 @@ def open_mitm_view(session_id: str, container_id: str) -> dict:
     existing = _alive_relay(session_id)
     if existing is not None:
         return existing
+
+    # ⚠ **先問上游，再進 port 迴圈。** 容器是 running、`capture` 也是真，不代表容器裡的
+    #   mitmweb 此刻在服務（它可能 crash 了，也可能 session 剛建好還在啟動）。少了這一關，
+    #   下面那個迴圈會把「上游接不上」當成「這個 port 不能用」，於是每一個 port 都起一顆
+    #   socat 再等滿 20 秒逾時。見 `config.MITM_PROBE_TIMEOUT` 的實測數字。
+    if not _mitmweb_reachable(container_id):
+        raise MitmNotReadyError("這一場的流量畫面還沒準備好（容器裡的 mitmweb 沒有回應），請稍後再試")
 
     for port in range(config.MITM_PORT_MIN, config.MITM_PORT_MAX + 1):
         row_id = _claim_port(session_id, port)
@@ -81,8 +101,22 @@ def open_mitm_view(session_id: str, container_id: str) -> dict:
             _kill_spawned(pid)
             _drop(row_id)
             raise
+        # 就緒失敗。**換下一個 port 只對其中一種有意義**，兩種混在一起就是那段 34 分鐘：
+        #   · 我們的 socat 根本沒站起來（bind 不上：那個 port 被 DB 以外的東西佔住，
+        #     或它自己剛死）→ 換下一個 port 是對的。
+        #   · socat 站起來了、也在聽，是**上游**（容器裡的 mitmweb）接不上 → 換 port 一點
+        #     用都沒有，每一個都會走完同一條路、等滿同一個 20 秒逾時。立刻收掉並回報。
+        # ⚠ 判準用 `_process_alive(pid)`（＝這個號碼上是**我們的 socat**）而不是只看
+        #   `views._port_open(port)`：port 上若是**別的服務**，我們的 socat 其實 bind 失敗
+        #   已經退出了，那時 `_port_open` 仍為真，只看它會把「port 被占」誤判成上游壞掉，
+        #   而換 port 正是那一種該做的事（ADR 0021 說的那道安全網）。
+        upstream_dead = _process_alive(pid) and views._port_open(port)
         _kill_spawned(pid)
         _drop(row_id)
+        if upstream_dead:
+            raise MitmNotReadyError(
+                "這一場的流量畫面還沒準備好（relay 起來了，但容器裡的 mitmweb 沒有回應），請稍後再試"
+            )
     raise MitmViewError(f"{config.MITM_PORT_MIN}-{config.MITM_PORT_MAX} 無可用 port")
 
 
@@ -195,6 +229,37 @@ def _alive_relay(session_id: str) -> dict | None:
 # --- socat 程序 -------------------------------------------------------------------
 
 
+# 進容器問一句「mitmweb 的 port 接得上嗎」。接得上就 exit 0，其餘（refuse、逾時）非 0。
+#
+# ⚠ 這裡刻意**不驗身分**（不看 `Server: mitmproxy`），只驗「TCP 接得上」。要驗身分就得帶
+#   Bearer，那等於把這一場的密碼多送進容器一次；而這一關要回答的只是「值不值得起 relay」，
+#   真正的驗明正身在 `_is_mitmweb_serving`（relay 起來之後，從控制平面這一側問）。
+# ⚠ `python3 -c` 收到的 `sys.argv[1]` 是 `-c` 後面接的第一個位置參數（同 mitm_bridge.sh）。
+_PROBE_SRC = "import socket, sys\nsocket.create_connection(('127.0.0.1', int(sys.argv[1])), timeout=2).close()\n"
+
+
+def _mitmweb_reachable(container_id: str) -> bool:
+    """容器裡的 mitmweb 現在接得上嗎。接不上（含探不動）一律回 False。
+
+    ⚠ **不經 shell**：argv 是 list，`container_id` 只從 DB 來（同 `_socat_argv` 的理由）。
+      也因此這一段不必像 `mitm_bridge.sh` 那樣收進獨立檔案：那個檔案存在的理由是 socat 的
+      `EXEC:` 沒有引號機制，而這裡根本沒有 socat。
+    ⚠ **探不動要當成「沒就緒」，不是「就緒」。** docker 不在、容器剛好消失、exec 逾時，
+      每一種都代表「現在起 relay 沒有意義」。往「不起」那一側倒的代價是使用者多按一次，
+      往另一側倒的代價是那段 34 分鐘。
+    """
+    try:
+        done = subprocess.run(
+            ["docker", "exec", container_id, "python3", "-c", _PROBE_SRC, str(config.MITM_WEB_PORT)],
+            capture_output=True,
+            timeout=config.MITM_PROBE_TIMEOUT,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):  # 含 TimeoutExpired
+        return False
+    return done.returncode == 0
+
+
 def _socat_argv(port: int, container_id: str) -> list[str]:
     """relay 的命令列。
 
@@ -267,7 +332,7 @@ def _pid_exists(pid: int) -> bool:
     return views._pid_exists(pid)
 
 
-def _wait_ready(port: int, pid: int, timeout: float = 20.0) -> bool:
+def _wait_ready(port: int, pid: int, timeout: float | None = None) -> bool:
     """等 relay 就緒。它先死掉、逾時、或該 port 上是別的服務都回 False。
 
     ⚠ **中止條件是「那個號碼上沒東西了」，不是 `_process_alive`（它還要比對 argv[0]）。**
@@ -283,7 +348,12 @@ def _wait_ready(port: int, pid: int, timeout: float = 20.0) -> bool:
     ⚠ 逾時比 ttyd 那邊（5 秒）寬得多：這一發探測要**整條路走完**：socat fork、
       `docker exec` 起一個行程（實測數百毫秒起跳）、python 連上容器 loopback、mitmweb 回應。
       而 mitmweb 本身也可能還在啟動（session 剛建好時）。
+
+    ⚠ 逾時值放在 `config.MITM_READY_TIMEOUT`（預設仍是 20 秒）而不是寫死在簽章裡：修好
+      「上游壞掉就別再換 port」之後，**這個數字就是最壞情況的全部**（先前是它乘以 101）。
+      是最壞情況的那個數字，就該看得見、調得動、也讓測試縮得短。
     """
+    timeout = config.MITM_READY_TIMEOUT if timeout is None else timeout
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not _pid_exists(pid):
