@@ -36,7 +36,8 @@ auth_request /_auth_mitm ──► Flask /api/auth/mitm?session=<sid>
    │                          · 回 200 + X-Mitm-Port + X-Mitm-Token
    ▼
 auth_request_set $mitm_port / $mitm_token
-proxy_pass  http://control:$mitm_port$rest$is_args$args
+rewrite ^/session/[A-Za-z0-9]+/mitm(/.*)$ $1 break
+proxy_pass  http://control:$mitm_port
 proxy_set_header Authorization "Bearer $mitm_token"
    ▼
 control 容器內的 relay：socat TCP-LISTEN:<port>,bind=<TTYD_BIND>,fork,reuseaddr
@@ -106,11 +107,24 @@ control 容器一重建就全沒了，DB 卻還留著幾列佔著 port。
 非容器化＝loopback，那時 nginx 也在同一台），就緒探測則一律從 127.0.0.1 探
 （`views._probe_host`）。
 
-### 2. `proxy_pass` 要帶 `$is_args$args`
+### 2. 前綴要用 `rewrite … break` 去掉，不可以拼進 `proxy_pass`
 
-`proxy_pass http://$up:$port$rest;` 在帶變數時用的是我們組出來的 URI，
-**原本的 query string 不會自動接上**。mitmweb 的 SPA 靠 query 傳篩選條件，
-少了它那些請求會變成「沒有條件」：回得出東西，只是答非所問，畫面上完全看不出來。
+規劃寫的是 `proxy_pass http://$up:$port$rest;`（把剩下的路徑拼進去）。那有兩個問題，
+第一個規劃已經點到、第二個是量出來的：
+
+- **query string 不會自動接上。** proxy_pass 帶變數時 nginx 用的是我們組出來的那個 URI，
+  原本的 query 不在裡面。mitmweb 的 SPA 靠 query 傳篩選條件，少了它那些請求會變成
+  「沒有條件」：回得出東西，只是答非所問，畫面上完全看不出來。
+- **🔴 已經 escape 的字元會被拆掉。** `$rest` 是從 `$uri` 擷取的，而 `$uri` 是**已經解碼**
+  的，nginx 又把變數拼出來的 URI **原樣**放進請求行。於是 `/a%20b` 送出去會變成
+  `GET /a b HTTP/1.1`，請求行裡一個裸空白，那不是合法的請求行。
+  2026-08-26 用一個把原始請求行吐回來的 echo upstream 對照量到的。
+
+兩個問題一次解決：`rewrite ^/session/[A-Za-z0-9]+/mitm(/.*)$ $1 break;` 加上一個
+**沒有 URI 部分**的 `proxy_pass`。rewrite 之後 nginx 送的是它自己重新 escape 過的 URI
+（`/a%20b` 原樣過去），而 rewrite 的替換字串裡沒有 `?`，所以原本的 query 會自動帶著走
+（因此**不可以**再加 `$is_args$args`，加了就是重複一份）。改後量到的請求行：
+`/flows?a=1&b=2`、`/a%20b`、`/a%20b?q=x%20y`、`/%E4%B8%AD%E6%96%87?f=%23x` 全部正確。
 
 尾斜線則用一條獨立的 `location ... /mitm$ { return 308 …/mitm/; }`，
 而不是在代理那條裡用 `if`。
@@ -197,6 +211,17 @@ mitmweb 跑在 tornado 上，`WebSocketHandler.check_origin` 拿瀏覽器送的 
 4. mitmweb 的 cookie 是 `Path=/`，所以那兩個 cookie 會跟著送到本站的每一條路徑。
    無害（Flask 不認得就忽略），但值得知道。
 
+## 已知未做（fable 完整審點出來、這次刻意不處理的）
+
+- **relay 沒有一支「真 socat」的整合測試。** `test_mitm_relay` 用的是同名替身（`exec -a socat`），
+  真的 socat 只在隔離環境用手驗過（真 nginx.conf ＋ 真 socat ＋ 真橋接 ＋ 真 mitmweb ＋ 瀏覽器，
+  2026-08-26）。要補的話得在 host 上裝 socat，並比照 `NEEDS_TTYD` 加一道 gate；
+  在沒有 socat 的機器上那支會以「無可用 port」這種完全不像缺工具的訊息失敗。
+- **`db._warn_missing_constraints` 的誤報疑慮沒有處理。** 這次實際量過：全新資料庫上
+  `views` 與 `mitm_views` 都拿得到兩條 UNIQUE autoindex，那支不會對新表發出警告
+  （`PRAGMA index_list` 各回 2 條 UNIQUE）。既有部署的 `views` 少一條那件事是舊的、
+  與本次無關，仍然會照舊警告。這一項留著沒動，因為沒有重現出誤報。
+
 ## 測試
 
 | 守什麼 | 在哪 |
@@ -207,5 +232,5 @@ mitmweb 跑在 tornado 上，`WebSocketHandler.check_origin` 拿瀏覽器送的 
 | relay 生命週期（port 仲裁、起收、archive 連帶收、殘列回收、位址不含空白） | `tests/test_mitm_relay.py`（假 socat） |
 | 橋接對真 mitmweb（半關閉、Bearer、403、不留行程） | `tests/test_mitm_bridge.py`（真容器，不經 socat） |
 | `/api/auth/mitm` 的 200/404/403/401 與 BEHIND_PROXY gate | `tests/test_auth.py` |
-| nginx 的 location 順序、`$is_args$args`、Bearer 注入、對外 404 | `tests/test_nginx_contract.py` |
+| nginx 的 location 順序、rewrite 去前綴、Bearer 注入、`Host $http_host`、對外 404 | `tests/test_nginx_contract.py` |
 | 按鈕只在有錄製時出現、開的是 `mitm/` 子路徑 | `frontend/src/__tests__/drawer.spec.ts`、`tests/golden/drawer-open/` |

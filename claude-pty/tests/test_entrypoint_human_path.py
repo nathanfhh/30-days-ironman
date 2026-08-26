@@ -159,7 +159,8 @@ check("⑦ 有印出 firewall/網路能力的結論行", "● 網路能力：" i
 # driver 啟動**之前**就印完了，換成 stub 只是讓尾巴確定、跑得快，不影響任何一條斷言。
 print("\n== 起容器（錄製選 y，照 run script 的形狀；不設 NCR_MARK、不設 NCR_MITM_WEB_PASSWORD）==")
 CAP_NAME = "claude-pty-humanpath-capture"
-WEB_PORT = "40099"  # run script 會動態挑一個，這裡釘死才驗得到 URL 逐字
+WEB_PORT = "40099"  # run script 會動態挑一個；這裡釘死一個值才驗得到 URL 逐字
+# （不會佔用 host 上的這個 port，見下面 cap_argv 裡不帶 `-p` 的理由）
 STUB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stub_claude.sh")
 os.chmod(STUB, 0o755)
 subprocess.run(["docker", "rm", "-f", CAP_NAME], capture_output=True)
@@ -176,14 +177,18 @@ cap_argv = [
     "-it",
     "--name",
     CAP_NAME,
-    # 以下三項照 dev-container/run-ncr-dev-container.sh：host 那側轉發 8081、
-    # 告訴 entrypoint host 視角的 port 與落盤目錄。
+    # 這兩項照 dev-container/run-ncr-dev-container.sh：告訴 entrypoint host 視角的
+    # port 與落盤目錄。它們只影響**印出來的那行字**，而那正是這一段要比對的東西。
+    #
+    # ⚠ **刻意不帶 `-p`。** run script 會把 8081 發布到 host，但這一段驗的是
+    #   「那行 URL 印對了沒有」，不是「轉發通不通」，而 `-p` 會讓這支測試佔一個
+    #   寫死的 host port：那台機器上剛好有人在用 40099（或兩份測試同時跑）的話，
+    #   容器起不來，而失敗訊息會是 docker 的 port 已被占用，看起來與 entrypoint
+    #   一點關係都沒有。不轉發就沒有這個外部相依。
     "-e",
     f"NCR_MITM_WEB_PORT={WEB_PORT}",
     "-e",
     f"NCR_CAPTURE_HOST_DIR={cap_home}/ncr/mitm",
-    "-p",
-    f"127.0.0.1:{WEB_PORT}:8081",
     "-v",
     f"{REPO}/dev-container/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro",
     # 沒有脫敏 addon 的話 start_capture 會 fail-closed 直接不錄，這一段就白跑了
@@ -212,6 +217,11 @@ try:
     if idx == 0:
         cap_child.sendline("n")
         cap_child.expect("REACHED-DRIVER-LAUNCH", timeout=150)
+    elif idx == 2:
+        # 🔴 **逾時不可以靜默落下。** 落下去的話下面那幾條會對著一份**半截的**畫面比對，
+        #    而「還沒印到」與「印錯了」在那些斷言上長得一模一樣：容器根本沒走到 driver
+        #    啟動，測試卻可能因為前面幾行剛好都在而全綠。
+        check("🔴 ⑦½ 等到 driver 啟動（逾時＝下面幾條比對的是半截畫面）", False)
 finally:
     cap_child.close(force=True)
     subprocess.run(["docker", "rm", "-f", CAP_NAME], capture_output=True)

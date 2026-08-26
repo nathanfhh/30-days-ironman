@@ -65,11 +65,24 @@ check(
 )
 _mitm_pass = re.search(r"proxy_pass http://\$mitm_upstream:\$mitm_port(\S*);", code)
 check("port 真的被用在 proxy_pass（取回來卻沒用＝路由斷掉）", _mitm_pass is not None)
-# 🔴 proxy_pass 帶變數時，**原本的 query string 不會自動接上**。少了 $is_args$args，
-#    SPA 靠 query 傳的篩選條件會整個消失：請求成功、答案卻是別的問題，畫面上看不出來。
+# 🔴 **前綴要用 `rewrite … break` 去掉，不可以把路徑拼進 proxy_pass。** 兩者送出去的
+#    東西不一樣：URI 由變數拼出來時 nginx 把那串**原樣**放進請求行，而那串是從已經解碼
+#    的 `$uri` 擷取的，於是 `/a%20b` 會變成請求行裡的裸空白（`GET /a b HTTP/1.1`，不合法）。
+#    rewrite 之後 proxy_pass 沒有 URI 部分，送的是 nginx 重新 escape 過的 URI。
+#    2026-08-26 用 echo upstream 對照量過改前改後。
 check(
-    "🔴 帶上 $is_args$args（否則 query string 被丟掉，而且是無聲的）",
-    _mitm_pass is not None and _mitm_pass.group(1).endswith("$is_args$args"),
+    "🔴 前綴由 rewrite … break 去掉（proxy_pass 拼變數會讓 %20 變成裸空白）",
+    re.search(r"rewrite \^/session/\[A-Za-z0-9\]\+/mitm\(/\.\*\)\$ \$1 break;", code) is not None,
+)
+check(
+    "🔴 proxy_pass 沒有 URI 部分（有的話 rewrite 就白做了）",
+    _mitm_pass is not None and _mitm_pass.group(1) == "",
+)
+# 🔴 `rewrite` 的替換字串裡沒有 `?`，原本的 query string 會自動帶著走。再加一份就是
+#    **重複**（`?a=1&b=2?a=1&b=2`），而先前那條測試守的正好是相反的事，前提已經變了。
+check(
+    "🔴 那條 location 裡沒有 $is_args$args（rewrite 已經帶著 query 走，再加是重複）",
+    "$is_args$args" not in code,
 )
 check(
     "🔴 尾斜線由 308 補（SPA 是路徑相對的，少了它資源會解析到 ttyd 那條路由）",

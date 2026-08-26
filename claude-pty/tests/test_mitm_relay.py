@@ -10,6 +10,7 @@ relay 的真本事（socat + docker exec + mitmweb）由 test_mitm_bridge 對著
 那是 `_kill()` 送 SIGTERM 前的唯一把關。取別的名字的話，這支測到的就是另一條路。
 """
 
+import importlib
 import os
 import socket
 import sys
@@ -22,13 +23,25 @@ os.environ["NO_PROXY"] = os.environ["no_proxy"] = "127.0.0.1,localhost"
 
 _tmp = tempfile.mkdtemp(prefix="claude-pty-mitmrelay-")
 os.environ["CLAUDE_PTY_DB_URL"] = f"sqlite:///{os.path.join(_tmp, 'test.db')}"
-# 專屬 port 區段：與正式服務的 41200–41300 分開，免得「無殘留」那類檢查把別人的算進來。
-os.environ["CLAUDE_PTY_MITM_PORT_MIN"] = "45200"
-os.environ["CLAUDE_PTY_MITM_PORT_MAX"] = "45210"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server import config, db  # noqa: E402
+from server import config  # noqa: E402
+
+# ⚠ **先讀預設值，再覆寫。** 下面那條「兩個範圍不可以重疊」驗的是**出貨的預設**，
+#   而這支測試自己要用一個專屬區段跑（免得「無殘留」那類檢查把正式服務的算進來）。
+#   一旦覆寫下去，config 裡就再也讀不到預設了；抄一份字面值又會在有人改 config
+#   的那天繼續比對舊的數字（那正是這條斷言要抓的事）。所以順序是：import、拍快照、
+#   覆寫、reload。
+_DEFAULT_TTYD_PORTS = range(config.TTYD_PORT_MIN, config.TTYD_PORT_MAX + 1)
+_DEFAULT_MITM_PORTS = range(config.MITM_PORT_MIN, config.MITM_PORT_MAX + 1)
+
+# 專屬 port 區段：與正式服務的那一段分開。
+os.environ["CLAUDE_PTY_MITM_PORT_MIN"] = "45200"
+os.environ["CLAUDE_PTY_MITM_PORT_MAX"] = "45210"
+importlib.reload(config)
+
+from server import db  # noqa: E402
 
 config.DB_URL = os.environ["CLAUDE_PTY_DB_URL"]
 db.reset_engine()
@@ -101,11 +114,13 @@ def alive_rows(sid: str) -> list[MitmView]:
 
 try:
     print("== 契約：兩個 port 範圍不可以重疊（兩張表各自仲裁，跨表不會擋）==")
-    # 這條看的是**預設值**，不是這支測試臨時設的區段。
-    _d_ttyd = range(41000, 41101)
+    # 🔴 比的是**整段對整段**，而且兩段都從 config 讀（見上面拍快照那段）。
+    #    先前這裡寫的是四個字面值的端點比對：既抄了一份會漂的數字，也只驗到端點，
+    #    把 MITM_PORT_MIN 改成 41050（整段落在 ttyd 範圍**裡面**）照樣全綠。
     check(
-        "預設 41000–41100（ttyd）與 41200–41300（relay）不相交",
-        41200 not in _d_ttyd and 41300 not in _d_ttyd and 41000 not in range(41200, 41301),
+        f"預設 {config.TTYD_PORT_MIN}–{config.TTYD_PORT_MAX}（ttyd）與 "
+        f"{_DEFAULT_MITM_PORTS.start}–{_DEFAULT_MITM_PORTS.stop - 1}（relay）不相交",
+        set(_DEFAULT_TTYD_PORTS).isdisjoint(_DEFAULT_MITM_PORTS),
     )
 
     print("== 契約：socat 的位址不可以有空白（EXEC 依空白切詞、沒有引號機制）==")
@@ -184,6 +199,28 @@ try:
     check("先用外力收掉它", _views_kill and not mitm_views._process_alive(rb["pid"]))
     check("list_mitm_views 會把死掉的那一列清走（釋放 port）", mitm_views.list_mitm_views("relay0002") == [])
     check("DB 裡真的沒有了", alive_rows("relay0002") == [])
+
+    print("== 🔴 spawn 之後、exec 成 socat 之前，那個行程也要收得掉 ==")
+    # `_spawn_detached` 是 double-fork：`$!` 拿到的 pid 一開始是 `sh` 的，要等它 exec 完
+    # argv[0] 才會變成 socat。`_kill()` 在送訊號前會比對 argv[0]，所以在那個窗口裡它會
+    # 判定「不是我們的程序」直接回 True 什麼都不做，那顆行程就活著而沒有人記得它。
+    # 這裡把窗口撐大（先睡再 exec）來釘住 `_kill_spawned` 有處理這件事。
+    _slow = os.path.join(_tmp, "bin", "slow-socat")
+    with open(_slow, "w", encoding="utf-8") as _f:
+        _f.write("#!/bin/bash\nsleep 3\nexec -a socat sleep 60\n")
+    os.chmod(_slow, 0o755)
+    _slow_pid = views._spawn_detached([_slow])
+    time.sleep(0.4)  # 還在 sleep，argv[0] 仍是 bash
+    check(
+        "窗口確實存在：行程在，但 `_process_alive` 認不得它",
+        mitm_views._pid_exists(_slow_pid) and not mitm_views._process_alive(_slow_pid),
+    )
+    check(
+        "🔴 `_kill()` 在這個窗口裡什麼都收不掉（所以不能只用它）",
+        mitm_views._kill(_slow_pid) and mitm_views._pid_exists(_slow_pid),
+    )
+    check("🔴 `_kill_spawned()` 收得掉", mitm_views._kill_spawned(_slow_pid, grace=0.2))
+    check("　└ 行程真的不在了", not mitm_views._pid_exists(_slow_pid))
 
     print("== 收一場沒有 relay 的：等冪，回 0 ==")
     check("close_mitm_views 對沒有 relay 的 session 回 0", mitm_views.close_mitm_views("relay0002") == 0)
