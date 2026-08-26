@@ -51,8 +51,47 @@ check("401/403 都接到", {"401", "403"} <= _codes)
 check("🔴 5xx 也接得到（auth_request 的其餘失敗不可以漏出裸錯誤頁）", bool(_codes & {"500", "502", "503", "504"}))
 check("導回首頁（302）", re.search(r"location @view_denied \{\s*\n\s*return 302 /;", code) is not None)
 
+print("== 路由 C：流量畫面（mitmweb UI，ADR 0021）==")
+check("mitm 路由套 auth_request", "auth_request /_auth_mitm;" in code)
+check("子請求端點標 internal（外部打不到）", re.search(r"location = /_auth_mitm \{\s*\n\s*internal;", code) is not None)
+check("取回 relay 的 port", "auth_request_set $mitm_port  $upstream_http_x_mitm_port;" in code)
+check("取回這一場的 token", "auth_request_set $mitm_token $upstream_http_x_mitm_token;" in code)
+# 🔴 **token 只能由 nginx 注入。** 取回來卻沒用＝mitmweb 對每一發請求回 403，而畫面上
+#    看起來是「一按就跳回首頁」；而如果改成讓瀏覽器帶（`?token=`），那串明文就進了
+#    網址列、瀏覽紀錄與任何一次複製貼上。
+check(
+    "🔴 token 由 nginx 組成 Bearer 注入（同時蓋掉 client 自己送的 Authorization）",
+    'proxy_set_header Authorization "Bearer $mitm_token";' in code,
+)
+_mitm_pass = re.search(r"proxy_pass http://\$mitm_upstream:\$mitm_port(\S*);", code)
+check("port 真的被用在 proxy_pass（取回來卻沒用＝路由斷掉）", _mitm_pass is not None)
+# 🔴 proxy_pass 帶變數時，**原本的 query string 不會自動接上**。少了 $is_args$args，
+#    SPA 靠 query 傳的篩選條件會整個消失——請求成功、答案卻是別的問題，畫面上看不出來。
+check(
+    "🔴 帶上 $is_args$args（否則 query string 被丟掉，而且是無聲的）",
+    _mitm_pass is not None and _mitm_pass.group(1).endswith("$is_args$args"),
+)
+check(
+    "🔴 尾斜線由 308 補（SPA 是路徑相對的，少了它資源會解析到 ttyd 那條路由）",
+    re.search(r"location ~ \^/session/\(\?<\w+>\[A-Za-z0-9\]\+\)/mitm\$ \{\s*\n\s*return 308 ", code) is not None,
+)
+check("WebSocket 升級（mitmweb 的 /updates）", code.count('proxy_set_header Connection "upgrade";') >= 2)
+_mitm_ep = re.search(r"error_page ([\d ]+)= @view_denied;[\s\S]*?\$mitm_port", code)
+check(
+    "🔴 5xx 也接得到（沒開錄製時 /api/auth/mitm 回 404，auth_request 會把它當 5xx）",
+    _mitm_ep is not None and bool(set(_mitm_ep.group(1).split()) & {"500", "502", "503", "504"}),
+)
+# 🔴 **順序**：nginx 取第一個命中的 regex location，而 `^/session/<sid>/` 也吃得下
+#    `/session/<sid>/mitm/…`。排錯的話這兩條一條都不會被走到，而且沒有任何錯誤——
+#    使用者按下「流量畫面」看到的會是終端。
+_i_bare = code.find("/mitm$")
+_i_rest = code.find("/mitm(?<")
+_i_ttyd = code.find("location ~ ^/session/(?<claude_pty_sid>")
+check("兩條 mitm 路由都在", _i_bare > 0 and _i_rest > 0 and _i_ttyd > 0)
+check("🔴 兩條都排在 ttyd 那條 regex **之前**（否則永遠不會被命中）", _i_bare < _i_ttyd and _i_rest < _i_ttyd)
+
 print("== 內部端點對外一律 404（不承認存在）==")
-for ep in ("/api/auth/view", "/api/auth/check"):
+for ep in ("/api/auth/view", "/api/auth/check", "/api/auth/mitm"):
     check(f"{ep} 對外 404", re.search(rf"location = {re.escape(ep)} \{{ return 404; \}}", code) is not None)
 
 print("== CSP：終端只給同源嵌（抽屜是 same-origin iframe）==")
