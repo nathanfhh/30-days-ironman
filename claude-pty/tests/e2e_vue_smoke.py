@@ -359,6 +359,44 @@ with sync_playwright() as pw:
     page.wait_for_function("() => location.pathname.startsWith('/login')", timeout=5000)
     check("登出回登入頁", page.url.endswith("/login"))
 
+    # --- 別的分頁把登入弄失效：下一發 API 的 401 要把人送回 /login ---
+    #
+    # ⚠ 這一條守的是 golden 與其餘 e2e 都看不到的形狀：**登入態在中途消失**。
+    #   真實情境是分頁 B 改了密碼（伺服端讓這個帳號的其他 session 全部作廢），分頁 A 手上
+    #   那份 cookie 當場變成廢紙。這裡用 `clear_cookies()` 造出同一件事，不必真的開第二個
+    #   分頁：要驗的是「A 收到 401 之後會怎樣」，不是「B 怎麼讓它失效的」。
+    # ⚠ 用**清 cookie ＋ 一個真的會打 API 的動作**，不是等 15 秒的輪詢：輪詢那條路一樣會
+    #   走到同一個處理器，但讓測試多等 15 秒買不到任何額外的保證。
+    page.fill('[data-testid="login-username"]', "vue-admin")
+    page.fill('[data-testid="login-password"]', "vue-password-1")
+    page.get_by_role("button", name="進入控制台").click()
+    page.wait_for_selector('[data-testid="session-row"]', timeout=8000)
+    check("重新登入回到清單", not page.url.endswith("/login"))
+
+    # ⚠ 等「歡迎回來」那一則自己倒數完再往下（5 秒 ＋ 離場過渡）。不等的話下面那條「畫面上
+    #   只有一則通知」會把它一起數進去，而那不是這一段在驗的東西。
+    page.wait_for_selector('[data-testid="toast"]', state="detached", timeout=12000)
+
+    page.context.clear_cookies()
+    page.click("#refresh-btn")
+    page.wait_for_function("() => location.pathname.startsWith('/login')", timeout=8000)
+    check("cookie 沒了之後，下一發 API 把人送回 /login", page.url.endswith("/login"))
+    # ⚠ 反向：到的是**真的登入表單**。身分沒清乾淨的話守衛會把這次導覽彈回 `/`，
+    #   而畫面上只剩一則 toast（2026-08-26 Nathan 回報的原症狀）。
+    check(
+        "而且到的是真的登入表單，不是被守衛彈回去",
+        page.locator('[data-testid="login-username"]').count() == 1,
+    )
+    check(
+        "有一則講得清楚的通知（不是「未登入」四個字）",
+        "登入已失效" in page.locator('[data-testid="toast-title"]').first.inner_text(),
+    )
+    # 各呼叫端那些「列表讀取失敗／未登入」被 toastError 統一吞掉，畫面上只留該讀的那一則
+    check(
+        "沒有重複的「◯◯失敗／未登入」洗版",
+        page.locator('[data-testid="toast"]').count() == 1,
+    )
+
     check(f"沒有未捕捉的 JS 例外（{errors}）", not errors)
     unexpected = [e for e in console_errors if "401" not in e and "400" not in e]
     check(f"console 只剩預期中的 401/400（{unexpected}）", not unexpected)

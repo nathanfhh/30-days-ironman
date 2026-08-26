@@ -5,7 +5,14 @@ import { activeFilterKeys, filterParams } from "@/lib/filters";
 import { chipsOf, freshness, liveState, type SessionRow } from "@/lib/sessions";
 import { lsDel, lsGet, lsJson, lsSet } from "@/lib/storage";
 import { absTime, relTime, span } from "@/lib/time";
-import { dismissToast, drainPendingToast, toast, toastAfterNav, toasts } from "@/lib/toast";
+import {
+  dismissToast,
+  drainPendingToast,
+  toast,
+  toastAfterNav,
+  toastError,
+  toasts,
+} from "@/lib/toast";
 
 const row = (over: Partial<SessionRow> = {}): SessionRow => ({
   id: "abc123",
@@ -201,6 +208,20 @@ describe("lib/toast", () => {
     dismissToast(t.id);
     dismissToast(t.id);
     expect(toasts).toHaveLength(0);
+  });
+
+  it("🔴 toastError 對 401 一個字都不講（那一則由全域處理器統一發）", () => {
+    // cookie 被作廢的那一刻，所有在飛的請求會同時拿到 401；每個呼叫端各講一次的話，
+    // 唯一該讀的那一則（「登入已失效」）會被埋在一堆「◯◯失敗／未登入」裡。
+    expect(toastError("列表讀取", new ApiError("未登入", 401))).toBeUndefined();
+    expect(toasts).toHaveLength(0);
+  });
+
+  it("401 以外照講，狀態碼不影響（403 是真的失敗，使用者要看到）", () => {
+    toastError("操作", new ApiError("需要管理員權限", 403));
+    toastError("讀取", new Error("連不上"));
+    expect(toasts.map((t) => t.title)).toEqual(["操作失敗", "讀取失敗"]);
+    expect(toasts[0]!.body).toBe("需要管理員權限");
   });
 });
 

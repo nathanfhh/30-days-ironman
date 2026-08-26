@@ -1,5 +1,7 @@
 import { reactive } from "vue";
 
+import { ApiError } from "@/api/client";
+
 /* ── 通知 toast ────────────────────────────────────────────────────────────────
  * 右上角堆疊，附倒數進度條，滑鼠移上去暫停。
  *
@@ -74,8 +76,19 @@ export function dismissToast(id: number): void {
   toasts.splice(i, 1);
 }
 
-/** 錯誤的統一呈現：標題講「哪個動作失敗」，內文放後端原文。 */
+/**
+ * 錯誤的統一呈現：標題講「哪個動作失敗」，內文放後端原文。
+ *
+ * ⚠ **401 一個字都不講**（回 undefined）。cookie 在伺服端被作廢的那一刻，當下所有在飛的
+ *   請求會同時拿到 401，而它們各自的呼叫端都會走到這裡：畫面上會一次堆出「列表讀取失敗／
+ *   未登入」「讀取 ttyd 實況失敗／未登入」這種對使用者毫無資訊的字，而**唯一該讀的那一則**
+ *   （lib/unauthorized 發的「登入已失效，請重新登入」）被埋在裡面。
+ *   401 不是這個動作失敗，是登入狀態沒了，那件事有它自己的一則通知與一次導覽。
+ * ⚠ 擋在這裡而不是各個 catch 裡：新增一顆按鈕的人不必記得補這件事（同 SessionsView 的
+ *   `handleRowError` 那條理由）。真的想在 401 時說點什麼的呼叫端，自己 `toast()` 即可。
+ */
 export function toastError(action: string, err: unknown): ToastItem | undefined {
+  if (err instanceof ApiError && err.status === 401) return undefined;
   const message = err instanceof Error ? err.message : String(err);
   return toast(`${action}失敗`, "danger", { body: message });
 }

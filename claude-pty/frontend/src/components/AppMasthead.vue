@@ -98,6 +98,11 @@ async function doLogout(): Promise<void> {
   } catch (ex) {
     // 登出失敗也要照樣離開：cookie 可能早就失效了（那正是常見的失敗原因），
     // 把人留在一個進不去任何頁面的畫面上更糟。
+    // ⚠ **要離開就得先把身分清掉。** 只 push 的話守衛看到 `store.user` 還在，會判他仍然
+    //   登入著並把這次導覽彈回 `/`，「照樣離開」這句話就不成立了（與 401 那條路同一個
+    //   坑，見 lib/unauthorized）。失敗原因是 401 時全域處理器已經清過一次，這裡再清一次
+    //   是安全的；而 500 那種失敗只有這裡清得到。
+    store.dropIdentity();
     toastError("登出", ex);
     await router.push("/login");
     return;

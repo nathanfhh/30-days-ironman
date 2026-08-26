@@ -48,8 +48,11 @@ router.afterEach((to) => {
  */
 export async function authGuard(to: RouteLocationNormalized) {
   const store = useSiteStore();
-  /* 一個 app 生命週期問一次就夠（`identityLoaded` 擋著）。cookie 中途失效時，api() 收到
-   * 401 會把人導回登入頁，那才是重新確認身分的入口。
+  /* 問一次就記著（`identityLoaded` 擋著）。cookie 中途失效時，api() 收到 401 會走
+   * `createUnauthorizedHandler`：它先把身分清掉（`dropIdentity`，`identityLoaded` 一併翻回
+   * false）再導回登入頁，所以那一次導覽會回到這裡**重新**探測一遍。那才是重新確認身分的
+   * 入口；而它成立的前提就是那面旗被翻回去了：沒翻的話這裡不重探、`store.user` 還在，
+   * 下面那條會把人彈回 `/`（2026-08-26 修，見 stores/site 的 dropIdentity）。
    *
    * ⚠ **登入頁也要問。** 曾經在這裡跳過它，理由是「那一頁本來就是給沒登入的人看的，那一發
    *   必定 401」——而那個理由漏掉了一種人：**已經登入、然後直接冷載入 `/login` 的**。
