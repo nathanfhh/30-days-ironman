@@ -1,0 +1,277 @@
+div testid=shell
+header testid=masthead
+span active=sessions
+a seg=sessions
+a seg=account
+a testid=cred-badge state=bad tip="在 host 上執行 `claude setup-token`，把輸出貼到帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態啟動，開場只會看到登入提示。"
+span testid=theme-picker
+button testid=theme-picker-button
+ul testid=theme-picker-menu hidden
+button testid=account-btn aria-controls=account-menu
+div testid=account-menu hidden id=account-menu
+button testid=menu-settings act=settings
+button testid=menu-logout act=logout
+div testid=pick-cli
+button testid=pick-cli-button
+ul testid=pick-cli-menu hidden
+div testid=pick-model
+button testid=pick-model-button
+ul testid=pick-model-menu hidden
+span testid=model-source tone
+div testid=pick-effort
+button testid=pick-effort-button
+ul testid=pick-effort-menu hidden
+span testid=effort-note tone
+div testid=pick-network on=false
+button testid=pick-network-control aria-checked=false
+span testid=pick-network-label
+div testid=pick-capture on=false
+button testid=pick-capture-control aria-checked=false
+span testid=pick-capture-label
+div testid=pick-telemetry on=false
+button testid=pick-telemetry-control aria-checked=false
+span testid=pick-telemetry-label
+input id=name
+div testid=pick-token-delivery on=false
+button testid=pick-token-delivery-control aria-checked=false
+span testid=pick-token-delivery-label
+button testid=tab-live aria-selected=true
+button testid=tab-past aria-selected=false
+button testid=filter-toggle active aria-controls=filter-bar
+div open=1
+div testid=filter-bar id=filter-bar
+div testid=filters-grid
+span testid=filter-field-label tip="限制＝只放行白名單（entrypoint 會套 iptables）；開放＝容器可以連任何地方。"
+div testid=pick-fnet
+button testid=pick-fnet-button
+ul testid=pick-fnet-menu hidden
+span testid=filter-field-label tip="這場有沒有把出網流量錄下來（經 mitm 落到 host）。"
+div testid=pick-fcap
+button testid=pick-fcap-button
+ul testid=pick-fcap-menu hidden
+span testid=filter-field-label tip="這場有沒有要求把 OpenTelemetry 送到 Jaeger。容器起來後會先探 Jaeger 通不通，探不通就不送——這個條件篩的是要求，不是結果。"
+div testid=pick-ftel
+button testid=pick-ftel-button
+ul testid=pick-ftel-menu hidden
+span testid=filter-field-label tip=從現在往回算。「執行中」比的是建立時間，「已結束」比的是結束時間——在已結束的清單裡，「一週內」問的是「一週內結束的」。選「自訂範圍」後面會接出起迄兩格。
+div testid=pick-since
+button testid=pick-since-button
+ul testid=pick-since-menu hidden
+li testid=pick-since-opt-any value active=false aria-selected=false
+li testid=pick-since-opt-1 value=1 active=false aria-selected=false
+li testid=pick-since-opt-7 value=7 active=false aria-selected=false
+li testid=pick-since-opt-30 value=30 active=false aria-selected=false
+li testid=pick-since-opt-custom value=custom active=true aria-selected=true
+div testid=filter-range
+span testid=filter-field-label tip=指定一段明確的區間。展開後左右兩個月並排：點一下選起點、再點一下選終點，中間滑過會預覽整段；也可以直接改上方的日期與時間。任一端留空＝那一端不限。
+button testid=range-trigger
+span empty=1
+div testid=range-panel
+input testid=range-from-date edit=from-date
+input testid=range-from-time edit=from-time
+input testid=range-to-date edit=to-date
+input testid=range-to-time edit=to-time
+div testid=range-cal
+button testid=range-prev-year move=-12
+button testid=range-prev-month move=-1
+button testid=range-day-other day=2026-06-28 in=false edge=false
+button testid=range-day-other day=2026-06-29 in=false edge=false
+button testid=range-day-other day=2026-06-30 in=false edge=false
+button testid=range-day day=2026-07-01 in=false edge=false
+button testid=range-day day=2026-07-02 in=false edge=false
+button testid=range-day day=2026-07-03 in=false edge=false
+button testid=range-day day=2026-07-04 in=false edge=false
+button testid=range-day day=2026-07-05 in=false edge=false
+button testid=range-day day=2026-07-06 in=false edge=false
+button testid=range-day day=2026-07-07 in=false edge=false
+button testid=range-day day=2026-07-08 in=false edge=false
+button testid=range-day day=2026-07-09 in=false edge=false
+button testid=range-day day=2026-07-10 in=false edge=false
+button testid=range-day day=2026-07-11 in=false edge=false
+button testid=range-day day=2026-07-12 in=false edge=false
+button testid=range-day day=2026-07-13 in=false edge=false
+button testid=range-day day=2026-07-14 in=false edge=false
+button testid=range-day day=2026-07-15 in=false edge=false
+button testid=range-day day=2026-07-16 in=false edge=false
+button testid=range-day day=2026-07-17 in=false edge=false
+button testid=range-day day=2026-07-18 in=false edge=false
+button testid=range-day day=2026-07-19 in=false edge=false
+button testid=range-day day=2026-07-20 in=false edge=false
+button testid=range-day day=2026-07-21 in=false edge=false
+button testid=range-day day=2026-07-22 in=false edge=false
+button testid=range-day day=2026-07-23 in=false edge=false
+button testid=range-day day=2026-07-24 in=false edge=false
+button testid=range-day day=2026-07-25 in=false edge=false
+button testid=range-day day=2026-07-26 in=false edge=false
+button testid=range-day day=2026-07-27 in=false edge=false
+button testid=range-day day=2026-07-28 in=false edge=false
+button testid=range-day day=2026-07-29 in=false edge=false
+button testid=range-day day=2026-07-30 in=false edge=false
+button testid=range-day day=2026-07-31 in=false edge=false
+button testid=range-day-other day=2026-08-01 in=false edge=false
+button testid=range-day-other day=2026-08-02 in=false edge=false
+button testid=range-day-other day=2026-08-03 in=false edge=false
+button testid=range-day-other day=2026-08-04 in=false edge=false
+button testid=range-day-other day=2026-08-05 in=false edge=false
+button testid=range-day-other day=2026-08-06 in=false edge=false
+button testid=range-day-other day=2026-08-07 in=false edge=false
+button testid=range-day-other day=2026-08-08 in=false edge=false
+div testid=range-cal
+button testid=range-next-month move=1
+button testid=range-next-year move=12
+button testid=range-day-other day=2026-07-26 in=false edge=false
+button testid=range-day-other day=2026-07-27 in=false edge=false
+button testid=range-day-other day=2026-07-28 in=false edge=false
+button testid=range-day-other day=2026-07-29 in=false edge=false
+button testid=range-day-other day=2026-07-30 in=false edge=false
+button testid=range-day-other day=2026-07-31 in=false edge=false
+button testid=range-day day=2026-08-01 in=false edge=false
+button testid=range-day day=2026-08-02 in=false edge=false
+button testid=range-day day=2026-08-03 in=false edge=false
+button testid=range-day day=2026-08-04 in=false edge=false
+button testid=range-day day=2026-08-05 in=false edge=false
+button testid=range-day day=2026-08-06 in=false edge=false
+button testid=range-day day=2026-08-07 in=false edge=false
+button testid=range-day day=2026-08-08 in=false edge=false
+button testid=range-day day=2026-08-09 in=false edge=false
+button testid=range-day day=2026-08-10 in=false edge=false
+button testid=range-day day=2026-08-11 in=false edge=false
+button testid=range-day day=2026-08-12 in=false edge=false
+button testid=range-day day=2026-08-13 in=false edge=false
+button testid=range-day day=2026-08-14 in=false edge=false
+button testid=range-day day=2026-08-15 in=false edge=false
+button testid=range-day day=2026-08-16 in=false edge=false
+button testid=range-day day=2026-08-17 in=false edge=false
+button testid=range-day day=2026-08-18 in=false edge=false
+button testid=range-day day=2026-08-19 in=false edge=false
+button testid=range-day day=2026-08-20 in=false edge=false
+button testid=range-day day=2026-08-21 in=false edge=false
+button testid=range-day day=2026-08-22 in=false edge=false
+button testid=range-day day=2026-08-23 in=false edge=false
+button testid=range-day day=2026-08-24 in=false edge=false
+button testid=range-day day=2026-08-25 in=false edge=false
+button testid=range-day day=2026-08-26 in=false edge=false
+button testid=range-day day=2026-08-27 in=false edge=false
+button testid=range-day day=2026-08-28 in=false edge=false
+button testid=range-day day=2026-08-29 in=false edge=false
+button testid=range-day day=2026-08-30 in=false edge=false
+button testid=range-day day=2026-08-31 in=false edge=false
+button testid=range-day-other day=2026-09-01 in=false edge=false
+button testid=range-day-other day=2026-09-02 in=false edge=false
+button testid=range-day-other day=2026-09-03 in=false edge=false
+button testid=range-day-other day=2026-09-04 in=false edge=false
+button testid=range-day-other day=2026-09-05 in=false edge=false
+button testid=range-clear act=clear
+button testid=range-ok act=ok
+span testid=filter-summary
+button testid=filter-clear
+div testid=manifest
+div testid=manifest-head
+article testid=session-row
+span testid=session-lamp state=running title=running
+span testid=session-title
+span testid=session-title-text
+button act=rename id=aa11bb22cc33 tip=重新命名
+div tip=claude-pty-aa11bb22cc33
+div testid=session-status state=ready
+span testid=checked-aa11bb22cc33 stale=0 tip="狀態於 2026/08/25 11:59:40 向 dockerd 求證"
+div testid=chips-cell
+span testid=chip tone=owner
+span testid=chip-text
+span testid=chip tone=cli-claude
+span testid=chip-text
+span testid=chip-mark tone kind=network tip=網路：開放
+span testid=chip-mark tone=accent kind=capture tip=流量錄製：開
+span testid=chip-mark tone=off kind=telemetry tip=Telemetry：不送
+span testid=chip-mark tone=accent kind=gitlab tip=GitLab：本場可用
+span testid=chip tone=model
+span testid=chip-text
+span testid=chip tone=effort
+span testid=chip-text
+span tip="2026/08/25 11:57:00"
+span tip="最後一次有人對它操作（開終端／改尺寸）。Claude 自己在跑不會更新這個時間"
+span tip="2026/08/25 11:58:00"
+button testid=row-open-aa11bb22cc33 act=open id=aa11bb22cc33 title="開啟終端（按住 ⌘/Ctrl 改開新分頁）"
+button act=kill id=aa11bb22cc33
+article testid=session-row
+span testid=session-lamp state=running title=running
+span testid=session-title tip=dd44ee55ff66
+span testid=session-title-text
+button act=rename id=dd44ee55ff66 tip=重新命名
+div tip=claude-pty-dd44ee55ff66
+div testid=session-status state=ready
+span testid=checked-dd44ee55ff66 stale=0 tip="狀態於 2026/08/25 11:59:40 向 dockerd 求證"
+div testid=chips-cell
+span testid=chip tone=owner
+span testid=chip-text
+span testid=chip tone=cli-claude
+span testid=chip-text
+span testid=chip-mark tone=accent kind=network tip=網路：限制
+span testid=chip-mark tone=off kind=capture tip=流量錄製：關
+span testid=chip-mark tone=accent kind=telemetry tip="Telemetry：送 Jaeger（建立時探測可達）"
+span testid=chip-mark tone=off kind=gitlab tip="GitLab：本場沒有——開場時沒接上代理網路，事後補 token 也救不了這一場（網路要在容器啟動前接），要用就開新的一場"
+span testid=chip tone=model
+span testid=chip-text
+span testid=chip tone=effort
+span testid=chip-text
+span tip="2026/08/25 11:48:00"
+span tip="最後一次有人對它操作（開終端／改尺寸）。Claude 自己在跑不會更新這個時間"
+span tip="2026/08/25 11:49:00"
+button testid=row-open-dd44ee55ff66 act=open id=dd44ee55ff66 title="開啟終端（按住 ⌘/Ctrl 改開新分頁）"
+button act=kill id=dd44ee55ff66
+article testid=session-row
+span testid=session-lamp state=creating title="running · 啟動中"
+span testid=session-title tip=還在開機的那一場
+span testid=session-title-text
+button act=rename id=1122334455aa tip=重新命名
+div tip=claude-pty-1122334455aa
+div testid=session-status state=booting
+span testid=checked-1122334455aa stale=1 tip="狀態於 2026/08/25 11:53:20 向 dockerd 求證；已經超過兩分鐘沒更新，對帳可能卡住了"
+div testid=chips-cell
+span testid=chip tone=owner
+span testid=chip-text
+span testid=chip tone=cli-claude
+span testid=chip-text
+span testid=chip-mark tone=accent kind=network tip=網路：限制
+span testid=chip-mark tone=off kind=capture tip=流量錄製：關
+span testid=chip-mark tone=warn kind=telemetry tip="Telemetry：要求了但沒開成（建立時 Jaeger 探不到，已降級不送）"
+span testid=chip tone=model
+span testid=chip-text
+span testid=chip tone=effort
+span testid=chip-text
+span tip="2026/08/25 11:19:00"
+span tip="最後一次有人對它操作（開終端／改尺寸）。Claude 自己在跑不會更新這個時間"
+span tip="2026/08/25 11:20:00"
+button testid=row-open-1122334455aa act=open id=1122334455aa title="開啟終端（按住 ⌘/Ctrl 改開新分頁）"
+button act=kill id=1122334455aa
+article testid=session-row
+span testid=session-lamp state=running title=running
+span testid=session-title tip="把整條 CI 的 trivy 快取與 gitlab 代理一起重做並補齊文件"
+span testid=session-title-text
+button act=rename id=99887766aabb tip=重新命名
+div tip=claude-pty-99887766aabb
+div testid=session-status state=ready
+span testid=checked-99887766aabb stale=1 tip="狀態於 2026/08/25 11:53:20 向 dockerd 求證；已經超過兩分鐘沒更新，對帳可能卡住了"
+div testid=chips-cell
+span testid=chip tone=owner
+span testid=chip-text
+span testid=chip tone=cli-claude
+span testid=chip-text
+span testid=chip-mark tone=accent kind=network tip=網路：限制
+span testid=chip-mark tone=off kind=capture tip=流量錄製：關
+span testid=chip-mark tone=off kind=telemetry tip=Telemetry：不送
+span testid=chip-mark tone=accent kind=gitlab tip=GitLab：本場可用
+span testid=chip tone=model
+span testid=chip-text
+span testid=chip tone=effort
+span testid=chip-text
+span tip="2026/08/25 09:00:00"
+span tip="最後一次有人對它操作（開終端／改尺寸）。Claude 自己在跑不會更新這個時間"
+span tip="2026/08/25 09:01:00"
+button testid=row-open-99887766aabb act=open id=99887766aabb title="開啟終端（按住 ⌘/Ctrl 改開新分頁）"
+button act=kill id=99887766aabb
+div hidden
+span testid=pager-status
+footer testid=footer
+span testid=footer-mod tip=控制平面本體。
+span testid=footer-mod tip=ttyd-rust：目前用於網頁終端的執行檔。

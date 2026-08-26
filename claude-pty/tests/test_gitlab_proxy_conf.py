@@ -346,10 +346,50 @@ with app.test_client() as cli:
     check("不認得的欄位被擋（與其他端點同一套）", r.status_code == 400)
 
     cli.put("/api/users/me/gitlab-pat", json={"pat": PAT})
-    page = cli.get("/account").get_data(as_text=True)
-    check("帳號頁畫得出這一塊，且說得出是哪一台 GitLab", "GitLab 憑證" in page and config.GITLAB_HOST in page)
-    check("🔴 畫面上不出現 PAT 本身（連已設定時也只給遮罩）", PAT not in page and (enc or "") not in page)
-    check("🔴 畫面講得出輪替語意那條準則（最容易被誤解的一件事）", "要隔離那場，就終止那場" in page)
+    # ⚠ 這三條原本讀的是 `/account` 渲染出來的 HTML。2026-08-26 拆掉 legacy 之後那條路吐的是
+    #   SPA 的殼，裡面一個字都沒有。三條守的性質**都還在**，只是各自搬到它現在的所有者：
+    #     · 「說得出是哪一台」→ 值由 `/api/account/bootstrap` 給，畫面只是把它印出來。
+    #     · 「PAT 不出現」→ 這是**安全**性質，而且搬到 API 之後守得更嚴：舊的只看一頁 HTML，
+    #       現在看的是畫面拿得到的每一份資料。
+    #     · 「輪替語意那句話」→ 文案現在在 Vue 元件裡，那就去那裡驗（同
+    #       test_admin_endpoint_gate.py 的做法：性質留著，來源換成現在的所有者）。
+    _acct = cli.get("/api/account/bootstrap").get_json()
+    check(
+        "說得出是哪一台 GitLab（值由 /api/account/bootstrap 給，畫面只負責印）",
+        _acct["gitlab"]["host"] == config.GITLAB_HOST,
+    )
+    _payloads = cli.get("/api/account/bootstrap").get_data(as_text=True) + cli.get("/api/auth/me").get_data(
+        as_text=True
+    )
+    check(
+        "🔴 畫面拿得到的資料裡沒有 PAT 本身（明文與密文都不出去）",
+        PAT not in _payloads and (enc or "") not in _payloads,
+    )
+    _panel = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "frontend",
+        "src",
+        "components",
+        "account",
+        "GitlabPatPanel.vue",
+    )
+
+    def _read_if_exists(path: str) -> str:
+        """檔案在就讀出來，不在就回空字串。
+
+        ⚠ **短路要留著**：元件搬走或改名時 `os.path.isfile` 是 False，那時不可以去 open 它
+          （會 FileNotFoundError，整支當場收攤，後面幾十條一條都跑不到）。回空字串的話
+          下面那條 `in` 會是 False，也就是**紅**，而紅正是那時該有的答案。
+        """
+        if not os.path.isfile(path):
+            return ""
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+    check(
+        "🔴 畫面講得出輪替語意那條準則（最容易被誤解的一件事）",
+        "要隔離那場，就終止那場" in _read_if_exists(_panel),
+    )
 
     # 🔴 列表要能讀到**兩個**事實。單獨任一個都會說謊：只看快照，使用者清掉 token 之後
     #    畫面會一直說「可用」而 git 全部失敗；只看帳號現況，事後補 token 會讓畫面對著一場

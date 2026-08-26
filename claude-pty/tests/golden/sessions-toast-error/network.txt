@@ -1,0 +1,30 @@
+# 文件與 API（依序，含 query）
+GET /login
+GET /api/bootstrap
+GET /api/account/bootstrap
+POST /api/auth/login
+GET /api/account/bootstrap
+GET /api/catalog
+GET /api/sessions?offset=0
+DELETE /api/sessions/aa11bb22cc33
+GET /api/sessions?offset=0&limit=10
+
+# 靜態資源（排序後、去掉 query，見 golden_scenes.network_text 的說明）
+GET /assets/AppShell.vue_vue_type_script_setup_true_lang-<hash>.js
+GET /assets/SessionsView-<hash>.js
+GET /assets/index-<hash>.css
+GET /assets/index-<hash>.js
+GET /static/images/01-circuit-board-transparent.webp
+GET /static/vendor/fontawesome/css/all.min.css
+GET /static/vendor/fontawesome/webfonts/fa-brands-400.woff2
+GET /static/vendor/fontawesome/webfonts/fa-regular-400.woff2
+GET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2
+GET /static/vendor/fontawesome/webfonts/fa-v4compatibility.woff2
+GET /static/vendor/fonts/instrument-serif-0.woff2
+GET /static/vendor/fonts/instrument-serif-1.woff2
+GET /static/vendor/fonts/instrument-serif-2.woff2
+GET /static/vendor/fonts/instrument-serif-3.woff2
+GET /static/vendor/fonts/instrument-serif.css
+
+# 場景就緒時的網址（replaceState 寫進去的條件不會產生請求）
+/

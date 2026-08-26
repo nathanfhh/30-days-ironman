@@ -1,0 +1,39 @@
+- banner:
+  - text: claude
+  - emphasis: "-pty"
+  - text: 控制平台
+  - group "主要區域":
+    - link " 工作階段":
+      - /url: /
+    - link " 帳號管理":
+      - /url: /account
+  - navigation:
+    - status: " Claude 未設定憑證 在 host 上執行 `claude setup-token`，把輸出貼到帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態啟動，開場只會看到登入提示。"
+    - button "介面主題":  Instrument 
+    - button "golden-admin  admin"
+- tablist "Session 檢視":
+  - tab " 執行中"
+  - tab " 已結束" [selected]
+- button " 篩選"
+- text: 擷取於 12:00:00
+- button " 重新整理"
+- text: 網路能力 限制＝只放行白名單（entrypoint 會套 iptables）；開放＝容器可以連任何地方。
+- button "* 不限 "
+- text: 流量錄製 這場有沒有把出網流量錄下來（經 mitm 落到 host）。
+- button "* 不限 "
+- text: Telemetry 這場有沒有要求把 OpenTelemetry 送到 Jaeger。容器起來後會先探 Jaeger 通不通，探不通就不送——這個條件篩的是要求，不是結果。
+- button "* 不限 "
+- text: 時間範圍 從現在往回算。「執行中」比的是建立時間，「已結束」比的是結束時間——在已結束的清單裡，「一週內」問的是「一週內結束的」。選「自訂範圍」後面會接出起迄兩格。
+- button "* 不限 "
+- text: 沒有套用任何條件
+- button " 清除全部條件" [disabled]
+- article: 01 上週那場已經結束的 claude-pty-cafe00112233 claude-pty-cafe00112233  使用者終止  golden-admin claude  網路：限制  流量錄製：關  Telemetry：不送  GitLab：期間曾啟用  opus  high 啟動 — 時長 2 小時 0 分 建立 1 天前 2026/08/24 10:00:00 結束 1 天前 2026/08/24 12:00:00
+- article: 02 beef44556677 claude-pty-beef44556677 claude-pty-beef44556677  自行結束  golden-admin claude  網路：限制  流量錄製：關  Telemetry：不送  GitLab：期間曾啟用  opus  high 啟動 — 時長 1 小時 0 分 建立 2 天前 2026/08/23 10:00:00 結束 2 天前 2026/08/23 11:00:00
+- contentinfo:
+  - text: claude-pty 0.0.0-golden
+  - code: "0000000"
+  - text: 控制平面本體。 ttyd（Rust） 1.0.0-golden
+  - code: "1111111"
+  - text: ttyd-rust：目前用於網頁終端的執行檔。 建置於
+  - time: 2026/08/25 12:00:00
+  - text: （0 秒前）

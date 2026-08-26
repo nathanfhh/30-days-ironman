@@ -1,0 +1,4 @@
+h1 testid=brand-mark
+div testid=login-error tone=error hidden
+input testid=login-username id=username
+input testid=login-password id=password

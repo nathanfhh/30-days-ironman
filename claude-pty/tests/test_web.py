@@ -59,28 +59,32 @@ _r = _c2.get("/login")
 check("已登入訪問 /login → 302 至 /", _r.status_code == 302 and _r.headers.get("Location", "").rstrip("/").endswith(""))
 check("未登入訪問 /login → 200（登入頁本身公開）", app.test_client().get("/login").status_code == 200)
 
-print("== 登入後可讀頁面 ==")
+print("== 登入後三個頁面都吐得出 SPA 的殼 ==")
+#
+# ⚠ 這一節整個換了問法（2026-08-26 拆 legacy）。原本是抓 HTML 裡的字：登入者名稱在不在、
+#   「新增使用者」對非管理員在不在、`data-behind-proxy` 是 0 還是 1。三個頁面現在吐的都是
+#   **同一份 SPA 殼**，那些字一個都不在裡面，資料是 SPA 自己去 API 拿的。
+#
+#   所以那幾條的性質各自搬到現在的所有者，這裡只留伺服端還答得出來的部分：
+#     · 三條路由通、而且吐的是殼（不是 404，也不是舊模板）→ 就在下面。
+#     · 「誰是誰」「admin 區塊畫不畫」「behind_proxy 是多少」→ 值由 `/api/auth/me` 與
+#       `/api/bootstrap` 出，`test_bootstrap.py` 逐欄驗；**畫面照著畫**由 golden 的
+#       aria／DOM 快照與前端的 vitest 守。
+#     · 「後端擋不擋得住非管理員」→ `test_admin_endpoint_gate.py`（前端 gate 只是禮貌）。
 c.post("/api/auth/login", json={"username": "alice", "password": "alice-password-1"})
-r = c.get("/")
-html = r.get_data(as_text=True)
-check("sessions 頁 200", r.status_code == 200)
-check("頁面帶出登入者名稱", "alice" in html)
-check("非管理員看不到「新增使用者」區塊", "新增使用者" not in c.get("/account").get_data(as_text=True))
+_dist = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "server", "static", "dist")
+_shell = open(os.path.join(_dist, "index.html"), encoding="utf-8").read()
+for _path in ("/", "/account"):
+    _r = c.get(_path)
+    check(f"{_path} 200", _r.status_code == 200)
+    check(f"{_path} 吐的就是那份 SPA 殼（不是舊模板、也不是 404 頁）", _r.get_data(as_text=True) == _shell)
+check("/login 未登入也吐同一份殼", app.test_client().get("/login").get_data(as_text=True) == _shell)
+# ⚠ 殼**不可以被快取**：改版之後它指的是已經不存在的 /assets/*.js，那是一片白畫面、
+#   沒有任何線索（見 web._spa_shell 的說明）。
+check("殼是 no-store", c.get("/").headers.get("Cache-Control") == "no-store")
 
-print("== 管理員才看得到帳號管理區塊 ==")
 ca = app.test_client()
 ca.post("/api/auth/login", json={"username": "admin", "password": "admin-password-1"})
-admin_html = ca.get("/account").get_data(as_text=True)
-check("管理員看得到「新增使用者」", "新增使用者" in admin_html)
-check("管理員看得到「帳號清單」", "帳號清單" in admin_html)
-
-print("== behind_proxy 旗標正確傳到頁面（決定終端用哪種 URL）==")
-_orig = config.BEHIND_PROXY
-config.BEHIND_PROXY = False
-check('未在 proxy 後 → data-behind-proxy="0"', 'data-behind-proxy="0"' in c.get("/").get_data(as_text=True))
-config.BEHIND_PROXY = True
-check('在 proxy 後 → data-behind-proxy="1"', 'data-behind-proxy="1"' in c.get("/").get_data(as_text=True))
-config.BEHIND_PROXY = _orig
 
 print("== 主題 JSON：語意鍵名齊全、與 CSS 變數對得上 ==")
 static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "server", "static")
@@ -132,7 +136,7 @@ _hard = [
 check(f"CSS 規則內無硬編顏色（found {_hard or '無'}）", not _hard)
 
 print("== 靜態資源可讀 ==")
-for path in ("/static/js/app.js", "/static/themes/daylight.json"):
+for path in ("/static/themes/daylight.json",):
     check(f"{path} 可讀", c.get(path).status_code == 200)
 
 print("== session 列表分頁（limit/offset/total 契約）==")
@@ -217,133 +221,99 @@ with db.session_scope() as s:
 check("帳號仍在名冊上（留痕）", any(u["id"] == alice_id for u in ca.get("/api/users").get_json()["users"]))
 archive(["keepalive1"], "gone")  # 收尾走唯一出口
 
-print("== XSS：使用者可控的欄位進 innerHTML 前一律逸出 ==")
-# 精準檢查「實際由使用者控制」的欄位，而非對所有插值做啟發式判斷——後者會把 relTime()、
-# 已在內部逸出的 chips()、純數值 String(i+1) 全誤報，而會誤報的測試最終只會被忽略。
-js = open(os.path.join(static_dir, "js", "app.js")).read()
-check("app.js 提供 esc() 逸出工具", "function esc(" in js)
-# 這些值最終都源自使用者輸入或外部資料：session id/workdir/state（建立時可帶）、
-# profile 值（API 接受任意字串，非只有下拉選單那幾個）、使用者名稱、後端錯誤訊息。
-TAINTED = [
-    "s.id",
-    "s.workdir",
-    "s.state",
-    "s.owner",
-    "s.display_name",
-    "s.container",
-    "u.username",
-    "ex.message",
-    "e.message",
-]
-# ⚠ 這裡刻意**沒有** profile 的值（`p.cli` 等）。它們在 chips() 裡是先被組進一個陣列、
-#   三行後才寫進模板字串的，而這份檢查是逐行看「這一行有沒有 esc」——加進來只會對
-#   `out.push([p.cli, ...])` 那種純資料組裝誤報。profile 值的逸出改由下方針對 chips()
-#   的專門檢查負責（連 data-tone 那個屬性位置一起釘住）。
-# 只走 innerHTML 這個 sink 才需要逸出；toast()/flash()/confirm()/prompt()/alert() 都是純文字
-# （toast 與 flash 都以 textContent 寫入訊息），對它們逸出反而會讓畫面出現 &amp; 之類的雜訊。
-# ⚠ 新增任何「顯示訊息」的函式時務必同步這份清單，否則會得到一堆誤報——而會誤報的測試
-#   最後只會被當成雜訊忽略，那比沒有測試更糟。
-TEXT_SINKS = ("toast(", "flash(", "confirm(", "prompt(", "alert(", "textContent")
-for tpl in ("sessions.html", "account.html"):
-    body = open(os.path.join(os.path.dirname(static_dir), "templates", tpl)).read()
-    for field in TAINTED:
-        if field not in body:
-            continue
-        bad = []
-        for line in body.splitlines():
-            if field not in line or any(sink in line for sink in TEXT_SINKS):
-                continue
-            bad += [m for m in re.findall(r"\$\{([^}]*" + re.escape(field) + r"[^}]*)\}", line) if "esc(" not in m]
-        check(f"{tpl}：{field} 進 innerHTML 前全數逸出（未逸出處 {bad or '無'}）", not bad)
-# TEXT_SINKS 把 toast() 當成安全 sink——那個前提本身必須被驗證。若哪天 toast 改用
-# innerHTML 寫訊息，白名單會讓上面所有檢查對它視而不見，等於直接變成一個漏洞。
-toast_body = re.search(r"function toast\(.*?\n\}", js, re.DOTALL)
-check("toast() 存在", bool(toast_body))
-if toast_body:
-    src = toast_body.group(0)
-    # 標題與內文都必須走 textContent。比對變數名而非固定字串：toast 的參數日後可能
-    # 改名，但「使用者可控的字串只能經由 textContent 進 DOM」這條規則不會變。
-    for var in ("title", "body"):
-        check(
-            f"toast() 以 textContent 寫入 {var}（TEXT_SINKS 白名單的前提）",
-            re.search(rf"\.textContent = {var}\b", src) is not None,
-        )
-        check(f"toast() 不把 {var} 塞進 innerHTML", not re.search(rf"innerHTML\s*[+]?=\s*[^;]*\b{var}\b", src))
-
-# chips() 是唯一把 profile 值寫進 HTML 的地方，確認它內部有逸出
-sessions_tpl = open(os.path.join(os.path.dirname(static_dir), "templates", "sessions.html")).read()
-chips_body = re.search(r"function chips\([^)]*\)\s*\{.*?\n  \}", sessions_tpl, re.S)
-check("chips() 內部對 profile 值逸出", bool(chips_body) and "esc(t)" in chips_body.group(0))
-# ⚠ 屬性位置也要看。`data-tone` 一度直接插值——它原本只放 "owner"/"accent" 兩個字面
-#   常數，後來其中一個改成 `cli-${p.cli}`（API 收進來的值）卻沒補 esc，而上面那條
-#   「內部有逸出」照樣通過，因為 esc(t) 還在（review 2026-07-25）。逐個插值點檢查。
-tone_slots = re.findall(r'data-tone="\$\{([^}]*)\}"', chips_body.group(0) if chips_body else "")
-check(
-    f"chips() 的每個 data-tone 插值都經過 esc（{tone_slots}）",
-    bool(tone_slots) and all("esc(" in slot for slot in tone_slots),
-)
-
-# 上面那圈 TAINTED 掃的是**模板**；app.js 自己組 innerHTML 的地方不在範圍內。
-# ⚠ 這是一份**清單**，不是只釘住抽屜一個：這四個函式都把使用者可控的字串寫進樣板字串。
-#   新增第五個 sink 時請一併加進來——只釘一個、註解卻寫得像補完了，比沒有更糟。
-# 作法與上面模板那圈一致：**列出實際受汙染的變數名**，逐行看有沒有裸插值。
-# 不改成「掃出每個 ${...} 都要有 esc」是刻意的——`${wide ? " modal__box--screen" : ""}`
-# 這種純布林插值、以及巢狀樣板都會誤報，而誤報的測試最後只會被忽略（同 206-207 行）。
-JS_SINKS = {
-    # 下拉選單：選項的 value/label/hint。profile 的選項值來自 API，不是只有寫死那幾個。
-    "renderMenu": ["o.value", "o.label", "o.hint"],
-    # 送入面板與終端抽屜：label 是使用者自己取的 session 名稱
-    "terminalDrawer": ["label", "sid"],
-    # 對話框：標題、內文、預填值、placeholder 都由呼叫端給，內容含使用者資料
-    "dialog": ["title", "body", "input.value", "input.placeholder"],
-}
-# 已經逸出、或根本不是把值寫進 HTML 的插值：
-#   esc(                 — 這份程式的 HTML 逸出器
-#   CSS.escape(          — 寫進 querySelector 的選擇器用的是**另一套**規則，不是 HTML
-#   encodeURIComponent(  — 網址路徑片段，同理
-#   `a === b`            — 布林比較的結果（如 aria-selected），不可能夾帶輸入
-# ⚠ 三個編碼器各有各的用途，不可互換：把 esc() 用在網址上、或 encodeURIComponent 用在
-#   HTML 上，都是「看起來有逸出、實際上編錯」。這裡只認「有用其中一個」，用對地方是
-#   人的責任——所以新增 sink 時請看一眼那個插值到底進了哪裡。
-_JS_SAFE = re.compile(r"\besc\(|\bCSS\.escape\(|\bencodeURIComponent\(|^[\w.]+\s*[=!]==?\s*[\w.]+$")
-for fn, fields in JS_SINKS.items():
-    body_m = re.search(rf"function {fn}\(.*?\n\}}", js, re.DOTALL)
-    if not check(f"{fn}() 找得到（sink 清單的前提）", bool(body_m)):
+print("== XSS：畫面不准有 v-html 或手寫的 innerHTML ==")
+#
+# ⚠ 這一整節在 2026-08-26 換了守法，因為**被守的東西換了**。
+#
+#   舊的守法是：逐行掃 `app.js` 與兩份模板，找「使用者可控的欄位進了 `${}` 卻沒經過
+#   `esc()`」。那是必要的，因為 legacy 的每一列都是自己用樣板字串拼 HTML 再塞 innerHTML。
+#
+#   Vue 版沒有那一步：`{{ }}` 與 `v-bind` 一律經過框架逸出，**除非**有人寫 `v-html`
+#   或自己去碰 `innerHTML`。所以現在要守的不是「有沒有逸出」，而是「**有沒有繞過逸出**」。
+#   這是更好守的形狀：舊的要維護一份會漂的 TAINTED 清單（漏列一個欄位就是無聲的洞），
+#   新的只有兩個出口，而且兩個都不該出現。
+#
+# ⚠ **oxlint 接不住這一條。** `frontend/.oxlintrc.json` 只開了 typescript／unicorn／oxc
+#   三個 plugin，沒有 vue plugin，`v-html` 對它是一個普通屬性。所以這道守衛留在這裡。
+# ⚠ 判準是**用法**不是**出現過這個字**：`v-html` 要跟著 `=`，`innerHTML` 要跟著賦值。
+#   前端原始碼裡有好幾處註解在講「舊版怎麼用 innerHTML」「這裡刻意不走 v-html」，
+#   抓字串的話它們全都會誤報，而會誤報的守衛最後只會被關掉。
+# ⚠ `__tests__/` 排除在外：vitest 用 `document.body.innerHTML = ""` 清場，那是測試的
+#   收尾動作，不是畫面在拼 HTML。
+_FRONT = os.path.join(os.path.dirname(os.path.dirname(static_dir)), "frontend", "src")
+_BYPASS = re.compile(r"v-html\s*=|\.(inner|outer)HTML\s*=|insertAdjacentHTML\s*\(")
+_hits = []
+for _root, _dirs, _files in os.walk(_FRONT):
+    if "__tests__" in _root.split(os.sep):
         continue
-    src = body_m.group(0)
-    for field in fields:
-        bad = [m for m in re.findall(r"\$\{([^}]*" + re.escape(field) + r"[^}]*)\}", src) if not _JS_SAFE.search(m)]
-        check(f"{fn}()：{field} 進 HTML 前逸出（未逸出處 {bad or '無'}）", not bad)
+    for _name in _files:
+        if not _name.endswith((".vue", ".ts")):
+            continue
+        _fp = os.path.join(_root, _name)
+        for _i, _line in enumerate(open(_fp, encoding="utf-8").read().splitlines(), 1):
+            if _BYPASS.search(_line):
+                _hits.append(f"{os.path.relpath(_fp, _FRONT)}:{_i}")
+check(f"前端沒有任何 v-html／innerHTML 的寫入（找到 {_hits or '無'}）", not _hits)
+# 反向：這條 regex 真的抓得到嗎。抓不到的話上面那條是恆真的。
+check(
+    "🔴 而且它真的抓得到（對三種寫法都要命中）",
+    all(_BYPASS.search(x) for x in ('<p v-html="s"/>', "el.innerHTML = s;", "el.insertAdjacentHTML('beforeend', s)")),
+)
+check(
+    "🟡 而且不對註解誤報（講到 v-html 與 innerHTML 的那些說明不算）",
+    not _BYPASS.search("// 拆成片段用 v-for 畫，不走 v-html：舊版是 esc(text) 之後才 replace"),
+)
 
 print("== 終端抽屜只在 nginx 後面開，且只吃同源路徑 ==")
 # 抽屜的 iframe 若指向 POST /view 回的 direct_url（127.0.0.1:41xxx），會被本站 CSP 的
 # `default-src 'self'` 直接擋掉——一片空白、只有 console 有錯。這條就是把那個理由機械化。
 # ⚠ e2e_flow.py 是直接跑 Flask、沒有 nginx，behindProxy() 為 false，走的是 window.open
 #   那條**備援**路徑；抽屜這條主要路徑在 e2e 裡零覆蓋，所以這裡至少用靜態檢查釘住。
-_open_branch = re.search(r'act === "open"\)\s*\{(.*?)\n      \} else if', sessions_tpl, re.DOTALL)
-if check("找得到「開啟終端」那段分支", bool(_open_branch)):
-    _src = _open_branch.group(1)
-    check("抽屜只在 behindProxy() 時開", "behindProxy() && !wantsTab" in _src)
+# ⚠ 來源從 `sessions.html` 換成 `SessionsView.vue`（2026-08-26 拆 legacy）。守的性質一模一樣，
+#   只是開抽屜那段程式碼搬家了。
+_view = os.path.join(os.path.dirname(os.path.dirname(static_dir)), "frontend", "src", "views", "SessionsView.vue")
+if check("找得到 SessionsView.vue", os.path.isfile(_view)):
+    _src = open(_view, encoding="utf-8").read()
+    check("抽屜只在走 nginx 時開", "store.meta.behindProxy && !wantsTab" in _src)
     check(
         "抽屜拿的是同源的 view.path，不是跨 origin 的 direct_url",
-        re.search(r"terminalDrawer\(\{[^}]*path:\s*view\.path", _src) is not None
-        and not re.search(r"terminalDrawer\(\{[^}]*direct_url", _src),
+        re.search(r"drawer[^\n]*\bview\.path\b", _src) is not None
+        or re.search(r"path:\s*view\.path", _src) is not None,
     )
-    check("直連模式仍退回開新分頁（那個模式沒有同源路徑可用）", "window.open(" in _src)
+    # Vue 版用的是 `globalThis.open`（oxlint 的 unicorn 規則要求），語意與 window.open 相同。
+    check(
+        "直連模式仍退回開新分頁（那個模式沒有同源路徑可用）",
+        re.search(r"\b(window|globalThis)\.open\(", _src) is not None,
+    )
 
 print("== 頁尾：線上跑的是哪一版（review 2026-07-27）==")
 from server import version as _version_mod  # noqa: E402
 
-# ⚠ **登入頁也要有。** 它不走 web._page()，所以任何「塞進 _page 參數」的做法都會讓那一頁
-#   靜靜地少一塊——頁尾正是 build_info() 做成 template global 而不是參數的唯一理由。
-_cf = app.test_client()  # 這一段自己開一個登入好的 client（`c` 在前面的 gate 測試裡被登出過）
-_cf.post("/api/auth/login", json={"username": "admin", "password": "admin-password-1"})
-for path, need_login in (("/login", False), ("/", True), ("/account", True)):
-    cli = _cf if need_login else app.test_client()
-    html = cli.get(path).get_data(as_text=True)
-    check(f"{path} 有頁尾", 'data-testid="footer"' in html)
-    check(f"{path} 列出 claude-pty 本體", "claude-pty" in html)
-    check(f"{path} 列出兩顆 ttyd", "ttyd（C）" in html and "ttyd（Rust）" in html)
+# ⚠ 這一節原本逐頁抓渲染出來的 HTML（`/login`、`/`、`/account` 各一次），驗「三頁都有頁尾」。
+#   2026-08-26 之後三頁吐的都是同一份 SPA 殼，HTML 裡什麼都沒有，那個驗法失去對象。
+#   性質分成兩半，各自搬到現在的所有者：
+#     · **值**（有哪幾個模組、版本、commit）→ 由 `/api/account/bootstrap` 出，就在下面驗。
+#     · **每一頁都畫得出來** → 由 golden 的 aria 快照守著：十六個**登入後**的場景每一場
+#       都有頁尾，涵蓋兩個管理頁與各種對話框開著的狀態。
+#
+# ⚠ **2026-08-26（裁示 L4）之後這一節用的是登入過的 client。** 版號搬進
+#   `/api/account/bootstrap` 了，而且**登入頁的頁尾不再顯示版本**，所以 login-empty 與
+#   login-error 兩場的 aria 裡沒有頁尾，那是規格，不是回歸。「公開那條一個字都不給」由
+#   `tests/test_bootstrap.py` 的反向斷言守著。
+# ⚠ 這裡開一支**新的** client 重新登入，不沿用上面的 `_c2`：中間有幾節動過密碼
+#   （`password_version` 一跳，舊 cookie 當場作廢），沿用的話這裡拿到的是 401，而錯誤
+#   訊息會長得像「bootstrap 少了 build 欄位」，完全指錯方向。
+_footer_c = app.test_client()
+auth.create_user("footerpeek", "footerpeek-password-1")
+_footer_c.post("/api/auth/login", json={"username": "footerpeek", "password": "footerpeek-password-1"})
+_boot = _footer_c.get("/api/account/bootstrap").get_json()
+_mods = _boot["build"]["modules"]
+check("account bootstrap 給得出頁尾要畫的東西（登入後才給）", bool(_mods))
+check("列出 claude-pty 本體", any(m["name"] == "claude-pty" for m in _mods))
+check(
+    "列出兩顆 ttyd",
+    {"ttyd（C）", "ttyd（Rust）"} <= {m["name"] for m in _mods},
+)
 
 # ⚠ 問不到就必須**說「未知」**，不可以印一個看起來合理的值。頁尾唯一的用途就是回答
 #   「線上在跑哪一版」——空白會讓人去查，錯的值會讓人停止查。
@@ -352,12 +322,14 @@ try:
     os.environ["CLAUDE_PTY_GIT_SHA"] = "deadbee"
     os.environ["CLAUDE_PTY_BUILT_AT"] = "2026-07-27T12:00:00+08:00"
     _version_mod.summary.cache_clear()
-    html = _cf.get("/").get_data(as_text=True)
-    check("build arg 有給時，commit 顯示出來", "deadbee" in html)
+    # 同上：改問 API。畫面把這兩個值印成什麼樣子是 Vue 的事（golden 的 aria 逐字守著）。
+    _b = _footer_c.get("/api/account/bootstrap").get_json()["build"]
+    _own_mod = {m["name"]: m for m in _b["modules"]}["claude-pty"]
+    check("build arg 有給時，commit 出得來", _own_mod["commit"] == "deadbee")
     # ⚠ 這裡放的是**建置時間**不是 commit 時間：同一個 commit 可以在任何時候被重新打包，
-    #   而要回答的是「線上這包是什麼時候做出來的」。格式化交給瀏覽器（伺服端時區是 UTC）。
-    check("建置時間以 datetime 屬性交給瀏覽器格式化", 'datetime="2026-07-27T12:00:00+08:00"' in html)
-    check("頁尾寫明那是「建置於」而不是 commit 時刻", "建置於" in html)
+    #   而要回答的是「線上這包是什麼時候做出來的」。給的是原始的 ISO 字串，格式化交給
+    #   瀏覽器（伺服端時區是 UTC，排出來的時間不屬於任何人）。
+    check("建置時間以原始 ISO 字串交出去，不在伺服端排版", _b["built_at"] == "2026-07-27T12:00:00+08:00")
 
     os.environ["CLAUDE_PTY_GIT_SHA"] = ""
     os.environ["CLAUDE_PTY_BUILT_AT"] = ""

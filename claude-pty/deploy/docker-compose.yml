@@ -239,7 +239,17 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    # ⚠ 從 `image: nginx:alpine` 改成 build，是因為 **Vue 版的產物要跟著 image 走版本**：
+    #   `--target nginx` 的那一階段把 node 階段 build 出來的 dist COPY 進 /usr/share/nginx/html
+    #   （見 deploy/Dockerfile）。base image 仍然是 nginx:alpine，只多了那一層 COPY。
+    #   用 bind mount 的話，host 上沒 build 過的目錄會被 docker 建成空目錄頂替——症狀是整站
+    #   404 而不是「你忘了 build」。
+    # ⚠ 這一層現在是唯一的畫面來源（legacy 於 2026-08-26 拆除）：頁面路由由下面掛進去的
+    #   `nginx-ui/vue` 片段直出 index.html，`/assets/*` 由 nginx 從這一層讀。
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: nginx
     # 唯一對外發布 port 的服務（ADR 0005 單一入口）。ttyd 的 port 全在內部網路，不發布。
     # ⚠ **預設只綁 loopback**。這個站台是明文 HTTP（COOKIE_SECURE 預設 0）、沒有租戶隔離、
     #   而且能在 host 的 dockerd 上開特權容器；SSH agent 轉發開著時還多一把能認證任何主機
@@ -249,6 +259,11 @@ services:
       - "${CLAUDE_PTY_BIND_ADDR:-127.0.0.1}:8080:8080"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro
+      # 頁面路由（`/`、`/login`、`/account`）的 nginx 片段。
+      # ⚠ 這裡**寫死 vue**，不再是變數。legacy 於 2026-08-26 拆除，只剩一份；
+      #   留一個只有一個合法值的變數只會讓人以為還切得回去（同 config.py 拿掉
+      #   `CLAUDE_PTY_UI` 的理由）。
+      - ./nginx-ui/vue:/etc/nginx/claude-pty-ui:ro
     # ⚠ 預設的 json-file driver **沒有大小上限**。control 每個請求一行 access log、
     #   nginx 也有、reconciler 每 30 秒一輪，三者都 restart: unless-stopped——磁碟被吃滿時
     #   的症狀是 SQLite 寫入失敗，那個症狀完全指不到 log 檔（審查 F-017）。

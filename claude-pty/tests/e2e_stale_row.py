@@ -149,9 +149,9 @@ try:
         page.route("**/api/sessions?*", count_list)
 
         page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-        page.fill("#username", "e2e-admin")
-        page.fill("#password", "e2e-password-1")
-        page.click("#login-btn")
+        page.fill('[data-testid="login-username"]', "e2e-admin")
+        page.fill('[data-testid="login-password"]', "e2e-password-1")
+        page.get_by_role("button", name="進入控制台").click()
         page.wait_for_function("() => !location.pathname.startsWith('/login')", timeout=8000)
         page.wait_for_selector('[data-testid="row-open-e1"]', timeout=8000)
         page.wait_for_timeout(400)
@@ -165,7 +165,7 @@ try:
         page.click('[data-testid="row-open-e1"]')
         page.wait_for_timeout(1200)
         check("🔴 按下開啟之後有重新拉列表（不必等對帳器那 30 秒）", len(lists) > before)
-        check("錯誤有講給使用者聽（toast 出現）", page.locator(".toast").count() >= 1)
+        check("錯誤有講給使用者聽（toast 出現）", page.locator('[data-testid="toast"]').count() >= 1)
 
         print("== 404（那場已經被歸檔）→ 同樣要重拉，而且訊息要說得出原因 ==")
         # ⚠ 刻意按**另一顆**按鈕（終止）：重拉如果是寫在「開啟」那一支裡，這裡就會漏掉。
@@ -174,8 +174,8 @@ try:
         page.wait_for_timeout(200)
         before = len(lists)
         page.click('[data-act="kill"][data-id="e1"]')
-        page.wait_for_selector(".modal", timeout=4000)
-        page.click('.modal [data-act="ok"]')
+        page.wait_for_selector('[data-testid="modal"]', timeout=4000)
+        page.click('[data-testid="modal"] [data-act="ok"]')
         page.wait_for_timeout(1200)
         check("🔴 換一顆按鈕（終止）也照樣重拉列表", len(lists) > before)
 
