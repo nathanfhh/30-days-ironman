@@ -2,7 +2,7 @@
 
 核心命題：**關掉網頁 → ttyd 自己消失**，沒有任何 worker 需要偵測或送 kill。
   - port 由 DB 的 views.port UNIQUE 仲裁（跨 worker 原子）
-  - ttyd 以 double-fork 起 → 不是 worker 的子程序（PPID=1）→ 殭屍由 init reap
+  - ttyd 以 double-fork 起 → 不是 worker 的子程序 → reparent 給 reaper（容器內是 tini）
   - `-q`（--exit-no-conn）：WS 斷線即自行退出
   - session terminate 會提前收掉殘留 view
 
@@ -130,9 +130,23 @@ try:
     with db.session_scope() as s:
         check("DB 有 view 記錄且 port 一致", s.query(View).filter_by(session_id=sid).one().port == v["port"])
 
-    print("== double-fork：ttyd 不是 worker 的子程序（PPID=1，殭屍由 init reap）==")
+    print("== double-fork：ttyd 不是 worker 的子程序（reparent 給本機的 reaper）==")
+    # ⚠ 這裡**不可以**寫死 `PPID == 1`。孤兒落到誰身上取決於最近的那個 child subreaper：
+    #   正式部署是容器內的 tini（compose 的 `init: true`），所以是 1；而這支測試跑在 host
+    #   上，桌面 session 底下 `systemd --user` 自己就是 subreaper，答案會是它的 pid。
+    #   要驗的性質是「已脫離 worker、有人會 reap」，跟那個數字是幾無關——所以先用同一支
+    #   `_spawn_detached` 起一個拋棄式探針量出本機的答案，再拿它當期望值。
+    #   （2026-08-26：寫死 1 讓這條在開發機上必紅，而產品端一行都沒問題。）
+    probe = views._spawn_detached(["sleep", "30"])
+    time.sleep(0.2)
+    reaper = ppid_of(probe)
+    try:
+        os.kill(probe, 9)
+    except OSError:
+        pass
     ppid = ppid_of(v["pid"])
-    check(f"PPID 為 1（got {ppid}）＝已 reparent 給 init", ppid == 1)
+    check(f"量得出本機的 reaper（got {reaper}）", reaper is not None and reaper != os.getpid())
+    check(f"PPID 為本機的 reaper {reaper}（got {ppid}）＝已 reparent、不會變殭屍", ppid == reaper)
     check("不是本 process 的子程序", ppid != os.getpid())
 
     print("== 記下這個 view 是哪一顆 ttyd 起的（畫面要在抽屜標題列標出來）==")
@@ -160,7 +174,7 @@ try:
     check("WS 連線期間 ttyd 仍活著", views._process_alive(v["pid"]))
     ws.close()  # ＝關掉瀏覽器分頁
     check("關頁後 ttyd 自行退出（-q 生效）", wait_gone(v["pid"]))
-    check("無殭屍殘留（PPID=1 由 init reap）", ppid_of(v["pid"]) is None)
+    check("無殭屍殘留（由 reaper 收掉）", ppid_of(v["pid"]) is None)
 
     print("== 自退後 list_views 清掉殘留記錄、釋放 port ==")
     check("list_views 回傳空（已清理）", views.list_views(sid) == [])

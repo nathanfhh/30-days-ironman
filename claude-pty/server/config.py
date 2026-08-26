@@ -102,6 +102,13 @@ CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_MODEL = os.environ.get("CLAUDE_PTY_DEFAULT_MODEL", "opus")
 DEFAULT_EFFORT = os.environ.get("CLAUDE_PTY_DEFAULT_EFFORT", "high")
 
+# 這套東西只驅動一種 CLI，而「哪一種」是**憑證狀態與招牌徽章的鍵**（見
+# credentials.credentials_state 的形狀 `{cli: state}`）。
+# ⚠ 放這裡而不是各自寫死：招牌模板、憑證狀態、啟動資料 API 三個地方都要用同一個字，
+#   而 `app.js` 的註解本來就寫著「data-cli 由伺服端以 config.DEFAULT_CLI 種下」，
+#   那句話在這個常數存在之前是假的（web.py 自己寫死一份），現在它是真的。
+DEFAULT_CLI = "claude"
+
 # 第二層 docker 能力所需的基礎設施參照（env 給不了的部分，ADR 0006）。
 # 所有走 docker API 的呼叫的上限（秒）。docker-py 預設是 **60**，而那個值在這裡是錯的：
 # 一顆卡住的容器（實測 2026-07-27：卡在 `removing` 40 分鐘，daemon 對它的 inspect/logs
@@ -624,6 +631,20 @@ NAME_SLUG_MAX = int(os.environ.get("CLAUDE_PTY_NAME_SLUG_MAX", "24"))
 # 使用者名稱長度上限。沒有上限時 505 字元的名字會進資料庫，然後在帳號清單、篩選下拉、
 # 稽核紀錄裡把版面推爆——而帳號**不能刪**（ADR 0010），建錯就永遠留著。
 USERNAME_MAX = int(os.environ.get("CLAUDE_PTY_USERNAME_MAX", "32"))
+
+# --- 前端 -------------------------------------------------------------------------
+#
+# ⚠ **`CLAUDE_PTY_UI` 這個切換器在 2026-08-26 拆掉了。** 它存在的理由是「兩版並存期間
+#   legacy 那條路的行為必須一個字都不變」，而 Vue 版四關全過（e2e、aria、DOM、網路序列、
+#   截圖）之後 legacy 就整個刪除了，沒有第二條路可以切。留著一個只有一個合法值的旗標，
+#   只會讓人以為還切得回去。
+# ⚠ 舊的 `.env` 裡可能還留著 `CLAUDE_PTY_UI=...`：**那是無害的**（沒有人讀它），
+#   而 `deploy/.env.example` 已經拿掉那一段。
+
+# SPA 的產物目錄（`frontend/vite.config.ts` 的 outDir）。**不進版控**：它是 build 產物，
+# 由 node 階段產生（見 deploy/Dockerfile）。prod 由 nginx 直出，dev 與 e2e 由 Flask serve。
+DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "dist")
+
 
 # 每人 session 上限（ADR 0004）。個人單機用先給一個寬鬆值。配額以 DB 計數仲裁（ADR 0008）。
 MAX_SESSIONS = int(os.environ.get("CLAUDE_PTY_MAX_SESSIONS", "10"))

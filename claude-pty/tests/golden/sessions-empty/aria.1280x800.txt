@@ -1,0 +1,58 @@
+- banner:
+  - text: claude
+  - emphasis: "-pty"
+  - text: 控制平台
+  - group "主要區域":
+    - link " 工作階段":
+      - /url: /
+    - link " 帳號管理":
+      - /url: /account
+  - navigation:
+    - status: " Claude 未設定憑證 在 host 上執行 `claude setup-token`，把輸出貼到帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態啟動，開場只會看到登入提示。"
+    - button "介面主題":  Instrument 
+    - button "golden-empty"
+- heading "開一個新 Session" [level=2]
+- text: AI Agent
+- button " Claude "
+- text: 模型
+- button " Opus "
+- text: 思考深度
+- button " high "
+- text: 網路能力
+- switch "網路能力": 
+- text: 限制（白名單） 可任意連外 流量錄製
+- switch "流量錄製": 
+- text: 不錄製 mitmproxy Telemetry
+- switch "Telemetry": 
+- text: 不送 探不通就不送 名稱
+- textbox "名稱":
+  - /placeholder: 例：重構登入流程
+- text: 憑證交付
+- switch "憑證交付": 
+- text: 檔案描述符 官方文件寫過的退路 預設不讓憑證進容器的環境變數。此法官方無文件、實測可用；若新 session 開始要求登入，改用環境變數。
+- button "+ 建立 Session"
+- tablist "Session 檢視":
+  - tab " 執行中" [selected]
+  - tab " 已結束"
+- button " 篩選"
+- text: 擷取於 12:00:00
+- button " 重新整理"
+- text: 網路能力 限制＝只放行白名單（entrypoint 會套 iptables）；開放＝容器可以連任何地方。
+- button "* 不限 "
+- text: 流量錄製 這場有沒有把出網流量錄下來（經 mitm 落到 host）。
+- button "* 不限 "
+- text: Telemetry 這場有沒有要求把 OpenTelemetry 送到 Jaeger。容器起來後會先探 Jaeger 通不通，探不通就不送——這個條件篩的是要求，不是結果。
+- button "* 不限 "
+- text: 時間範圍 從現在往回算。「執行中」比的是建立時間，「已結束」比的是結束時間——在已結束的清單裡，「一週內」問的是「一週內結束的」。選「自訂範圍」後面會接出起迄兩格。
+- button "* 不限 "
+- text: 沒有套用任何條件
+- button " 清除全部條件" [disabled]
+- text: 目前沒有 Session。用上面的表單開一個。
+- contentinfo:
+  - text: claude-pty 0.0.0-golden
+  - code: "0000000"
+  - text: 控制平面本體。 ttyd（Rust） 1.0.0-golden
+  - code: "1111111"
+  - text: ttyd-rust：目前用於網頁終端的執行檔。 建置於
+  - time: 2026/08/25 12:00:00
+  - text: （0 秒前）

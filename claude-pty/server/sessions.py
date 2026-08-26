@@ -40,7 +40,7 @@ from .models import SessionHistory
 from .attach import AttachMixin, _close_socketio, _discard_attach, close_attach  # noqa: F401
 from .constants import ALIVE_STATES, DRIVER_MARKER  # noqa: F401
 from .credentials import (  # noqa: F401
-    _CLAUDE_BASE,
+    _claude_base,
     _guard_credentials,
     _put_cli_token,
     claude_credentials_state,

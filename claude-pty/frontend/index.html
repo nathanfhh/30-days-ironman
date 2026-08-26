@@ -1,0 +1,47 @@
+<!doctype html>
+<!--
+  ⚠ 這一份對應舊版的 `server/templates/base.html`，逐項對照過：
+
+    · `data-behind-proxy` / `data-persist-dir` 舊版是伺服端算好塞進 <html> 的。SPA 沒有
+      伺服端渲染這一步，所以改由 `stores/site` 在進頁時向 `/api/bootstrap` 取得，再由 JS
+      寫回 <html>——屬性本身留著，因為抽屜是 runtime 才建的，它讀的就是這兩個屬性。
+    · 首屏套色的 inline script **原樣照抄**（連 key 都一樣）：它必須在 CSS 之後、
+      body 之前同步執行，那件事跟框架無關，交給 Vue 反而會晚一整個 mount。
+    · 字體與圖示一律自帶、不走 CDN（部署環境未必出得去公網）。這兩份仍由 Flask/nginx
+      以 `/static/…` 供應，**不進 Vite 的 bundle**：它們是原檔，不該被雜湊改名。
+    · app.css 由 `src/main.ts` import，Vite 打包成帶雜湊的 /assets/*.css。原檔一字不改。
+-->
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>claude-pty</title>
+    <link rel="stylesheet" href="/static/vendor/fonts/instrument-serif.css" />
+    <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+    <script>
+      /* 首屏套色：必須在 CSS 之後、body 之前**同步**執行。
+         ⚠ SYNC：key 與 src/lib/theme.ts 的 THEME_STORAGE_KEY / THEME_VARS_KEY 一致，
+            也與舊版 static/js/app.js 相同（兩版並存期間共用同一份快取）。 */
+      (function () {
+        try {
+          var id = localStorage.getItem("claude-pty:theme");
+          if (!id || id === "instrument") return; // 預設主題＝CSS 內建值，不必覆寫
+          document.documentElement.dataset.theme = id;
+          var vars = JSON.parse(localStorage.getItem("claude-pty:theme-vars:" + id) || "null");
+          if (!vars) return; // 沒快取就維持預設，主題載入後會補上
+          for (var k in vars) document.documentElement.style.setProperty("--color-" + k, vars[k]);
+        } catch (e) {
+          /* localStorage 不可用（無痕/停用）→ 就用預設主題，不影響功能 */
+        }
+      })();
+    </script>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230a0d12'/><circle cx='16' cy='16' r='5' fill='%23e0a340'/></svg>"
+    />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

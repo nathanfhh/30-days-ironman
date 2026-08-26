@@ -1,0 +1,32 @@
+div testid=shell
+header testid=masthead
+span active=account
+a seg=sessions
+a seg=account
+a testid=cred-badge state=bad tip="在 host 上執行 `claude setup-token`，把輸出貼到帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態啟動，開場只會看到登入提示。"
+span testid=theme-picker
+button testid=theme-picker-button
+ul testid=theme-picker-menu hidden
+button testid=account-btn aria-controls=account-menu
+div testid=account-menu hidden id=account-menu
+button testid=menu-settings act=settings
+button testid=menu-logout act=logout
+span testid=token-state
+span tone=error
+code title=點一下複製
+input testid=cli-token id=cli-token
+button testid=token-save
+button testid=token-clear hidden
+span tone=error
+input id=gitlab-pat
+button hidden
+p tone=warn
+form testid=pw-form
+input testid=old-pw id=old-pw
+input testid=new-pw id=new-pw
+input testid=confirm-pw id=confirm-pw
+span testid=pw-hint tone=error hidden
+button testid=pw-btn
+footer testid=footer
+span testid=footer-mod tip=控制平面本體。
+span testid=footer-mod tip=ttyd-rust：目前用於網頁終端的執行檔。

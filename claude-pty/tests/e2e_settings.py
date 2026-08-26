@@ -27,7 +27,6 @@ markup 裡有、`grep` 找得到、**執行期卻不存在**，那條規則從�
 
 import logging
 import os
-import re
 import socket
 import sys
 import tempfile
@@ -91,9 +90,9 @@ try:
         ctx = browser.new_context(viewport={"width": 1440, "height": 1000}, timezone_id="Asia/Taipei")
         page = ctx.new_page()
         page.goto(f"{BASE}/login")
-        page.fill("#username", "settings-user")
-        page.fill("#password", PW)
-        page.click("button[type=submit]")
+        page.fill('[data-testid="login-username"]', "settings-user")
+        page.fill('[data-testid="login-password"]', PW)
+        page.get_by_role("button", name="進入控制台").click()
         page.wait_for_selector('[data-testid="account-btn"]')
 
         print("== 招牌：登出已經收進下拉，不再是常駐膠囊 ==")
@@ -117,14 +116,16 @@ try:
         page.click('[data-testid="menu-settings"]')
         page.wait_for_selector('[data-testid="settings-modal"]')
         check("對話框開得起來", page.is_visible('[data-testid="settings-modal"]'))
-        check("「終端程式」那一列在", page.inner_text(".settings__label").strip() == "終端程式")
-        check("說明文字看得見", page.locator(".settings__note").first.is_visible())
+        check("「終端程式」那一列在", page.inner_text('[data-testid="settings-label"]').strip() == "終端程式")
+        check("說明文字看得見", page.locator('[data-testid="settings-note"]').first.is_visible())
 
         print("== 版面：量出來的，不是斷言 class 在 ==")
         # picker 要等 /api/prefs 回來才建——直接問 is_visible 會抓到還沒建好的瞬間。
-        page.wait_for_selector("#pick-ttyd .picker__button", state="visible")
-        row_w = page.eval_on_selector(".settings__row", "e => Math.round(e.getBoundingClientRect().width)")
-        mount_w = page.eval_on_selector("#pick-ttyd", "e => Math.round(e.getBoundingClientRect().width)")
+        page.wait_for_selector('[data-testid="pick-ttyd-button"]', state="visible")
+        row_w = page.eval_on_selector(
+            '[data-testid="settings-row"]', "e => Math.round(e.getBoundingClientRect().width)"
+        )
+        mount_w = page.eval_on_selector('[data-testid="pick-ttyd"]', "e => Math.round(e.getBoundingClientRect().width)")
         # ⚠ 這一條就是 `.settings__control` 那個 bug 的守門人。那條規則寫的是 width:100%，
         #   而它從來沒生效過——版面之所以正確，靠的是 `.settings__row` 的 flex column 撐滿。
         #   量寬度才分得出「規則有效」與「剛好也對」；斷言 class 在只會兩種都綠。
@@ -135,10 +136,10 @@ try:
         #   真正要守的不變式在下面那段（原始碼層級），那個才驗得出來。
         # 對話框本身要真的浮在內容之上，而 z-index 數字只在同一個堆疊脈絡裡可比——
         # 所以問瀏覽器「這個點上最上層是誰」，同 e2e_drawer 的 toast 那條。
-        box = page.locator(".modal__box").bounding_box()
+        box = page.locator('[data-testid="modal-box"]').bounding_box()
         top = page.evaluate(
             "([x, y]) => { const e = document.elementFromPoint(x, y);"
-            "  return e ? (e.closest('.modal') ? 'modal' : e.tagName) : 'none'; }",
+            "  return e ? (e.closest('[data-testid=modal-box]') ? 'modal' : e.tagName) : 'none'; }",
             [box["x"] + box["width"] / 2, box["y"] + 12],
         )
         check(f"對話框真的浮在最上層（那個點上是 {top}）", top == "modal")
@@ -149,11 +150,14 @@ try:
             check(f"沒有 .{cls}", page.locator(f".{cls}").count() == 0)
 
         print("== 切換終端程式：存得下去，而且只影響之後開的終端 ==")
-        page.click("#pick-ttyd .picker__button")
-        page.wait_for_selector("#pick-ttyd .picker__menu li")
-        opts = page.eval_on_selector_all("#pick-ttyd .picker__menu li", "els => els.map(e => e.textContent.trim())")
+        page.click('[data-testid="pick-ttyd-button"]')
+        # 選項以 role=option 認，不靠 `li` 這個標籤或 picker 的 class
+        options = page.locator('[data-testid="pick-ttyd-menu"]').get_by_role("option")
+        options.first.wait_for()
+        opts = options.all_inner_texts()
+        opts = [t.strip() for t in opts]
         check(f"兩顆 ttyd 都在選單裡（{opts}）", len(opts) == len(config.TTYD_BINS))
-        page.locator("#pick-ttyd .picker__menu li").last.click()
+        options.last.click()
         # 存到 DB 才算數——畫面上換了字但沒存下去是這種偏好設定最典型的假成功。
         for _ in range(50):
             if auth.get_user(1)["ttyd_bin"] != config.TTYD_BIN_DEFAULT:
@@ -162,29 +166,15 @@ try:
         saved = auth.get_user(1)["ttyd_bin"]
         check(f"選的那一顆真的存進 DB（{saved}）", saved in config.TTYD_BINS and saved != config.TTYD_BIN_DEFAULT)
 
-        print("== 🔴 picker 掛載點不准帶 class（原始碼層級，因為執行期看不出來）==")
-        # ⚠ 這條守的是那個「靜態掃描抓不到」的 bug 本體：`createPicker` 開頭是
-        #   `mount.className = "picker"`，會**把掛載點原本的 class 整個吃掉**。所以在掛載點
-        #   上寫 class 是無效的——而且不會報錯、不會有任何跡象，`grep` 還找得到它。
-        #   `.settings__control { width: 100% }` 就這樣睡了很久。
-        # ⚠ 為什麼驗原始碼而不是驗畫面：畫面上分不出來。掛載點沒有多餘 class 時，
-        #   `className =` 與 `classList.add` 產生的結果完全相同，執行期的斷言恆真。
-        _src = ""
-        for _f in ("server/static/js/app.js", "server/templates/sessions.html", "server/templates/account.html"):
-            _src += open(
-                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), _f), encoding="utf-8"
-            ).read()
-        _bad = re.findall(r'<[^>]*id="pick-[a-z-]+"[^>]*\bclass=[^>]*>', _src)
-        check(f"沒有任何 picker 掛載點帶 class（找到 {len(_bad)} 個：{_bad}）", not _bad)
-        # 反向確認這條抓得到：拿一段「掛載點帶 class」的假 markup 餵同一條 regex。
-        check(
-            "🔴 而且它真的抓得到（同一條 regex 對假 markup 要命中）",
-            bool(
-                re.findall(
-                    r'<[^>]*id="pick-[a-z-]+"[^>]*\bclass=[^>]*>', '<div id="pick-x" class="settings__control"></div>'
-                )
-            ),
-        )
+        # ⚠ 這裡曾經有一條「picker 掛載點不准帶 class」的原始碼層斷言。它守的是 legacy
+        #   `createPicker` 的一個具體 bug：那個函式開頭是 `mount.className = "picker"`，
+        #   會**把掛載點原本的 class 整個吃掉**，於是寫在掛載點上的樣式規則從來沒有生效過，
+        #   而且不會報錯、grep 還找得到它（`.settings__control { width: 100% }` 就這樣睡了很久）。
+        #
+        #   2026-08-26 拆掉 legacy 之後**那個機制不存在了**：picker 是一個 Vue 元件，沒有
+        #   「掛載點」這個東西可以被吃掉。查證過再刪的，不是看到紅燈就拿掉：
+        #   `grep -rn 'className\s*=' frontend/src/`（排除 __tests__）**一個結果都沒有**。
+        #   性質消失，斷言才跟著消失。
 
         print("== Esc 關得掉（焦點不在對話框裡也要收到）==")
         page.keyboard.press("Escape")

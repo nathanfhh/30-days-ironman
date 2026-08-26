@@ -16,6 +16,12 @@
 nginx → ttyd → `docker attach`，**不經過 Flask**。授權掛在 nginx 把連線交給 ttyd
 之前那一刻（`auth_request`），ttyd 端還有第二層（`--auth-url`，見下）。
 
+畫面是一支 Vue 3 SPA（`frontend/`，Vite build 到 `server/static/dist/`），三條頁面路由
+（`/`、`/login`、`/account`）都吐同一份殼，資料一律走 `/api/*`。**產物不進版控**，所以
+第一次跑之前要 `cd frontend && npm ci && npm run build`（`tests/run-all.sh` 會自己補）。
+改寫前的那一版（Jinja 模板 + 手寫 `app.js`）於 2026-08-26 退場，見
+[ADR 0020](docs/adr/0020-frontend-vue3.md)。
+
 設計決策的完整記錄在 [`docs/adr/`](docs/adr/)。
 
 ## 部署
@@ -381,7 +387,59 @@ PTY 是字元流，圖片拖不進終端。補法：終端抽屜的迴紋針鈕�
 ```bash
 tests/run-all.sh          # 快速組（不需要 docker）
 tests/run-all.sh --all    # 全部（需要 docker；ttyd 在 PATH 上則含真終端測試）
+tests/run-all.sh --e2e    # 只跑瀏覽器那幾支（10 支：九支 e2e ＋ golden_check）
 ```
+
+前端那六關（`npm ci` / oxlint / prettier / vue-tsc / vitest / vite build）也在
+`run-all.sh` 裡，最後一關 build 出來的 `dist/` 正是所有瀏覽器測試要吃的東西。
+沒有 node 的機器會整段跳過**並講出來**，不會靜靜略過。
+
+### golden master：舊畫面就是規格
+
+`tests/golden/` 是十八個場景的四份快照（兩個視口的 aria 樹、DOM 合約屬性、網路呼叫、
+桌機全頁截圖），`golden_check.py` 拿當下的畫面去對它。整套的理由與限制在
+[ADR 0020](docs/adr/0020-frontend-vue3.md)。
+
+⚠ `--with` 那一串不可以省：這幾支是拿 `uv run` **直接跑腳本**、不是安裝這個套件。
+清單的來源是 `tests/run-all.sh` 的 `DEPS`，兩邊要一起動。（下面刻意逐條寫全，不先塞進一個變數：
+`uv run $DEPS …` 在 bash 會做單字分割、在 zsh **不會**，貼過去只會得到一句
+`For more information, try '--help'`，而那個錯誤看起來完全不像是引號的問題。）
+
+```bash
+cd claude-pty
+
+uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
+  --with psutil --with cryptography --with playwright --with pillow \
+  python tests/golden_check.py            # 比
+
+uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
+  --with psutil --with cryptography --with playwright --with pillow \
+  python tests/golden_record.py --verify  # 連錄兩次，驗不穩定源都釘死了
+
+uv run --with flask --with docker --with sqlalchemy --with argon2-cffi \
+  --with psutil --with cryptography --with playwright --with pillow \
+  python tests/golden_record.py           # 重錄＝改規格，見下
+```
+
+⚠ **重錄等於改規格。** 看到 `golden_check` 紅了就順手重錄，等於把「我改壞了」寫成
+「這就是新的對的樣子」，那條防線當場消失。先看差異圖（`golden_check` 會印路徑），
+確認那是你要的改動，再重錄，並把 diff 一起送審。
+
+⚠ **重錄的 commit 訊息要帶 `golden:` 並逐場列出來，CI 會擋**（PR 上跑
+`tests/check_golden_change.sh`）。列不出改了哪幾場，正是要攔的那一次；名字可以分成好幾行、
+也可以散在同一個 PR 的好幾顆 commit 裡，gate 取聯集。`META`（錄製環境的指紋）也算一個名字。
+標記**必須在一行的開頭**（前面只允許空白），這樣「寫標記」與在訊息裡「談論標記」才分得開。
+
+```
+golden: sessions-list, sessions-filters
+```
+
+本機先驗一次：`tests/check_golden_change.sh`（預設 `main..HEAD`）。
+
+⚠ **截圖只能在錄它的那台機器上比。** golden 錄在 macOS，ubuntu runner 算繪出來的字是
+另一組像素；`tests/golden/META` 記著平台與 chromium 版本，對不上時**只跳過截圖**、
+aria／DOM／網路照比，而且會明講跳了什麼。所以 **CI 全綠不等於四關全過**：動到版面之後
+要在本機跑一次 `tests/run-all.sh --e2e`。
 
 GitLab 代理有三支：`test_gitlab_proxy_conf.py`（離線，驗設定產生與「token 不進 session
 容器」）、`test_user_proxy.py`（需要 docker，真的建容器、真的熱重載、真的用
@@ -415,6 +473,10 @@ uv run --with coverage python -m coverage report --sort=cover
 只跑不需要 docker 的 28 支時 `sessions.py` 是 65%，差的 20 個百分點全在 `create` 與 attach 那條真的碰容器的路上。
 
 這個數字會隨檔案增減變動，不當 gate；它回答的是「哪些路徑從來沒被走過」，不是「測得夠不夠」。
+
+前端是另一套：`cd frontend && npm run test:coverage`（vitest），**行覆蓋率門檻 70%，
+這一個是 gate**（在 `run-all.sh` 的前端六關裡，不到就紅）。兩邊的數字不要合著看：
+後端那個是診斷，前端那個是門檻。
 
 Telemetry 也有兩支，因為 **OTLP 是 fail-open：接錯或漏接完全沒有錯誤訊息**。
 `test_telemetry.py` 驗降級與「座標不准說謊」；`test_jaeger_wiring.py` 驗接線本身——

@@ -191,15 +191,15 @@ def login(page, username):
       都在登入頁上跑，而且「網址沒有 owner」這種檢查會**空過**（登入頁本來就沒有）。
     """
     page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-    page.fill("#username", username)
-    page.fill("#password", "e2e-password-1")
-    page.click("#login-btn")
+    page.fill('[data-testid="login-username"]', username)
+    page.fill('[data-testid="login-password"]', "e2e-password-1")
+    page.get_by_role("button", name="進入控制台").click()
     page.wait_for_function("() => !location.pathname.startsWith('/login')", timeout=8000)
 
 
 def rows(page):
     """畫面上實際有幾筆資料列（不含表頭）。"""
-    return page.locator('[data-testid="manifest"] .manifest__row:not(.manifest__row--head)').count()
+    return page.locator('[data-testid="manifest"] [data-testid="session-row"]').count()
 
 
 def open_filters(page):
@@ -255,7 +255,9 @@ try:
         check("選了自訂才出現起迄那格", page.locator('[data-testid="filter-range"]').is_visible())
         # 位置也要對：時間範圍在最後，起迄緊接在它後面（不是跑到另一塊區域）
         order = page.eval_on_selector_all(
-            ".filters__grid .field:not([hidden])", "els => els.map(e => e.querySelector('.label').textContent.trim())"
+            '[data-testid="filters-grid"] [data-testid="filter-field-label"]',
+            # 收起來的那格（起迄）掛的是 hidden 屬性，用 closest 排掉它
+            "els => els.filter(e => !e.closest('[hidden]')).map(e => e.textContent.trim())",
         )
         check(f"時間範圍後面直接接起迄：{order[-2:]}", order[-2:] == ["時間範圍", "起迄"])
         check("還沒選過時按鈕上是提示不是值", "指定區間" in page.inner_text('[data-testid="range-trigger"]'))
@@ -273,22 +275,29 @@ try:
         )
         check(
             "兩個月並排（各 42 格）",
-            page.locator(".rangepick__cal").count() == 2 and page.locator(".rangepick__day").count() == 84,
+            page.locator('[data-testid="range-cal"]').count() == 2
+            and page.locator('[data-testid^="range-day"]').count() == 84,
         )
 
         # ⚠ 點日期不可以把面板關掉。點擊處理器會重建 innerHTML，若外部點擊判定跑在冒泡
         #   階段，等事件走到 document 時被點的節點已經不在 DOM 裡，`contains()` 回 false
         #   就會誤判成「點在外面」——真瀏覽器實測過這個 bug（2026-07-26）。
-        days = page.locator(".rangepick__day:not(.is-other)")
+        # range-day＝本月的格子；鄰月那些拿的是 range-day-other，選不到就不會誤點
+        days = page.locator('[data-testid="range-day"]')
         days.nth(5).click()
         page.wait_for_timeout(200)
         check("點了一天之後面板還開著", page.locator('[data-testid="range-panel"]').is_visible())
         days.nth(18).hover()
         page.wait_for_timeout(250)
-        check("還沒定終點時，滑過的那段會即時預覽", page.locator(".rangepick__day.is-in").count() > 0)
+        # 狀態改讀 data-in／data-edge（paintDays 與 class 一起寫）。不讀 is-in／is-edge：
+        # 那兩個 class 是給 CSS 的，換樣式時它們會動，而這兩條驗的是「哪幾格算在區間裡」。
+        check(
+            "還沒定終點時，滑過的那段會即時預覽",
+            page.locator('[data-testid="range-day"][data-in="true"]').count() > 0,
+        )
         days.nth(18).click()
         page.wait_for_timeout(200)
-        check("兩端各標一格", page.locator(".rangepick__day.is-edge").count() == 2)
+        check("兩端各標一格", page.locator('[data-testid="range-day"][data-edge="true"]').count() == 2)
         check("還沒按確定就不該動到網址（半截的區間不查詢）", "from=" not in page.url)
         page.click('[data-testid="range-ok"]')
         page.wait_for_timeout(600)

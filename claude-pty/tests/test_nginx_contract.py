@@ -88,6 +88,88 @@ check(
     _up is not None and "client_max_body_size 12m;" in _up.group(1),
 )
 
+print("== 前端：頁面路由不寫死在主檔，assets 直出且長快取 ==")
+# ⚠ 這一節原本守的是「切換器只加分支、不動舊路」。切換器沒了（legacy 於 2026-08-26 拆除），
+#   但 include 這條仍然要守：那份片段裡有一整套「為什麼是 `location =` 而不是前綴、
+#   為什麼 `try_files` 是錯的」的說明，搬進主檔只會讓它多七十行不相干的東西。
+#   而 glob 沒命中不是錯誤，所以掛載掉了 nginx 照樣起得來、三條路由落回 `location /`
+#   去 proxy 給 Flask（Flask 也吐同一份殼），那是刻意留的軟著陸。
+check(
+    "頁面路由由外部檔案帶進來（glob 沒命中就落到 location /）",
+    "include /etc/nginx/claude-pty-ui/*.conf;" in code,
+)
+_assets = re.search(r"location /assets/ \{([^}]*)\}", code)
+check("/assets/ 有自己的 location（不 proxy 給 Flask）", _assets is not None)
+check(
+    "從檔案系統直出（root），不是 proxy_pass",
+    _assets is not None and "root /usr/share/nginx/html;" in _assets.group(1) and "proxy_pass" not in _assets.group(1),
+)
+check(
+    "長快取（Vite 把內容雜湊寫進檔名，改版就換檔名）",
+    _assets is not None and "max-age=31536000" in _assets.group(1) and "immutable" in _assets.group(1),
+)
+# 🔴 **不可以有 `always`。** 沒有它時 add_header 只套在 2xx／3xx 上；加了它連 404 也會帶著
+#    `immutable, max-age=31536000`。改版之後舊的殼會去要一個已經不存在的
+#    `index-<舊雜湊>.js`，那一發 404 被快取一年，**清了快取才救得回來**，而症狀是一片白
+#    畫面、看不出跟快取有關（完整審查 L1）。
+check(
+    "🔴 快取標頭沒有 always（404 不可以帶著 immutable 被快取一年）",
+    _assets is not None and "always" not in _assets.group(1),
+)
+# 🔴 `expires` 自己就會送一個 Cache-Control。兩個一起用＝同一個標頭回兩份，而「聽哪一份」
+#    是實作決定的——一個要快取一年的資源不該讓那件事變成問題。
+check(
+    "🔴 沒有 expires（它會與 add_header 各送一份 Cache-Control）",
+    _assets is not None and "expires" not in _assets.group(1),
+)
+
+_ui_dir = os.path.join(_repo, "deploy", "nginx-ui")
+_vue = os.path.join(_ui_dir, "vue", "ui.conf")
+check("vue 的片段存在", os.path.isfile(_vue))
+# ⚠ 這裡曾經有三條在守 `nginx-ui/legacy/ui.conf`（存在、而且**一條指令都沒有**）。
+#   那三條守的是「兩版並存期間 legacy 行為一個字不變」，而 legacy 於 2026-08-26 拆除，
+#   那個目錄也一起刪了，性質本身不再存在。下面「vue 的片段長什麼樣」那幾條照舊。
+if os.path.isfile(_vue):
+    _vue_code = "\n".join(
+        ln for ln in open(_vue, encoding="utf-8").read().splitlines() if not ln.lstrip().startswith("#")
+    )
+    for _page in ("/", "/login", "/account"):
+        # 精確比對（`location =`）：前綴比對會把 /static/* 的字體與圖示一起吃掉
+        check(
+            f"vue 片段有 {_page} 的精確路由",
+            re.search(rf"location = {re.escape(_page)} \{{", _vue_code) is not None,
+        )
+    # 🔴 **這一條抓的是「三個頁面全部 404」。** `try_files $uri /index.html;` 的最後一個
+    #    參數是 URI，nginx 會做**內部轉向**：把 `/index.html` 當成新請求重跑一次 location
+    #    比對，而它不符合上面三條精確比對，於是落到 `location /` 被 proxy 給 Flask——
+    #    Flask 沒有這條路由，回 404。正解是最後一個參數用 `=404`，讓 `/index.html` 被當成
+    #    **檔案路徑**直接送出，完全不重新比對。
+    check("三條都直接送檔，不做內部轉向", _vue_code.count("try_files /index.html =404;") == 3)
+    check(
+        "🔴 沒有留下會內部轉向的寫法（那會讓三個頁面全部 404）",
+        "try_files $uri /index.html" not in _vue_code,
+    )
+    # 這三條路不經 Flask，`_security_headers` 那支 after_request 完全沒機會跑。
+    _app_src = open(os.path.join(_repo, "server", "app.py"), encoding="utf-8").read()
+    for _hdr, _needle in (
+        ("Content-Security-Policy", "frame-ancestors 'none'"),
+        ("X-Content-Type-Options", "nosniff"),
+        ("Referrer-Policy", "same-origin"),
+        ("X-Frame-Options", "DENY"),
+    ):
+        check(
+            f"🔴 nginx 直出的殼也要有 {_hdr}（不經 Flask＝那支 after_request 不會跑）",
+            _vue_code.count(f'add_header {_hdr} "') == 3 and _needle in _vue_code,
+        )
+        # 值不可以與 Flask 那份分岔：兩條路對同一個頁面該給同一組標頭。
+        check(f"　└ 值與 server/app.py 對得上（{_needle}）", _needle in _app_src)
+    check(
+        "🔴 每一條 add_header 都帶 always（預設只對 2xx/3xx 生效）",
+        _vue_code.count("add_header") == _vue_code.count("always;"),
+    )
+    # 殼被快取的話，改版後拿到的舊殼會去要一個已經不存在的 /assets/*.js——一片白畫面
+    check("🔴 SPA 的殼不可快取（no-store）", _vue_code.count('add_header Cache-Control "no-store" always;') == 3)
+
 print("== session 編號不可猜 ==")
 # 路由只認 [A-Za-z0-9]+；sid 本體是 uuid4 的 hex 截 12 碼（48 bits 隨機）。
 # 這裡釘住「隨機來源沒有被換成可預測的東西」——流水號或時間戳都會讓

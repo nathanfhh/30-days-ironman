@@ -24,9 +24,17 @@
      的快照，之後接的網路不在清單裡，而且**永遠不會好**。`test_create_ordering` 從靜態
      層面釘著「網路要在 start 之前就位」，這裡證明那個危害是真的
 
-⚠ 最後那條**用 IP 打，不用 alias**。容器建在預設 bridge 上時 `/etc/resolv.conf` 指的不是
-  docker 的內嵌 DNS，事後 connect 也不會改寫它——用名字打會因為 DNS 解不開而失敗，
-  那條斷言就會為了錯的理由變綠（它要量的是 iptables，不是 DNS）。
+⚠ 最後那條**用 IP 打，不用 alias**：它要量的是 iptables 擋不擋得住，不是 DNS 解不解得開。
+  用名字打的話，任何一種解析失敗都會讓它為了錯的理由變綠。
+
+⚠ 「快照陷阱」那顆容器接的是一張**臨時的 scratch network**，不是預設 bridge。這不是裝飾：
+  `init-firewall.sh` 第 5 節要 `dig` 出 ALLOWED_DOMAINS 的 IP，解不到就 `exit 1`（fail-closed）。
+  預設 bridge 上的容器繼承 daemon.json 那份 resolver 清單，而 `dig` 對回 SERVFAIL 的第一台
+  **不會 failover**——內網優先的機器上白名單就解不開，防火牆整支掛掉、牆根本沒立起來，
+  下面兩條斷言會一起紅而且訊息指不到 DNS（2026-08-26 撞到）。接上任何一張 user-defined
+  network 就拿得到 docker 的內嵌 DNS（127.0.0.11），它會問到會回答的那一台。
+  scratch 網段本來就會進快照的放行清單，**被測的性質不受影響**：`NET`（代理所在的那張）
+  仍然是事後才 connect 的。
 """
 
 import os
@@ -68,6 +76,13 @@ def check(label, ok, detail=""):
 
 cli = docker.from_env(timeout=90)
 NET = user_proxy.network_name(UID)
+# 只給「快照陷阱」那顆容器用，為的是拿到 docker 內嵌 DNS（見檔頭）。⚠ 刻意**不套**
+# `USER_NETWORK_PREFIX`、也不打 user-network 的標籤——那是 reconciler 認領網路的依據，
+# 借用它等於讓這張暫時的網被當成某個使用者的。
+SCRATCH_PREFIX = "claude-pty-test-fwdns-scratch"
+# 名稱帶 pid：同一台機器上兩份測試同時跑（或前一次中斷留下的網）不會在 create 時撞名；
+# cleanup 則是掃整個前綴，殘留的一併收掉（Copilot review，public PR #1）。
+SCRATCH = f"{SCRATCH_PREFIX}-{os.getpid()}"
 
 
 def cleanup():
@@ -75,13 +90,17 @@ def cleanup():
         c = user_proxy.find(cli, UID)
         if c:
             c.remove(force=True)
+    stale = []
     with suppress(Exception):
-        net = cli.networks.get(NET)
-        net.reload()
-        for cid in net.attrs.get("Containers") or {}:
-            with suppress(Exception):
-                net.disconnect(cid, force=True)
-        net.remove()
+        stale = [n.name for n in cli.networks.list() if n.name.startswith(SCRATCH_PREFIX)]
+    for name in (NET, *stale):
+        with suppress(Exception):
+            net = cli.networks.get(name)
+            net.reload()
+            for cid in net.attrs.get("Containers") or {}:
+                with suppress(Exception):
+                    net.disconnect(cid, force=True)
+            net.remove()
 
 
 def run(argv, timeout=300):
@@ -176,6 +195,7 @@ try:
     #   網段快照。之後才 `network connect` 的網路不在清單裡，而 reconciler 補得了網路、
     #   補不了 iptables——所以那個容器**永遠**連不到代理。`user_proxy` 那句「網路必須在
     #   start 之前就位」就是為了這件事。
+    cli.networks.create(SCRATCH, driver="bridge")  # 為了 DNS，不是為了連到代理（見檔頭）
     late = cli.api.create_container(
         config.IMAGE,
         entrypoint=["sleep", "300"],
@@ -183,14 +203,24 @@ try:
         host_config=cli.api.create_host_config(
             cap_add=["NET_ADMIN"], binds={FW: {"bind": "/usr/local/bin/init-firewall.sh", "mode": "ro"}}
         ),
+        networking_config=cli.api.create_networking_config({SCRATCH: cli.api.create_endpoint_config()}),
     )
     lid = late["Id"]
     try:
-        cli.api.start(lid)  # 只在預設 bridge 上，還沒接使用者那張網
+        cli.api.start(lid)  # 只在 scratch 網上，還沒接使用者那張網
+        # ⚠ 失敗時要看得到 fw.log：牆掛在哪一節決定了下面那條負向斷言算不算數，而
+        #   「rc=1」三個字什麼都指不到。
         rc, out = run(
-            ["docker", "exec", lid, "bash", "-lc", "sudo /usr/local/bin/init-firewall.sh >/tmp/fw.log 2>&1; echo rc=$?"]
+            [
+                "docker",
+                "exec",
+                lid,
+                "bash",
+                "-lc",
+                'sudo /usr/local/bin/init-firewall.sh >/tmp/fw.log 2>&1; echo "FWRC=$?"; tail -15 /tmp/fw.log',
+            ]
         )
-        check("防火牆先套起來了", "rc=0" in out, out[-400:])
+        check("防火牆先套起來了", "FWRC=0" in out, out[-600:])
         cli.api.connect_container_to_network(lid, NET)  # 事後才接
         rc, out = run(
             [

@@ -1,0 +1,54 @@
+div testid=shell
+header testid=masthead
+span active=account
+a seg=sessions
+a seg=account
+a testid=cred-badge state=bad tip="在 host 上執行 `claude setup-token`，把輸出貼到帳號管理頁的「CLI 憑證」。沒有它，session 會以未登入狀態啟動，開場只會看到登入提示。"
+span testid=theme-picker
+button testid=theme-picker-button
+ul testid=theme-picker-menu hidden
+button testid=account-btn aria-controls=account-menu
+div testid=account-menu hidden id=account-menu
+button testid=menu-settings act=settings
+button testid=menu-logout act=logout
+span testid=token-state
+span tone=error
+code title=點一下複製
+input testid=cli-token id=cli-token
+button testid=token-save
+button testid=token-clear hidden
+span tone=ok
+input id=gitlab-pat
+p tone=warn
+form testid=pw-form
+input testid=old-pw id=old-pw
+input testid=new-pw id=new-pw
+input testid=confirm-pw id=confirm-pw
+span testid=pw-hint tone=error hidden
+button testid=pw-btn
+p tone=info
+input testid=new-user id=new-user title="最長 32 字元，不可含空白或換行"
+input testid=new-user-pw id=new-user-pw
+div testid=pick-role
+button testid=pick-role-button
+ul testid=pick-role-menu hidden
+table testid=roster-table
+tbody testid=roster
+span testid=roster-name title=golden-admin
+span tone=accent
+button act=reset id=1
+span testid=roster-name title=golden-empty
+button act=reset id=3
+span testid=roster-name title=golden-user
+button act=reset id=2
+div testid=roster-pager hidden
+button testid=roster-prev
+span testid=roster-status
+button testid=roster-next
+button testid=ttyd-refresh
+p tone=warn hidden
+tbody testid=ttyd-views
+div testid=ttyd-orphans
+footer testid=footer
+span testid=footer-mod tip=控制平面本體。
+span testid=footer-mod tip=ttyd-rust：目前用於網頁終端的執行檔。
