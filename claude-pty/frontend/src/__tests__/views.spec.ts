@@ -743,16 +743,12 @@ describe("SettingsModal", () => {
     expect(toasts.at(-1)!.level).toBe("danger");
   });
 
-  /* 🐛 **目前是紅的，而且它抓到的是真的壞掉**（用 it.fails 標著：哪天修好了這一支會改成
-   *    「預期失敗卻通過」而炸開，那時把 `.fails` 拿掉即可）。
-   *
-   *    `save()` 第一行的 `const before = value.value` 想記下「改之前是什麼」，但 SitePicker
-   *    是先 `emit("update:modelValue")` 再 `emit("change")`，而 v-model 的處理器是同步跑的，
-   *    所以 save 讀到的 `before` 已經是**新值**，catch 裡那句「轉回真實值」等於什麼都沒做。
-   *    後果：畫面停在「Rust 版」，而下一場開出來的是 C 版，兩者不一致且沒有任何跡象。
-   *    修法是把改前的值留在 change 之外（例如在 SitePicker 的 change 事件裡一併帶上舊值，
-   *    或改用 `@change` 單向、不掛 v-model），那是行為變更，不在這一輪的範圍內。 */
-  it.fails("🔴 存不進去就把值轉回真實值，不要留一個假象", async () => {
+  /* ⚠ 這一條守的是一個**修過的**真 bug：舊版 `save()` 第一行是 `const before = value.value`，
+   *    想記下「改之前是什麼」，但 SitePicker 先 `emit("update:modelValue")` 再
+   *    `emit("change")`，而 v-model 的處理器是同步跑的，所以 save 讀到的 `before` 已經是
+   *    新值，catch 裡那句還原等於什麼都沒做。現在改成一個獨立的 `committed` ref，只在
+   *    真的存成功時才前進。 */
+  it("🔴 存不進去就把值轉回真實值，不要留一個假象", async () => {
     installFetch({
       "/api/prefs": (init) =>
         init?.method === "PATCH"

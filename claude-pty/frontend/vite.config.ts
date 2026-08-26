@@ -52,8 +52,9 @@ export default defineConfig({
       include: ["src/**/*.{ts,vue}"],
       exclude: ["src/main.ts", "src/**/*.spec.ts"],
       thresholds: {
-        // 計畫的決定 8：新前端行覆蓋率 70%，進 run-all.sh。
-        lines: 70,
+        /* 計畫的決定 8 訂的是 70%，那是「至少要有」的底線。實際已經到 94%，門檻跟著收緊到
+           90%：留在 70 的話，之後刪掉一整塊測試也還是綠的，那條線就等於沒有在守什麼。 */
+        lines: 90,
       },
     },
   },
