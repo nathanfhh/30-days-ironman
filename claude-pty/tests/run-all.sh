@@ -19,6 +19,10 @@ cd "$(dirname "$0")/.."
 DEPS=(--with flask --with docker --with sqlalchemy --with argon2-cffi
       --with psutil --with cryptography
       --with websocket-client --with pexpect --with playwright
+      # ⚠ 只有 golden_check 用得到：它要把兩張 PNG 逐像素比。同 playwright／pexpect，
+      #   是只在這裡出現的測試期工具，**刻意不是**專案相依（進了 pyproject 就會跟著
+      #   進正式 image，而正式環境一張圖都不需要比）。
+      --with pillow
       # ⚠ 只有 test_locked_runtime 用得到，而且**刻意不是**專案相依：它是 deploy 那道閘
       #   拿來照規格評估 requirement marker 的工具，進了 pyproject 就會跟著進正式 image。
       #   同 playwright／pexpect／websocket-client，都是只在這裡出現的測試期工具。
@@ -82,6 +86,17 @@ NEEDS_CLAUDE_CRED=(test_entrypoint_human_path)
 have_claude_cred=0
 { [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -f "${HOME}/.claude/.credentials.json" ]; } && have_claude_cred=1
 
+# Vue 版的 e2e 需要前端**已經 build 過**（`server/static/dist/`，不進版控）。
+# ⚠ 存在與否要在**用到的當下**才問，不是在這裡先算一次：上面那段前端六關的最後一關就是
+#   build，它跑在這幾行之後——先算的話永遠是「還沒 build」。
+# ⚠ 沒有 node 的機器整段前端會被跳過，那時 dist 真的不存在。那不是「測試壞了」，是環境
+#   缺一個工具，所以進跳過清單、看得見（同 ttyd、同 playwright 的處置）。
+# ⚠ **每一支瀏覽器測試都要 dist**，不是只有 e2e_vue_smoke。legacy 拆掉之後畫面只剩這一份，
+#   八支 e2e 與 golden_check 全部吃它；只列一支的話，其餘那幾支在缺 dist 時會以一串看不懂的
+#   逾時失敗，而真正的原因（沒 build）不會出現在跳過清單上（完整審查 L3）。
+NEEDS_DIST=(e2e_account e2e_chips e2e_drawer e2e_filters e2e_flow e2e_gitlab_chip
+            e2e_settings e2e_stale_row e2e_vue_smoke golden_check)
+
 # 瀏覽器 e2e 需要 playwright 真的把 chromium 下載下來。沒下載的話每一支 e2e 都會吐一段
 # 「Executable doesn't exist」的 traceback——看起來像測試壞了，其實是少一個安裝步驟。
 # ⚠ 不可以只判「快取目錄在不在」：playwright 升版之後要的是**另一個 build 編號**，舊的那幾顆
@@ -92,6 +107,10 @@ _pw_dir="$(uv run "${DEPS[@]}" python -m playwright install --dry-run chromium-h
            | awk '/Install location:/ {print $3; exit}')"
 [ -n "${_pw_dir}" ] && [ -d "${_pw_dir}" ] && have_browser=1
 
+# --- 參數 -------------------------------------------------------------------
+#
+# ⚠ 這裡曾經有一個 `--ui legacy|vue`（兩版並存期間用的）。**2026-08-26 legacy 拆除之後
+#   它就消失了**：只剩一份前端，瀏覽器測試與 golden 一律對它跑，沒有第二條路可以切。
 mode="${1:-quick}"
 case "${mode}" in
   quick|--quick) want_docker=0; want_e2e=1 ;;
@@ -144,7 +163,7 @@ run_one() {
   base="$(basename "${f}" .py)"
   # ⚠ 先判「這個模式要不要跑它」再判環境缺什麼：反過來的話 --e2e 模式下每支非 e2e 測試
   #   都會被報成「沒有 ttyd」，而那不是它被跳過的原因。
-  if [ "${want_e2e}" -eq 2 ] && [[ "${base}" != e2e_* ]]; then
+  if [ "${want_e2e}" -eq 2 ] && [[ "${base}" != e2e_* ]] && [[ "${base}" != golden_* ]]; then
     skipped+=("${base}（--e2e 只跑瀏覽器測試）"); return
   fi
   if in_list "${base}" "${NEEDS_DOCKER[@]}" && [ "${want_docker}" -eq 0 ]; then
@@ -164,7 +183,11 @@ run_one() {
   if in_list "${base}" "${NEEDS_CLAUDE_CRED[@]}" && [ "${have_claude_cred}" -eq 0 ]; then
     skipped+=("${base}（host 上沒有 claude 憑證可複製進沙盒）"); return
   fi
-  if [[ "${base}" == e2e_* ]] && [ "${have_browser}" -eq 0 ]; then
+  if in_list "${base}" "${NEEDS_DIST[@]}" && [ ! -f server/static/dist/index.html ]; then
+    skipped+=("${base}（前端還沒 build：server/static/dist/ 不存在，裝 node 24 讓上面那幾關跑）"); return
+  fi
+  # golden_check 也開真的瀏覽器（它就是拿畫面跟 tests/golden/ 錄下來的比），同一道 gate。
+  if { [[ "${base}" == e2e_* ]] || [[ "${base}" == golden_* ]]; } && [ "${have_browser}" -eq 0 ]; then
     skipped+=("${base}（playwright 缺這版的瀏覽器：playwright install chromium-headless-shell）"); return
   fi
   printf '\n\033[1m== %s\033[0m\n' "${base}"
@@ -200,26 +223,137 @@ run_one() {
   rm -f "${out}"
 }
 
-# --- 先驗 app.js 的語法 -------------------------------------------------------
+# ⚠ 這裡曾經有一道「app.js 語法檢查」（`node --check server/static/js/app.js`）。
+#   那個檔案在 2026-08-26 隨 legacy 一起刪了，這道 gate 也跟著退場。它守的性質現在由前端
+#   六關的 `vue-tsc` 與 `vite build` 接手，而且接得更緊：那兩關看得到型別與打包，
+#   `node --check` 只看得到語法。
+
+# --- 前端（Vue 版）的工具鏈 ---------------------------------------------------
 #
-# ⚠ 這一條放在最前面，因為它壞掉時的**症狀指向完全錯的地方**。app.js 解析失敗＝整頁沒有
-#   任何 JS，於是每一支瀏覽器測試都停在「登入之後沒有跳轉」而逾時——看起來像是登入壞了。
-#   2026-07-29 實測踩到：抽屜那段 HTML 註解裡寫了一個反引號，而那段在 template literal
-#   裡面，字串當場被截斷。從逾時訊息完全看不出這件事，`node --check` 一秒就指到行號。
-# ⚠ 沒有 node 就跳過並講出來——不可以靜靜不驗。
-if command -v node >/dev/null 2>&1; then
-  printf '\n\033[1m== app.js 語法\033[0m\n'
-  if node --check server/static/js/app.js; then
-    echo "  PASS  解析得過"
+# 六關，順序是「便宜的先擋」：安裝 → lint → 格式 → 型別 → 單元測試（含覆蓋率門檻）→ build。
+#
+# ⚠ 為什麼 build 也要跑：型別過得了不代表打包得出來（outDir 寫錯、import 到 root 外面沒放行、
+#   CSS 原檔被搬走），而那些只有 `vite build` 會紅。產物不進版控，所以「沒有人 build 過」
+#   這件事在部署之前不會有任何跡象。
+# ⚠ `npm ci` 不是 `npm install`：ci 只照 lockfile 裝，裝不出來就直接失敗（同 deploy/Dockerfile）。
+# ⚠ 沒有 node/npm 就整段跳過**並講出來**——不可以靜靜不驗（同 ttyd、同 playwright 的處置）。
+front_gate() {          # front_gate <說明> <指令...>
+  local label="$1"; shift
+  printf '\n\033[1m== %s\033[0m\n' "${label}"
+  if (cd frontend && "$@"); then
+    echo "  PASS  ${label}"
   else
     fails=$((fails + 1))
-    echo "   ↑ app.js 語法錯誤——所有瀏覽器測試都會以「登入逾時」的形式失敗"
+    echo "   ↑ ${label} 失敗"
   fi
+}
+
+if [ ! -d frontend ]; then
+  skipped+=("前端工具鏈（沒有 frontend/ 目錄）")
+elif [ "${want_e2e}" -eq 2 ]; then
+  skipped+=("前端工具鏈（--e2e 只跑瀏覽器測試）")
+elif ! command -v npm >/dev/null 2>&1; then
+  skipped+=("前端工具鏈（host 上沒有 npm，裝 node 24）")
+elif [ ! -f frontend/package-lock.json ]; then
+  # lockfile 不見了不是「環境沒裝」，是 repo 壞了——這條要紅，不是跳過。
+  fails=$((fails + 1))
+  echo "   ↑ frontend/package-lock.json 不見了：npm ci 沒有它就跑不了，而 npm install 會自己挑版本"
 else
-  skipped+=("app.js 語法檢查（host 上沒有 node）")
+  front_gate "前端相依（npm ci）" npm ci --no-audit --no-fund
+  front_gate "前端 lint（oxlint）" npm run --silent lint
+  front_gate "前端格式（prettier --check）" npm run --silent format:check
+  front_gate "前端型別（vue-tsc）" npm run --silent typecheck
+  front_gate "前端單元測試（vitest，行覆蓋率門檻 70%）" npm run --silent test:coverage
+  front_gate "前端 build（vite）" npm run --silent build
+
+  # --- 供應鏈：前端的相依也要掃 -----------------------------------------------
+  #
+  # ⚠ python 那邊的相依早就在掃（deploy 的 image 掃描），而前端一口氣加了 200 多個
+  #   套件——那些程式碼會被打包進 `/assets/*.js`，直接在使用者的瀏覽器裡執行。
+  #   只掃後端等於掃了一半。
+  # ⚠ **「沒有目標」不等於「乾淨」**（repo 既有的紀律，見 skills 的 scanners.md）：
+  #   trivy 掃不到任何相依清單時一樣 exit 0、報告是空的，而那個空白什麼都沒證明。
+  #   所以除了「有沒有漏洞」，還要驗「它真的把 lockfile 當成 npm 目標解析了」。
+  # ⚠ 沒裝 trivy 就跳過並講出來（同 node、同 playwright 的做法）。
+  if ! command -v trivy >/dev/null 2>&1; then
+    skipped+=("前端相依掃描（host 上沒有 trivy）")
+  else
+    printf '\n\033[1m== 前端相依掃描（trivy）\033[0m\n'
+    _trivy_out="$(mktemp)"
+    if trivy fs --scanners vuln --severity CRITICAL,HIGH,MEDIUM --format json --quiet \
+         frontend/package-lock.json > "${_trivy_out}" 2>/dev/null \
+       && python3 - "${_trivy_out}" <<'PYEOF'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+results = data.get("Results") or []
+npm = [r for r in results if r.get("Type") == "npm"]
+if not npm:
+    print("  FAIL  trivy 沒有把 package-lock.json 當成 npm 目標解析——空報告證明不了任何事")
+    sys.exit(1)
+vulns = [v for r in npm for v in (r.get("Vulnerabilities") or [])]
+if vulns:
+    print(f"  FAIL  {len(vulns)} 筆 MEDIUM 以上：")
+    for v in vulns[:20]:
+        print(f"          {v['VulnerabilityID']}  {v['PkgName']} {v.get('InstalledVersion')}"
+              f"  → {v.get('FixedVersion') or '尚無修正版'}  [{v['Severity']}]")
+    sys.exit(1)
+print(f"  PASS  {len(npm)} 個 npm 目標、0 筆 MEDIUM 以上")
+PYEOF
+    then
+      :
+    else
+      fails=$((fails + 1))
+      echo "   ↑ 前端相依掃描失敗"
+    fi
+    rm -f "${_trivy_out}"
+  fi
 fi
 
-for f in tests/test_*.py tests/e2e_*.py; do
+# dist 的保險絲：跑到這裡不在、或**比原始碼舊**，就補 build 一次。
+#
+# 正常情況上面那段前端六關的最後一關就是 build，所以到這裡 dist 已經是新的。但它有兩條
+# 會被整段跳過的路：`--e2e` 模式（那一段自己會跳），以及 host 上沒有 npm。
+# **缺 dist 等於每一支瀏覽器測試都跳過，那一輪什麼都沒測到而畫面上是綠的**
+# （legacy 拆掉之後前端只剩這一份，所有瀏覽器測試都吃它）。
+#
+# ⚠ **判準是「新不新」不是「在不在」。** 第一版只問存不存在，於是
+#   `./tests/run-all.sh --e2e --ui vue` 拿一份**上一次 build 的 dist** 去測，而那份
+#   dist 的原始碼比工作區舊了兩個 commit。症狀是 golden 的網路序列多一發
+#   `/api/auth/me`，我差一點把它當成 Vue 版的 bug 回報出去（2026-08-26 實際發生）。
+#   這與這個檔案開頭清 `__pycache__` 的理由是同一個：**測試必須對應現在的原始碼**，
+#   而「build 產物悄悄落後」沒有任何跡象。
+# ⚠ 只在真的需要時 build：build 一秒多，但每次都跑會讓「跑一次測試」多一個副作用。
+# ⚠ 沒有 npm 就照既有風格跳過**並講出來**，不可以靜靜地讓後面每一支都以「缺 dist」跳過。
+_dist_stale=0
+if [ ! -f server/static/dist/index.html ]; then
+  _dist_stale=1
+# ⚠ `server/static/css/app.css` 也要列進來：SPA 的樣式**不是**打包進 bundle 的，是
+#   `index.html` 直接引用 `/static/css/app.css`（見 frontend/index.html）。它一改，畫面就變，
+#   而 `frontend/` 底下一個字都沒動 —— 少了這一項，golden 會拿一份舊畫面去比新樣式
+#   （完整審查 L3）。
+elif [ -n "$(find frontend/src frontend/index.html frontend/package.json frontend/vite.config.ts \
+              server/static/css/app.css \
+              -newer server/static/dist/index.html -print -quit 2>/dev/null)" ]; then
+  _dist_stale=1
+fi
+if [ "${_dist_stale}" -eq 1 ]; then
+  if command -v npm >/dev/null 2>&1 && [ -f frontend/package-lock.json ]; then
+    printf '\n\033[1m== dist 不在或比原始碼舊，先 build 一次 ==\033[0m\n'
+    if (cd frontend && npm ci --no-audit --no-fund >/dev/null 2>&1 && npm run --silent build); then
+      echo "  PASS  dist 是對應現在這份原始碼的了"
+    else
+      fails=$((fails + 1))
+      echo "   ↑ 前端 build 失敗，vue 模式的瀏覽器測試會全部跳過"
+    fi
+  else
+    skipped+=("前端 dist（host 上沒有 npm 或缺 lockfile，裝 node 24）")
+  fi
+fi
+
+# ⚠ `golden_check.py` 要逐一列名，不能靠 glob：同一個目錄下的 `golden_record.py`（錄）
+#   與 `golden_scenes.py`（場景定義）都不是測試，一條斷言都沒有，被撿走只會空跑。
+#   `fake_ttyd.py`／`fake_gitlab.py` 同理，它們的檔名本來就避開了上面兩個 glob。
+for f in tests/test_*.py tests/e2e_*.py tests/golden_check.py; do
   run_one "${f}"
 done
 

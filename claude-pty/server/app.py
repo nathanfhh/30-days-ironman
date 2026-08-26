@@ -17,10 +17,10 @@ from contextlib import suppress
 from datetime import timedelta
 from functools import wraps
 
-from flask import Flask, g, jsonify, request, session
+from flask import Flask, g, jsonify, request, session, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from . import auth, config, views
+from . import auth, config, version, views
 from . import sessions as sessions_mod
 from .db import init_db
 from .sessions import (
@@ -31,7 +31,7 @@ from .sessions import (
     _as_bool,
 )
 from .views import ViewError
-from .web import redirect_to_login, web
+from .web import login_art, redirect_to_login, web
 
 app = Flask(__name__)
 app.register_blueprint(web)
@@ -64,8 +64,21 @@ if _fatal:
     print("[claude-pty] ✗ 上面是**會讓服務做不了事**的設定錯誤，因此不啟動。修好 deploy/.env 再重新部署。", flush=True)
     raise SystemExit(1)
 
-# 不需登入的端點：登入 API、登入頁、靜態資源、健康檢查。其餘一律過 gate。
-_PUBLIC_ENDPOINTS = {"login", "web.login_page", "web.healthz", "static"}
+# 不需登入的端點：登入 API、登入頁、靜態資源、健康檢查，以及畫面外殼的啟動資料。
+# ⚠ `bootstrap` 公開的**範圍在 2026-08-26 收緊過**：它現在只回 `behind_proxy` 與
+#   `login_art` 兩件事，版號（`build`）與主機路徑（`persist_dir`）搬進要登入的
+#   `/api/account/bootstrap`。原本公開的理由是「這幾件事今天就印在未登入者拿得到的
+#   /login 上」，而那個理由的前提是登入頁該印它們；裁示把前提改掉了（登入頁的頁尾不再
+#   顯示版本，見 frontend/src/components/AppFooter.vue），所以 API 跟著收。
+#   **兩邊要一起收**：只收 API 不收畫面、或反過來，都只是讓人以為收緊了。
+#   需要登入才看得到的東西一律不在那條裡，見 `/api/account/bootstrap`。
+# ⚠ `web.spa_asset` 是 Vue 版的 JS/CSS（`/assets/*`），同樣必須公開——登入頁本身就是那包
+#   SPA，擋掉的話沒登入的人只看得到一片白。它只吐 build 產物，不含任何使用者資料，
+#   與 `static` 同一個性質。
+# ⚠ 這一行是兩條 lane 合併時**唯一會撞在一起的一行**（階段 3 加 `bootstrap`、階段 4 加
+#   `web.spa_asset`），而掉哪一個都不會報錯、只會靜靜壞掉：掉 `bootstrap` 是登入頁沒有
+#   頁尾版本也沒有插畫，掉 `web.spa_asset` 是 vue 模式的登入頁一片白。所以取聯集。
+_PUBLIC_ENDPOINTS = {"login", "bootstrap", "web.login_page", "web.healthz", "static", "web.spa_asset"}
 
 
 @app.errorhandler(SessionNotFound)
@@ -410,6 +423,134 @@ def _check_model_effort(raw: dict) -> None:
         raise BadInput(f"profile.model 只能是 {' / '.join(_CLAUDE_MODELS)}")
     if "effort" in raw and raw["effort"] not in _CLAUDE_EFFORTS:
         raise BadInput(f"profile.effort 只能是 {' / '.join(_CLAUDE_EFFORTS)}")
+
+
+# --- 畫面的啟動資料 ---------------------------------------------------------------
+#
+# 這兩條是為了讓畫面不必再靠 Jinja 注入拿伺服端狀態（前端改 SPA 的階段 3）。模板已於
+# 2026-08-26 隨 legacy 退場，這兩條現在是 SPA 唯一的來源。
+#
+# ⚠ **分界線是 gate，不是頁面。** 未登入的畫面畫得對就好的（`<html data-behind-proxy>`、
+#   登入插畫）走公開那條；**要先證明你是誰才給的**（限制值、GitLab 主機、憑證狀態，
+#   以及 2026-08-26 搬過去的版號與主機路徑）走另一條。
+#   照頁面切的話，登入頁需要的東西會被關在 401 後面，而 SPA 的登入畫面就少一塊；
+#   照主詞切的話（「機器的事實」對「帳號的處境」），`build` 會自己佔一條端點，而登入後
+#   的每一頁都得為那個分類的整齊多打一發。切在 gate 上，兩件事都不會發生。
+# ⚠ **已經有出口的一律不重複**：使用者本人與權限（含 gitlab_pat_configured）在
+#   /api/auth/me、模型清單在 /api/catalog、ttyd 選項在 /api/prefs。重複一份的代價不是
+#   流量，是兩份會分岔，而分岔的那天沒有人會發現，畫面只是「有一邊怪怪的」。
+
+
+@app.get("/api/bootstrap")
+def bootstrap():
+    """**公開**：畫面外殼在知道「你是誰」之前就要畫對的東西。
+
+    這兩件事**在知道你是誰之前**就要畫對，所以這條端點是公開的。
+
+    | 回傳欄位 | 畫面上的樣子 |
+    |---|---|
+    | `behind_proxy` | 開終端要用抽屜還是新分頁（跨 origin 的 direct_url 會被 CSP 擋） |
+    | `login_art` | 登入頁左下角那張插畫的網址 |
+
+    ⚠ **`persist_dir` 與 `build` 在 2026-08-26 搬去 `/api/account/bootstrap`**（裁示 L4）。
+      它們是**主機的內部事實**：宿主機上的一個絕對路徑，以及「這台在跑哪一版 claude-pty、
+      哪一版 ttyd」。對未登入的人那兩件事沒有任何用途，只有一個效果：把「該打哪一個
+      已知漏洞」直接印在門口。原本公開的理由是「登入頁的頁尾今天就印著它們」，而那個
+      理由的前提是**登入頁該印**；前提被改掉了（登入頁的頁尾不再顯示版本，見
+      `frontend/src/components/AppFooter.vue`），所以這條跟著收。
+      **兩邊一起收才是真的收**：只收 API 不收畫面、或反過來，都只是讓人以為收緊了。
+
+    ⚠ `login_art` 每次呼叫重挑一張（見 `web.login_art`）：「每次載入換一張」
+      是這張圖的行為。所以這條**不可以被快取**，也不要拿它的值去做等值比較。
+    """
+    art = login_art()
+    resp = jsonify(
+        behind_proxy=config.BEHIND_PROXY,
+        login_art=url_for("static", filename=f"images/{art}") if art else None,
+    )
+    # ⚠ **只有這一條需要 no-store，所以寫在這裡而不是放寬 `_security_headers`。**
+    #   那支對 JSON 一律不設 Cache-Control 是對的（其餘 API 是每次都問的即時狀態，
+    #   本來就沒有人會快取），為了一條端點把整個 /api/* 都標成不可快取，是拿一個
+    #   全域的決定去解一個局部的問題。
+    #   這一條特別：它是**公開**的 GET（中間任何一層都可能想順手存一份），而它回的
+    #   `login_art` 每次要換一張，被快取就變成同一張圖，那張圖「每次載入換一張」的
+    #   行為當場消失。
+    #   ⚠ `build` 搬走之後這裡少了一個理由（改版後必須跟著變），**但 no-store 要留著**：
+    #     剩下的那一個理由自己就成立。搬走的那一份現在活在 `/api/account/bootstrap`，
+    #     而那條是**帶 cookie 的私有回應**，中間層本來就不會替它存一份。
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.get("/api/account/bootstrap")
+def account_bootstrap():
+    """登入之後，兩個管理頁還缺的伺服端狀態。**一頁一次，不要拆成四條。**
+
+    名字取 `account` 是因為它回答的都是「**這個帳號**的處境」：他的 CLI 憑證設好了沒、
+    他的 GitLab 代理活著沒、他打字時受哪些長度限制。招牌在 sessions 與 account 兩頁都
+    有，所以兩頁都要打這一條，它不是「帳號頁專用」。
+
+    | 回傳欄位 | 畫面上的樣子 |
+    |---|---|
+    | `user` | 招牌上的名字與 admin 徽章、account 的管理員區塊（同 `/api/auth/me`） |
+    | `default_cli` | 招牌徽章看的是哪一種 CLI 的憑證狀態 |
+    | `credentials` | 招牌上的憑證徽章（同 `/api/sessions` 搭順風車那份） |
+    | `limits.name_max` | sessions 的名稱欄 `maxlength` 與重新命名對話框 |
+    | `limits.username_max` | account 新增帳號欄的 `maxlength` 與 `title` |
+    | `limits.min_password_length` | account 改密碼欄的標籤與 `MIN_PW` |
+    | `gitlab.*` | account 的 GitLab 區塊（是否顯示、主機名、代理錯誤） |
+    | `persist_dir` | 抽屜標題列講「哪個目錄寫了會留著」 |
+    | `build` | 頁尾那一排模組版本與 commit |
+
+    ⚠ **`persist_dir` 與 `build` 是 2026-08-26 從公開的 `/api/bootstrap` 搬進來的**
+      （裁示 L4：版號與主機路徑是機敏資訊，登入前不得取得）。它們與這條端點原本那些
+      不同性質：那些是「**這個帳號**的處境」，這兩個是「**這台機器**的事實」，對誰都
+      一樣。放在同一條裡是**照 gate 切、不照主詞切**：它們要的是「先證明你是誰」，
+      而這條端點就是那道 gate 之後的第一發，登入後的每一頁本來就都會打它。為它們另開
+      第三條端點，等於為了分類的整齊讓每一頁多一次往返。
+    ⚠ `build.built_at` **提到最外層**，不留在第一列裡。它是**整包**的屬性、不屬於任何
+      一個模組。留在列裡的話，前端遲早會有人把它畫成「claude-pty 這一列的時間」。
+    ⚠ 版本資訊來自 `version.summary()`，那支有 lru_cache（它會跑 subprocess 問 ttyd 版本）。
+      沒有快取的話，登入後的每一次換頁都是一個「打一次生幾個行程」的入口。
+
+    ⚠ `user` 就是 `/api/auth/me` 回的**同一個物件**（`g.user`，由 `auth._to_dict` 產生）。
+      **不是在這裡另外拼一份**：拼一份就是第二個真相來源，而分岔的那天沒有人會發現，
+      畫面只是「有一邊怪怪的」。PAT 設過沒（`gitlab_pat_configured`）因此順著它一起出來，
+      出口仍然只有 `_to_dict` 那一行，明文與密文一律不出去。
+      `tests/test_bootstrap.py` 有一條「與 `/api/auth/me` 逐欄相同」把這件事釘住。
+    ⚠ 為什麼要合進來：SPA 冷載入帳號頁時，`user` 與下面這些是**同一個時間點**要的東西，
+      拆成兩發等於為了同一個畫面往返兩次（實測 vue 版每頁多打兩發 `/api/auth/me`）。
+      `/api/auth/me` **保留不動**：登入之後想單獨重新確認身分的路徑仍然需要它。
+    ⚠ `limits` **不隨權限改變形狀**：`username_max` 今天只印在 account 的管理員區塊裡，
+      這裡卻對所有登入者都給。這是刻意的：它是一個表單長度常數，不是誰的資料，而讓
+      回傳形狀依角色而異會把一個 `undefined` 分支推給每一個取用它的地方。真正該 gate 的
+      是**那個區塊畫不畫**，答案在 `/api/auth/me` 的 `is_admin`。
+    ⚠ `gitlab.proxy_error` 只在功能開著時才查：關掉時整塊 UI 都不畫（同模板的
+      `{% if gitlab_enabled %}`），為一個不會被顯示的值多打一次 DB 沒有意義。
+    """
+    gitlab_on = config.gitlab_enabled()
+    mods = version.summary()["modules"]
+    return jsonify(
+        user=g.user,
+        default_cli=config.DEFAULT_CLI,
+        persist_dir=config.DATA_BIND,
+        build={"modules": mods, "built_at": mods[0]["built_at"] if mods else None},
+        credentials=sessions_mod.credentials_state(g.user["id"]),
+        limits={
+            "name_max": config.NAME_MAX,
+            "username_max": config.USERNAME_MAX,
+            "min_password_length": config.MIN_PASSWORD_LENGTH,
+        },
+        gitlab={
+            "enabled": gitlab_on,
+            # 空字串是「沒設定」，而 `""` 在畫面上與「設了一個空主機」長得一樣。
+            "host": config.GITLAB_HOST or None,
+            # 代理**連續**起不來時 nginx 說的最後一句話（診斷麵包屑，見
+            # auth.gitlab_proxy_error）。沒有它，使用者只會看到「GitLab 連不到」，
+            # 然後往 token／網路／GitLab 是不是掛了這些錯的方向查。
+            "proxy_error": auth.gitlab_proxy_error(g.user["id"]) if gitlab_on else None,
+        },
+    )
 
 
 @app.get("/api/catalog")

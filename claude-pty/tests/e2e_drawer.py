@@ -32,6 +32,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from server import config  # noqa: E402
 
 TMP = tempfile.mkdtemp(prefix="e2e-drawer-")
@@ -130,55 +131,13 @@ for _ in range(50):
     time.sleep(0.1)
 
 
-# ── ttyd 的替身 ──────────────────────────────────────────────────────────────
-# 只做父頁面真正會碰到的那幾件事。字寬/行高取等寬字的常見比例，讓「改字級」真的會改
-# 變欄列數——測「送出的是哪一個尺寸」需要這個因果關係，寫死的數字驗不出東西。
-#
-# 畫布那一段模的是 xterm 真正的行為（2026-07-27 在真的 ttyd 上量過每一條）：
-#   * backing store 只在**重新量字**時才依當下的 dpr 重建；
-#   * 同值指派 fontSize 會被忽略，所以「先跳開再回來」是唯一叫得動它的方式；
-#   * 改字級**不會**順便重新 fit（欄列數不變）——fit 是 window resize 才跑的。
-# `__scale` 是「建立畫布時用的 dpr」，把它設成 dpr 的兩倍就重現了使用者遇到的畫面：
-# 字被畫成一半大小，要手動按一下 +/- px 才會對。
-STUB = """<!doctype html><meta charset="utf-8"><body style="margin:0;background:#111">
-<div class="xterm"><div class="xterm-screen">
-<canvas class="xterm-link-layer"></canvas><canvas></canvas></div></div>
-<script>
-const CB = [];
-let font = 14;
-window.__remeasures = 0;                 // 重新量字的次數（驗「沒事別亂動」）
-window.term = {
-  options: {
-    get fontSize() { return font; },
-    set fontSize(v) { if (v === font) return; font = v; remeasure(); },
-  },
-  cols: 0, rows: 0,
-  onResize(cb) { CB.push(cb); },
-};
-function paint(scale) {
-  document.querySelectorAll(".xterm canvas").forEach((c) => {
-    c.style.width = window.innerWidth + "px";
-    c.style.height = window.innerHeight + "px";
-    c.width  = Math.round(window.innerWidth  * scale);
-    c.height = Math.round(window.innerHeight * scale);
-  });
-}
-function remeasure() { window.__remeasures++; paint(window.devicePixelRatio || 1); }
-function fit() {
-  const cols = Math.max(2, Math.floor(window.innerWidth  / (font * 0.6)));
-  const rows = Math.max(1, Math.floor(window.innerHeight / (font * 1.2)));
-  paint(window.devicePixelRatio || 1);   // fit 之後畫布一定是對的
-  if (cols === window.term.cols && rows === window.term.rows) return;
-  window.term.cols = cols; window.term.rows = rows;
-  CB.forEach((cb) => cb({ cols, rows }));
-}
-window.addEventListener("resize", fit);
-fit();
-paint(__SCALE__);                        // 起始狀態：畫布與 CSS 尺寸脫節
-__FONT_AFTER__                           // 見下方 stub_font_after 的說明（預設空字串）
-</script>"""
+# ttyd 的替身搬去 `tests/fake_ttyd.py` 了：golden_scenes.py 也要用同一份，複製兩份會各自
+# 漂走，而漂走之後兩邊驗的就不是同一個終端，卻沒有任何東西會紅。
+from fake_ttyd import STUB  # noqa: E402
 
 posts = []  # 收到的每一發 /resize（依序）
+post_at = []  # 每一發送到的牆鐘時刻（ms）。與瀏覽器的 Date.now() 是同一支時鐘，
+# 所以「送出」與「動畫結束」這兩個時間點可以直接比大小（見最後那段時序測試）。
 fail_next = 0  # 還要讓幾發失敗（驗「旗標黏著」）
 stub_scale = "2"  # iframe 起始的畫布倍率；"window.devicePixelRatio" ＝一開始就是好的
 
@@ -214,6 +173,7 @@ def route_session(route, _request):
 def route_resize(route, request):
     global fail_next
     posts.append(json.loads(request.post_data))
+    post_at.append(time.time() * 1000)
     if fail_next > 0:
         fail_next -= 1
         route.fulfill(status=500, content_type="application/json", body='{"error":"session 還在 creating"}')
@@ -231,7 +191,11 @@ def term_size(page):
 
 
 def canvas_state(page):
-    """iframe 裡每一張畫布的 backing store 有沒有跟 CSS 尺寸對上。"""
+    """iframe 裡每一張畫布的 backing store 有沒有跟 CSS 尺寸對上。
+
+    ⚠ `.xterm canvas` 是 ttyd／xterm.js 自己的 DOM（上面那個假頁面照著它長），
+      不是我們的模板，沒有地方可以在上面補 data-testid，所以這裡照原樣認 class。
+    """
     return page.evaluate(
         "() => { const f = document.querySelector('[data-testid=\"drawer-frame\"]');"
         " const w = f.contentWindow, dpr = w.devicePixelRatio || 1;"
@@ -243,11 +207,19 @@ def canvas_state(page):
 
 
 def open_drawer(page, sid):
+    before = len(posts)
     page.click(f'[data-testid="row-open-{sid}"]')
     page.wait_for_selector('[data-testid="drawer"]')
     # pending 收起來＝iframe 已載入且父頁面認得它，attachSizeSync 這時才會開始
     page.wait_for_selector('[data-testid="drawer-pending"]', state="hidden", timeout=8000)
-    page.wait_for_timeout(700)  # 讓 debounce（300ms）那一發送完
+    # ⚠ 不睡一個固定的秒數。送出的時機由「抽屜停定 ＋ iframe 盒子不再變」決定，不是一個
+    #   常數；睡 700ms 在慢一點的機器上會剛好搶在它前面，而那種紅燈長得像功能壞了。
+    #   等它真的到，沒到就讓後面的斷言去說話（這裡不拋）。
+    for _ in range(80):
+        if len(posts) > before:
+            break
+        page.wait_for_timeout(50)
+    page.wait_for_timeout(250)  # 若還會有第二發，讓它也到齊再斷言
 
 
 try:
@@ -260,9 +232,9 @@ try:
         page.route("**/session/**", route_session)
 
         page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-        page.fill("#username", "e2e-admin")
-        page.fill("#password", "e2e-password-1")
-        page.click("#login-btn")
+        page.fill('[data-testid="login-username"]', "e2e-admin")
+        page.fill('[data-testid="login-password"]', "e2e-password-1")
+        page.get_by_role("button", name="進入控制台").click()
         page.wait_for_function("() => !location.pathname.startsWith('/login')", timeout=8000)
         page.wait_for_timeout(600)
 
@@ -419,7 +391,7 @@ try:
         #    有人日後把路徑拆出去或在它上面攔 click 就會靜靜失效。這裡直接點 code 釘住它。
         page.evaluate("() => navigator.clipboard.writeText('__before__')")
         persist.locator("code").click()
-        page.wait_for_selector(".toast", state="visible", timeout=4000)
+        page.wait_for_selector('[data-testid="toast"]', state="visible", timeout=4000)
         check(
             f"🔴 點路徑本身就複製到了（{page.evaluate('navigator.clipboard.readText()')}）",
             page.evaluate("navigator.clipboard.readText()") == config.DATA_BIND,
@@ -434,14 +406,14 @@ try:
         #   只有一個」不等於「不會再有第二個」**——下次有人再發明一個掃得到它的全域機制，
         #   這條就會紅。等 800ms 而不是立刻數：第二則若是非同步來的，立刻數會漏掉。
         page.wait_for_timeout(800)
-        _n = page.locator(".toast").count()
+        _n = page.locator('[data-testid="toast"]').count()
         check(f"🔴 一次點擊只有一則 toast（實際 {_n} 則）", _n == 1)
         # 收掉這一則，下面要驗的是「再點一次」自己那一則
-        page.locator(".toast__close").first.click()
-        page.wait_for_selector(".toast", state="detached", timeout=4000)
+        page.locator('[data-testid="toast-close"]').first.click()
+        page.wait_for_selector('[data-testid="toast"]', state="detached", timeout=4000)
         persist.click()
-        page.wait_for_selector(".toast", state="visible", timeout=4000)
-        toast_el = page.locator(".toast").first
+        page.wait_for_selector('[data-testid="toast"]', state="visible", timeout=4000)
+        toast_el = page.locator('[data-testid="toast"]').first
         check("🔴 有 toast", toast_el.is_visible())
         check("toast 說得出複製了什麼", config.DATA_BIND in toast_el.inner_text())
         copied = page.evaluate("navigator.clipboard.readText()")
@@ -449,22 +421,23 @@ try:
         box = toast_el.bounding_box()
         top = page.evaluate(
             "([x, y]) => { const e = document.elementFromPoint(x, y);"
-            "  return e ? (e.closest('.toast') ? 'toast'"
-            "            : e.closest('.drawer') ? 'drawer' : e.tagName) : 'none'; }",
+            "  return e ? (e.closest('[data-testid=toast]') ? 'toast'"
+            "            : e.closest('[data-testid=drawer]') ? 'drawer' : e.tagName) : 'none'; }",
             [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2],
         )
         check(f"🔴 toast 那個點上最上層的是 toast 本身而不是抽屜（{top}）", top == "toast")
         # 抽屜把 .shell 設成 inert；toast 掛在 document.body 而不是 .shell 裡，所以仍點得到。
-        check("toast 沒有被 inert 掃到（關閉鍵可以按）", page.locator(".toast__close").first.is_enabled())
+        check("toast 沒有被 inert 掃到（關閉鍵可以按）", page.locator('[data-testid="toast-close"]').first.is_enabled())
 
         print("== 提示是輪播：同時只露一條，而且會換 ==")
         # ⚠ 先把滑鼠移開、焦點放掉：輪播**依設計**在 hover/focus 時暫停（裡面有可點的
         #   複製鍵），而上一段剛剛點過它。不做這件事會等到逾時，然後看起來像「輪播壞了」。
         page.mouse.move(5, 5)
         page.evaluate("document.activeElement && document.activeElement.blur()")
-        hints = page.locator('[data-testid="drawer-hints"] .drawer__hint')
+        # 兩條提示各自有 testid（drawer-persist / drawer-mouse），這裡數的是「有 testid 的那些」
+        hints = page.locator('[data-testid="drawer-hints"] [data-testid]')
         check(f"兩條提示都在 DOM 裡（{hints.count()} 條）", hints.count() == 2)
-        shown = page.locator('[data-testid="drawer-hints"] .drawer__hint[data-on="true"]')
+        shown = page.locator('[data-testid="drawer-hints"] [data-testid][data-on="true"]')
         check("🔴 同時只有一條露臉", shown.count() == 1)
         first = shown.first.get_attribute("data-testid")
         # ⚠ 等的是「換人了」而不是固定睡 6 秒：睡太短會偶爾紅、睡太久拖慢整套。
@@ -476,7 +449,7 @@ try:
         try:
             page.wait_for_function(
                 "(prev) => { const el = document.querySelector("
-                '  \'[data-testid="drawer-hints"] .drawer__hint[data-on="true"]\');'
+                "  '[data-testid=drawer-hints] [data-testid][data-on=true]');"
                 "  return el && el.dataset.testid !== prev; }",
                 arg=first,
                 timeout=9000,
@@ -487,7 +460,7 @@ try:
         check("換完之後仍然只有一條露臉", shown.count() == 1)
         # 沒露臉的不可以還在 Tab 序裡——否則鍵盤使用者會 Tab 到一顆看不見的複製鍵
         hidden_focusable = page.evaluate(
-            "[...document.querySelectorAll('[data-testid=\"drawer-hints\"] .drawer__hint')]"
+            "[...document.querySelectorAll('[data-testid=drawer-hints] [data-testid]')]"
             "  .filter(h => h.dataset.on !== 'true' && !h.inert).length"
         )
         check(f"🔴 沒露臉的都退出 Tab 序（{hidden_focusable} 個漏網）", hidden_focusable == 0)
@@ -558,9 +531,97 @@ try:
         globals()["stub_font_after"] = ""
         page.evaluate("() => localStorage.removeItem('claude-pty:term-font')")
 
+        print("== 🔴 送出的時機：抽屜停定之後，不是滑到一半 ==")
+        # 這一條守的是**順序**，不是數字。
+        #
+        # 送出的時機原本完全由一個 300ms 的 debounce 決定，而抽屜的滑入是 CSS 裡的 240ms
+        # transition，兩者誰先誰後沒有任何人管：prefers-reduced-motion、慢一點的機器、
+        # 或哪天有人把動畫調長，都會換一個答案。把動畫拉長到 800ms 就看得出來：修之前
+        # 那一發在 +335ms 就送掉了，那時面板還滑到一半（2026-08-25 用 Playwright 逐幀量的）。
+        #
+        # ⚠ 這裡**不驗**「送出的格數是中途值」，因為那件事並沒有發生：滑入用的是
+        #   `transform: translateX()`，不影響版面尺寸，實測整段動畫期間 iframe 的
+        #   clientWidth/innerWidth 從第一幀到最後一幀都是 1295×834。要守的是
+        #   「UI 停定之後才告訴 PTY」這個順序本身，不是一個被誤診出來的數字。
+        # ⚠ 動畫時長只在測試裡改（add_style_tag），`app.css` 一行沒動；量完就把那條規則
+        #   移掉，後面的段落不受影響。
+        slow = page.add_style_tag(content=".drawer__panel { transition: transform 800ms linear !important; }")
+        posts.clear()
+        post_at.clear()
+        page.click('[data-testid="row-open-e1"]')
+        page.wait_for_selector('[data-testid="drawer"]')
+        # 面板的滑入真的跑完的時刻。
+        # ⚠ 不可以只 `getAnimations()` 一次就算數：`data-open` 是下一幀才打上去的，這一刻
+        #   多半還沒有任何動畫在跑，拿到空陣列會讓這條斷言變成恆真（動畫結束＝按下去的
+        #   那一刻，當然比送出早）。所以要等到它真的出現，再等它 finished。
+        anim_end = page.evaluate("""() => new Promise((resolve) => {
+          const panel = document.querySelector('.drawer__panel');
+          let frames = 0;
+          const poll = () => {
+            const anims = panel.getAnimations();
+            if (anims.length) {
+              Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(() => resolve(Date.now()));
+              return;
+            }
+            // 等了二十幾幀還是沒有動畫：prefers-reduced-motion 把 transition 關掉了，
+            // 那就是「一開始就停定」，據實回報而不是假裝有等過。
+            if (++frames > 24) return resolve(Date.now());
+            requestAnimationFrame(poll);
+          };
+          poll();
+        })""")
+        for _ in range(80):
+            if posts:
+                break
+            page.wait_for_timeout(50)
+        page.wait_for_timeout(400)
+        live = term_size(page)
+        last = posts[-1] if posts else {}
+        sent_at = post_at[-1] if post_at else None
+        check(f"有送出（收到 {len(posts)} 發）", len(posts) >= 1)
+        check(
+            "🔴 最後一發是在抽屜停定**之後**才送的"
+            f"（動畫結束後 {round(sent_at - anim_end) if sent_at else '沒送'}ms 才送出）",
+            sent_at is not None and sent_at >= anim_end,
+        )
+        check(
+            f"送出的就是最終尺寸 {live['cols']}×{live['rows']}（實收 {last.get('cols')}×{last.get('rows')}）",
+            last.get("cols") == live["cols"] and last.get("rows") == live["rows"],
+        )
+        check(f"等歸等，還是只送一發（收到 {len(posts)} 發）", len(posts) == 1)
+        check(f"redraw 旗標沒有被這道閘吃掉：{last}", last.get("redraw") is True)
+        slow.evaluate("el => el.remove()")
+        page.click('[data-testid="drawer-close"]')
+        page.wait_for_selector('[data-testid="drawer"]', state="detached")
+
+        print("== 🔴 面板上有無限動畫時，尺寸照樣送得出去 ==")
+        # 這條守的是 `drawerSettled()` 的濾網。`getAnimations()` 回的是元素上**所有**動畫，
+        # 面板上只要有一個 `animation: ... infinite`（呼吸燈、脈動、旋轉的載入圖示都算），
+        # 它的 `finished` 永遠不會 resolve，於是 /resize 從此再也送不出去。
+        #
+        # ⚠ 這種壞法最惡劣的地方是**肇因與症狀完全不相干**：改的是一條 CSS 裝飾，壞掉的是
+        #   容器裡的 TTY 尺寸。沒有這條斷言的話，加裝飾的人不會有任何理由懷疑到自己。
+        # ⚠ 用 add_style_tag 灌一個無限動畫進去，`app.css` 一行沒動，量完就移除。
+        spin = page.add_style_tag(
+            content="@keyframes e2e-pulse { from { opacity: 1 } to { opacity: 0.985 } }"
+            " .drawer__panel { animation: e2e-pulse 1s linear infinite !important; }"
+        )
+        posts.clear()
+        open_drawer(page, "e1")
+        live = term_size(page)
+        sent = posts[-1] if posts else {}
+        check(f"🔴 有無限動畫也照樣送得出去（收到 {len(posts)} 發）", len(posts) >= 1)
+        check(
+            f"而且送的還是最終尺寸 {live['cols']}×{live['rows']}（實收 {sent.get('cols')}×{sent.get('rows')}）",
+            sent.get("cols") == live["cols"] and sent.get("rows") == live["rows"],
+        )
+        spin.evaluate("el => el.remove()")
+        page.click('[data-testid="drawer-close"]')
+        page.wait_for_selector('[data-testid="drawer"]', state="detached")
+
         print("== 同時只留一個抽屜 ==")
         open_drawer(page, "e1")
-        page.evaluate("""() => document.querySelector('.shell').inert = false""")
+        page.evaluate("""() => document.querySelector('[data-testid=shell]').inert = false""")
         page.click('[data-testid="row-open-e2"]', force=True)
         page.wait_for_selector('[data-testid="drawer"]')
         page.wait_for_timeout(700)

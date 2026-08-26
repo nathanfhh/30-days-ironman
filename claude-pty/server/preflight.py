@@ -277,6 +277,15 @@ def preflight() -> tuple[list[str], list[str]]:
                     f"`--build-arg NCR_UID={os.getuid()}` 對齊（Linux 上請用 `id -u`），"
                     f"並把既有的 {config.SPACE_SELF}/user-* 一併 chown。{_hint}"
                 )
+    # 前端是唯一的一份（legacy 已於 2026-08-26 拆除），所以只剩「build 過沒」要問。
+    # ⚠ 沒有它的話三個頁面都回 404，而那看起來像路由壞掉——症狀指向完全錯的地方，
+    #   所以要在啟動時就講清楚。
+    if not os.path.isfile(os.path.join(config.DIST_DIR, "index.html")):
+        problems.append(
+            f"{config.DIST_DIR}/index.html 不存在——前端還沒 build。"
+            f"跑 `cd frontend && npm ci && npm run build`（或用 deploy/Dockerfile 的 node 階段）。"
+            f"沒有它的話 /、/login、/account 三個頁面都會回 404，而那看起來像路由壞掉。"
+        )
     if config.PAGE_SIZE_CLAMPED is not None:
         problems.append(
             f"CLAUDE_PTY_PAGE_SIZE={config.PAGE_SIZE_CLAMPED} 不在 1–{config.MAX_PAGE_SIZE} "

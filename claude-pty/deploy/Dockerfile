@@ -63,6 +63,38 @@ RUN cargo build --release --locked && /src/rust/target/release/ttyd --version
 #   而不是等到執行時靜默少一層。這是「用真 binary 驗旗標真的被接受」，不是讀 --version。
 RUN for flag in --title --auth-url --auth-cache-ttl; do         /src/rust/target/release/ttyd --help 2>&1 | grep -q -- "$flag"         || { echo "FATAL: Rust ttyd 缺旗標 $flag（fork 版本不對？）" >&2; exit 1; };     done
 
+# --- 第二階段：把 Vue 版前端 build 出來（階段 4）----------------------------------
+#
+# ⚠ 產物**不進版控**（`claude-pty/.gitignore` 只加了 `server/static/dist/` 一行），所以它
+#   一定要在 build 期產生。少了這一階段，三個頁面會全部 404——
+#   而那看起來像路由壞掉，不像「你忘了 build 前端」。
+# ⚠ 用 `npm ci` 不是 `npm install`：ci 只照 lockfile 裝，裝不出來就直接失敗。install 會
+#   為了「解得開」而自己挑另一組版本，於是 image 裡跑的與 lockfile 講的可以是兩組——那正是
+#   下面 python 那段 `uv lock --check → --require-hashes` 在防的同一件事，只是換個生態系。
+# ⚠ 這一階段**不需要**檔頭那條 https 規則：node:24-slim 不裝任何 apt 套件。
+FROM node:24-slim AS frontend
+WORKDIR /build/frontend
+# 先只複製兩份清單：原始碼改了不必重裝相依（npm ci 是這整包裡第二貴的一步）。
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+# ⚠ `app.css` 是**原檔**、住在 Vite root 的外面（`src/main.ts` 直接 import 它）。
+#   階段 4 的前提是 CSS 一字不改，所以這裡帶原檔進來，不複製成第二份真相。
+COPY server/static/css/app.css /build/server/static/css/app.css
+# outDir 是 `../server/static/dist`（見 frontend/vite.config.ts），所以產物落在 /build/server/。
+# ⚠ 明確驗一次產物在不在：vite 失敗時的退出碼是可靠的，但「build 成功卻沒有 index.html」
+#   （改錯 outDir）是靜悄悄的，而症狀要到部署之後才看得見。
+RUN npm run build && test -f /build/server/static/dist/index.html
+
+# --- 第三階段：nginx（**只有 `--target nginx` 才會 build**）------------------------
+#
+# 為什麼 dist 用 COPY 進 image 而不是 bind mount：mount 的話，host 上沒 build 過的目錄會被
+# docker 建成一個**空目錄**頂替，症狀是整站 404 而不是「你忘了 build」；而且正式站的產物
+# 就該跟著 image 走版本，不該取決於部署那台機器當下的工作區。
+# nginx.conf 仍然是 mount 的（改設定不必重 build，見 docker-compose.yml）。
+FROM nginx:alpine AS nginx
+COPY --from=frontend /build/server/static/dist /usr/share/nginx/html
+
 FROM python:3.13-slim
 
 # docker CLI（只要 client，不要 daemon——daemon 是 host 的）+ ttyd
@@ -174,6 +206,15 @@ RUN pip install --no-cache-dir uv==0.7.3 \
     && rm -f /tmp/requirements.txt \
     && pip freeze > /app/installed-requirements.txt \
     && python -c "import gunicorn, psutil, flask, sqlalchemy, argon2"
+
+# SPA 的產物。**dev 與 e2e 走這條**（in-thread Flask serve dist，見 server/web.py 的
+# `_spa_shell`／`spa_asset`）；正式站是 nginx 直出上面那個 stage 的同一份產物。
+# ⚠ 放在 pip install **之後**：這個套件沒有宣告 package-data（見 pyproject 的
+#   `[tool.setuptools.packages.find]`），所以執行期讀的一律是 `/app/server`，不是
+#   site-packages 那份。放在後面只是為了不讓「改前端」把 pip 那一層的快取一起弄掉。
+# ⚠ 這一份是 dev 與 e2e 那條路要的：正式部署由 nginx 直出 dist（見 deploy/nginx.conf），
+#   而 Flask 自己 serve 頁面時（沒有 nginx）也要拿得到同一份產物。
+COPY --from=frontend /build/server/static/dist /app/server/static/dist
 
 # registry / secret key 的落腳處；compose 以 volume 掛入使其跨重啟持久。
 ENV CLAUDE_PTY_CONTROL_HOST=0.0.0.0

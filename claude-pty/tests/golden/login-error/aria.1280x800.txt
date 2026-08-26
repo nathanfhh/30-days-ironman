@@ -1,0 +1,13 @@
+- main:
+  - complementary:
+    - paragraph: 控制平台
+    - heading "claude-pty" [level=1]:
+      - text: claude
+      - emphasis: "-pty"
+  - heading "身分驗證" [level=2]
+  - text: 帳號或密碼錯誤 使用者名稱
+  - textbox "使用者名稱": golden-user
+  - text: 密碼
+  - textbox "密碼": definitely-wrong
+  - button "顯示密碼": 
+  - button " 進入控制台"

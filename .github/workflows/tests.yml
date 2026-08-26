@@ -47,6 +47,60 @@ jobs:
       - name: build 控制平面 image（frozen + hash-verified）
         working-directory: claude-pty
         run: docker build -f deploy/Dockerfile -t claude-pty-control:ci .
+      # ⚠ `--target nginx` 那一階段**不會**被上面那次 build 帶到（buildkit 只 build 目標
+      #   依賴到的 stage），所以要單獨來一次。它守的是「Vue 版的產物真的進得了 nginx image」
+      #   ——沒有它的話，正式站切到 vue 才會發現整站 404，而那看起來像路由壞掉。
+      - name: build nginx image（Vue 版產物要跟著 image 走版本）
+        working-directory: claude-pty
+        run: |
+          set -euo pipefail
+          docker build -f deploy/Dockerfile --target nginx -t claude-pty-nginx:ci .
+          docker run --rm --entrypoint sh claude-pty-nginx:ci -c \
+            'test -f /usr/share/nginx/html/index.html && ls /usr/share/nginx/html/assets | head -5'
+      - name: 控制平面 image 裡也要有同一份 dist（dev 與 e2e 走 Flask 那條路）
+        run: docker run --rm --entrypoint sh claude-pty-control:ci -c 'test -f /app/server/static/dist/index.html'
+      # ⚠ **這一步抓的是「三個頁面全部 404」。** `test_nginx_contract` 是結構測試：它證明
+      #   指令都在、接對了名字，證明不了 nginx 真的照做。而 try_files 的內部轉向正是那種
+      #   「設定看起來完全正確、跑起來卻整站 404」的東西（`try_files $uri /index.html;` 會
+      #   把 /index.html 當新請求重跑一次 location 比對 → 落到 location / → proxy 給
+      #   Flask → 404）。所以這裡起真的 nginx 用真的 curl 問。
+      # ⚠ **刻意不起 Flask。** `control` 指到 127.0.0.1、那個 port 上沒有東西，所以任何
+      #   落到 `location /` 的請求都會是 502——502 就是失敗，200 才是「nginx 自己送出了殼」。
+      #   起了 Flask 的話兩條路都會 200，這道閘就分不出來了。
+      - name: nginx 真的送得出 SPA 的殼（vue 片段）
+        working-directory: claude-pty
+        run: |
+          set -euo pipefail
+          docker rm -f pty-nginx-ci >/dev/null 2>&1 || true
+          docker run -d --name pty-nginx-ci --add-host control:127.0.0.1 -p 18080:8080 \
+            -v "$PWD/deploy/nginx.conf:/etc/nginx/conf.d/claude-pty.conf:ro" \
+            -v "$PWD/deploy/nginx-ui/vue:/etc/nginx/claude-pty-ui:ro" \
+            claude-pty-nginx:ci
+          for i in $(seq 1 20); do
+            curl -sf -o /dev/null http://127.0.0.1:18080/login && break || sleep 0.5
+          done
+          fail=0
+          for path in / /login /account; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18080${path}")
+            echo "${path} → ${code}"
+            [ "${code}" = "200" ] || { echo "::error::${path} 回 ${code}，不是 200（502＝落到 location / 被 proxy 走了）"; fail=1; }
+          done
+          # 安全標頭要真的送出來（那三條路不經 Flask，`_security_headers` 不會跑）
+          hdrs=$(curl -sI http://127.0.0.1:18080/login)
+          for h in "Cache-Control: no-store" "X-Frame-Options: DENY" "X-Content-Type-Options: nosniff" "Referrer-Policy: same-origin" "Content-Security-Policy:"; do
+            echo "${hdrs}" | grep -qi "^${h}" || { echo "::error::/login 少了標頭：${h}"; fail=1; }
+          done
+          # Cache-Control 只能有一份（expires 與 add_header 並用會送兩份）
+          asset=$(docker exec pty-nginx-ci sh -c 'ls /usr/share/nginx/html/assets | head -1')
+          n=$(curl -sI "http://127.0.0.1:18080/assets/${asset}" | grep -ci '^Cache-Control:')
+          [ "${n}" = "1" ] || { echo "::error::/assets/ 回了 ${n} 份 Cache-Control"; fail=1; }
+          docker rm -f pty-nginx-ci >/dev/null
+          exit "${fail}"
+      # ⚠ 這裡曾經有一個「legacy 片段不改變舊路」的步驟：掛 `nginx-ui/legacy`（空的片段）
+      #   起 nginx，驗三條頁面路由仍然 502（＝落到 `location /` 去 proxy 給 Flask，而 Flask
+      #   不在，所以 502 才是對的）。它守的是「切換器只加分支、不動舊路」，而 legacy 於
+      #   2026-08-26 拆除、那個目錄也刪了，性質本身不再存在。上面那個 `pty-nginx-ci` 的
+      #   步驟（vue 片段真的把三條路由直出成 index.html）照舊。
       # image 裡落地的是哪一組版本，要對得回 lockfile。只驗「build 成功」不夠：
       # `--require-hashes` 保證裝的東西沒被掉包，但保證不了它跟 uv.lock 講的是同一組。
       - name: 落地版本必須對得回 uv.lock
@@ -74,21 +128,73 @@ jobs:
         working-directory: claude-pty
         run: python3 tests/test_locked_runtime.py
 
+  golden-change:
+    # golden 動了，commit 訊息就要說是哪幾場（完整審查 L2）。
+    #
+    # ⚠ **只在 PR 上跑。** 它比的是「這個 PR 改了什麼」，而 push 到 main 那一刻沒有 base
+    #   可比（要嘛沒有範圍、要嘛範圍是整個歷史）。既有的重錄 commit 沒有帶標記，這道 gate
+    #   對它們放行不是特例，是它本來就只看 PR range。
+    # ⚠ `fetch-depth: 0`：預設是淺 clone，拿不到 base 的 commit，`rev-list` 會解不開範圍。
+    #   那時腳本會**紅**而不是當成「沒有變動」——「看不到」與「沒有」不可以長得一樣。
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: golden 變動要在 commit 訊息裡交代
+        working-directory: claude-pty
+        run: ./tests/check_golden_change.sh "${{ github.event.pull_request.base.sha }}..HEAD"
+
   claude-pty:
-    # quick 模式：跳過所有會真的起容器的整合測試，不需要 image，約一分鐘。
+    # quick 模式：跳過所有會真的起容器的整合測試，不需要 image。
     # ⚠ 這個 job 存在的理由寫在 run-all.sh 的檔頭：測試寫得再好，沒有機制保證它們被跑過
     #   就等於少了一半。在它之前，claude-pty 那 11,000 行測試沒有任何自動觸發。
+    # ⚠ 這裡曾經有一個並行的 `claude-pty-vue` job（`--ui vue`）。兩版並存期間它是必要的，
+    #   2026-08-26 legacy 拆除之後**兩個 job 跑的是同一件事**，所以併回來了。
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      # app.js 的語法檢查要 node；沒有的話 run-all.sh 會跳過它並講出來，但那一關壞掉時
-      # 症狀是「每支瀏覽器測試都停在登入逾時」，不該讓它在 CI 上缺席。
+      # node 管前端那六關（npm ci / oxlint / prettier / vue-tsc / vitest / vite build），
+      # 而最後一關 build 出來的 dist 正是所有瀏覽器測試要吃的東西。沒有它的話 run-all.sh
+      # 會把六關與每一支瀏覽器測試都跳過並講出來，而那一輪等於什麼都沒測到。
+      - uses: aquasecurity/setup-trivy@v0.3.1
+        # 前端相依掃描（run-all.sh 的 trivy 那關）要 runner 上真的有 trivy；沒有的話它會
+        # 「跳過並講出來」，而跳過在 CI 上要被下面那道上限擋住。裝了它，掃描才是真的跑。
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: ./tests/run-all.sh
+          cache: npm
+          cache-dependency-path: claude-pty/frontend/package-lock.json
+      - name: playwright 瀏覽器
+        # 八支 e2e 加 golden_check 都要它。版本要跟 run-all.sh 問到的那顆一致——它問的是
+        # playwright 自己要哪一個 build，不是看快取目錄在不在（快取裡留著舊 build 是常態）。
+        run: uv run --with playwright python -m playwright install --with-deps chromium-headless-shell
+      - name: 全套（quick）
         working-directory: claude-pty
+        run: |
+          set -o pipefail
+          ./tests/run-all.sh 2>&1 | tee /tmp/pty-quick.log
+      - name: 跳過清單必須只剩已知的那些
+        # ⚠ 「安靜地跳過」在 CI 上跟「跑過而且過了」長得一模一樣，這是假綠燈第一種形狀。
+        #   瀏覽器沒裝、dist 沒 build 的話，run-all.sh 會把每一支瀏覽器測試都跳過並回
+        #   exit 0，那一輪什麼都沒測到而綠勾長得跟真的一樣。
+        # ⚠ **預期是 14：需要 docker 的那 14 支（quick 模式本來就不跑）。** trivy 已由
+        #   setup-trivy 裝進 runner，前端相依掃描是真的跑，不再是跳過項（PR #2 第一輪 CI
+        #   就是因為 runner 沒有 trivy 而在 dev-container job 多跳一支）。
+        #   `test_entrypoint_human_path` 同時需要 docker，quick 模式下它是被 docker 那道
+        #   gate 擋掉的，已經算在 14 裡面（fable 快審 4b 低 3）。
+        working-directory: claude-pty
+        run: |
+          n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-quick.log)
+          n=${n:-0}
+          echo "跳過 ${n} 支（預期上限 14：需要 docker 的那 14 支）"
+          if [ "${n}" -gt 14 ]; then
+            sed -n '/^跳過/,$p' /tmp/pty-quick.log
+            echo "::error::跳過的數量超出預期——CI 上的跳過幾乎都是設定漏了，不是正當的環境限制"
+            exit 1
+          fi
 
   dev-container:
     # build image ＋ 全套（含那 13 支要 docker 的）。
@@ -99,9 +205,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      # 這個 job 跑 `run-all.sh --all`，前端那六關也在裡面（見 claude-pty job 的說明）。
+      - uses: aquasecurity/setup-trivy@v0.3.1
+        # 前端相依掃描（run-all.sh 的 trivy 那關）要 runner 上真的有 trivy；沒有的話它會
+        # 「跳過並講出來」，而跳過在 CI 上要被下面那道上限擋住。裝了它，掃描才是真的跑。
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
+          cache-dependency-path: claude-pty/frontend/package-lock.json
       # ⚠ install: true 把 `docker build` 換成 buildx，build.sh 才吃得到 --cache-from。
       #   不改用 build-push-action，是因為「Linux 才帶 NCR_UID」那段判斷只寫在 build.sh
       #   裡；重寫一份等於讓兩條路分家，而分家的那天不會有人發現。
