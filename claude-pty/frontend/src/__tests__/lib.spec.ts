@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api, setUnauthorizedHandler } from "@/api/client";
 import { activeFilterKeys, filterParams } from "@/lib/filters";
 import { chipsOf, freshness, liveState, type SessionRow } from "@/lib/sessions";
-import { lsGet, lsJson, lsSet } from "@/lib/storage";
+import { lsDel, lsGet, lsJson, lsSet } from "@/lib/storage";
 import { absTime, relTime, span } from "@/lib/time";
 import { dismissToast, drainPendingToast, toast, toastAfterNav, toasts } from "@/lib/toast";
 
@@ -67,6 +67,29 @@ describe("lib/storage", () => {
       throw new Error("blocked");
     });
     expect(lsGet("k", "fallback")).toBe("fallback");
+    spy.mockRestore();
+  });
+
+  it("🔴 寫入被擋下時回 false 而不是拋出去（呼叫端據此決定要不要退而求其次）", () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    expect(lsSet("k", "v")).toBe(false);
+    spy.mockRestore();
+    // 拋出去的話呼叫它的那一段後面全部不執行，而且畫面上沒有任何跡象
+    expect(lsSet("k", "v")).toBe(true);
+  });
+
+  it("刪除同樣包起來：刪不掉不是理由讓整個初始化中斷", () => {
+    lsSet("k", "v");
+    expect(lsDel("k")).toBe(true);
+    expect(lsGet("k")).toBeNull();
+    // 不存在的鍵也算刪成功（removeItem 本來就是冪等的）
+    expect(lsDel("nope")).toBe(true);
+    const spy = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    expect(lsDel("k")).toBe(false);
     spy.mockRestore();
   });
 });

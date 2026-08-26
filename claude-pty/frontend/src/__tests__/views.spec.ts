@@ -4,10 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 
 import App from "@/App.vue";
+import SettingsModal from "@/components/SettingsModal.vue";
 import { authGuard } from "@/router";
 import LoginView from "@/views/LoginView.vue";
 import SessionsView from "@/views/SessionsView.vue";
-import { applyTheme, paintTheme, persistTheme, setThemeVars, THEME_STORAGE_KEY } from "@/lib/theme";
+import {
+  applyTheme,
+  initTheme,
+  paintTheme,
+  persistTheme,
+  setThemeVars,
+  THEME_STORAGE_KEY,
+  THEME_VARS_KEY,
+} from "@/lib/theme";
 import { toasts } from "@/lib/toast";
 import { useSiteStore } from "@/stores/site";
 
@@ -621,5 +630,262 @@ describe("lib/theme", () => {
     await applyTheme("daylight", null);
     expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#f0a");
     paintTheme("instrument", null);
+  });
+});
+
+/* ── 設定對話框 ────────────────────────────────────────────────────────────────
+ * 上面那一支從身分下拉把它叫出來，守的是「叫得出來、關得掉」。這裡直接掛元件，守的是
+ * 讀不到偏好時畫成什麼、換一顆 ttyd 那條 PATCH，以及**存不進去時值要轉回真實值**：
+ * 留著假象的話畫面會說「已經是 Rust 版了」，而下一場開出來還是 C 版。
+ */
+const PREFS = {
+  ttyd_bin: "ttyd",
+  ttyd_choices: [
+    { value: "ttyd", label: "C 版" },
+    { value: "ttyd-rs", label: "Rust 版" },
+  ],
+};
+
+function mountSettings(): VueWrapper {
+  const w = mount(SettingsModal, { attachTo: document.body });
+  mounted.push(w);
+  return w;
+}
+
+/** ⚠ 對話框是 Teleport 到 body 的，wrapper.find() 看不到它，一律回文件裡找。 */
+function inDoc<T extends Element>(selector: string): T {
+  const found = document.querySelector<T>(selector);
+  if (!found) throw new Error(`畫面上找不到 ${selector}`);
+  return found;
+}
+
+const clickIn = async (selector: string): Promise<void> => {
+  inDoc<HTMLElement>(selector).click();
+  await flushPromises();
+};
+
+const pressEscape = (): void => {
+  document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+};
+
+describe("SettingsModal", () => {
+  it("🔴 Esc 掛在 document 上：對話框是從下拉點開的，焦點根本不在它裡面", async () => {
+    installFetch({ "/api/prefs": { body: PREFS } });
+    const w = mountSettings();
+    await flushPromises();
+    // 初始焦點放關閉鍵：picker 要等 /api/prefs 回來才建，它是唯一一定聚焦得上的控件
+    expect(document.activeElement).toBe(inDoc('[data-testid="settings-modal"] [data-act="close"]'));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+    expect(w.emitted("close")).toBeUndefined();
+    pressEscape();
+    expect(w.emitted("close")).toHaveLength(1);
+  });
+
+  it("拆掉之後 Esc 就不該再被接走（監聽掛在 document 上，不拆會留一輩子）", async () => {
+    installFetch({ "/api/prefs": { body: PREFS } });
+    const w = mountSettings();
+    await flushPromises();
+    w.unmount();
+    mounted.splice(mounted.indexOf(w), 1);
+    pressEscape();
+    expect(w.emitted("close")).toBeUndefined();
+  });
+
+  it("點遮罩關、點盒子裡面不關", async () => {
+    installFetch({ "/api/prefs": { body: PREFS } });
+    const w = mountSettings();
+    await flushPromises();
+    await clickIn('[data-testid="modal-box"]');
+    expect(w.emitted("close")).toBeUndefined();
+    await clickIn('[data-testid="settings-modal"]');
+    expect(w.emitted("close")).toHaveLength(1);
+  });
+
+  it("讀不到偏好時說得出原因，而且不畫一個沒有選項的下拉", async () => {
+    installFetch({ "/api/prefs": { status: 500, body: { error: "boom" } } });
+    mountSettings();
+    await flushPromises();
+    expect(toasts.at(-1)!.title).toContain("讀取設定失敗");
+    expect(document.querySelector("#pick-ttyd")).toBeNull();
+    // 對話框本身照畫，不然點了設定像是完全沒有反應
+    expect(document.querySelector('[data-testid="settings-modal"]')).not.toBeNull();
+  });
+
+  it("換一顆 ttyd：PATCH 出去，並講明「已經開著的那一場不會換」", async () => {
+    installFetch({
+      "/api/prefs": (init) =>
+        init?.method === "PATCH" ? { body: { ...PREFS, ttyd_bin: "ttyd-rs" } } : { body: PREFS },
+    });
+    mountSettings();
+    await flushPromises();
+    await clickIn('[data-testid="pick-ttyd-button"]');
+    await clickIn('[data-testid="pick-ttyd-opt-ttyd-rs"]');
+    const patch = calls.find((c) => c.url === "/api/prefs" && c.method === "PATCH")!;
+    expect(patch.body).toEqual({ ttyd_bin: "ttyd-rs" });
+    // 講的是 label 不是 value：畫面上從來沒出現過 "ttyd-rs" 這個字
+    expect(toasts.at(-1)!.title).toContain("Rust 版");
+    expect(toasts.at(-1)!.title).toContain("終端分頁全部關掉");
+  });
+
+  it("存不進去要說是哪一句話卡住了，而且不可以報成功", async () => {
+    installFetch({
+      "/api/prefs": (init) =>
+        init?.method === "PATCH"
+          ? { status: 500, body: { error: "唯讀的設定檔" } }
+          : { body: PREFS },
+    });
+    mountSettings();
+    await flushPromises();
+    await clickIn('[data-testid="pick-ttyd-button"]');
+    await clickIn('[data-testid="pick-ttyd-opt-ttyd-rs"]');
+    expect(toasts.at(-1)!.title).toContain("設定沒存成功");
+    expect(toasts.at(-1)!.title).toContain("唯讀的設定檔");
+    expect(toasts.at(-1)!.level).toBe("danger");
+  });
+
+  /* 🐛 **目前是紅的，而且它抓到的是真的壞掉**（用 it.fails 標著：哪天修好了這一支會改成
+   *    「預期失敗卻通過」而炸開，那時把 `.fails` 拿掉即可）。
+   *
+   *    `save()` 第一行的 `const before = value.value` 想記下「改之前是什麼」，但 SitePicker
+   *    是先 `emit("update:modelValue")` 再 `emit("change")`，而 v-model 的處理器是同步跑的，
+   *    所以 save 讀到的 `before` 已經是**新值**，catch 裡那句「轉回真實值」等於什麼都沒做。
+   *    後果：畫面停在「Rust 版」，而下一場開出來的是 C 版，兩者不一致且沒有任何跡象。
+   *    修法是把改前的值留在 change 之外（例如在 SitePicker 的 change 事件裡一併帶上舊值，
+   *    或改用 `@change` 單向、不掛 v-model），那是行為變更，不在這一輪的範圍內。 */
+  it.fails("🔴 存不進去就把值轉回真實值，不要留一個假象", async () => {
+    installFetch({
+      "/api/prefs": (init) =>
+        init?.method === "PATCH"
+          ? { status: 500, body: { error: "唯讀的設定檔" } }
+          : { body: PREFS },
+    });
+    mountSettings();
+    await flushPromises();
+    const button = (): string => inDoc('[data-testid="pick-ttyd-button"]').textContent ?? "";
+    expect(button()).toContain("C 版");
+    await clickIn('[data-testid="pick-ttyd-button"]');
+    await clickIn('[data-testid="pick-ttyd-opt-ttyd-rs"]');
+    // 畫面說 Rust、下一場卻開出 C 版，是這一塊最糟的結局
+    expect(button()).toContain("C 版");
+  });
+});
+
+/* ── 主題的過渡與快取 ─────────────────────────────────────────────────────────
+ * 上面那一組守的是「顏色有沒有塗上去」。這裡守的是**過渡本身**：色票與 localStorage
+ * 必須在過渡之外先做完（startViewTransition 會等 callback 的 promise，等待期間整頁是
+ * 一張凍結的靜態圖），以及三條退路（沒有 View Transition、使用者要求減少動態、過渡
+ * 被中斷）都不可以讓主題換不成。
+ */
+/* ⚠ jsdom 沒有 View Transition，而 DOM 的型別宣告要求 `startViewTransition` 回傳一個完整的
+   `ViewTransition`（finished / updateCallbackDone / skipTransition …）。替身只需要 `ready`，
+   所以轉型集中在這兩支上，測試本文不再散落 `as unknown as`。 */
+type StartViewTransition = (cb: () => void) => { ready: Promise<void> };
+
+function stubViewTransition(start: StartViewTransition): void {
+  (document as unknown as { startViewTransition?: StartViewTransition }).startViewTransition =
+    start;
+}
+
+/** 只有 `ready` 的動畫替身：真正要問的是「有沒有拿正確的 clipPath 去動畫」。 */
+function stubAnimate(): ReturnType<typeof vi.fn> {
+  const animate = vi.fn((_frames: unknown, _opts: unknown) => ({}) as Animation);
+  document.documentElement.animate = animate as unknown as HTMLElement["animate"];
+  return animate;
+}
+
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+const serveColors = (colors: Record<string, string>): ReturnType<typeof vi.fn> => {
+  const spy = vi.fn(async () => jsonResponse({ colors }));
+  globalThis.fetch = spy as unknown as typeof fetch;
+  return spy;
+};
+
+/** 把測試裝上去的替身全部拆乾淨，並把畫面還原成預設主題。 */
+function resetTheme(): void {
+  Reflect.deleteProperty(document, "startViewTransition");
+  Reflect.deleteProperty(document.documentElement, "animate");
+  vi.unstubAllGlobals();
+  paintTheme("instrument", null);
+}
+
+describe("lib/theme：過渡與退路", () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(resetTheme);
+
+  it("色票快取壞掉就當作沒有、重抓一次，不是讓整個主題壞掉", async () => {
+    localStorage.setItem(THEME_VARS_KEY + "vellum", "{{{");
+    const spy = serveColors({ surface: "#111" });
+    await setThemeVars("vellum");
+    expect(spy).toHaveBeenCalledOnce();
+    expect(document.documentElement.style.getPropertyValue("--color-surface")).toBe("#111");
+  });
+
+  it("主題檔抓不到就不套色票，但仍然標上是哪一個主題", async () => {
+    globalThis.fetch = vi.fn(async () => new Response("nope", { status: 404 })) as typeof fetch;
+    await setThemeVars("daylight");
+    expect(document.documentElement.dataset.theme).toBe("daylight");
+    expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("");
+  });
+
+  it("🔴 使用者要求減少動態時不做同心圓，主題照樣要換成功", async () => {
+    serveColors({ accent: "#0af" });
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    const start = vi.fn((cb: () => void) => {
+      cb();
+      return { ready: Promise.resolve() };
+    });
+    stubViewTransition(start);
+    await applyTheme("daylight", { x: 10, y: 20 });
+    expect(start).not.toHaveBeenCalled();
+    expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#0af");
+  });
+
+  it("🔴 過渡的 callback 只做改樣式那一件事，色票與 localStorage 都在它之外先做完", async () => {
+    serveColors({ accent: "#f0a" });
+    const animate = stubAnimate();
+    let paintedInside = "";
+    let storedBefore: string | null = null;
+    stubViewTransition((cb) => {
+      storedBefore = localStorage.getItem(THEME_STORAGE_KEY);
+      cb();
+      paintedInside = document.documentElement.style.getPropertyValue("--color-accent");
+      return { ready: Promise.resolve() };
+    });
+    await applyTheme("daylight", { x: 10, y: 20 });
+    expect(paintedInside).toBe("#f0a");
+    // ⚠ 進到 callback 之前就已經存好了：localStorage 是同步磁碟 I/O，放進去等於延長凍結
+    expect(storedBefore).toBe("daylight");
+    const [frames, opts] = animate.mock.calls[0] as [
+      { clipPath: string[] },
+      KeyframeAnimationOptions,
+    ];
+    // 漣漪從點擊處長出來，半徑要夠遠才蓋得滿整個視窗
+    expect(frames.clipPath[0]).toBe("circle(0px at 10px 20px)");
+    expect(frames.clipPath[1]).toMatch(/^circle\(\d+(\.\d+)?px at 10px 20px\)$/);
+    expect(opts.pseudoElement).toBe("::view-transition-new(root)");
+  });
+
+  it("過渡被中斷（連按兩下換主題）不是錯誤：顏色已經換好了", async () => {
+    serveColors({ accent: "#f0a" });
+    stubAnimate();
+    stubViewTransition((cb) => {
+      cb();
+      return { ready: Promise.reject(new Error("aborted")) };
+    });
+    await expect(applyTheme("daylight", { x: 1, y: 1 })).resolves.toBeUndefined();
+    expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#f0a");
+  });
+
+  it("進站時把存下來的主題套回去；預設主題連一趟網路都不必跑", async () => {
+    const spy = serveColors({ surface: "#111" });
+    expect(await initTheme()).toBe("instrument");
+    expect(spy).not.toHaveBeenCalled();
+    persistTheme("vellum", { surface: "#111" });
+    expect(await initTheme()).toBe("vellum");
+    expect(document.documentElement.dataset.theme).toBe("vellum");
+    // 快取讀得回來，所以還是不必跑網路
+    expect(spy).not.toHaveBeenCalled();
   });
 });
