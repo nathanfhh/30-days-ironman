@@ -7,6 +7,15 @@ bind-mount 進去，等同於「rebuild image 之後」的情況，再用真 PTY
   2. 畫面上不該出現就緒標記（那是給控制平面看的機器標記，只有 NCR_MARK=1 才印）
   3. 最終真的進到 CLI
 
+第二段（`NCR_MITM_WEB_PASSWORD` 上線後補的，ADR 0021）走**錄製那一條分支**：
+控制平面那條路會把 mitmweb 的密碼指定進去，而人自己開容器時**不設它**。
+所以這裡照 run script 的形狀起容器（掛 repo 的 mitm/、帶 NCR_MITM_WEB_PORT 與
+NCR_CAPTURE_HOST_DIR），錄製選 y，斷言那行帶 token 的即時畫面 URL **逐字沒變**、
+token 仍是現產的 24 字元亂數。
+
+⚠ 為什麼一定要有這一段：第一段錄製選的是 n，`start_capture` 根本不會被執行到，
+  於是它守不到那個函式裡的任何一行。改動落在那裡而測試在別處，就是那種「全綠但沒測到」。
+
 零 token：進到 Claude Code 的畫面就停手，不送任何 prompt。
 """
 
@@ -143,5 +152,89 @@ plain = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", text)
 #   也不會紅——操作者就此失去畫面上唯一一句「這一場實際套到哪種模式」（審查 F-021）。
 check("⑦ 有印出 firewall/網路能力的結論行", "● 網路能力：" in plain)
 
-print(f"\n{'done' if _fails == 0 else f'{_fails} FAILED'}（完整輸出：/tmp/claude-pty-humanpath.log）")
+
+# --- 第二段：錄製那一條分支（start_capture 真的被執行到）-------------------------
+#
+# 這一段用 stub claude（`tests/stub_claude.sh`）而不是真的 CLI：要看的東西全部在
+# driver 啟動**之前**就印完了，換成 stub 只是讓尾巴確定、跑得快，不影響任何一條斷言。
+print("\n== 起容器（錄製選 y，照 run script 的形狀；不設 NCR_MARK、不設 NCR_MITM_WEB_PASSWORD）==")
+CAP_NAME = "claude-pty-humanpath-capture"
+WEB_PORT = "40099"  # run script 會動態挑一個，這裡釘死才驗得到 URL 逐字
+STUB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stub_claude.sh")
+os.chmod(STUB, 0o755)
+subprocess.run(["docker", "rm", "-f", CAP_NAME], capture_output=True)
+
+cap_home = tempfile.mkdtemp(prefix="claude-pty-humanpath-cap-")
+atexit.register(shutil.rmtree, cap_home, True)
+os.makedirs(os.path.join(cap_home, ".claude"), exist_ok=True)
+with open(os.path.join(cap_home, ".claude.json"), "w") as f:
+    f.write("{}")
+
+cap_argv = [
+    "run",
+    "--rm",
+    "-it",
+    "--name",
+    CAP_NAME,
+    # 以下三項照 dev-container/run-ncr-dev-container.sh：host 那側轉發 8081、
+    # 告訴 entrypoint host 視角的 port 與落盤目錄。
+    "-e",
+    f"NCR_MITM_WEB_PORT={WEB_PORT}",
+    "-e",
+    f"NCR_CAPTURE_HOST_DIR={cap_home}/ncr/mitm",
+    "-p",
+    f"127.0.0.1:{WEB_PORT}:8081",
+    "-v",
+    f"{REPO}/dev-container/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro",
+    # 沒有脫敏 addon 的話 start_capture 會 fail-closed 直接不錄，這一段就白跑了
+    "-v",
+    f"{REPO}/mitm:/home/nathan/ncr-mitm:ro",
+    "-v",
+    f"{STUB}:/home/nathan/.local/bin/claude:ro",
+    "-v",
+    f"{cap_home}/.claude:/home/nathan/.claude",
+    "-v",
+    f"{cap_home}/.claude.json:/home/nathan/.claude.json",
+    IMAGE,
+]
+
+cap_child = pexpect.spawn("docker", cap_argv, encoding="utf-8", timeout=180, dimensions=(40, 140))
+cap_lines: list[str] = []
+cap_child.logfile_read = type("W", (), {"write": cap_lines.append, "flush": lambda self: None})()
+try:
+    cap_child.expect(r"請選擇 \[1\]:")
+    cap_child.sendline("2")  # 網路能力：完全開放（這一段不驗防火牆）
+    cap_child.expect(r"錄製流量\? \[y/N\]:")
+    cap_child.sendline("y")  # ← 與第一段的差別就在這裡
+    cap_child.expect(r"請選擇 \[1\]:")
+    cap_child.sendline("1")  # 錄製範圍：全部流量
+    idx = cap_child.expect([r"送 Jaeger\? \[Y/n\]:", "REACHED-DRIVER-LAUNCH", pexpect.TIMEOUT], timeout=120)
+    if idx == 0:
+        cap_child.sendline("n")
+        cap_child.expect("REACHED-DRIVER-LAUNCH", timeout=150)
+finally:
+    cap_child.close(force=True)
+    subprocess.run(["docker", "rm", "-f", CAP_NAME], capture_output=True)
+
+cap_text = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", "".join(cap_lines)).replace("\r", "")
+with open("/tmp/claude-pty-humanpath-capture.log", "w") as f:
+    f.write(cap_text)
+
+check("⑧ 錄製真的開起來了（不是 fail-closed 跳過，否則下面幾條驗不到東西）", "● 錄製中 →" in cap_text)
+# 🔴 **逐字**比對那兩行。控制平面那條路把它們 gate 在 NCR_MARK 上了，人這條路一個字都不能變。
+_m = re.search(r"● 即時畫面 → http://localhost:(\d+)/\?token=(\S+)", cap_text)
+check("🔴 ⑨ 帶 token 的即時畫面 URL 還在，形狀沒變", _m is not None)
+check("　└ port 是 run script 傳進來的那個（NCR_MITM_WEB_PORT）", _m is not None and _m.group(1) == WEB_PORT)
+_tok = _m.group(2) if _m else ""
+# 沒有設 NCR_MITM_WEB_PASSWORD，所以這裡必須是 entrypoint 自己現產的那一串。
+check("🔴 ⑩ token 仍是現產的 24 字元英數亂數", len(_tok) == 24 and _tok.isalnum())
+check(
+    "🔴 ⑪ 後面那句說明也逐字沒變",
+    "  （畫面上是未脫敏的即時內容，host 側只綁本機且要 token；落地的是脫敏版）" in cap_text,
+)
+check("⑫ 這條路上仍然沒有就緒標記（沒設 NCR_MARK）", MARKER not in cap_text)
+check("⑬ 沒有出現非互動模式的提示", "非互動" not in cap_text)
+
+_verdict = "done" if _fails == 0 else f"{_fails} FAILED"
+print(f"\n{_verdict}（完整輸出：/tmp/claude-pty-humanpath.log、/tmp/claude-pty-humanpath-capture.log）")
 sys.exit(1 if _fails else 0)

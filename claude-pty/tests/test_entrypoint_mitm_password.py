@@ -98,6 +98,7 @@ _READ_ARGV = r"""for f in /proc/[0-9]*/cmdline; do tr '\0' '\n' < "$f" 2>/dev/nu
 
 NAME_A = "claude-pty-mitmpw-given"
 NAME_B = "claude-pty-mitmpw-random"
+NAME_C = "claude-pty-mitmpw-empty"
 BASE_ENV = {
     "NCR_NET": "unrestricted",
     "NCR_CAPTURE": "1",
@@ -138,9 +139,24 @@ try:
     got = m.group(1) if m else ""
     check("token 是現產的 24 字元亂數", len(got) == 24 and got.isalnum())
     check("🔴 不是控制平面那一串（沒設 env 就不該沾到它）", got != GIVEN)
+
+    print("\n== 邊界：兩個 env 設成空字串，行為要與「沒設」相同 ==")
+    # 🔴 這一條守的是兩個很容易寫錯一個字的地方：
+    #    · `${NCR_MITM_WEB_PASSWORD:-…}` 的 `:-`（空字串也退回現產）；寫成 `-` 的話，
+    #      一個空的 env 會變成**空密碼**送給 mitmweb，那是誰都進得去。
+    #    · `[ -z "${NCR_MARK:-}" ]`（空字串仍算「人路徑」，照印）；判成有值的話，
+    #      人自己開容器時那行 URL 會消失，而畫面上不會有任何說明。
+    #    兩者都不會報錯，也都看不出來，所以要真的餵一次空字串進去。
+    log_c, ok_c = boot(NAME_C, {**BASE_ENV, "NCR_MARK": "", "NCR_MITM_WEB_PASSWORD": ""}, "● 即時畫面")
+    check("空字串時照樣印出那行（NCR_MARK='' 仍算人路徑）", ok_c)
+    m_c = re.search(r"即時畫面 → http://localhost:\d+/\?token=(\S+)", log_c)
+    got_c = m_c.group(1) if m_c else ""
+    check("🔴 空的密碼 env 退回現產亂數（不是變成空密碼）", len(got_c) == 24 and got_c.isalnum())
+    check("　└ 而且與另一顆容器的不同（真的是每次現產）", got_c != got)
 finally:
     run("docker", "rm", "-f", NAME_A)
     run("docker", "rm", "-f", NAME_B)
+    run("docker", "rm", "-f", NAME_C)
 
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)
