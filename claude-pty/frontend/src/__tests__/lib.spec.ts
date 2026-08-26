@@ -15,9 +15,13 @@ const row = (over: Partial<SessionRow> = {}): SessionRow => ({
   ...over,
 });
 
+const ago = (sec: number): string => new Date(Date.now() - sec * 1000).toISOString();
+
+const mark = (s: SessionRow, gitlabEnabled: boolean, historical = false) =>
+  chipsOf(s, { isAdmin: false, gitlabEnabled, historical }).marks.find((m) => m.kind === "gitlab");
+
 describe("lib/time", () => {
   it("相對時間分四段，秒／分／時／天", () => {
-    const ago = (sec: number): string => new Date(Date.now() - sec * 1000).toISOString();
     expect(relTime(ago(5))).toBe("5 秒前");
     expect(relTime(ago(120))).toBe("2 分鐘前");
     expect(relTime(ago(7200))).toBe("2 小時前");
@@ -116,10 +120,6 @@ describe("lib/sessions", () => {
   });
 
   it("GitLab 標記：功能關掉不畫、null 不畫、接上了但沒 token 是 warn", () => {
-    const mark = (s: SessionRow, gitlabEnabled: boolean, historical = false) =>
-      chipsOf(s, { isAdmin: false, gitlabEnabled, historical }).marks.find(
-        (m) => m.kind === "gitlab",
-      );
     expect(mark(row({ gitlab_proxy: true }), false)).toBeUndefined();
     expect(mark(row({ gitlab_proxy: null }), true)).toBeUndefined();
     expect(mark(row({}), true)).toBeUndefined();
@@ -181,22 +181,22 @@ describe("lib/toast", () => {
   });
 });
 
+const respond = (init: { status: number; body?: unknown; statusText?: string }): void => {
+  globalThis.fetch = vi.fn(async () =>
+    init.status === 204
+      ? new Response(null, { status: 204 })
+      : new Response(JSON.stringify(init.body ?? {}), {
+          status: init.status,
+          statusText: init.statusText ?? "",
+          headers: { "Content-Type": "application/json" },
+        }),
+  ) as typeof fetch;
+};
+
 describe("api/client", () => {
   beforeEach(() => {
     setUnauthorizedHandler(() => {});
   });
-
-  const respond = (init: { status: number; body?: unknown; statusText?: string }): void => {
-    globalThis.fetch = vi.fn(async () =>
-      init.status === 204
-        ? new Response(null, { status: 204 })
-        : new Response(JSON.stringify(init.body ?? {}), {
-            status: init.status,
-            statusText: init.statusText ?? "",
-            headers: { "Content-Type": "application/json" },
-          }),
-    ) as typeof fetch;
-  };
 
   it("沒有 body 的變更請求也要帶 X-Requested-With（CSRF 閘門靠它）", async () => {
     respond({ status: 204 });
