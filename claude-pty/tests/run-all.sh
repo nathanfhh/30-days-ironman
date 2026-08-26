@@ -38,7 +38,8 @@ NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
               test_reconciler test_entrypoint_human_path test_entrypoint_profile
               test_firewall_ssh_gate test_user_proxy test_network_isolation
               test_gitlab_upstream_e2e test_restricted_proxy_reach e2e_flow
-              test_token_fd test_trivy_volume test_ro_socket_mount)
+              test_token_fd test_trivy_volume test_ro_socket_mount
+              test_entrypoint_mitm_password)
 # ⚠ 判準是「會不會真的起容器／建 volume」，不是「檔案裡有沒有出現 docker」。用假 client
 #   的那幾支（test_host_platform／test_jaeger_wiring／test_trivy_db／test_ttyd_identity）
 #   一個容器都不起，留在 quick 模式是對的。自我 SKIP 不能取代這道 gate：docker 在的開發機
@@ -48,13 +49,13 @@ NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
 # ⚠ 它的檔名沒有 `test_` 前綴正是為了不被下面那個 glob 撿走——改名前先想清楚。
 
 # 需要 dev-container image 已經 build 好的。
-# ⚠ 這兩支遇到缺 image 時**自己** print SKIP 再 exit 0——那正是「空跑」偵測要抓的形狀
+# ⚠ 這幾支遇到缺 image 時**自己** print SKIP 再 exit 0——那正是「空跑」偵測要抓的形狀
 #   （test_ro_socket_mount 就是這樣在 CI 上綠著跑完的）。但缺 image 是**真的環境條件**，
 #   不是設定漏了，所以正解是讓它進跳過清單、看得見，而不是紅燈。
 #   ⚠ CI 不受影響：dev-container job 會先現 build 這顆 image。
-# ⚠ image 名字與那兩支同一個來源（CLAUDE_PTY_IMAGE），不在這裡抄第二份——抄一份的那天，
+# ⚠ image 名字與那幾支同一個來源（CLAUDE_PTY_IMAGE），不在這裡抄第二份——抄一份的那天，
 #   gate 判的就不是測試真正要用的那顆了。
-NEEDS_NCR_IMAGE=(test_token_fd test_trivy_volume)
+NEEDS_NCR_IMAGE=(test_token_fd test_trivy_volume test_entrypoint_mitm_password)
 have_ncr_image=0
 docker image inspect "${CLAUDE_PTY_IMAGE:-ncr-dev-container}" >/dev/null 2>&1 && have_ncr_image=1
 
