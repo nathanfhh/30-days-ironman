@@ -774,3 +774,21 @@ describe("AppFooter", () => {
     expect(w.find(".footer__built").exists()).toBe(true);
   });
 });
+
+describe("ToastStack", () => {
+  it("掛上之前就已經在佇列裡的 toast 也要進場（登出後整頁跳轉那一則）", async () => {
+    // main.ts 是先 drainPendingToast() 再 app.mount()：這一則在元件掛上時就已經存在。
+    const { toast, toasts, dismissToast } = await import("@/lib/toast");
+    const { default: ToastStack } = await import("@/components/ToastStack.vue");
+    toasts.splice(0, toasts.length);
+    const item = toast("已登出", "info");
+    const w = mount(ToastStack, { attachTo: document.body });
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 60)); // jsdom 的 rAF 是真計時器（約 16ms 一影格），等它跑過
+    const el = document.querySelector('#toast-stack [data-testid="toast"]');
+    expect(el).not.toBeNull();
+    expect(el?.getAttribute("data-shown")).toBe("1");
+    if (item) dismissToast(item.id);
+    w.unmount();
+  });
+});

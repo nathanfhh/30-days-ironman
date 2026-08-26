@@ -21,6 +21,10 @@ import { nextTick, watch } from "vue";
 import { dismissToast, toasts, TOAST_LEVELS, type ToastItem } from "@/lib/toast";
 
 // 下一影格才加 shown，讓進場過渡有起始狀態可以過渡（同一影格內設會被合併掉）
+// ⚠ `immediate: true` 不是裝飾：main.ts 在 `app.mount()` **之前**就 `drainPendingToast()`，
+//   登出後整頁跳回登入頁的那則「已登出」在這個元件掛上時已經躺在 toasts 裡。watch 只看
+//   之後的變化的話，那一則永遠拿不到 shown，CSS 讓它停在 opacity 0 直到倒數結束自己消失，
+//   畫面上從頭到尾沒有人看到它（Copilot review 2026-08-26 抓到的）。
 watch(
   () => toasts.length,
   () => {
@@ -30,6 +34,7 @@ watch(
       });
     });
   },
+  { immediate: true },
 );
 
 function close(item: ToastItem): void {
