@@ -32,6 +32,9 @@ const props = defineProps<{
   label: string;
   path: string;
   flavor?: string | null;
+  /* 這一場有沒有開流量錄製（`profile.capture`）。沒開就沒有 mitmweb 可看——
+     那時**按鈕整顆不畫**，不是畫一顆按了會失敗的（後端對那種 session 回 404）。 */
+  capture?: boolean;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -183,6 +186,14 @@ async function uploadFile(file: File | null | undefined): Promise<void> {
 function onFilePicked(): void {
   void uploadFile(fileInput.value?.files?.[0]);
   if (fileInput.value) fileInput.value.value = ""; // 同一個檔連傳兩次也要觸發 change
+}
+
+/* 流量畫面：mitmweb 自己送 `X-Frame-Options: DENY`，所以只能新分頁，不能像終端那樣嵌。
+   路徑的**尾斜線不可省**：那個 SPA 是路徑相對的（`./static/…`、WS 由 location.pathname
+   現場組），少了它資源會解析到 `/session/<sid>/` 底下，也就是終端那條路由。
+   token 完全不經過這裡：nginx 在 auth_request 之後自己注入 Bearer（ADR 0021）。 */
+function openMitm(): void {
+  globalThis.open(`${props.path}mitm/`, "_blank", "noopener");
 }
 
 function popOut(): void {
@@ -390,6 +401,19 @@ onBeforeUnmount(() => {
               accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md"
               @change="onFilePicked"
             />
+            <!-- ⚠ 做成 icon-btn 而不是帶字的 btn：這一列的寬度要分給 session 名稱、
+                 提示輪播、字級與新分頁，多一顆帶字的會先擠掉名稱。 -->
+            <button
+              v-if="capture"
+              class="icon-btn"
+              data-act="mitm"
+              data-testid="drawer-mitm"
+              aria-label="開啟這一場的流量畫面（新分頁）"
+              title="流量畫面（錄到的請求，新分頁開啟）"
+              @click="openMitm"
+            >
+              <i class="fa-solid fa-network-wired"></i>
+            </button>
             <button class="btn" data-act="pop" @click="popOut">
               <i class="fa-solid fa-arrow-up-right-from-square"></i> 新分頁
             </button>

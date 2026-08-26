@@ -185,6 +185,7 @@ output testid=drawer-font-value
 button testid=drawer-font-inc act=font+ title=放大字級
 button testid=drawer-upload act=upload title=上傳檔案（路徑進剪貼簿）
 input testid=drawer-file hidden
+button testid=drawer-mitm act=mitm title=流量畫面（錄到的請求，新分頁開啟）
 button act=pop
 button testid=drawer-close act=close title=關閉
 iframe testid=drawer-frame title=終端：重構登入流程

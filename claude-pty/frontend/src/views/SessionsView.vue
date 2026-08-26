@@ -58,9 +58,13 @@ async function withBusy(key: string, fn: () => Promise<void>): Promise<void> {
     busyAction.value = null;
   }
 }
-const drawer = ref<{ sid: string; label: string; path: string; flavor: string | null } | null>(
-  null,
-);
+const drawer = ref<{
+  sid: string;
+  label: string;
+  path: string;
+  flavor: string | null;
+  capture: boolean;
+} | null>(null);
 
 const showHistory = computed(() => route.query.tab === "past");
 const activeCount = computed(() => activeFilterKeys(route.query).length);
@@ -250,6 +254,9 @@ async function openRow(row: SessionRow, e: MouseEvent): Promise<void> {
         label: row.display_name || row.id,
         path: view.path,
         flavor: view.ttyd_flavor ?? null,
+        // 抽屜據此決定要不要畫「流量畫面」那顆按鈕。值來自列表那一筆的 profile，
+        // 與後端 /api/auth/mitm 的判準是同一個事實。
+        capture: row.profile?.capture === true,
       };
     } else {
       // ⚠ 帶 noopener 時 window.open **一定**回傳 null（規範如此），不代表被攔截。
@@ -393,6 +400,7 @@ watch(showHistory, () => {
       :label="drawer.label"
       :path="drawer.path"
       :flavor="drawer.flavor"
+      :capture="drawer.capture"
       @close="drawer = null"
     />
   </AppShell>

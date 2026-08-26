@@ -94,6 +94,7 @@
       - status: 14px
       - button "放大終端字級": +
     - button "上傳檔案，路徑會複製到剪貼簿": 
+    - button "開啟這一場的流量畫面（新分頁）": 
     - button " 新分頁"
     - button "關閉終端": 
   - iframe
