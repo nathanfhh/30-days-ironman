@@ -83,9 +83,25 @@ is_linux=0
 # Claude Code 的畫面才算數（測試會複製一份憑證進沙盒，不掛使用者真正的 ~/.claude）。
 # ⚠ 沒有憑證時它不會快速失敗，而是 pexpect 一路等到逾時：2026-08-15 在 CI 上實測卡了
 #   153 秒才紅，佔整套 340 秒的四成五，而畫面上只有一串正則，看不出「你少了憑證」。
+# ⚠ **憑證不是只會住在檔案裡。** macOS 上 Claude Code 把它放進 keychain，`~/.claude/`
+#   底下根本沒有 `.credentials.json`；於是這道 gate 在**每一台 macOS 開發機**上都判「沒有
+#   憑證」，那支測試從來沒有在本機跑過（2026-08-27 在 Nathan 的機器上發現，那台的憑證
+#   在 keychain：`security find-generic-password -s "Claude Code-credentials"` 命中，
+#   而檔案不存在）。所以兩個地方都要問。
+# ⚠ 只問**存在性**，不取值：`security find-generic-password` 不帶 `-w` 只讀 metadata，
+#   不會把密文吐出來、也不會跳出授權對話框。要值是 `-w`，這裡刻意不用。
+# ⚠ service 名稱 `Claude Code-credentials` 是在機器上查證過的（`-s` 與 `-l` 都命中），
+#   不是猜的。
+# ⚠ 非 macOS 沒有 `security` 這支指令，所以先確認它在才問；不在就只看檔案。
+#   Linux（含 CI 的 runner）走的就是這條，行為與先前逐字相同。
 NEEDS_CLAUDE_CRED=(test_entrypoint_human_path)
 have_claude_cred=0
-{ [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -f "${HOME}/.claude/.credentials.json" ]; } && have_claude_cred=1
+if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -f "${HOME}/.claude/.credentials.json" ]; then
+  have_claude_cred=1
+elif command -v security >/dev/null 2>&1 &&
+     security find-generic-password -s "Claude Code-credentials" >/dev/null 2>&1; then
+  have_claude_cred=1
+fi
 
 # Vue 版的 e2e 需要前端**已經 build 過**（`server/static/dist/`，不進版控）。
 # ⚠ 存在與否要在**用到的當下**才問，不是在這裡先算一次：上面那段前端六關的最後一關就是
@@ -182,7 +198,9 @@ run_one() {
     skipped+=("${base}（沒有 ${CLAUDE_PTY_IMAGE:-ncr-dev-container} image，先跑 dev-container/build.sh）"); return
   fi
   if in_list "${base}" "${NEEDS_CLAUDE_CRED[@]}" && [ "${have_claude_cred}" -eq 0 ]; then
-    skipped+=("${base}（host 上沒有 claude 憑證可複製進沙盒）"); return
+    # ⚠ 訊息要講得出「哪幾個地方都問過了」。原本只寫「沒有 claude 憑證」，而在 macOS 上
+    #   憑證通常在 keychain 而不是檔案裡，讀的人會以為自己沒登入、跑去重登一次也沒用。
+    skipped+=("${base}（沒有 claude 憑證：\$CLAUDE_CODE_OAUTH_TOKEN 未設、~/.claude/.credentials.json 不存在、keychain 也沒有 Claude Code-credentials）"); return
   fi
   if in_list "${base}" "${NEEDS_DIST[@]}" && [ ! -f server/static/dist/index.html ]; then
     skipped+=("${base}（前端還沒 build：server/static/dist/ 不存在，裝 node 24 讓上面那幾關跑）"); return
