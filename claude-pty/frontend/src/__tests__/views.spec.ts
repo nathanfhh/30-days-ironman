@@ -3,9 +3,11 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 
+import { api, setUnauthorizedHandler } from "@/api/client";
 import App from "@/App.vue";
 import SettingsModal from "@/components/SettingsModal.vue";
 import { authGuard } from "@/router";
+import { createUnauthorizedHandler } from "@/lib/unauthorized";
 import LoginView from "@/views/LoginView.vue";
 import SessionsView from "@/views/SessionsView.vue";
 import {
@@ -883,5 +885,161 @@ describe("lib/theme：過渡與退路", () => {
     expect(document.documentElement.dataset.theme).toBe("vellum");
     // 快取讀得回來，所以還是不必跑網路
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+/* ── 401：別的分頁把這一台的登入弄失效了 ─────────────────────────────────────────
+ * 分頁 A 開著清單、分頁 B 改密碼（伺服端讓其他 session 全部作廢），分頁 A 下一次輪詢就
+ * 拿到 401。2026-08-26 Nathan 實測回報：只跳一則 toast，人還留在原頁。
+ *
+ * ⚠ 這一組**真的掛 App ＋ 真的走 authGuard**，不是單獨呼叫處理器看它有沒有 push。
+ *   那個 bug 的全部內容就在守衛裡：push 出去了，然後被彈回來。只驗「有沒有 push」的測試
+ *   在修好之前就是綠的。
+ */
+describe("401 之後回得去登入頁", () => {
+  /** 伺服端還認不認得這個 cookie。false 之後每一條需要登入的端點都回 401。 */
+  let authed = true;
+
+  beforeEach(() => {
+    authed = true;
+    /* 每一條都從「處理器什麼都不做」起跑，要驗的那條自己掛自己的。
+       ⚠ 不掛的話用的是 api/client 的預設值，那是 `location.href = "/login"`（還沒接上
+         router 時的退路），在 jsdom 裡會變成一句 Not implemented 的雜訊。 */
+    setUnauthorizedHandler(() => {});
+    // ⚠ 這一份是跨測試留下來的：AppMasthead 的登出走 `toastAfterNav`，而 SPA 內換頁沒有人
+    //   會去 drain 它（`drainPendingToast` 只在 main.ts 進站時跑一次）。下面那條「不要寄放」
+    //   的斷言要驗的是**這次**有沒有寄放，所以先歸零。
+    sessionStorage.clear();
+    installFetch({
+      "/api/account/bootstrap": () =>
+        authed
+          ? { body: accountBootstrapBody({ id: 1, username: "alice", is_admin: true }) }
+          : { status: 401, body: { error: "未登入" } },
+      "/api/catalog": { body: CATALOG },
+      "/api/sessions": () =>
+        authed ? { body: listBody([sessionRow()]) } : { status: 401, body: { error: "未登入" } },
+      "/api/sessions/history": { body: listBody([], 0) },
+      "/api/prefs": { body: { ttyd_bin: "ttyd", ttyd_choices: [] } },
+      "/api/auth/logout": () =>
+        authed ? { status: 204 } : { status: 500, body: { error: "伺服器炸了" } },
+    });
+  });
+
+  it("🔴 401 之後真的在 /login，而且身分已經清掉", async () => {
+    setUser();
+    await mountAt("/");
+    expect(router.currentRoute.value.path).toBe("/");
+
+    authed = false;
+    const probes = () => calls.filter((c) => c.url === "/api/account/bootstrap").length;
+    const before = probes();
+    createUnauthorizedHandler(router)();
+    await flushPromises();
+
+    // ⚠ 這一條就是那個 bug：身分沒清的話守衛判他「已登入」，回 { path: "/" } 把導覽彈回去，
+    //   最後 path 仍是 "/"，畫面上只剩那一則 toast。
+    expect(router.currentRoute.value.path).toBe("/login");
+    const store = useSiteStore();
+    expect(store.user).toBeNull();
+    // 而且守衛真的**重新探測**了一次（identityLoaded 被翻回 false 才會有這一發；不翻的話
+    // 「我是誰」會停在上一次的答案，而那個答案已經過期了）
+    expect(probes()).toBe(before + 1);
+  });
+
+  it("🔴 到的是真的登入表單，不是一個空殼", async () => {
+    setUser();
+    const w = await mountAt("/");
+    authed = false;
+    createUnauthorizedHandler(router)();
+    await flushPromises();
+    expect(w.find('[data-testid="login-username"]').exists()).toBe(true);
+    // 登入後才給的那些 meta 一起還原（同登出那條路，裁示 L4）
+    expect(useSiteStore().meta.buildModules).toEqual([]);
+    expect(w.find('[data-testid="footer"]').exists()).toBe(false);
+  });
+
+  it("說一句人話，而且只說一次（用 toast 不是 toastAfterNav：SPA 換頁沒人 drain）", async () => {
+    setUser();
+    await mountAt("/");
+    authed = false;
+    createUnauthorizedHandler(router)();
+    await flushPromises();
+    expect(toasts.map((t) => t.title)).toContain("登入已失效，請重新登入");
+    // 寄放區是空的：寄過去的話這則通知要等下一次整頁重載才會冒出來
+    expect(sessionStorage.getItem("claude-pty:pending-toast")).toBeNull();
+  });
+
+  it("🔴 同一時間兩發 401 只導一次（vue-router 對重複導覽會出 warning）", async () => {
+    setUser();
+    await mountAt("/");
+    authed = false;
+    // ⚠ spy 要在 mountAt 之後裝：mountAt 自己就 push 過一次
+    const push = vi.spyOn(router, "push");
+    const onUnauthorized = createUnauthorizedHandler(router);
+    onUnauthorized();
+    onUnauthorized(); // 輪詢與憑證徽章同時吃到 401
+    await flushPromises();
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(toasts.filter((t) => t.title === "登入已失效，請重新登入")).toHaveLength(1);
+    expect(router.currentRoute.value.path).toBe("/login");
+    // ⚠ 但**每一發都要清身分**：只清第一發的話，第二發之後 store 可能又被別的回應填回去。
+    expect(useSiteStore().user).toBeNull();
+  });
+
+  it("🔴 攔截條件只認 401：403 照樣是錯誤，但不導覽、不清身分", async () => {
+    /* 401 與 403 是兩件事：401 是「我不知道你是誰了」，403 是「我知道你是誰，但你不能做
+       這件事」。把 403 也送去登入頁，等於叫一個登入狀態完全正常的人重新登入一次，而他
+       再登入一次也還是不能做那件事。
+       ⚠ 判準是 `res.status === 401` 這個數字，**不是錯誤訊息的字串**：後端的中文隨時會
+         改，而且訊息撞字是很容易發生的（下面那條 403 的 body 就故意寫成「未登入」）。 */
+    setUser();
+    await mountAt("/");
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    installFetch({
+      // 故意讓 403 的訊息與 401 撞字：靠字串判斷的實作會在這裡漏接
+      "/api/users": { status: 403, body: { error: "未登入" } },
+      "/api/prefs": { status: 401, body: { error: "需要管理員權限" } },
+    });
+
+    await expect(api("/api/users")).rejects.toMatchObject({ name: "ApiError", status: 403 });
+    await flushPromises();
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(useSiteStore().user).not.toBeNull();
+    expect(useSiteStore().identityLoaded).toBe(true);
+
+    /* 反向：同一組接線下，401 就會叫。少了這一半，上面那幾條在「處理器根本沒掛上」時
+       也是綠的（訊息撞字那條同理：這一發的 body 寫的是「需要管理員權限」）。 */
+    await expect(api("/api/prefs")).rejects.toMatchObject({ name: "ApiError", status: 401 });
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("🔴 登出失敗也要照樣離開（同一個坑：只 push 會被守衛彈回 `/`）", async () => {
+    setUser();
+    const w = await mountAt("/");
+    authed = false; // 讓 POST /api/auth/logout 回 500
+    await w.find('[data-testid="account-btn"]').trigger("click");
+    await w.find('[data-testid="menu-logout"]').trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/login");
+    expect(useSiteStore().user).toBeNull();
+    // 500 是真的失敗，該講；被吞掉的只有 401（見 lib/toast 的 toastError）
+    expect(toasts.map((t) => t.title)).toContain("登出失敗");
+  });
+
+  it("導覽結束之後旗子放下：之後再失效一次，還是會再導一次", async () => {
+    setUser();
+    await mountAt("/");
+    authed = false;
+    const onUnauthorized = createUnauthorizedHandler(router);
+    onUnauthorized();
+    await flushPromises();
+    await router.push("/");
+    await flushPromises();
+    const push = vi.spyOn(router, "push");
+    onUnauthorized();
+    await flushPromises();
+    expect(push).toHaveBeenCalledTimes(1);
   });
 });

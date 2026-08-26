@@ -13,6 +13,7 @@ import { createApp } from "vue";
 import { setUnauthorizedHandler } from "@/api/client";
 import App from "@/App.vue";
 import { drainPendingToast } from "@/lib/toast";
+import { createUnauthorizedHandler } from "@/lib/unauthorized";
 import { router } from "@/router";
 import { useSiteStore } from "@/stores/site";
 
@@ -22,9 +23,11 @@ app.use(createPinia());
 app.use(router);
 
 // 401 改走 SPA 導向（舊版是整頁 location.href）。語意不變：cookie 過期就回登入頁。
-setUnauthorizedHandler(() => {
-  void router.push("/login");
-});
+// ⚠ 但「push 一下」**不等於**回得去：SPA 換頁時 store 是活的，身分沒清掉的話守衛會判他
+//   仍然登入著，把這次導覽原地彈回原頁（2026-08-26 Nathan 實測回報）。清身分、只導一次、
+//   發哪一則 toast 這三件事都在 `lib/unauthorized`，那裡有完整的理由；放在那邊也才進得了
+//   單元測試的覆蓋範圍：這個檔被 coverage 排除（見 vite.config.ts）。
+setUnauthorizedHandler(createUnauthorizedHandler(router));
 
 // 公開的伺服端事實（behind_proxy / 登入頁插畫）。**不等身分**：登入頁的插畫需要它，
 // 而那一頁本來就是未登入的人在看。
@@ -33,8 +36,9 @@ setUnauthorizedHandler(() => {
 // 不 await：它失敗或慢都不該擋住第一次繪製（拿不到就留白，見 store 的說明）。
 void useSiteStore().loadPublicMeta();
 
-// 上一頁寄放的通知。SPA 之內換頁不會清掉 toast，但**離開 SPA 的那條路還在**：登出之後是
-// 整頁跳轉回登入頁，當下發的那一則得有人接手（見 lib/toast 的 toastAfterNav）。
+// 上一頁寄放的通知。SPA 之內換頁不會清掉 toast，但**離開 SPA 的那條路還在**：改完密碼是
+// 整頁跳轉回登入頁（PasswordPanel 的 `location.href`），當下發的那一則得有人接手
+// （見 lib/toast 的 toastAfterNav）。
 drainPendingToast();
 
 app.mount("#app");

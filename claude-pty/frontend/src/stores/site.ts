@@ -125,8 +125,10 @@ export const useSiteStore = defineStore("site", () => {
 
   /** 我是誰。**冷載入時這是唯一的那一發**——身分與這個帳號的處境同一條回應。
    *
-   * ⚠ **一個 app 生命週期只會問一次**（`identityLoaded` 擋著），跨路由不重打；cookie 失效
-   *   時 api() 收到 401 會統一導回登入頁，那條路才是重新確認身分的入口。 */
+   * ⚠ **問一次就記著**（`identityLoaded` 擋著），跨路由不重打。cookie 中途失效時，api()
+   *   收到 401 會走 `createUnauthorizedHandler`：它先 `dropIdentity()` 把 `identityLoaded`
+   *   翻回 false，再導回登入頁，所以下一次守衛會**重新**探測一遍。那條路才是重新確認
+   *   身分的入口，而它之所以成立，靠的正是那一行翻旗。 */
   async function loadIdentity(): Promise<User | null> {
     try {
       await fetchAccountMeta({ probe: true });
@@ -225,15 +227,15 @@ export const useSiteStore = defineStore("site", () => {
   }
 
   /**
-   * 登出。**登入後才拿得到的 meta 要一起清掉**，不只是身分與憑證。
+   * 把「要登入才拿得到的一切」還原成未登入的樣子：身分、憑證，以及登入後才給的 meta。
    *
-   * ⚠ 登出是 SPA 內的換頁（`router.push("/login")`），不是整頁跳轉：store 活著，meta 裡
-   *   那份版號與主機路徑會原封不動跟著人回到登入頁，頁尾就照樣印出來。那正是裁示 L4 要
-   *   收的東西，只是換了一條路徑洩漏。所以這裡把「要登入才給的那些」還原成預設值，
-   *   公開那兩個（`behindProxy` / `loginArt`）留著：它們本來就不需要身分。
+   * ⚠ 登出與「伺服端把這個 session 作廢了」都是 SPA 內的換頁（`router.push("/login")`），
+   *   不是整頁跳轉：store 活著，meta 裡那份版號與主機路徑會原封不動跟著人回到登入頁，
+   *   頁尾就照樣印出來。那正是裁示 L4 要收的東西，只是換了一條路徑洩漏。所以這裡把
+   *   「要登入才給的那些」還原成預設值，公開那兩個（`behindProxy` / `loginArt`）留著：
+   *   它們本來就不需要身分。
    */
-  async function logout(): Promise<void> {
-    await api("/api/auth/logout", { method: "POST" });
+  function clearPrivateState(): void {
     user.value = null;
     credentials.value = {};
     meta.value = {
@@ -242,6 +244,29 @@ export const useSiteStore = defineStore("site", () => {
       loginArt: meta.value.loginArt,
     };
     applyMetaToRoot();
+  }
+
+  /**
+   * 身分在**伺服端**被作廢了：別的分頁改了密碼、session 過期、帳號被停用。前端是從一發
+   * 401 才知道這件事的，而知道之後要做的不只是「清掉使用者」。
+   *
+   * ⚠ **`identityLoaded` 一定要翻回 false**，這是它與 `logout()` 唯一的差別，也是它存在的
+   *   理由。少了這一行：401 處理器 push("/login") → 守衛看 `identityLoaded` 仍是 true 而
+   *   不重新探測 → `store.user` 若也還在，`to.path === "/login"` 那條會判他「已登入」並回
+   *   `{ path: "/" }`，把這次導覽原地彈回去。症狀正是 2026-08-26 回報的那個：跳了一則
+   *   toast，人還留在原頁（見 docs/frontend-vue3-journal.md）。
+   * ⚠ **登出不走這一支。** 那條路 `user` 清掉就夠了；把 `identityLoaded` 也翻回 false 會讓
+   *   接著進登入頁的守衛多打一發必定 401 的探測，而那一發會出現在 golden 的網路序列裡。
+   */
+  function dropIdentity(): void {
+    clearPrivateState();
+    identityLoaded.value = false;
+  }
+
+  /** 登出。**登入後才拿得到的 meta 要一起清掉**，不只是身分與憑證（見 clearPrivateState）。 */
+  async function logout(): Promise<void> {
+    await api("/api/auth/logout", { method: "POST" });
+    clearPrivateState();
   }
 
   return {
@@ -254,6 +279,7 @@ export const useSiteStore = defineStore("site", () => {
     loadPublicMeta,
     loadAccountMeta,
     applyMetaToRoot,
+    dropIdentity,
     setCredentials,
     logout,
   };
