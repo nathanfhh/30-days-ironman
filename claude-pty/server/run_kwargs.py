@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 import docker
 
-from . import config, user_proxy
+from . import config, crypto, user_proxy
 from . import auth as auth_mod
 
 
@@ -270,6 +270,15 @@ def build_run_kwargs(name: str, sid: str, profile: Profile, user_id: int) -> dic
         # 存在性查 *_SELF、掛載用 host 路徑（同上，ADR 0009）
         if os.path.isdir(config.CLAUDE_MITM_SELF):  # redact addon 在才掛（否則 entrypoint fail-closed 跳過）
             volumes[config.CLAUDE_MITM_HOST] = {"bind": config.MITM_ADDON_BIND, "mode": "ro"}
+        # mitmweb 的網頁密碼（ADR 0021）：由 SECRET_KEY 對 sid 導出，兩端各算各的算出同一串，
+        # `/api/auth/mitm` 之後重算並交給 nginx 以 Bearer 注入——DB 一個欄位都不用加。
+        #
+        # ⚠ **只跟 capture 成對送。** capture 關著時 entrypoint 根本不會走到 start_capture，
+        #   送了就是一封死信：沒有任何行為，卻讓「這個 env 代表什麼」多一種說法。
+        #   test_profile_mapping 兩個方向都釘著（開著時在、關著時整份 env 裡沒有這個鍵）。
+        # ⚠ 它與 `NCR_MITM_WEB_BIND` 是兩件事，不要合併：bind 是**每一場都送**的
+        #   （網頁開的 session 一律把 UI 收回 loopback），password 只在錄製時有意義。
+        env["NCR_MITM_WEB_PASSWORD"] = crypto.mitm_web_password(sid)
         # capture 的落盤目錄已由 user_mounts() 掛成 per-user（ADR 0014）——它裡面是**完整的
         # API 請求本文**（prompt 全文），比 transcript 更敏感，共用一個目錄是先前盤點時
         # 最容易漏掉的那一項。掛載本身無條件（不分 capture 開關），少一個條件分支。
