@@ -79,7 +79,10 @@ NET = user_proxy.network_name(UID)
 # 只給「快照陷阱」那顆容器用，為的是拿到 docker 內嵌 DNS（見檔頭）。⚠ 刻意**不套**
 # `USER_NETWORK_PREFIX`、也不打 user-network 的標籤——那是 reconciler 認領網路的依據，
 # 借用它等於讓這張暫時的網被當成某個使用者的。
-SCRATCH = "claude-pty-test-fwdns-scratch"
+SCRATCH_PREFIX = "claude-pty-test-fwdns-scratch"
+# 名稱帶 pid：同一台機器上兩份測試同時跑（或前一次中斷留下的網）不會在 create 時撞名；
+# cleanup 則是掃整個前綴，殘留的一併收掉（Copilot review，public PR #1）。
+SCRATCH = f"{SCRATCH_PREFIX}-{os.getpid()}"
 
 
 def cleanup():
@@ -87,7 +90,10 @@ def cleanup():
         c = user_proxy.find(cli, UID)
         if c:
             c.remove(force=True)
-    for name in (NET, SCRATCH):
+    stale = []
+    with suppress(Exception):
+        stale = [n.name for n in cli.networks.list() if n.name.startswith(SCRATCH_PREFIX)]
+    for name in (NET, *stale):
         with suppress(Exception):
             net = cli.networks.get(name)
             net.reload()
