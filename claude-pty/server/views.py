@@ -92,11 +92,15 @@ def open_view(
         except Exception:
             # spawn 之後任一步失敗（含寫 pid 進 DB 失敗）都必須收掉那個 ttyd，
             # 否則它會活著卻沒人記得 pid，永遠不會被回收（review H3）。
-            _kill(pid)
+            _kill_spawned(pid)
             _drop_view(view_id)
             raise
         # 起不來（多半是 port 被 DB 以外的程序佔住）→ 收乾淨，換下一個 port
-        _kill(pid)
+        # ⚠ **這兩處都是 `_kill_spawned` 不是 `_kill`。** 這條路走得到「ttyd 還沒 exec 完」
+        #   的窗口（最明確的一種：`_wait_ready` 逾時，而那顆替身／慢啟動的 ttyd 到那一刻
+        #   都還沒把自己換掉），而 `_kill()` 在那個窗口裡會判定「不是我們的程序」直接回
+        #   True 什麼都不做，接著下一行就把唯一的追蹤記錄刪掉。詳見 `_kill_spawned`。
+        _kill_spawned(pid)
         _drop_view(view_id)
     raise ViewError(f"{config.TTYD_PORT_MIN}-{config.TTYD_PORT_MAX} 無可用 port")
 
@@ -563,6 +567,52 @@ def _kill(pid: int | None, names: frozenset[str] | None = None) -> bool:
     except (PermissionError, OSError):
         return False
     return _await_gone(pid, proc, config.VIEW_KILL_GRACE)
+
+
+def _kill_spawned(pid: int | None, names: frozenset[str] | None = None, grace: float = 1.0) -> bool:
+    """收掉「我們剛 spawn、但可能還沒 exec 成目標程序」的那個行程。
+
+    ⚠ **spawn 之後的失敗路徑上不可以只呼叫 `_kill()`。** 它在送訊號之前會先確認 argv[0]
+      在白名單裡，而 `_spawn_detached` 是 double-fork：`$!` 拿到的 pid 一開始是 `sh` 的。
+      在那個窗口裡 `_kill()` 會判定「不是我們的程序」而**直接回 True 什麼都不做**，
+      接著呼叫端 `_drop_view()` 刪掉唯一的追蹤記錄，那顆行程隨後 exec 起來、活著、
+      而再也沒有人記得它（review H3 的形狀）。
+
+      **而沒有任何機制會發現它**：`_clean_views` 只走 DB 列、`_remove_orphans` 只管
+      container。它唯一會現身的地方是 `inspect_ttyd` 的孤兒清單，也就是有人剛好去看
+      那一頁的時候。那個 port 就此消失，畫面上與 log 裡都沒有跡象。
+
+    做法：先給它 `grace` 秒把 exec 走完（走完就交給 `_kill()` 那一整套「等到它真的從
+    行程表上消失才算數」）；到時間還沒變成我們認得的名字，就直接對這個號碼送訊號。
+
+    ⚠ 直接送訊號的那一段有一個窄窗口：`sh` 剛好在這幾毫秒退出、而號碼被別人接手。
+      這個 pid 是我們自己在幾百毫秒前從 `$!` 拿到的，接手的機率極低；而另一側的代價是
+      **確定**漏掉一顆沒有人記得的行程。往「收得掉」那一側倒，理由同上面 `_kill` 那段
+      「psutil 保護的是等待判斷、不是訊號投遞」的取捨。
+
+    ⚠ 本體住在這裡、`mitm_views._kill_spawned` 只換白名單來委派：那一支是 2026-08-26 為
+      socat 寫的，而 ttyd 這條路的 `open_view` 有一模一樣的失敗路徑卻只呼叫 `_kill()`。
+      兩邊共用同一份，才不會下次只修好一邊。
+    """
+    if not pid:
+        return True
+    names = names or _OUR_TTYD_NAMES
+    deadline = time.time() + grace
+    while time.time() < deadline:
+        if not _pid_exists(pid):
+            return True  # 它自己走了
+        if _process_alive(pid, names):
+            return _kill(pid, names)  # 已經 exec 完了，走完整的那一套
+        time.sleep(0.05)
+    if not _pid_exists(pid):
+        return True
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        with suppress(OSError):
+            os.kill(pid, sig)
+        time.sleep(0.1)
+        if not _pid_exists(pid):
+            return True
+    return False
 
 
 def _pid_exists(pid: int | None) -> bool:

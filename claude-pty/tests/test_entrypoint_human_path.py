@@ -129,8 +129,17 @@ try:
     if idx == 0:
         check("③ telemetry 選單出現（endpoint 有設時）", True)
         child.sendline("n")
-    else:
+    elif idx == 1:
+        # 沒設 OTEL endpoint 就直接印結論行，照設計不問。這是**正當的跳過**。
         print("  SKIP  ③ telemetry 選單（未設 OTEL endpoint，照設計不問）")
+    else:
+        # 🔴 **逾時不可以跟「照設計不問」共用同一個分支。** 兩者的意思相反：一個是
+        #    「畫面上出現了該出現的東西，只是不是選單」，另一個是「三十秒內什麼都沒印」。
+        #    落下去的話，容器卡在更前面（entrypoint 掛了、image 壞了）會被記成一行 SKIP，
+        #    而下面 ⑤⑥⑦ 那幾條比對的是一份半截的畫面：`MARKER not in text` 與
+        #    `"非互動" not in text` 這種**否定式**斷言，畫面越少越容易綠。
+        #    （同一個錯在第二段的 Jaeger 那步修過了，這裡是第一段漏掉的那一個。）
+        check("🔴 ③ 三十秒內連結論行都沒印出來（下面幾條會對著半截畫面比對）", False)
 
     # 進到 CLI：等 Claude Code 的畫面元素
     child.expect(["bypass permissions", "Claude Code", "for shortcuts"], timeout=120)

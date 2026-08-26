@@ -54,7 +54,7 @@ db.reset_engine()
 db.init_db()
 
 from server import sessions as sessions_mod, views  # noqa: E402
-from server.models import Session as SessionRow  # noqa: E402
+from server.models import Session as SessionRow, View as ViewRow  # noqa: E402
 
 _pass = _fail = 0
 
@@ -123,6 +123,24 @@ def spawn_slow(port: int, sid: str, delay: str = "1.0") -> int:
     return pid
 
 
+def _pids_on_bin() -> list[int]:
+    """此刻還活著的替身有哪些（不論它 exec 完了沒有）。
+
+    ⚠ 判準是「cmdline 裡有沒有這次測試的暫存目錄」，不是「叫不叫 ttyd」。窗口裡它的
+      argv 是 `/bin/bash <tmp>/bin/ttyd …`、exec 之後是 `ttyd <tmp>/fake_ttyd_impl.py …`，
+      兩種形狀都要撿得到。只認 `ttyd` 這個名字的話，**漏掉的正好是要抓的那一種**。
+    ⚠ 目錄是 `mkdtemp` 給的，所以這條掃描不會把別的測試或正式服務的行程算進來。
+    """
+    if views.psutil is None:
+        return []
+    out = []
+    for p in views.psutil.process_iter(["pid", "cmdline"]):
+        with __import__("contextlib").suppress(Exception):
+            if any(_tmp in a for a in (p.info["cmdline"] or [])):
+                out.append(p.info["pid"])
+    return out
+
+
 def seed(sid: str) -> str:
     """建一筆 session 列（FK 是開著的，view 的列一定要掛在真的 session 上）。"""
     uid = sessions_mod.ensure_system_user()
@@ -175,6 +193,43 @@ try:
         check("DB 記下了 pid（＝這一列不會停在 in-flight 宣告）", v["pid"] is not None)
         check("那顆行程此刻確實是我們的 ttyd", views._process_alive(v["pid"]) is True)
         check("port 真的在服務", views._port_open(v["port"]) is True)
+
+    print("== 🔴 收程序：`_kill` 在那個窗口裡收不掉，失敗路徑必須用 `_kill_spawned` ==")
+    # `_kill()` 送訊號前要確認 argv[0] 在白名單裡，而窗口裡它是 `bash`／`sh`。
+    # 於是 `_kill()` 判定「不是我們的程序」，**直接回 True 什麼都不做**。
+    # 呼叫端接著 `_drop_view()` 刪掉唯一的追蹤記錄，那顆行程就此沒有人記得。
+    # （形狀與斷言順序同 test_mitm_relay 的 socat 版，這裡是 ttyd 版。）
+    _kp = spawn_slow(free_port(), "killprobe", delay="30.0")
+    time.sleep(0.4)
+    check("前提：還在窗口裡（存在、但 argv[0] 還不是 ttyd）", views._pid_exists(_kp) and not views._process_alive(_kp))
+    check(
+        "🔴 `_kill()` 回 True 卻沒有收掉它（這就是為什麼不能只叫它）",
+        views._kill(_kp) is True and views._pid_exists(_kp),
+    )
+    check("🔴 `_kill_spawned()` 收得掉", views._kill_spawned(_kp, grace=0.5) is True)
+    check("　└ 行程真的不在了", not views._pid_exists(_kp))
+
+    print("== 🔴 `open_view` 走完失敗路徑之後，不可以留下沒有人記得的 ttyd ==")
+    # 把窗口撐到比 `_wait_ready` 的 5 秒逾時還長：替身在整個逾時期間都還沒 exec，
+    # 於是 open_view 的收尾**確定**落在窗口裡。這是那條路徑唯一穩定重現的方式。
+    # ⚠ port 範圍縮成一個，否則每個 port 都要付一次 5 秒逾時。
+    os.environ["CLAUDE_PTY_TTYD_PORT_MIN"] = os.environ["CLAUDE_PTY_TTYD_PORT_MAX"] = str(free_port())
+    importlib.reload(config)
+    _sid2 = "leakprobe001"
+    _ctr2 = seed(_sid2)
+    os.environ["FAKE_TTYD_DELAY"] = "8.0"
+    _before = set(_pids_on_bin())
+    _err2 = None
+    try:
+        views.open_view(_sid2, _ctr2)
+    except views.ViewError as e:
+        _err2 = e
+    check(f"前提：這一輪本來就該失敗（{_err2}）", _err2 is not None)
+    _leaked = set(_pids_on_bin()) - _before
+    _spawned.extend(_leaked)  # 不管綠紅都要收乾淨
+    check(f"🔴 沒有留下孤兒行程（多出來 {len(_leaked)} 顆）", not _leaked)
+    with db.session_scope() as _s:
+        check("DB 那一列也收乾淨了", _s.query(ViewRow).filter(ViewRow.session_id == _sid2).count() == 0)
 
     print("== 反向：行程真的不在了，還是要回 False，而且要快 ==")
     # 中止條件放寬成「存在性」之後，最容易犯的下一個錯是「它永遠等到逾時」。

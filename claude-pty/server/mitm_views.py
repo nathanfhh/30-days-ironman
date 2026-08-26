@@ -19,8 +19,6 @@
 from __future__ import annotations
 
 import datetime as _dt
-import os
-import signal
 import socket
 import time
 from contextlib import suppress
@@ -226,38 +224,11 @@ def _kill(pid: int | None) -> bool:
 def _kill_spawned(pid: int | None, grace: float = 1.0) -> bool:
     """收掉「我們剛 spawn、但可能還沒 exec 成 socat」的那個行程。
 
-    ⚠ **這條路上不可以只呼叫 `_kill()`。** 它在送訊號之前會先確認 argv[0] 是 socat，
-      而 `_spawn_detached` 是 double-fork：`$!` 拿到的 pid 一開始是 `sh` 的。在那個窗口裡
-      `_kill()` 會判定「不是我們的程序」而**直接回 True 什麼都不做**，於是那顆行程活著、
-      DB 那一列被 `_drop` 掉，再也沒有人記得它。症狀與 `views.open_view` 的 review H3
-      是同一種：port 就此消失，而畫面上、log 裡都沒有任何跡象。
-
-    做法：先給它 `grace` 秒把 exec 走完（走完就交給 `_kill()` 那一整套「等到它真的從行程表
-    上消失才算數」）；到時間還沒變成 socat，就直接對這個號碼送訊號。
-
-    ⚠ 直接送訊號的那一段有一個窄窗口：`sh` 剛好在這幾毫秒退出、而號碼被別人接手。
-      這個 pid 是我們自己在幾百毫秒前從 `$!` 拿到的，接手的機率極低；而另一側的代價是
-      **確定**漏掉一顆沒有人記得的行程。往「收得掉」那一側倒，理由同 `views._kill` 那段
-      「psutil 保護的是等待判斷、不是訊號投遞」的取捨。
+    ⚠ 本體搬去 `views._kill_spawned` 了：ttyd 那條路的 `open_view` 有**一模一樣**的失敗
+      路徑，而它原本只呼叫 `_kill()`（同一個坑）。這裡只換白名單，理由同 `_kill`／
+      `_process_alive`：能共用的都直接用 views 的，不留第二份會漂的副本。
     """
-    if not pid:
-        return True
-    deadline = time.time() + grace
-    while time.time() < deadline:
-        if not _pid_exists(pid):
-            return True  # 它自己走了
-        if _process_alive(pid):
-            return _kill(pid)  # 已經是 socat，走完整的那一套
-        time.sleep(0.05)
-    if not _pid_exists(pid):
-        return True
-    for sig in (signal.SIGTERM, signal.SIGKILL):
-        with suppress(OSError):
-            os.kill(pid, sig)
-        time.sleep(0.1)
-        if not _pid_exists(pid):
-            return True
-    return False
+    return views._kill_spawned(pid, _OUR_RELAY_NAMES, grace)
 
 
 def _process_alive(pid: int | None) -> bool:

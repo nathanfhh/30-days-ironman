@@ -104,6 +104,39 @@ def wait_gone(pid, timeout=10.0):
     return False
 
 
+def strays():
+    """本測試 port 區段裡此刻還活著的 ttyd（連 `ps` 那一行一起回，供失敗時列證據）。
+
+    ⚠ 只找 450xx，別把正式服務（41000–41100）算進來：誤報的測試最終就是被忽略。
+    """
+    r = subprocess.run(["pgrep", "-f", "ttyd -p 450[0-9][0-9]"], capture_output=True, text=True)
+    pids = [p for p in r.stdout.split() if p.isdigit()]
+    if not pids:
+        return []
+    out = subprocess.run(["ps", "-o", "pid=,lstart=,command=", "-p", ",".join(pids)], capture_output=True, text=True)
+    return [ln.strip() for ln in out.stdout.splitlines() if ln.strip()] or [f"pid {' '.join(pids)}"]
+
+
+def wait_no_stray(timeout=5.0):
+    """等到殘留清空為止，回傳最後一次看到的殘留（空 list ＝乾淨）。
+
+    ⚠ **原本這裡是一次瞬時取樣。** 收尾的最後一步是 `mgr.terminate()`，而它收 ttyd 走的
+      是「送 SIGTERM → 等它真的從行程表上消失」那一整套，所以那一瞬間理應已經乾淨。
+      但這條斷言守的是「**沒有任何人記得的**那種殘留」，那種東西不歸任何收尾流程管，
+      它什麼時候現身取決於它自己 exec 完了沒有。取樣一次的話，同一顆殘留會依機器快慢
+      時紅時綠，而一個會隨機紅的檢查最後會被整支關掉。
+
+    ⚠ **上限存在，而且很短。** 這是「等它出現／等它離開」的容忍窗，不是無限期等待：
+      逾時就要紅，不可以退化成「等到乾淨為止」那種永遠不會失敗的檢查。
+    """
+    end = time.time() + timeout
+    while True:
+        found = strays()
+        if not found or time.time() >= end:
+            return found
+        time.sleep(0.25)
+
+
 print("== ttyd argv：不把 container 身分洩漏到網頁標題 ==")
 # ttyd 預設標題是「完整命令 + 容器 hostname」，會把 container id 與 attach 參數
 # 帶進分頁標題／瀏覽紀錄／截圖。必須用 titleFixed 蓋掉。
@@ -248,10 +281,15 @@ finally:
             mgr.terminate(x["id"])
     leftover = _leftovers()
     check("測試結束無殘留 container", len(leftover) == 0)
-    stray = subprocess.run(  # 只找本測試 port 區段的，別把正式服務算進來
-        ["pgrep", "-f", "ttyd -p 450[0-9][0-9]"], capture_output=True, text=True
-    )
-    check("測試結束無殘留 ttyd", stray.returncode != 0 or not stray.stdout.strip())
+    stray = wait_no_stray()
+    if not check("測試結束無殘留 ttyd", not stray):
+        # ⚠ 這一條原本只印得出 FAIL 四個字。它紅的時候（2026-08-27 實測連跑十次紅四次）
+        #   畫面上沒有任何線索可以判斷殘留的是哪一個 port、哪一場、什麼時候起的，
+        #   於是它很容易被當成噪音。而它其實是有後果的：留下的那顆會一路毒到後面的
+        #   golden，因為帳號頁的 TtydPanel 掃的是**本機真實的 ttyd 程序**，多一顆孤兒
+        #   就多畫一列，`account-admin` 那一場整場對不上。所以要把證據印出來。
+        for line in stray:
+            print(f"        {line}")
     db.reset_engine()
     __import__("shutil").rmtree(_tmp, ignore_errors=True)
 
