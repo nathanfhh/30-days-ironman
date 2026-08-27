@@ -344,9 +344,7 @@ def _partial_close_payload(r: dict) -> dict:
     else:
         warning = f"密碼已經改掉，但有 {failed} 場的終端沒有收乾淨；那些連線在收掉之前仍然可以打字。請再跑一次。"
     if mitm_failed == -1:
-        warning += (
-            " 收流量畫面這一步也整個失敗了，他已開啟的流量畫面可能還看得到即時流量。"
-        )
+        warning += " 收流量畫面這一步也整個失敗了，他已開啟的流量畫面可能還看得到即時流量。"
     elif mitm_failed:
         warning += f" 另有 {mitm_failed} 條流量畫面通道沒有收乾淨，在收掉之前仍然看得到即時流量。"
     out = {
