@@ -100,6 +100,10 @@ if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -f "${HOME}/.claude/.credentials.j
   have_claude_cred=1
 elif command -v security >/dev/null 2>&1 &&
      security find-generic-password -s "Claude Code-credentials" >/dev/null 2>&1; then
+  # ⚠ keychain 裡的憑證**複製不進沙盒**（那要把密文讀出來，不做）。所以這一條的意思是
+  #   「這台機器有登入過，entrypoint 那條路值得跑」，不是「沙盒裡會有憑證」：測試照跑，
+  #   但登入後才看得到的那一條（④b）會印 SKIP。要讓它也跑，設 CLAUDE_CODE_OAUTH_TOKEN
+  #   （`claude setup-token`），那個值會被 `-e` 帶進容器。
   have_claude_cred=1
 fi
 

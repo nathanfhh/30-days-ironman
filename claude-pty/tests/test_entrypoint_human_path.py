@@ -103,6 +103,11 @@ argv = [
     f"{SANDBOX}/.claude:/home/nathan/.claude",
     "-v",
     f"{SANDBOX}/.claude.json:/home/nathan/.claude.json",
+    # 裸 `-e NAME`：host 有設才帶進去，沒設就完全不帶。gate 早就認這個變數
+    # （見 run-all.sh 的 NEEDS_CLAUDE_CRED），但以前沒有人把它送進容器，於是
+    # 「有 token 所以跑得起來」這條路上的 CLI 其實一直是未登入的。
+    "-e",
+    "CLAUDE_CODE_OAUTH_TOKEN",
     IMAGE,
 ]
 
@@ -150,9 +155,22 @@ try:
         #    （同一個錯在第二段的 Jaeger 那步修過了，這裡是第一段漏掉的那一個。）
         check("🔴 ③ 三十秒內連結論行都沒印出來（下面幾條會對著半截畫面比對）", False)
 
-    # 進到 CLI：等 Claude Code 的畫面元素
+    # 進到 CLI。**拆成兩條**：④a 只證明 CLI 被 exec 起來了（OSC 標題列的
+    # `✳ Claude Code` 也算），④b 才是「真的登入進到提示畫面」。
+    # ⚠ 為什麼要拆：`_sandboxed_home()` 複製的是 `~/.claude/.credentials.json`，而
+    #   macOS 的憑證在 keychain 裡，那個檔根本不存在，於是沙盒裡的 claude 是**未登入**
+    #   的。舊的單一斷言用同一個正則同時接受登入畫面與提示畫面，於是它在兩種情況下
+    #   都綠，log 上分不出「登入了」與「根本沒憑證」。這正是 ③ 修過的同一種錯。
+    #   （不從 keychain 取密文：那要 `security -w`，等於把使用者的憑證讀出來寫進檔案。
+    #     要讓 ④b 在 mac 上也跑，正途是 `claude setup-token` 設 CLAUDE_CODE_OAUTH_TOKEN。）
     child.expect(["bypass permissions", "Claude Code", "for shortcuts"], timeout=120)
-    check("④ 最終進到 CLI 畫面", True)
+    check("④a CLI 被 exec 起來了", True)
+    # entrypoint.sh 在沒有憑證時會自己印這一句（見它的檔頭那段），拿它當判準比猜畫面可靠
+    if "容器內沒有憑證" in "".join(transcript):
+        print("  SKIP  ④b 已登入進到提示畫面（沙盒沒有可複製的憑證：keychain 不算）")
+    else:
+        idx = child.expect(["bypass permissions", "for shortcuts", pexpect.TIMEOUT], timeout=60)
+        check("④b 已登入進到提示畫面", idx != 2)
 finally:
     with open("/tmp/claude-pty-humanpath.log", "w") as f:
         f.write("".join(transcript))  # 供人工比對畫面
