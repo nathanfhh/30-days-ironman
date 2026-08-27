@@ -457,15 +457,24 @@ describe("TerminalDrawer", () => {
     expect(f.term.options.fontSize).toBe(14);
   });
 
-  it("有錄流量時才有那顆按鈕，而且是新分頁開 mitm/ 子路徑", async () => {
-    const open = vi.fn();
+  it("有錄流量時才有那顆按鈕，先 POST 建 relay、成功後導向 mitm/ 子路徑", async () => {
+    const open = vi.fn(() => null); // popup 被擋的情境走 fallback（同樣是新分頁）
     vi.stubGlobal("open", open);
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return { ok: true, status: 201, json: async () => ({ path: "/session/sid1/mitm/" }) };
+    });
     const w = mountDrawer({ capture: true });
     await flushPromises();
     el<HTMLButtonElement>('[data-testid="drawer-mitm"]').click();
     await flushPromises();
-    /* 🔴 尾斜線不可省：mitmweb 的 SPA 是路徑相對的，停在 `/session/sid1/mitm` 的話
-       `./static/…` 會解析到 `/session/sid1/static/…`，落到終端那條路由去。 */
+    /* 🔴 建立走 POST（GET /api/auth/mitm 是純查詢，不能靠導航順便建 relay）：
+       先在 user gesture 內開空白分頁，POST 成功後才導向。尾斜線不可省：mitmweb 的 SPA
+       是路徑相對的，停在 `/session/sid1/mitm` 的話 `./static/…` 會解析到終端那條路由。 */
+    expect(calls[0]?.url).toBe("/api/sessions/sid1/mitm");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(open).toHaveBeenCalledWith("about:blank", "_blank");
     expect(open).toHaveBeenCalledWith("/session/sid1/mitm/", "_blank", "noopener");
     // 同「新分頁」：開了不關抽屜（終端那條連線要留著）
     expect(w.emitted("close")).toBeUndefined();

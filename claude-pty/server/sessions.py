@@ -91,32 +91,57 @@ def archive(sids, reason: str, actor: dict | None = None) -> int:
     `immediate=True`：web worker 的 list() 對帳與 reconciler 會同時歸檔同一筆
     （前者判 gone、後者判 exited），沒有序列化的話兩邊都先讀到列、各寫一筆歷史，
     結束原因還取決於誰先寫。`session_history.session_id` 的 UNIQUE 是第二道保險。
+
+    ⚠ **先收通道再歸檔，而且收不掉的不可以歸檔。** 刪列會 cascade 掉 views 與
+      mitm_views，而那些記錄是**唯一**記得 pid／process group 的地方——cleanup 失敗
+      還硬刪列的話，殘留的 ttyd／socat（連同它握著的 WebSocket）就變成永久孤兒：
+      `_clean_views` 只走 DB 列、`_remove_orphans` 只管 container，沒有人依 port 或
+      process 掃描。所以 close 失敗的 sid **不進** `_archive_txn`（session 列與
+      tracking row 都留下，供 reconciler／下一次操作重試），收成功（或本來就沒有）
+      的才歸檔；有被擋下的就拋出，讓呼叫端講出「沒有歸檔成功」——reconciler 的兩個
+      呼叫端本來就 suppress 例外（下一輪會再試），不受影響。
+
+    ⚠ close 的兩支都**自己開交易**，必須在 `session_scope` 之外呼叫（`database is
+      locked` 的既有教訓，見 auth.change_password 同一段註解）。
     """
     sids = [sid for sid in sids if sid]
     if not sids:
         return 0
-    # ⚠ 先收 ttyd 再歸檔：刪列會 cascade 掉 views，而 view 記錄是**唯一**記得那個 ttyd
-    # pid 的地方。先刪列的話，若那個 ttyd 從頭到尾沒有 client 連上過（`-q` 就永遠不會
-    # 觸發），它會活著卻沒有任何機制找得到——_clean_views 只走 views 列、_remove_orphans
-    # 只管 container，沒有人依 port 或 process 掃描。那個 port 就此永久消失。
-    # 放在這裡而不是各呼叫端：四個出口只有 list() 漏了，靠「每個呼叫端記得」擋不住。
-    # ⚠ **mitmweb 的 relay 更非收不可。** ttyd 帶 `-q`（最後一個 client 斷線就自退），
-    # 所以漏收只是延遲；socat 是 `TCP-LISTEN,fork`，**沒有 client 時照樣在那裡聽著**，
-    # 永遠不會自己結束。而 `views.inspect_ttyd` 那種對帳頁只掃 ttyd 的名字，看不到它。
+    from .mitm_views import MitmViewError as _MitmViewError
     from .mitm_views import close_mitm_views
     from .views import close_views
 
+    archivable: list[str] = []
+    blocked: list[tuple[str, Exception]] = []
     for sid in sids:
-        with suppress(Exception):
+        errors: list[Exception] = []
+        # 各自 try：ttyd 收不掉不能跳過 relay 的清理，反之亦然。
+        try:
             close_views(sid)  # 等冪：沒有 view 就回 0
-        with suppress(Exception):
-            close_mitm_views(sid)  # 同上
-    try:
-        return _archive_txn(sids, reason, actor)
-    except IntegrityError:
-        # UNIQUE 兜底擋下了：這批裡有人已被另一個 worker 歸檔。目標已達成，不是錯誤
-        # ——尤其不該讓使用者按「終止」時看到 500。
-        return 0
+        except Exception as exc:  # noqa: BLE001 — 一條收不掉不能擋掉其餘通道的收尾
+            errors.append(exc)
+        try:
+            close_mitm_views(sid)  # 等冪：沒有 relay 就回 0
+        except Exception as exc:  # noqa: BLE001 — 同上
+            errors.append(exc)
+        if errors:
+            blocked.append((sid, errors[0]))
+        else:
+            archivable.append(sid)
+    archived = 0
+    if archivable:
+        try:
+            archived = _archive_txn(archivable, reason, actor)
+        except IntegrityError:
+            # UNIQUE 兜底擋下了：這批裡有人已被另一個 worker 歸檔。目標已達成，不是錯誤
+            # ——尤其不該讓使用者按「終止」時看到 500。
+            return 0
+    if blocked:
+        first_sid, first_exc = blocked[0]
+        raise _MitmViewError(
+            f"{len(blocked)} 場的通道收不掉，先不歸檔（{first_sid}：{first_exc}）；該場的登錄已保留，處理乾淨後再試一次"
+        ) from first_exc
+    return archived
 
 
 def _archive_txn(sids: list[str], reason: str, actor: dict | None = None) -> int:

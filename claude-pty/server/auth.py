@@ -240,10 +240,11 @@ def authenticate(username: str, password: str) -> dict:
 def change_password(user_id: int, new_password: str, old_password: str | None = None, require_old: bool = True) -> dict:
     """改密碼。require_old=True（使用者自行修改）時必須驗舊密碼；admin 代改可略過。
 
-    回傳改完之後的 user（含遞增過的 password_version），另外帶三個欄位講收終端的結果：
-    `views_closed`、`views_failed`（`-1` 代表整個動作拋出來、連收幾場都不知道）、
-    以及失敗時的 `views_error`。**呼叫端不可以只看有沒有拋例外就回報成功**，密碼改掉了
-    而終端沒收乾淨是一種部分成功，要講出來。
+    回傳改完之後的 user（含遞增過的 password_version），另外帶欄位講清理的結果：
+    `views_closed`／`views_failed`（收終端，ttyd）與 `mitm_closed`／`mitm_failed`
+    （收流量畫面 relay，socat）。兩組的 `-1` 都代表整個動作拋出來、連收幾場都不知道，
+    失敗時另有 `views_error`／`mitm_error`。**呼叫端不可以只看有沒有拋例外就回報成功**，
+    密碼改掉了而終端或流量畫面沒收乾淨是一種部分成功，要講出來。
 
     ⚠ **不為「操作中的這一台」留特例**（ADR 0010）：password_version 一遞增，這個帳號的
       每一張 cookie 都當場失效，包含按下送出的那一張——`app.change_own_password` 自己
@@ -305,6 +306,21 @@ def change_password(user_id: int, new_password: str, old_password: str | None = 
     else:
         result["views_closed"] = closed
         result["views_failed"] = failed
+    # mitmweb 的 relay 同樣要收：password_version 管不到已經升級的 WebSocket，而 relay
+    # 的 fork child 握著的正是那種連線（見 close_user_mitm_views 的 docstring）。
+    # ⚠ 與上一段同一個交易邊界理由：close_user_mitm_views 自己開交易，必須在 session_scope
+    #   之外。admin 的範圍（全收）由那一支自己判，這裡不重複。
+    from . import mitm_views  # 區域 import：理由同 views
+
+    try:
+        mitm_closed, mitm_failed = mitm_views.close_user_mitm_views(user_id)
+    except Exception as e:  # noqa: BLE001 — 同上：不能讓已經改掉的密碼變成錯誤回應
+        result["mitm_closed"] = 0
+        result["mitm_failed"] = -1
+        result["mitm_error"] = str(e)
+    else:
+        result["mitm_closed"] = mitm_closed
+        result["mitm_failed"] = mitm_failed
     return result
 
 

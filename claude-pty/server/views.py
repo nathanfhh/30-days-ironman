@@ -414,6 +414,26 @@ def _spawn_detached(argv: list[str]) -> int:
     return int(pid_line)
 
 
+def _spawn_detached_with_group(argv: list[str]) -> tuple[int, int | None]:
+    """同 `_spawn_detached`，另把 process group id 一起帶回來。
+
+    ⚠ 為什麼 group id 是這樣拿的：double-fork 的那顆 `sh` 自己帶 `start_new_session=True`
+      ——它是新 session／group 的 leader（pgid ＝ 它的 pid），隨即退出；背景 child 沒有
+      job control，**繼承 sh 的 pgid**，sh 死後被 reparent 給 init 但 group 不變。
+      所以從外面問 child 的 pgid，拿到的正是「這次 spawn 全部成員」的 group id——
+      之後 `killpg` 一發就涵蓋 listener、它 fork 的 children、與 bridge script 起的
+      `docker exec` client（沒有人 setsid 的話，整棵子孫樹都在同一個 group）。
+
+    ⚠ pgid 問不到（程序剛好退出、號碼被回收）就回 `None`；呼叫端把 None 存進 DB，
+      清理時降級回單 pid 路徑——行為與沒有這個欄位的舊版相同，不會更糟。
+    """
+    pid = _spawn_detached(argv)
+    try:
+        return pid, os.getpgid(pid)
+    except OSError:  # 含 ProcessLookupError：那個號碼已經不在了
+        return pid, None
+
+
 # 我們自己會起的 ttyd 檔名（＝白名單本身）。**每個名字都收**，不是只收「這個人現在選的
 # 那一顆」：偏好是 per-user 的，而且切換之後先前起的程序還活著——只認一個名字的話，那些
 # 程序不會被認成我們的，於是 `_kill()` 收不掉、`_process_alive()` 判它們死掉而清掉登錄列。
@@ -734,6 +754,101 @@ def _process_alive(pid: int | None, names: frozenset[str] | None = None) -> bool
         return False
     # 存在還不夠：得確認是我們的程序而非被回收的號碼（review H8）
     return _is_ours(pid, names or _OUR_TTYD_NAMES)
+
+
+def _process_group_id(pid: int | None) -> int | None:
+    """這個 pid 現在的 pgid。拿不到（已死、無 psutil）就 None——呼叫端降級回單 pid 收法。"""
+    if not pid:
+        return None
+    try:
+        return os.getpgid(pid)
+    except OSError:
+        return None
+
+
+def _group_ours_members(pgid: int, names: frozenset[str], bridge_hint: str) -> list:
+    """這個 group 裡現在還活著的、我們認得的成員。psutil 不在就回空（＝無從佐證）。
+
+    成員認得的兩種證據（任一成立就算）：
+      · argv[0] 的 basename 在白名單裡——socat 的 fork children 都是這個形狀。
+      · cmdline 裡含有 bridge script 的路徑——bridge script 的 sh 包裝與它 fork 出去的
+        `docker exec` client 認不得白名單（前者 argv[0] 是 sh，後者是 docker），但它們
+        的位置參數裡帶著我們組的腳本路徑，那是比名字更直接的出身證據
+        （路徑不含空白，整段比對是安全的）。
+    ⚠ 只認得 socat、不認得 docker exec client 的話有個死角：socat 全死、只剩 client 的
+      group 會被判「不是我們的」而放過。那是刻意往安全側倒（同 `_still_our_spawn` 的
+      取捨：誤殺沒有上限，漏掉的有下輪 cleanup），而且 socat 死了 client 的管線跟著斷，
+      實務上它自己就會走。
+    """
+    if psutil is None:
+        return []
+    out = []
+    # ⚠ pgid 不能放進 process_iter 的 attrs，psutil 也沒有 pgid() 方法（psutil 的
+    #   Process 不暴露 process group）——用 os.getpgid 問，它在兩個平台都有。
+    #   慢一點，但這條路徑只在收尾時跑，行程表也不過幾百顆。
+    for proc in psutil.process_iter(["pid", "cmdline"]):
+        with suppress(psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+            if os.getpgid(proc.info["pid"]) != pgid:
+                continue
+            argv = proc.info.get("cmdline") or []
+            if (argv and os.path.basename(argv[0]) in names) or bridge_hint in argv:
+                out.append(proc)
+    return out
+
+
+def _kill_process_group(
+    pid: int | None,
+    process_group_id: int | None,
+    names: frozenset[str] | None = None,
+    bridge_hint: str | None = None,
+) -> bool:
+    """以**整個 process group**收掉一顆 view/relay；回傳「我們的成員都不在了」。
+
+    ⚠ **為什麼非 group 不可。** listener（`socat TCP-LISTEN,fork`）死掉不代表它的
+      fork children 死了——每個 child 手上握著一條已經升級的 WebSocket。只打 listener
+      pid 的話，「撤銷存取權」之後那些 WebSocket 繼續通：cookie 版號管不到它們，
+      授權又不會回頭再問一次。同一個 group 一發 `killpg` 就涵蓋 listener、全部
+      children、與 bridge script 起的 `docker exec` client（成員繼承 pgid，見
+      `_spawn_detached_with_group` 那段）。
+
+    ⚠ **送 killpg 前後的身分把關，與 `_kill` 的 argv[0] 把關是同一件事。** PGID 與 pid
+      一樣是可回收的號碼：整組退出後，新的程序群可能拿到同一個號。所以：
+        · 送 SIGTERM 前先確認 group 裡**現在**還有我們認得的成員；
+        · 每一級訊號之後、下一級之前**再驗一次**——grace 期間整組死光、號碼被別人
+          接手的話，下一發就不送了。寧可少殺（有下輪 cleanup），不誤殺。
+
+    ⚠ 沒有 pgid（spawn 早期失敗、舊列、pgid 問不到）→ 降級回 `_kill(pid)` 的單 pid
+      路徑：行為與沒有這個機制的舊版逐字相同。**降級不可以炸**，舊列才收得掉。
+    """
+    names = names or _OUR_TTYD_NAMES
+    pgid = process_group_id or _process_group_id(pid)
+    if not pgid:
+        return _kill(pid, names)
+    bridge_hint = bridge_hint or config.MITM_BRIDGE
+
+    def ours_gone() -> bool:
+        return not _group_ours_members(pgid, names, bridge_hint)
+
+    if not _group_ours_members(pgid, names, bridge_hint):
+        # group 裡已沒有我們認得的成員：要嘛早收完了，要嘛號碼被別人接手（絕不能對它
+        # killpg）。用單 pid 那一套收尾確認——它自己的 argv[0] 把關原樣保留。
+        return _kill(pid, names)
+    for sig, grace in ((signal.SIGTERM, config.VIEW_TERM_GRACE), (signal.SIGKILL, config.VIEW_KILL_GRACE)):
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            return True  # 整組剛好自己走完
+        except (PermissionError, OSError):
+            return False  # 送不出去：可能有成員還活著，不可以當成收掉了
+        deadline = time.monotonic() + grace
+        while time.monotonic() < deadline:
+            if ours_gone():
+                return True
+            time.sleep(0.05)
+        # 進下一級訊號前再驗一次（PGID 重用防護，見上）。
+        if ours_gone():
+            return True
+    return ours_gone()
 
 
 def _probe_host() -> str:

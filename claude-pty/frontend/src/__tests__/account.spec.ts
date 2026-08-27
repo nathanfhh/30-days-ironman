@@ -207,6 +207,20 @@ describe("AccountView：一般使用者", () => {
     expect((w.find('[data-testid="old-pw"]').element as HTMLInputElement).value).toBe("");
   });
 
+  it("🔴 只有流量畫面沒收乾淨（mitm_failed）也**不可以**報完全成功", async () => {
+    installFetch({ "/api/users/me/password": { body: { mitm_failed: 2 } } });
+    const w = await mountAccount(false, { minPasswordLength: 8 });
+    await w.find('[data-testid="old-pw"]').setValue("oldpassword");
+    await w.find('[data-testid="new-pw"]').setValue("newpassword");
+    await w.find('[data-testid="confirm-pw"]').setValue("newpassword");
+    await w.find('[data-testid="pw-form"]').trigger("submit");
+    await flushPromises();
+    const t = toasts.at(-1)!;
+    expect(t.level).toBe("warning");
+    expect(t.title).toContain("沒有收乾淨");
+    expect(t.body).toContain("流量畫面");
+  });
+
   it("🔴 存完憑證是**重抓 bootstrap**，不是整頁重載，而且欄位要清掉", async () => {
     const reload = vi.fn();
     // location.reload 在 jsdom 是唯讀的 getter，蓋掉一個間諜才問得出「有沒有被呼叫」

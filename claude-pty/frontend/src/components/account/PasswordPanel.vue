@@ -42,20 +42,29 @@ const canSubmit = computed(
 
 const save = submitting(busy, async () => {
   try {
-    const r = await api<{ views_failed?: boolean } | null>("/api/users/me/password", {
-      method: "POST",
-      body: { old_password: oldPw.value, new_password: newPw.value },
-    });
+    const r = await api<{ views_failed?: boolean; mitm_failed?: boolean } | null>(
+      "/api/users/me/password",
+      {
+        method: "POST",
+        body: { old_password: oldPw.value, new_password: newPw.value },
+      },
+    );
     oldPw.value = "";
     newPw.value = "";
     confirmPw.value = "";
     let wait = 1200;
-    if (r && r.views_failed) {
+    if (r && (r.views_failed || r.mitm_failed)) {
       wait = 7000;
-      toast("密碼已更改，但終端沒有收乾淨", "warning", {
+      // ⚠ 終端與流量畫面是兩種 partial failure，但這一則 toast 要一句話講完兩件事：
+      //   分成兩則的話第二則會蓋掉第一則（同一個 toast 槽），而使用者兩件事都該知道。
+      const parts: string[] = [];
+      if (r.views_failed) parts.push("有終端沒收掉，那些連線在收掉之前仍然可以打字");
+      if (r.mitm_failed) parts.push("有流量畫面通道沒收掉，那些畫面仍然看得到即時流量");
+      toast("密碼已更改，但連線沒有收乾淨", "warning", {
         body:
-          "所有裝置的登入已失效，但有終端沒收掉；那些連線在收掉之前仍然可以打字。" +
-          "重新登入之後把它們關掉，或直接終止那幾場 session。",
+          "所有裝置的登入已失效；" +
+          parts.join("，") +
+          "。重新登入之後把它們關掉，或直接終止那幾場 session。",
         duration: wait,
         pausable: false,
       });
@@ -63,7 +72,7 @@ const save = submitting(busy, async () => {
       // ⚠ 「這次追蹤到的」不是客套，是這句話唯一站得住的範圍：後端收的是它當下列得出來
       //   的那些 view。這裡不可以升級成「所有終端」。
       toast("密碼已更改，請重新登入", "success", {
-        body: "所有裝置的登入已失效，這次追蹤到的互動終端也都收掉了；容器不受影響，重新登入即可接回",
+        body: "所有裝置的登入已失效，這次追蹤到的互動終端與流量畫面也都收掉了；容器不受影響，重新登入即可接回",
       });
     }
     setTimeout(() => {

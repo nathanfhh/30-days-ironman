@@ -24,6 +24,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 
 import { ApiError, notifyUnauthorized } from "@/api/client";
 import { useTerminalSize } from "@/composables/useTerminalSize";
+import { openMitm as openMitmRelay } from "@/lib/mitm";
 import { toast, toastError } from "@/lib/toast";
 import { useSiteStore } from "@/stores/site";
 
@@ -189,11 +190,18 @@ function onFilePicked(): void {
 }
 
 /* 流量畫面：mitmweb 自己送 `X-Frame-Options: DENY`，所以只能新分頁，不能像終端那樣嵌。
-   路徑的**尾斜線不可省**：那個 SPA 是路徑相對的（`./static/…`、WS 由 location.pathname
-   現場組），少了它資源會解析到 `/session/<sid>/` 底下，也就是終端那條路由。
-   token 完全不經過這裡：nginx 在 auth_request 之後自己注入 Bearer（ADR 0021）。 */
-function openMitm(): void {
-  globalThis.open(`${props.path}mitm/`, "_blank", "noopener");
+   建立走 `lib/mitm.ts` 的 `openMitm`：先在 user gesture 內開空白分頁，再 POST
+   `/api/sessions/<sid>/mitm` 起 relay——`/api/auth/mitm` 是 nginx 的 auth_request
+   掛載點，GET 必須零副作用，不能靠導航順便建（ADR 0021）。
+   token 完全不經過這裡：nginx 在 auth_request 之後自己注入 Bearer。 */
+async function openMitm(): Promise<void> {
+  try {
+    await openMitmRelay(props.sid);
+  } catch (ex) {
+    // 503（mitmweb 還沒準備好）與 404/409（這場不能看）是不同的話要講；toastError
+    // 會把後端說的原因原樣端出來。
+    toastError("流量畫面", ex, { duration: 8000 });
+  }
 }
 
 function popOut(): void {

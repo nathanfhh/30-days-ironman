@@ -98,23 +98,29 @@ async function resetPassword(u: RosterUser): Promise<void> {
       toast("已取消", "info", { body: `${u.username} 的密碼未變動` });
       return;
     }
-    const r = await api<{ views_failed?: boolean } | null>(`/api/users/${u.id}/password`, {
-      method: "POST",
-      body: { new_password: pw },
-    });
-    // ⚠ 這條是「讓某個人退場」最常走的路，收不乾淨更不能報成功。
-    if (r && r.views_failed) {
+    const r = await api<{ views_failed?: boolean; mitm_failed?: boolean } | null>(
+      `/api/users/${u.id}/password`,
+      {
+        method: "POST",
+        body: { new_password: pw },
+      },
+    );
+    // ⚠ 這條是「讓某個人退場」最常走的路，收不乾淨更不能報成功。終端與流量畫面兩種
+    //   partial failure 一句話講完（分兩則會互相蓋掉）。
+    if (r && (r.views_failed || r.mitm_failed)) {
       // 這條不跳頁，所以可以 hover 暫停補讀；但訊息比 success 長，時間要給足。
-      toast(`已重設 ${u.username} 的密碼，但終端沒有收乾淨`, "warning", {
+      const parts: string[] = [];
+      if (r.views_failed) parts.push("有終端沒收掉，那些連線在收掉之前仍然可以打字");
+      if (r.mitm_failed) parts.push("有流量畫面通道沒收掉，那些畫面仍然看得到即時流量");
+      toast(`已重設 ${u.username} 的密碼，但連線沒有收乾淨`, "warning", {
         body:
-          "他的登入已經失效，但有終端沒收掉；那些連線在收掉之前仍然可以打字。" +
-          "請再按一次，或直接終止他那幾場 session。",
+          "他的登入已經失效；" + parts.join("，") + "。請再按一次，或直接終止他那幾場 session。",
         duration: 9000,
       });
     } else {
       // ⚠ 範圍限定在「這次追蹤到的」，不要寫成「開著的終端都失效了」。
       toast(`已重設 ${u.username} 的密碼`, "success", {
-        body: "他既有的登入已立刻失效，這次追蹤到的互動終端也都收掉了",
+        body: "他既有的登入已立刻失效，這次追蹤到的互動終端與流量畫面也都收掉了",
       });
     }
   } catch (ex) {

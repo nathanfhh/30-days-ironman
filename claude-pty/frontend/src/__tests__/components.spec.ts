@@ -190,11 +190,17 @@ describe("ManifestList", () => {
     expect(acts).toEqual(["open", "kill", "mitm"]);
   });
 
-  it("🔴 「流量」按鈕開的是那一場的 mitm 路由，而且是新分頁", () => {
+  it("🔴 「流量」按鈕先 POST 建 relay，成功後才導向回傳的 path", async () => {
     const opened: unknown[][] = [];
     const spy = vi
       .spyOn(globalThis, "open")
       .mockImplementation((...a: unknown[]) => (opened.push(a), null));
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      // 尾斜線不可省：mitmweb 的 SPA 用相對路徑取資源，少了它會解析到終端那條路由
+      return { ok: true, status: 201, json: async () => ({ path: "/session/capsid0001/mitm/" }) };
+    });
     const w = mount(ManifestList, {
       props: {
         ...base,
@@ -206,10 +212,49 @@ describe("ManifestList", () => {
         ],
       },
     });
-    w.find('[data-testid="row-mitm-capsid0001"]').trigger("click");
-    // 尾斜線不可省：mitmweb 的 SPA 用相對路徑取資源，少了它會解析到終端那條路由
-    expect(opened[0]).toEqual(["/session/capsid0001/mitm/", "_blank", "noopener"]);
+    await w.find('[data-testid="row-mitm-capsid0001"]').trigger("click");
+    await flushPromises();
+    // 先在 user gesture 內開空白分頁（防 popup blocker），POST 成功後導向 relay path
+    expect(opened[0]).toEqual(["about:blank", "_blank"]);
+    expect(calls[0]?.url).toBe("/api/sessions/capsid0001/mitm");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(opened[1]).toEqual(["/session/capsid0001/mitm/", "_blank", "noopener"]);
     spy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("🔴 POST 失敗時關閉空白分頁、不再導向、錯誤要講出來", async () => {
+    const closed = vi.fn();
+    const spy = vi
+      .spyOn(globalThis, "open")
+      .mockImplementation(
+        () =>
+          ({ opener: null, location: { replace: vi.fn() }, close: closed }) as unknown as Window,
+      );
+    vi.stubGlobal("fetch", async () => ({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      json: async () => ({
+        error: "這一場的流量畫面還沒準備好（容器裡的 mitmweb 沒有回應），請稍後再試",
+      }),
+    }));
+    const w = mount(ManifestList, {
+      props: {
+        ...base,
+        rows: [
+          row({
+            id: "capsid0001",
+            profile: { cli: "claude", network: "restricted", capture: true },
+          }),
+        ],
+      },
+    });
+    await w.find('[data-testid="row-mitm-capsid0001"]').trigger("click");
+    await flushPromises();
+    expect(closed).toHaveBeenCalled(); // 空白分頁被收掉，不留可誤解的空白頁
+    spy.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it("沒取名字就用 sid 並套等寬字體", () => {

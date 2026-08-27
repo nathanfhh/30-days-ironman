@@ -315,10 +315,11 @@ class MitmView(Base):
       並讓兩個 port 範圍不重疊（config.MITM_PORT_MIN/MAX）。
 
     ⚠ 這一列**不記 actor**（View 有）。理由是這個 relay 不是「某個人開著的畫面」而是
-      「這一場有沒有一條可用的通道」：授權每一發請求都在 nginx 的 auth_request 重驗一次
-      （`/api/auth/mitm` 走與終端同一套 `_owned`），所以撤銷存取權不需要靠這一列去收，
-      下一發請求就過不了。相對地，ttyd 的 WebSocket 升級之後**不再**經過
-      auth_request，那才是 `views.actor_user_id` 存在的理由（見 close_user_views）。
+      「這一場有沒有一條可用的通道」：HTTP 的授權每一發請求都在 nginx 的 auth_request
+      重驗一次，所以「撤銷存取權」對 HTTP 是自動的。**但已升級的 WebSocket 不會回頭再問
+      一次**——這一點與 ttyd 相同（`views.actor_user_id` 存在的理由），所以撤銷存取權
+      時仍然要靠這一列的 pid／`process_group_id` 把 relay 的整個 process group 收掉
+      （見 `close_user_mitm_views`），只是收的粒度是「這一場」而不是「這個人」。
     """
 
     __tablename__ = "mitm_views"
@@ -331,6 +332,14 @@ class MitmView(Base):
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     port: Mapped[int] = mapped_column(Integer, nullable=False)
     pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 整個 relay（listener + 它 fork 的 children + bridge 的 docker exec client）的
+    # process group。清理要打**整組**：socat fork 的 child 各握一條已升級的 WebSocket，
+    # 只打 listener pid 的話，撤銷存取權之後那些連線繼續通（見 mitm_views.close_mitm_views）。
+    # NULL ＝ 舊列或 spawn 早期（pgid 還沒寫入就死了）；清理時降級回單 pid 路徑。
+    process_group_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ready=False ＝ 已 spawn、還在等就緒（_wait_ready 進行中）或 worker 已死在半路；
+    # True ＝ 就緒探測通過、可以 proxy。NULL ＝ 剛 claim 完 port、程序還沒起來的瞬間。
+    ready: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
 
 

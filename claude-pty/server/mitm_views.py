@@ -87,22 +87,38 @@ def open_mitm_view(session_id: str, container_id: str) -> dict:
         if row_id is None:
             continue  # 這個 port 被別的 session 佔走 → 換下一個
         pid = None
+        process_group_id = None
         # 同 views.open_view：argv 與 spawn 時刻留給失敗路徑的 `_kill_spawned` 當證據。
         argv = _socat_argv(port, container_id)
         spawn_time = time.time()
         try:
-            pid = views._spawn_detached(argv)
+            pid, process_group_id = views._spawn_detached_with_group(argv)
+            # ⚠ **先寫 pid 與 pgid，再等 readiness。** 若 worker 在等待期間掛掉，殘留列
+            #   仍然足以讓 cleanup（或 reconciler）收掉 listener 與全部 fork children；
+            #   ready=False 也不會被 peek_mitm_view 當成可用的 relay。反過來（先等再寫）
+            #   的話，等的那 20 秒裡這顆 socat 是一顆「沒有人記得 pgid」的孤兒。
+            with session_scope(immediate=True) as s:
+                row = s.get(MitmView, row_id)
+                if row is None:  # 宣告被清掉了（不該發生）→ 當失敗處理
+                    raise MitmViewError("relay 宣告已消失")
+                row.pid = pid
+                row.process_group_id = process_group_id
+                row.ready = False
             if _wait_ready(port, pid):
                 with session_scope(immediate=True) as s:
                     row = s.get(MitmView, row_id)
                     if row is None:  # 宣告被清掉了（不該發生）→ 當失敗處理
                         raise MitmViewError("relay 宣告已消失")
                     row.pid = pid
+                    row.process_group_id = process_group_id
+                    row.ready = True
                 return _relay_dict(row_id, session_id, port, pid)
-        except Exception:
+        except Exception as exc:
             # spawn 之後任一步失敗都必須收掉那顆 socat，否則它活著卻沒有人記得 pid
-            # （同 views.open_view 的 review H3）。
-            _kill_spawned(pid, argv, spawn_time=spawn_time)
+            # （同 views.open_view 的 review H3）。但**收不掉時不可以刪列**：那顆還活著
+            # 的 socat 唯一的追蹤記錄就是這一列，刪了它＝永久孤兒（archive 同一個教訓）。
+            if not _kill_spawned(pid, process_group_id, argv, spawn_time=spawn_time):
+                raise MitmViewError("relay 啟動失敗且無法完成程序清理；追蹤記錄已保留，請稍後重試") from exc
             _drop(row_id)
             raise
         # 就緒失敗。**換下一個 port 只對其中一種有意義**，兩種混在一起就是那段 34 分鐘：
@@ -115,7 +131,8 @@ def open_mitm_view(session_id: str, container_id: str) -> dict:
         #   已經退出了，那時 `_port_open` 仍為真，只看它會把「port 被占」誤判成上游壞掉，
         #   而換 port 正是那一種該做的事（ADR 0021 說的那道安全網）。
         upstream_dead = _process_alive(pid) and views._port_open(port)
-        _kill_spawned(pid, argv, spawn_time=spawn_time)
+        if not _kill_spawned(pid, process_group_id, argv, spawn_time=spawn_time):
+            raise MitmViewError("relay 尚未就緒且無法完成程序清理；追蹤記錄已保留，請稍後重試")
         _drop(row_id)
         if upstream_dead:
             raise MitmNotReadyError(
@@ -131,14 +148,21 @@ def close_mitm_views(session_id: str) -> int:
       沒有任何 client 時它照樣在那裡聽著，永遠不會自己結束。session 收掉之後沒有人再
       呼叫它，而那個 port 會一直被佔住，`views.inspect_ttyd` 那種對帳頁也看不到它
       （它只掃 ttyd 的名字）。所以生命週期必須明確地掛在 archive 上。
+
+    ⚠ **收的是整個 process group，不是只有 listener。** socat 的 fork child 各握一條
+      已升級的 WebSocket——只打 listener pid，撤銷存取權之後那些連線繼續通（cookie
+      版號管不到已升級的 WebSocket）。`_kill_row` 走 `views._kill_process_group`。
+
+    ⚠ **收不掉時不可以刪列**（同 views.close_views）：刪掉唯一的追蹤記錄等於把一顆還
+      活著的 socat 變成孤兒，而它正是我們要收的那個東西。保留列、拋出，讓呼叫端
+      （archive、改密碼、reconciler）有機會重試。
     """
     closed = 0
     stuck: list[int] = []
     with session_scope(immediate=True) as s:
         for row in s.query(MitmView).filter(MitmView.session_id == session_id).all():
-            if not _kill(row.pid):
-                # 同 views.close_views：**不刪這一列**。刪掉唯一的追蹤記錄等於把一顆還活著
-                # 的 socat 變成孤兒，而它正是我們要收的那個東西。
+            if not _kill_row(row):
+                # **不刪這一列**。它此刻是那顆 socat（與它的 children）唯一的追蹤記錄。
                 stuck.append(row.pid or 0)
                 continue
             s.delete(row)
@@ -151,25 +175,83 @@ def close_mitm_views(session_id: str) -> int:
 def list_mitm_views(session_id: str) -> list[dict]:
     """列出仍存活的 relay；順手清掉已死的殘留記錄（釋放 port）。
 
-    ⚠ pid 尚未寫入（NULL）的列是**另一個 worker 剛搶到 port、socat 還沒起來**的 in-flight
-      宣告，不可當死的刪掉（同 views.list_views 在 2026-07-25 抓到的跨 worker race）。
-      只有超過寬限期仍無 pid 才回收。
+    ⚠ pid 尚未寫入（NULL）或 ready=False 的列是**另一個 worker 剛搶到 port、socat 還
+      沒起來／還在等就緒**的 in-flight 宣告，不可當死的刪掉（同 views.list_views 在
+      2026-07-25 抓到的跨 worker race）。只有超過寬限期仍是這個形狀才回收——那時多半
+      是 worker 已死在半路，留下的 proc 要連 group 一起收。
     """
     out, dead = [], []
     cutoff = utcnow() - _dt.timedelta(seconds=config.VIEW_CLAIM_GRACE)
     with session_scope() as s:
         for row in s.query(MitmView).filter(MitmView.session_id == session_id).all():
-            if row.pid is None:
-                if row.created_at < cutoff:
+            if row.ready is False:
+                # in-flight：另一個 worker 正在 build。過了寬限期還是這個狀態＝worker
+                # 死在半路，pid/pgid 已寫進列（見 open_mitm_view 的先寫再等），可以收。
+                if row.created_at < cutoff and _kill_row(row):
                     dead.append(row.id)
                 continue
-            if _process_alive(row.pid):
+            if row.pid is not None and _process_alive(row.pid):
                 out.append(_relay_dict(row.id, row.session_id, row.port, row.pid))
             else:
-                dead.append(row.id)
+                # listener 可能已死，但 socat 的 fork child 仍握著 WebSocket。先收整個
+                # group，成功後才刪列；不可只看 leader pid 就釋放唯一追蹤記錄。
+                if _kill_row(row):
+                    dead.append(row.id)
     for rid in dead:
         _drop(rid)
     return out
+
+
+def peek_mitm_view(session_id: str) -> dict | None:
+    """**純查詢**目前可用的 relay：不殺行程、不刪列、不寫任何東西。
+
+    這一支是給 nginx `auth_request` 的熱路徑用的（`app.auth_mitm`）：那裡每一發 asset
+    與 WS upgrade 都會打一次，**任何副作用都會被放大**。清理殘列、建 relay、touch
+    session 全部不屬於它——那些是建立路徑（`open_mitm_view`）與 reconciler 的責任。
+
+    ⚠ ready=False 的列是「正在等就緒」或「worker 死在半路」——兩種都不是可用的 relay，
+      一律回 None（可用的判斷交給 POST 那條路）。
+    """
+    with session_scope() as s:
+        row = s.query(MitmView).filter(MitmView.session_id == session_id).one_or_none()
+        if row is None or row.ready is False or row.pid is None:
+            return None
+        if not _process_alive(row.pid):
+            return None
+        return _relay_dict(row.id, row.session_id, row.port, row.pid)
+
+
+def close_user_mitm_views(user_id: int) -> tuple[int, int]:
+    """收掉使用者可持有的 mitm relay，回傳 `(收掉幾條, 失敗幾場)`。
+
+    ⚠ **改密碼必須呼叫這一支**（與 ttyd 的 `close_user_views` 同一個位置、同一個理由）：
+      password_version 遞增讓 cookie 全滅，但**管不到一條已經升級的 WebSocket**——
+      relay 的 fork child 握著 mitmweb 的 WS，升級之後授權不會回頭再問一次。
+    ⚠ relay 沒有 actor 欄位（見 models.MitmView 的 docstring）：一般使用者只影響自己
+      擁有的 sessions；**admin 可能已經開過任何人的流量畫面**，而這一列無法分辨是誰開的，
+      所以改 admin 密碼時採保守策略收掉**所有** relay。
+    ⚠ 一條收不掉不能阻止其餘的收尾——回 `(N, failed)` 讓呼叫端講出 partial failure；
+      收不掉的那幾條的 tracking row 會被 `close_mitm_views` 保留，供 reconciler 重試。
+    """
+    from .models import Session as SessionRow
+    from .models import User as UserRow
+
+    with session_scope() as s:
+        user = s.get(UserRow, user_id)
+        if user is None:
+            return 0, 0
+        query = s.query(MitmView.session_id)
+        if not user.is_admin:
+            query = query.join(SessionRow, SessionRow.id == MitmView.session_id).filter(SessionRow.user_id == user_id)
+        targets = {row.session_id for row in query.all()}
+
+    closed = failed = 0
+    for sid in targets:
+        try:
+            closed += close_mitm_views(sid)
+        except Exception:  # noqa: BLE001 — 一條收不掉不能阻止其餘 relay 收尾
+            failed += 1
+    return closed, failed
 
 
 # --- port 分配（DB UNIQUE 為跨 worker 仲裁）-------------------------------------
@@ -207,7 +289,7 @@ def _await_peer(session_id: str, timeout: float | None = None) -> dict | None:
                 return None  # 不存在 → 純粹是 port 撞號
             snapshot = (
                 _relay_dict(row.id, row.session_id, row.port, row.pid)
-                if row.pid is not None and _process_alive(row.pid)
+                if row.ready is not False and row.pid is not None and _process_alive(row.pid)
                 else None
             )
         if snapshot and views._port_open(snapshot["port"]):
@@ -290,8 +372,20 @@ def _kill(pid: int | None) -> bool:
     return views._kill(pid, _OUR_RELAY_NAMES)
 
 
+def _kill_row(row: MitmView) -> bool:
+    """以整個 process group 收掉一列 relay。
+
+    ⚠ 舊列沒有 PGID（NULL）時，`views._kill_process_group` 會現場問一次 leader 的
+      pgid（過渡期：列是舊的、程序還活著），問不到就降級回單 pid 路徑——行為與沒有
+      這個欄位的舊版相同。
+    """
+    process_group_id = row.process_group_id or views._process_group_id(row.pid)
+    return views._kill_process_group(row.pid, process_group_id, _OUR_RELAY_NAMES)
+
+
 def _kill_spawned(
     pid: int | None,
+    process_group_id: int | None = None,
     argv: list[str] | None = None,
     grace: float = 1.0,
     spawn_time: float | None = None,
@@ -301,8 +395,14 @@ def _kill_spawned(
     ⚠ 本體搬去 `views._kill_spawned` 了：ttyd 那條路的 `open_view` 有**一模一樣**的失敗
       路徑，而它原本只呼叫 `_kill()`（同一個坑）。這裡只換白名單，理由同 `_kill`／
       `_process_alive`：能共用的都直接用 views 的，不留第二份會漂的副本。
+    ⚠ 有了 pgid 之後再補一發整組的確認：spawn 窗口結束、socat 已 exec 完成之後才失敗的
+      話，它的 fork children 可能已經存在（每一條連線一個 child），只打 leader pid
+      收不到它們。
     """
-    return views._kill_spawned(pid, argv, _OUR_RELAY_NAMES, grace, spawn_time)
+    cleaned = views._kill_spawned(pid, argv, _OUR_RELAY_NAMES, grace, spawn_time)
+    if not process_group_id:
+        return cleaned
+    return cleaned and views._kill_process_group(pid, process_group_id, _OUR_RELAY_NAMES)
 
 
 def _process_alive(pid: int | None) -> bool:

@@ -593,25 +593,63 @@ def _clean_views() -> int:
       差別在 relay 沒有任何「使用中」的訊號可以靠：它沒有 `-q`，也不在 inspect_ttyd 的
       掃描範圍內。少了這一段，每一次 redeploy 都會在 mitm_views 的 port 範圍裡吃掉幾格
       （症狀是很久以後某一場開不出流量畫面，而畫面上只說「無可用 port」）。
+
+    ⚠ **mitm relay 的「程序已不存在」要看整個 process group，不只 leader pid。**
+      listener 被 control 重部署收掉、或被外力砍了，它 fork 出去的 children 仍握著
+      WebSocket（與是否撤銷存取權無關，只是 cleanup 遲到）。只看 leader pid 的話：
+      判死 → 刪列 → **children 變成沒有人記得的孤兒**，而那正是要防的事。
+      所以 relay 側的清理改走 `_kill_row`：先收整個 group，真的收乾淨才刪列。
+      收不掉的列留下來，下一輪再試（與 close_mitm_views 同一個語義）。
+
+    ⚠ **ttyd 那邊維持原樣**：它的 pid 死了就是死了（ttyd 沒有 fork children，
+      WebSocket 升級後的連線是它自己 process 內的 thread）。混用 group 版反而是為
+      ttyd 引入一段它用不到的掃描。
     """
     cutoff = utcnow() - _dt.timedelta(seconds=config.VIEW_CLAIM_GRACE)
     cleaned = 0
-    for model, alive in ((View, views._process_alive), (MitmView, mitm_views._process_alive)):
-        dead: list[int] = []
-        with session_scope() as s:
-            for row in s.query(model).all():
-                if row.pid is None:
-                    if row.created_at < cutoff:
-                        dead.append(row.id)
-                elif not alive(row.pid):
+    dead: list[int] = []
+    with session_scope() as s:
+        for row in s.query(View).all():
+            if row.pid is None:
+                if row.created_at < cutoff:
                     dead.append(row.id)
-        if dead:
-            with session_scope() as s:
-                for vid in dead:
-                    obj = s.get(model, vid)
-                    if obj is not None:
-                        s.delete(obj)
-        cleaned += len(dead)
+            elif not views._process_alive(row.pid):
+                dead.append(row.id)
+    if dead:
+        with session_scope() as s:
+            for vid in dead:
+                obj = s.get(View, vid)
+                if obj is not None:
+                    s.delete(obj)
+    cleaned += len(dead)
+
+    dead = []
+    stuck = 0
+    with session_scope() as s:
+        rows = s.query(MitmView).all()
+    for row in rows:
+        if row.pid is None:
+            # 與 list_mitm_views 同一個 in-flight 語義：pid 沒寫、ready 也不是 False 的
+            # 列在寬限期內不動；過了寬限期還這個形狀＝worker 死在半路。
+            if row.ready is not False and row.created_at >= cutoff:
+                continue
+            if row.created_at < cutoff and mitm_views._kill_row(row):
+                dead.append(row.id)
+            continue
+        if mitm_views._process_alive(row.pid):
+            continue  # 活著，不是殘留
+        # leader 已死。children 可能還握著 WebSocket → 先收整個 group，成功才刪列。
+        if mitm_views._kill_row(row):
+            dead.append(row.id)
+        else:
+            stuck += 1
+    if dead:
+        with session_scope() as s:
+            for vid in dead:
+                obj = s.get(MitmView, vid)
+                if obj is not None:
+                    s.delete(obj)
+    cleaned += len(dead)
     return cleaned
 
 

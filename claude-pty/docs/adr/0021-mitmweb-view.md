@@ -305,6 +305,51 @@ control 容器內的外層 socat（TCP-LISTEN,fork）
 - mitmweb 本身照樣跟著 session 容器活；`NCR_MITM_WEB_BIND=127.0.0.1` 與
   per-user network 的隔離模型**都沒有動**。
 
+## 2026-08-27（review 修正）：GET 純查詢化、POST 建立端點、process group 清理
+
+### `/api/auth/mitm` 的 GET 必須零副作用
+
+`auth_mitm` 是 nginx 的 auth_request 掛載點，**每個 asset 與每次 WS upgrade 都會打
+一次**。原本「沒有活著的就當場建」在那個頻率下被放大成兩種代價：mitmweb 尚未就緒時
+每一發都付一次同步的 docker 探測（最壞 5 秒），而且 GET 上有 DB 寫入（`list_mitm_views`
+刪殘列、`manager.touch`）。「動詞不是我們選的」推不出「建立可以掛在這裡」——因為
+使用者按按鈕的時候，前端**有能力**發 POST。
+
+修法（PR3 review）：
+
+- GET 只做三件事：`_owned(peek=True)`（純 DB 讀，連 dockerd 都不問）、capture 判斷、
+  `mitm_views.peek_mitm_view`（純查詢：不殺行程、不刪列）。有可用 relay → 200 +
+  `X-Mitm-Port`/`X-Mitm-Token`；沒有 → 403；沒開錄製 → 404；
+  BEHIND_PROXY=0 → 一律 403。
+- 建立集中在 **`POST /api/sessions/<sid>/mitm`**：ownership → capture → BEHIND_PROXY
+  → 容器狀態（已結束 → **409**，讓 `open_mitm_view` 的 docker 探測不必白跑）→ 建立或
+  沿用 → **成功之後才** `touch`。`MitmNotReadyError` → 503；其餘 `MitmViewError` → 403。
+  成功回 201 + `{path}`。
+- 前端按鈕改走 `lib/mitm.ts`：click handler 內同步開 `about:blank`（解除 popup 攔截、
+  `opener` 置空），POST 成功後 `location.replace(relay.path)`，失敗關空白分頁 + 錯誤
+  toast。token 仍由 nginx 注入，**前端永遠拿不到**。
+- ttyd 的 `/api/auth/view` 行為**刻意不動**：它那一條的副作用 GET 是既有決策，改它的
+  爆炸半徑不在這次 review 的範圍。
+
+### cleanup 要收整個 process group
+
+socat 的 fork child 各握一條**已升級**的 WebSocket——只打 listener pid，撤銷存取權之後
+那些連線繼續通（cookie 版號管不到已升級的連線，授權也不會回頭再問）。所以：
+
+- spawn 時建立獨立 process group（`_spawn_detached_with_group`），**pgid 在 readiness
+  等待之前就寫進 DB**；`ready` 欄位（claim 後 False、就緒後 True）讓殘列與 in-flight
+  宣告分得開。舊列沒有 pgid → 降級回單 pid 路徑，行為與舊版相同。
+- 清理走 `views._kill_process_group`：SIGTERM → grace → SIGKILL → grace，每一級訊號
+  之前都重驗「group 裡還有我們認得的成員」（PGID 也會被回收重用）。**只有整組消失才
+  准刪 tracking row**；收不掉 → 保留列、拋出。
+- 密碼撤銷接進 `auth.change_password`（web 三個入口與 CLI `set-password` 同時涵蓋）：
+  `close_user_mitm_views(user_id)` 收掉該使用者的 relay；**admin 採保守策略全收**
+  （relay 沒有 actor 欄位，admin 可能開過任何人的流量畫面）。partial failure 以
+  `mitm_closed`/`mitm_failed`/`mitm_error` 併進回應，API 不回 204、前端要講出來——
+  與收終端那一套同一個形狀。
+- archive：close 失敗的 session **不歸檔**（session 列與 tracking row 都留下供重試），
+  收成功的才進 `_archive_txn`——cascade 不再是黑洞。reconciler 的清理也改收整組。
+
 ## 已知未做（fable 完整審點出來、這次刻意不處理的）
 
 - **relay 沒有一支「真 socat」的整合測試。** `test_mitm_relay` 用的是同名替身（`exec -a socat`），
@@ -326,6 +371,7 @@ control 容器內的外層 socat（TCP-LISTEN,fork）
 | relay 生命週期（port 仲裁、起收、archive 連帶收、殘列回收、位址不含空白、橋接指令契約：`docker exec -i`、無 TTY、內層是容器裡的 socat） | `tests/test_mitm_relay.py`（假 socat） |
 | 上游沒在服務時不掃整段 port（探測擋下、迴圈只試一個、port 被占仍要換下一個） | `tests/test_mitm_relay.py`（假 socat ＋ 假 docker） |
 | 橋接對真 mitmweb（image 有 socat、半關閉、Bearer、403、WS 握手+雙向 frame、上游不在時非 0 收乾淨、不留行程） | `tests/test_mitm_bridge.py`（真容器，不經外層 socat） |
-| `/api/auth/mitm` 的 200/404/403/401/503 與 BEHIND_PROXY gate | `tests/test_auth.py` |
+| `/api/auth/mitm` GET 的零副作用（不建 relay、不問 dockerd、不 touch、不刪列）與 `POST /api/sessions/<sid>/mitm` 的行為矩陣（201/404/403/401/409/503、成功後才 touch） | `tests/test_auth.py` |
+| relay 的 pgid/ready 記錄、只殺 listener 時 child 仍活、整組收乾淨、cleanup 失敗保留列、archive 拒絕歸檔、revoke 連動（admin 範圍＝全收） | `tests/test_mitm_relay.py` |
 | nginx 的 location 順序、rewrite 去前綴、Bearer 注入、`Host $http_host`、對外 404 | `tests/test_nginx_contract.py` |
 | 按鈕只在有錄製時出現、開的是 `mitm/` 子路徑 | `frontend/src/__tests__/drawer.spec.ts`、`tests/golden/drawer-open/` |

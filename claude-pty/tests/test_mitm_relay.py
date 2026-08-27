@@ -77,6 +77,14 @@ with open(_IMPL, "w", encoding="utf-8") as _f:
     _f.write(
         "import os, socket, sys, threading\n"
         "open(os.environ['FAKE_SOCAT_ARGV'], 'a').write(repr(sys.argv[1:]) + '\\n')\n"
+        # `FAKE_SOCAT_FORK_CHILD=1`：開場先起一個真 child 行程，模擬 listener 已經 fork
+        # 出去、手上握著 WebSocket 的 child socat。Popen 的第一個元素是 argv[0]（"socat"，
+        # 白名單認得的形狀），executable 才是真 binary；child 與本體同 pgid（不 setsid），
+        # 那是 group 清理要證明收得到的對象。
+        "if os.environ.get('FAKE_SOCAT_FORK_CHILD') == '1':\n"
+        "    import subprocess\n"
+        "    subprocess.Popen(['socat', '-c', 'import time; time.sleep(120)'],\n"
+        "                     executable=sys.executable)\n"
         "port = int(sys.argv[1].split('TCP-LISTEN:')[1].split(',')[0])\n"
         "srv = socket.socket()\n"
         "srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
@@ -162,6 +170,17 @@ def alive_rows(sid: str) -> list[MitmView]:
         return list(s.query(MitmView).filter(MitmView.session_id == sid).all())
 
 
+def _group_has_member(pgid: int | None) -> bool:
+    """這個 pgid 底下現在還有我們認得的成員嗎（複用 production 的成員判斷）。
+
+    psutil 不在（＝production 走「無從佐證」的降級路徑）就回 True：這一節的斷言會被
+    上游的 `if _group_has_member(...)` 分岔帶到「略過」那一側，不會假綠。
+    """
+    if views.psutil is None:
+        return True
+    return bool(views._group_ours_members(pgid, mitm_views._OUR_RELAY_NAMES, config.MITM_BRIDGE))
+
+
 try:
     print("== 契約：兩個 port 範圍不可以重疊（兩張表各自仲裁，跨表不會擋）==")
     # 🔴 比的是**整段對整段**，而且兩段都從 config 讀（見上面拍快照那段）。
@@ -236,6 +255,18 @@ try:
     _got = [ln for ln in open(_ARGV_LOG, encoding="utf-8").read().splitlines() if str(r["port"]) in ln]
     check("socat 收到的就是我們組的那三個參數", len(_got) == 1 and "EXEC:" in _got[0] and cid in _got[0])
 
+    print("== 🔴 DB 記錄了 process group，而且**在 readiness 之前**就寫 ==")
+    # pgid 的用途：cleanup 要打整個 group（listener + fork children + docker exec client）。
+    # 寫入時機是關鍵：若等 readiness 之後才寫，worker 死在等待中的話，那顆 socat 是
+    # 「沒有人記得 pgid」的孤兒——reconciler 只能靠 leader pid 收，children 收不到。
+    _row = alive_rows("relay0001")[0]
+    check("🔴 process_group_id 已寫進 DB", isinstance(_row.process_group_id, int) and _row.process_group_id > 0)
+    check("🔴 ready 已標成 True（peek 只認 ready 的列）", _row.ready is True)
+    check(
+        "🔴 記的 pgid 就是 listener 現在的 pgid（同一個 group，children 都在裡面）",
+        _row.process_group_id == views._process_group_id(r["pid"]),
+    )
+
     print("== 點兩次不會多起一條（沿用既有的）==")
     r2 = mitm_views.open_mitm_view("relay0001", cid)
     check("回同一條", r2["port"] == r["port"] and r2["pid"] == r["pid"])
@@ -260,11 +291,91 @@ try:
         check("port 已經釋放（連不上）", _s.connect_ex(("127.0.0.1", _port_a)) != 0)
     check("另一場不受影響", mitm_views._process_alive(rb["pid"]))
 
+    print("== 🔴 只殺 listener 時 fork child 仍活著；完整 cleanup 連 child 一起收 ==")
+    # fake socat 開場先起一個真 child 行程（argv[0] 也是 socat），模擬「每條連線 fork 一個
+    # child socat」：child 與 listener 同 group——那正是實際部署的形狀，也是 group 清理
+    # 存在的理由。psutil 不在的環境驗不了 group 成員，這一節直接略過（test_auth 對真
+    # 容器的那半會補上）。
+    os.environ["FAKE_SOCAT_FORK_CHILD"] = "1"
+    rc_child = seed("relaychild")
+    r_child = mitm_views.open_mitm_view("relaychild", rc_child)
+    _child_row = alive_rows("relaychild")[0]
+    _child_pid = _child_row.pid
+    time.sleep(1.0)  # 等 child 行程穩定
+    if _group_has_member(_child_row.process_group_id):
+        # 先只殺 leader（不經過 group 的路徑）：child 必須還活著。
+        os.kill(_child_pid, views.signal.SIGTERM)
+        deadline = time.time() + 5
+        while time.time() < deadline and mitm_views._pid_exists(_child_pid):
+            time.sleep(0.1)
+        check("🔴 外力只收 listener 之後，DB 列還在（group 還有成員）", alive_rows("relaychild") != [])
+        check(
+            "🔴 group 裡仍有我們認得的成員（child 沒有跟著 leader 死）", _group_has_member(_child_row.process_group_id)
+        )
+        # 完整 cleanup（close_mitm_views → _kill_row → killpg）把 child 一起收掉。
+        mitm_views.close_mitm_views("relaychild")
+        deadline = time.time() + 10
+        while time.time() < deadline and _group_has_member(_child_row.process_group_id):
+            time.sleep(0.2)
+        check(
+            "🔴 close_mitm_views 收掉的是整個 group（child 也走乾淨）",
+            not _group_has_member(_child_row.process_group_id),
+        )
+        check("　└ DB 那一列也刪了（收乾淨才准刪）", alive_rows("relaychild") == [])
+    else:
+        check("🔴 group 裡仍有我們認得的成員（child 沒有跟著 leader 死）", False)
+    os.environ.pop("FAKE_SOCAT_FORK_CHILD", None)
+
     print("== 殘留列回收：行程被外力收掉時，那一列不可以永遠佔著 port ==")
     _views_kill = views._kill(rb["pid"], mitm_views._OUR_RELAY_NAMES)
     check("先用外力收掉它", _views_kill and not mitm_views._process_alive(rb["pid"]))
     check("list_mitm_views 會把死掉的那一列清走（釋放 port）", mitm_views.list_mitm_views("relay0002") == [])
     check("DB 裡真的沒有了", alive_rows("relay0002") == [])
+
+    print("== 🔴 peek_mitm_view 是純查詢：不刪列、不殺行程 ==")
+    rc_peek = seed("relaypeek")
+    rp = mitm_views.open_mitm_view("relaypeek", rc_peek)
+    check("peek 回得到可用的 relay", (mitm_views.peek_mitm_view("relaypeek") or {}).get("port") == rp["port"])
+    check("peek 之後 DB 仍在、行程仍活", len(alive_rows("relaypeek")) == 1 and mitm_views._process_alive(rp["pid"]))
+    # 把 ready 弄成 False（＝還在等就緒或 worker 死在半路）：peek 不可以把它當可用。
+    with db.session_scope(immediate=True) as _s:
+        _s.get(mitm_views.MitmView, alive_rows("relaypeek")[0].id).ready = False
+    check("🔴 ready=False 的列不是可用 relay（就算程序還活著）", mitm_views.peek_mitm_view("relaypeek") is None)
+    mitm_views.close_mitm_views("relaypeek")
+
+    print("== 🔴 cleanup 失敗時，tracking row 必須保留（刪了＝永久孤兒）==")
+    rc_stuck = seed("relaystuck")
+    rs = mitm_views.open_mitm_view("relaystuck", rc_stuck)
+    _stuck_row = alive_rows("relaystuck")[0]
+    _orig_kpg = views._kill_process_group
+    views._kill_process_group = lambda *a, **k: False  # 模擬「送訊號了但收不掉」
+    try:
+        _raised = None
+        try:
+            mitm_views.close_mitm_views("relaystuck")
+        except mitm_views.MitmViewError as e:
+            _raised = e
+        check("🔴 close_mitm_views 對收不掉的 relay 拋出（不是靜靜成功）", _raised is not None)
+        check("🔴 tracking row 還在（唯一的追蹤記錄，刪了＝沒人收得住那顆 socat）", alive_rows("relaystuck") != [])
+        check("🔴 行程當然也還在", mitm_views._process_alive(rs["pid"]))
+        # archive 同一個語義：blocked 的 sid 不歸檔，session 與 tracking row 都留下。
+        _archived_exc = None
+        try:
+            sessions_mod.archive(["relaystuck"], "terminated")
+        except Exception as e:
+            _archived_exc = e
+        check("🔴 cleanup 失敗 → archive 拒絕歸檔（拋出）", _archived_exc is not None)
+        from server.models import Session as _SessionRow
+
+        with db.session_scope() as _s:
+            check("🔴 session 列還在（不可被 FK cascade 靜默帶走）", _s.get(_SessionRow, "relaystuck") is not None)
+        check("🔴 mitm tracking row 也還在（供 reconciler 重試）", alive_rows("relaystuck") != [])
+        # 恢復之後再收，才走得完：等冪的重試路徑。
+        views._kill_process_group = _orig_kpg
+        mitm_views.close_mitm_views("relaystuck")
+        check("　└ 重試之後收乾淨", alive_rows("relaystuck") == [] and not mitm_views._process_alive(rs["pid"]))
+    finally:
+        views._kill_process_group = _orig_kpg
 
     print("== 🔴 spawn 之後、exec 成 socat 之前，那個行程也要收得掉 ==")
     # `_spawn_detached` 是 double-fork：`$!` 拿到的 pid 一開始是 `sh` 的，要等它 exec 完
