@@ -1,5 +1,7 @@
 # claude-pty
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/nathanfhh/30-days-ironman)
+
 多人共用的網頁終端控制平面：每個人登入後開自己的 session（一場 = 一顆 container），
 在瀏覽器裡直接操作容器內的 Claude Code。斷線、關瀏覽器、換一台電腦，回來還是同一場
 ——PTY 由 dockerd 持有，網頁只是一張隨開隨丟的臉。

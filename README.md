@@ -1,6 +1,7 @@
 # 30 Days Ironman
 
 [![tests](https://github.com/nathanfhh/30-days-ironman/actions/workflows/tests.yml/badge.svg)](https://github.com/nathanfhh/30-days-ironman/actions/workflows/tests.yml)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/nathanfhh/30-days-ironman)
 
 一套有立場、可測試的 AI Code Review agent：審查判準寫成 skill、行為回歸測試、外部 benchmark、
 可拋棄的審查容器、憑證隔離、遙測與側錄，最後從瀏覽器就開得出來：一場 Session 一顆容器。
