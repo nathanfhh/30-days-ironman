@@ -79,6 +79,25 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 1
+            # mitmweb 的 relay 同理：他手上如果還開著流量畫面（已升級的 WebSocket），
+            # cookie 全滅擋不到它。與收終端同一個處置：partial failure 不可以只印成功。
+            _m = r.get("mitm_failed")
+            if _m == -1:
+                print(
+                    f"⚠ 收流量畫面這一步整個失敗了（{r.get('mitm_error', '原因不明')}）。"
+                    f"他已開啟的流量畫面可能還看得到即時流量。請再跑一次；"
+                    f"再失敗就直接終止他的 session。",
+                    file=sys.stderr,
+                )
+                return 1
+            if _m:
+                print(
+                    f"⚠ 有 {_m} 場的流量畫面通道沒有收乾淨（收掉 {r.get('mitm_closed', 0)} 條）。"
+                    f"那些畫面在收掉之前仍然看得到即時流量，請再跑一次，"
+                    f"或直接終止那幾場 session。",
+                    file=sys.stderr,
+                )
+                return 1
     except auth.AuthError as e:
         print(f"錯誤：{e}", file=sys.stderr)
         return 1

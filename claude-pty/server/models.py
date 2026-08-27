@@ -301,6 +301,48 @@ class View(Base):
     session: Mapped[Session] = relationship(back_populates="views")
 
 
+class MitmView(Base):
+    """一條「開網頁看這一場的 mitmweb UI」的 relay 登錄（ADR 0021）。
+
+    形狀刻意與 `View` 一致：DB 一列 + 一個 listen 在 TTYD_BIND 的 port，port 的 UNIQUE
+    就是跨 worker 的分配仲裁。差別只在跑的是 `socat`（每條連線 fork 一次 docker exec 進
+    session 容器接 mitmweb 的 loopback），不是 ttyd。
+
+    ⚠ **為什麼是另一張表，而不是在 `views` 加一個 kind 欄位。** 後者才是真正一勞永逸的
+      解（同一張表 → `port` 的 UNIQUE 自動跨兩種東西仲裁），但它要把既有的
+      `uq_views_session` 改成 `(session_id, kind)`，而輕量升級（db._add_missing_columns）
+      **加不了也改不了約束**，那是一次 alembic 引入。取捨寫在 ADR 0021：先分表，
+      並讓兩個 port 範圍不重疊（config.MITM_PORT_MIN/MAX）。
+
+    ⚠ 這一列**不記 actor**（View 有）。理由是這個 relay 不是「某個人開著的畫面」而是
+      「這一場有沒有一條可用的通道」：HTTP 的授權每一發請求都在 nginx 的 auth_request
+      重驗一次，所以「撤銷存取權」對 HTTP 是自動的。**但已升級的 WebSocket 不會回頭再問
+      一次**——這一點與 ttyd 相同（`views.actor_user_id` 存在的理由），所以撤銷存取權
+      時仍然要靠這一列的 pid／`process_group_id` 把 relay 的整個 process group 收掉
+      （見 `close_user_mitm_views`），只是收的粒度是「這一場」而不是「這個人」。
+    """
+
+    __tablename__ = "mitm_views"
+    __table_args__ = (
+        UniqueConstraint("port", name="uq_mitm_views_port"),
+        UniqueConstraint("session_id", name="uq_mitm_views_session"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    port: Mapped[int] = mapped_column(Integer, nullable=False)
+    pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 整個 relay（listener + 它 fork 的 children + bridge 的 docker exec client）的
+    # process group。清理要打**整組**：socat fork 的 child 各握一條已升級的 WebSocket，
+    # 只打 listener pid 的話，撤銷存取權之後那些連線繼續通（見 mitm_views.close_mitm_views）。
+    # NULL ＝ 舊列或 spawn 早期（pgid 還沒寫入就死了）；清理時降級回單 pid 路徑。
+    process_group_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ready=False ＝ 已 spawn、還在等就緒（_wait_ready 進行中）或 worker 已死在半路；
+    # True ＝ 就緒探測通過、可以 proxy。NULL ＝ 剛 claim 完 port、程序還沒起來的瞬間。
+    ready: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    created_at: Mapped[_dt.datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+
+
 class Lease(Base):
     """互斥租約：讓「只該有一個執行者」的工作真的只有一個（review M2）。
 

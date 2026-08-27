@@ -10,6 +10,7 @@
 import { computed, useTemplateRef } from "vue";
 
 import { useClipTips } from "@/composables/useClipTips";
+import { openMitm as openMitmRelay } from "@/lib/mitm";
 import {
   END_REASON,
   freshness,
@@ -17,6 +18,7 @@ import {
   SLOW_BOOT_SECONDS,
   type SessionRow,
 } from "@/lib/sessions";
+import { toastError } from "@/lib/toast";
 import { span } from "@/lib/time";
 
 import MetricTime from "./MetricTime.vue";
@@ -43,6 +45,18 @@ const emit = defineEmits<{
   open: [row: SessionRow, event: MouseEvent];
   kill: [row: SessionRow];
 }>();
+
+/* 流量畫面的去處。建立走 `lib/mitm.ts` 的 `openMitm`：先在 user gesture 內開空白分頁、
+   再 POST 起 relay——`/api/auth/mitm` 是 nginx 的 auth_request 掛載點，GET 必須零副作用，
+   不能靠導航順便建（ADR 0021）。沒權限、沒在錄、relay 起不來的話，那個 POST 會帶著
+   後端的原因失敗，錯誤在這裡講出來，空白分頁由 lib 收掉。 */
+async function openMitm(row: SessionRow): Promise<void> {
+  try {
+    await openMitmRelay(row.id);
+  } catch (ex) {
+    toastError("流量畫面", ex, { duration: 8000 });
+  }
+}
 
 const root = useTemplateRef<HTMLElement>("root");
 useClipTips(root);
@@ -275,6 +289,23 @@ const emptyText = computed(() =>
             @click="emit('kill', s)"
           >
             <i class="fa-solid fa-circle-stop"></i> 終止</button>
+          <!-- 流量畫面：只有這一場真的在錄才畫得出來（判準與後端 /api/auth/mitm 是同一個
+               事實：這一筆的 profile.capture）。放在「終止」右邊，是列表上這一列的最後
+               一顆；抽屜裡另有一顆同樣去處的 icon 按鈕，兩個入口共用同一條路由。
+               ⚠ 新分頁而非 iframe：mitmweb 送 X-Frame-Options: DENY。
+               ⚠ prettier-ignore 與上面兩顆同理：收尾標籤換行會讓 Vue 的 whitespace
+                 condense 在文字後留下一個空白，截圖 golden 會紅在別的地方。 -->
+          <!-- prettier-ignore -->
+          <button
+            v-if="s.profile?.capture === true"
+            class="btn"
+            data-act="mitm"
+            :data-id="s.id"
+            :data-testid="`row-mitm-${s.id}`"
+            title="流量畫面（這一場錄到的請求，新分頁開啟）"
+            @click="openMitm(s)"
+          >
+            <i class="fa-solid fa-network-wired"></i> 流量</button>
         </div>
       </article>
     </template>

@@ -20,6 +20,8 @@
 
 import base64
 import enum
+import hashlib
+import hmac
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
@@ -99,3 +101,53 @@ def is_readable(token: str | None, *, purpose: Purpose) -> bool:
       那時的事實是「不能用」。答成「已設定」會讓人去查一把完全正常的 token。
     """
     return decrypt(token, purpose=purpose) is not None
+
+
+# --- mitmweb 的網頁密碼（ADR 0021）-------------------------------------------------
+
+
+# 導出時的 domain separation 字串。與 `Purpose` 同一個用意（同一把 SECRET_KEY 底下，
+# 不同用途要導出不同的值），但這裡**不是**加密而是導一個口令，所以不共用那個 enum：
+# 混在一起會讓「這個成員是拿來解密的還是拿來當密碼的」變成要讀實作才知道的事。
+# v1 同樣是給「換算法時要能並存」留的餘地。
+_MITM_WEB_INFO = b"mitm-web-password-v1"
+
+# base64url 的字母表：A-Z a-z 0-9 - _（加上 `=` 填充，但我們截斷後不會留到）。
+_MITM_WEB_LEN = 24
+
+
+def mitm_web_password(session_id: str) -> str:
+    """這一場 mitmweb 的 `web_password`。**確定性導出，不落 DB、不進瀏覽器。**
+
+    控制平面建容器時用 `NCR_MITM_WEB_PASSWORD` 把它送進去（run_kwargs），之後
+    `/api/auth/mitm` 用同一個公式當場重算，交給 nginx 以 `Authorization: Bearer` 注入。
+    兩端各算各的、算出同一串，所以**一個欄位都不用加**，也沒有「存了忘了輪替」的問題。
+
+    ⚠ **不用 `NCR_SESSION_ID`（Claude Code 的 sessionId）**，雖然它看起來現成。兩個理由：
+      1. 它是 entrypoint **在容器內自己產的**（讀 /proc 的 uuid），控制平面不知道它：
+         要用就得反過來由控制平面餵進去，兩條路徑（網頁／人自己開）都得改。
+      2. 它是**可枚舉的**：capture 落盤目錄名就是 sessionId，而 `ncr/` 根是 per-user
+         共用掛載，同一個人開的任何一顆容器裡的 agent 都 `ls` 得出全部場次的 id。
+         這個 UI 顯示的是**未脫敏的即時流量**：「token＝sessionId」等於一旦哪天有條路
+         讓兄弟容器碰得到 8081，全部場次一次交出去。HMAC 導出沒有這個性質：知道一場的
+         推不出別場的，洩漏半徑小得多。
+
+    ⚠ **回的是 base64url 截斷，不是 hex 也不是任意位元組**，三件事都靠它：
+      · mitmweb 把 `$` 開頭的 `web_password` 當成 argon2 hash 去驗（v12.2.3 的 `app.py`），
+        而我們要它拿去做**明文**比對（Bearer 送的就是這一串）。base64url 的字母表裡
+        沒有 `$`，所以這件事是字母表保證的，不是運氣。
+      · 這一串會變成 HTTP header 的值與 shell 的 env，字母表裡沒有空白、引號、控制字元。
+      · 24 字元 ≈ 144 bits，遠超過猜測攻擊需要的強度；而它同時要塞進 entrypoint 的
+        `${token:0:24}`，長度對齊才不會兩邊各留一半。
+
+    ⚠ 換掉 `SECRET_KEY` ＝ **所有還開著的 session 的這個密碼一起作廢**（容器裡的 mitmweb
+      還記著舊的，控制平面已經在算新的）。那是刻意的：一次作廢全部正是這個設計買到的
+      東西；代價是那些場次的 UI 要等 session 換一顆容器才會通。cookie 本來就會跟著
+      SECRET_KEY 一起失效，所以這不是新增的失效模式，只是多一項。
+    """
+    mac = hmac.new(
+        config.SECRET_KEY.encode(),
+        _MITM_WEB_INFO + b":" + session_id.encode(),
+        hashlib.sha256,
+    ).digest()
+    return base64.urlsafe_b64encode(mac).decode()[:_MITM_WEB_LEN]

@@ -20,7 +20,7 @@ from functools import wraps
 from flask import Flask, g, jsonify, request, session, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from . import auth, config, version, views
+from . import auth, config, crypto, mitm_views, version, views
 from . import sessions as sessions_mod
 from .db import init_db
 from .sessions import (
@@ -30,6 +30,7 @@ from .sessions import (
     SessionNotFound,
     _as_bool,
 )
+from .mitm_views import MitmNotReadyError, MitmViewError
 from .views import ViewError
 from .web import login_art, redirect_to_login, web
 
@@ -107,6 +108,11 @@ def _session_error(e: SessionError):
 
 @app.errorhandler(ViewError)
 def _view_error(e: ViewError):
+    return jsonify(error=str(e)), 400
+
+
+@app.errorhandler(MitmViewError)
+def _mitm_view_error(e: MitmViewError):
     return jsonify(error=str(e)), 400
 
 
@@ -320,13 +326,16 @@ def _too_large(e):
 
 
 def _partial_close_payload(r: dict) -> dict:
-    """改密碼成功、但收終端沒收乾淨時的回應本體。
+    """改密碼成功、但收終端／收流量畫面沒收乾淨時的回應本體。
 
     ⚠ **兩種失敗要分開講。** `views_failed` 是正數＝那幾場個別收不掉，其餘收掉了；
       是 `-1` ＝整個動作拋出來，連「有幾場要收」都沒問到，所以不知道還有幾個活著。
       後者比前者糟，用同一句話帶過會讓人以為只是零星幾場。
+    ⚠ mitm relay 的清理（`mitm_failed`）與終端同一個性質——cookie 全滅擋不到一條已經
+      升級的 WebSocket——所以 partial failure 也要一起講，不能只講終端。
     """
     failed = r["views_failed"]
+    mitm_failed = r.get("mitm_failed")
     if failed == -1:
         warning = (
             "密碼已經改掉，但收終端這一步整個失敗了，連有幾場要收都沒查到。"
@@ -334,14 +343,22 @@ def _partial_close_payload(r: dict) -> dict:
         )
     else:
         warning = f"密碼已經改掉，但有 {failed} 場的終端沒有收乾淨；那些連線在收掉之前仍然可以打字。請再跑一次。"
+    if mitm_failed == -1:
+        warning += " 收流量畫面這一步也整個失敗了，他已開啟的流量畫面可能還看得到即時流量。"
+    elif mitm_failed:
+        warning += f" 另有 {mitm_failed} 條流量畫面通道沒有收乾淨，在收掉之前仍然看得到即時流量。"
     out = {
         "password_changed": True,
         "views_closed": r.get("views_closed", 0),
         "views_failed": failed,
+        "mitm_closed": r.get("mitm_closed", 0),
+        "mitm_failed": mitm_failed,
         "warning": warning,
     }
     if r.get("views_error"):
         out["views_error"] = r["views_error"]
+    if r.get("mitm_error"):
+        out["mitm_error"] = r["mitm_error"]
     return out
 
 
@@ -781,6 +798,89 @@ def auth_check():
     return "", 204
 
 
+@app.get("/api/auth/mitm")
+def auth_mitm():
+    """nginx `auth_request` 掛載點：這一場的 mitmweb UI（ADR 0021）——**純查詢**。
+
+    ⚠ **GET 沒有任何副作用，這是硬性規則。** 這支會被 nginx 對**每一個 asset 與每一次
+      WS upgrade** 各打一次（fork 端有 --auth-cache-ttl 壓頻率）：建 relay、問 dockerd、
+      清殘列、touch session——任何一種副作用都會被那個頻率放大。所以這裡只做三件事：
+      擁有權（`_owned(peek=True)`，純 DB 讀）、capture 判斷、`mitm_views.peek_mitm_view`
+      （純查詢）。建立 relay 的責任在 `POST /api/sessions/<sid>/mitm`（見下）。
+
+    Contract（與 ttyd 的 `/api/auth/view` 不同，這一支的消費者是同一個 nginx）：
+      · 沒開錄製 → **404**。403 等於承認「有這個東西、只是不給你」，而這一場根本沒有
+        mitmweb 可看。（nginx 的 auth_request 只認 2xx/401/403，其餘一律當 5xx，
+        `error_page 401 403 500 502 503 504` 一律接到 @view_denied 導回首頁。）
+      · 有錄製、沒有可用 relay → **403**。建立是前端按鈕那個 POST 的責任。
+      · 有可用 relay → 200 + `X-Mitm-Port` + `X-Mitm-Token`。**token 從頭到尾不進瀏覽器**：
+        nginx 拿它組 `Authorization: Bearer`。它不是查出來的，是用 SECRET_KEY 對 sid
+        **當場重算**的（crypto.mitm_web_password），與建容器時送進去的那一串是同一個公式。
+      · 開發部署（BEHIND_PROXY=0）→ 一律 403：沒有 nginx 擋著，而前端在那個模式下
+        也不顯示按鈕（抽屜本身就只在 behindProxy 時才開）。
+    """
+    sid = request.args.get("session", "")
+    try:
+        session_info = _owned(sid, peek=True)  # 純 DB 讀：不問 dockerd（見 docstring）
+    except SessionError:
+        return "", 403
+    if not (session_info.get("profile") or {}).get("capture"):
+        return "", 404  # 這一場沒有在錄，沒有 UI 可看，不承認有這個東西
+    if not config.BEHIND_PROXY:
+        return "", 403  # 沒有 nginx 擋在前面：查得到也不回（建立要靠 POST，而 POST 也擋）
+    relay = mitm_views.peek_mitm_view(sid)
+    if relay is None:
+        return "", 403
+    resp = app.make_response(("", 200))
+    resp.headers["X-Mitm-Port"] = str(relay["port"])
+    resp.headers["X-Mitm-Token"] = crypto.mitm_web_password(sid)
+    return resp
+
+
+@app.post("/api/sessions/<sid>/mitm")
+def open_mitm(sid: str):
+    """建立（或沿用）這一場的 mitmweb relay——**副作用集中在這裡**，GET 只查詢。
+
+    為什麼要一個明確的建立端點：`/api/auth/mitm` 是 nginx auth_request 的掛載點，會被
+    每個 asset 與 WS upgrade 反覆呼叫，GET 必須完全無副作用（見 `auth_mitm`）。「使用者
+    按了流量按鈕」這個動作才該起一顆 socat，而按鈕按得下去的時候，前端有能力發 POST。
+    成功之後的 auth_request 就只在既有 relay 上查，熱路徑乾淨。
+
+    順序（每一關失敗就停，不做事後補救）：
+      ownership → capture → BEHIND_PROXY → 容器當下狀態（409）→ 建立或沿用 → touch。
+
+    狀態碼：
+      · `MitmNotReadyError`（容器裡的 mitmweb 還沒在服務）→ **503**，暫時性，等一下再試。
+      · 其餘 `MitmViewError`（port 用罄、程序收不掉等）→ **403**，經 `_mitm_view_error`
+        同一套語義——不可以漏成未處理的 500。
+      · 容器已結束（dockerd 報非 running）→ **409**。在這裡擋掉，`open_mitm_view` 的
+        docker 探測就不必白跑（它會把「容器沒了」也報成 503「還沒準備好」，那是錯的訊息）。
+    ⚠ `manager.touch` 只在**成功**之後做：看一眼但起不來的操作不該重置 idle 計時。
+    """
+    try:
+        session_info = _owned(sid)  # status()：要容器當下狀態，不是純 DB 事實
+    except SessionError:
+        return "", 403
+    if not (session_info.get("profile") or {}).get("capture"):
+        return jsonify(error="這一場沒有開流量錄製，沒有流量畫面可看"), 404
+    if not config.BEHIND_PROXY:
+        return jsonify(error="開發部署沒有 nginx 擋著，不支援開流量畫面"), 403
+    state = session_info.get("state")
+    if not session_info.get("container_id") or (state is not None and state != "running"):
+        # state=None ＝ dockerd 問不到（最後已知狀態也是空）：不在此擋，讓
+        # open_mitm_view 的上游探測去回答（它探不動回 503）。
+        return jsonify(error="這一場的容器已經結束，沒有流量畫面可看"), 409
+    try:
+        # ⚠ 只吃 DB 裡的 container id。使用者輸入不進入這條路徑的任何位置。
+        relay = mitm_views.open_mitm_view(sid, session_info.get("container_id") or "")
+    except MitmNotReadyError as exc:
+        return jsonify(error=str(exc)), 503
+    except MitmViewError as exc:
+        return jsonify(error=str(exc)), 403
+    manager.touch(sid)  # 成功之後才算「用過這一場」；失敗路徑不 touch
+    return jsonify({"path": relay["path"]}), 201
+
+
 @app.get("/api/prefs")
 def get_prefs():
     """這個人的偏好設定 + 每一項的合法選項（畫面直接照它畫，不必在前端複製白名單）。"""
@@ -944,9 +1044,10 @@ def change_own_password():
     # ⚠ 這一張 cookie 也作廢：session 清掉，下一個請求就會被 gate 送回登入頁。
     #   不清的話它會帶著舊版號活到下一次請求才被擋，中間那段是說一套做一套。
     session.clear()
-    # ⚠ 收終端沒收乾淨就**不可以回 204**。密碼確實改了（回不去了），但那不是完整的
-    #   「已經切斷」——回 200 加上實情，讓前端有東西可講。
-    if r.get("views_failed"):
+    # ⚠ 收終端／收流量畫面沒收乾淨就**不可以回 204**。密碼確實改了（回不去了），但那
+    #   不是完整的「已經切斷」——回 200 加上實情，讓前端有東西可講。mitm 失敗而終端
+    #   收乾淨也一樣：兩種 partial failure 都是「切了但沒切乾淨」。
+    if r.get("views_failed") or r.get("mitm_failed"):
         return jsonify(**_partial_close_payload(r)), 200
     return "", 204
 
@@ -1008,15 +1109,16 @@ def admin_change_password(uid: int):
     還在、收終端可能失敗（失敗時這個端點不回 204，見下）。缺口清單在 auth.py 尾段。
     要讓他回來，把新密碼告訴他即可。
 
-    ⚠ 只換掉密碼而不切斷已連上的終端，等於重設完之後對方還握著 shell——cookie 的
-      版號管不到一條已經升級完成的 WebSocket。收的動作在 auth.change_password 裡面
-      （見 views.close_user_views）——CLI 那條路徑就是靠它才涵蓋得到的。
+    ⚠ 只換掉密碼而不切斷已連上的終端（與流量畫面），等於重設完之後對方還握著 shell
+      與 mitmweb 的 WebSocket——cookie 的版號管不到一條已經升級完成的連線。收的動作
+      在 auth.change_password 裡面（見 views.close_user_views 與
+      mitm_views.close_user_mitm_views）——CLI 那條路徑就是靠它才涵蓋得到的。
     """
     body = _body()
     _reject_unknown(body, {"new_password"})
     r = auth.change_password(uid, body.get("new_password", ""), require_old=False)
     # ⚠ 同上：這條是「讓某個人退場」最常走的路，收不乾淨更不能靜靜回成功。
-    if r.get("views_failed"):
+    if r.get("views_failed") or r.get("mitm_failed"):
         return jsonify(**_partial_close_payload(r)), 200
     return "", 204
 

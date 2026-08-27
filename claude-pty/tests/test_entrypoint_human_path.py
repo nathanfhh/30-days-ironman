@@ -7,6 +7,15 @@ bind-mount 進去，等同於「rebuild image 之後」的情況，再用真 PTY
   2. 畫面上不該出現就緒標記（那是給控制平面看的機器標記，只有 NCR_MARK=1 才印）
   3. 最終真的進到 CLI
 
+第二段（`NCR_MITM_WEB_PASSWORD` 上線後補的，ADR 0021）走**錄製那一條分支**：
+控制平面那條路會把 mitmweb 的密碼指定進去，而人自己開容器時**不設它**。
+所以這裡照 run script 的形狀起容器（掛 repo 的 mitm/、帶 NCR_MITM_WEB_PORT 與
+NCR_CAPTURE_HOST_DIR），錄製選 y，斷言那行帶 token 的即時畫面 URL **逐字沒變**、
+token 仍是現產的 24 字元亂數。
+
+⚠ 為什麼一定要有這一段：第一段錄製選的是 n，`start_capture` 根本不會被執行到，
+  於是它守不到那個函式裡的任何一行。改動落在那裡而測試在別處，就是那種「全綠但沒測到」。
+
 零 token：進到 Claude Code 的畫面就停手，不送任何 prompt。
 """
 
@@ -94,6 +103,11 @@ argv = [
     f"{SANDBOX}/.claude:/home/nathan/.claude",
     "-v",
     f"{SANDBOX}/.claude.json:/home/nathan/.claude.json",
+    # 裸 `-e NAME`：host 有設才帶進去，沒設就完全不帶。gate 早就認這個變數
+    # （見 run-all.sh 的 NEEDS_CLAUDE_CRED），但以前沒有人把它送進容器，於是
+    # 「有 token 所以跑得起來」這條路上的 CLI 其實一直是未登入的。
+    "-e",
+    "CLAUDE_CODE_OAUTH_TOKEN",
     IMAGE,
 ]
 
@@ -116,16 +130,55 @@ try:
     child.sendline("n")  # 不錄製（測試不依賴 mitm addon）
 
     # 3) telemetry 只有在 OTEL_EXPORTER_OTLP_ENDPOINT 有值時才問
-    idx = child.expect(["送 Jaeger\\? \\[Y/n\\]:", "網路能力：完全開放", pexpect.TIMEOUT], timeout=30)
+    #
+    # ⚠ **「沒問」的哨兵必須是 telemetry 那一段之後才印的東西。** 這裡原本用的是
+    #   `網路能力：完全開放`（entrypoint.sh L426），而它印在**錄製選單之前**：上面那句
+    #   `child.expect("錄製本場流量")` 早就把它連同前面的畫面一起吃掉了，所以這個分支
+    #   **永遠不可能成立**。於是每一台沒設 OTEL endpoint 的機器都在這裡默默付一次 30 秒
+    #   逾時，然後把逾時報成一行「照設計不問」的 SKIP（2026-08-27 在開發機上量到：
+    #   那 30 秒佔了第一段的大半，而畫面上完全看不出來）。
+    #   `● session id` 是 entrypoint.sh L551/L553 印的，位置在 telemetry 那一段**之後**、
+    #   CLI 啟動之前，兩種寫法（自產／呼叫端指定）都吃得到，是這裡唯一站得住的哨兵。
+    idx = child.expect([r"送 Jaeger\? \[Y/n\]:", "● session id", pexpect.TIMEOUT], timeout=30)
     if idx == 0:
         check("③ telemetry 選單出現（endpoint 有設時）", True)
         child.sendline("n")
-    else:
+    elif idx == 1:
+        # 沒設 OTEL endpoint 就直接走到 session id 那一行，照設計不問。**正當的跳過**。
         print("  SKIP  ③ telemetry 選單（未設 OTEL endpoint，照設計不問）")
+    else:
+        # 🔴 **逾時不可以跟「照設計不問」共用同一個分支。** 兩者的意思相反：一個是
+        #    「畫面上出現了該出現的東西，只是不是選單」，另一個是「三十秒內什麼都沒印」。
+        #    落下去的話，容器卡在更前面（entrypoint 掛了、image 壞了）會被記成一行 SKIP，
+        #    而下面 ⑤⑥⑦ 那幾條比對的是一份半截的畫面：`MARKER not in text` 與
+        #    `"非互動" not in text` 這種**否定式**斷言，畫面越少越容易綠。
+        #    （同一個錯在第二段的 Jaeger 那步修過了，這裡是第一段漏掉的那一個。）
+        check("🔴 ③ 三十秒內連結論行都沒印出來（下面幾條會對著半截畫面比對）", False)
 
-    # 進到 CLI：等 Claude Code 的畫面元素
+    # 進到 CLI。**拆成兩條**：④a 只證明 CLI 被 exec 起來了（OSC 標題列的
+    # `✳ Claude Code` 也算），④b 才是「真的登入進到提示畫面」。
+    # ⚠ 為什麼要拆：`_sandboxed_home()` 複製的是 `~/.claude/.credentials.json`，而
+    #   macOS 的憑證在 keychain 裡，那個檔根本不存在，於是沙盒裡的 claude 是**未登入**
+    #   的。舊的單一斷言用同一個正則同時接受登入畫面與提示畫面，於是它在兩種情況下
+    #   都綠，log 上分不出「登入了」與「根本沒憑證」。這正是 ③ 修過的同一種錯。
+    #   （不從 keychain 取密文：那要 `security -w`，等於把使用者的憑證讀出來寫進檔案。
+    #     要讓 ④b 在 mac 上也跑，正途是 `claude setup-token` 設 CLAUDE_CODE_OAUTH_TOKEN。）
     child.expect(["bypass permissions", "Claude Code", "for shortcuts"], timeout=120)
-    check("④ 最終進到 CLI 畫面", True)
+    check("④a CLI 被 exec 起來了", True)
+    # entrypoint.sh 在沒有憑證時會自己印這一句（見它的檔頭那段），拿它當判準比猜畫面可靠
+    if "容器內沒有憑證" in "".join(transcript):
+        print("  SKIP  ④b 已登入進到提示畫面（沙盒沒有可複製的憑證：keychain 不算）")
+    else:
+        # ⚠ 這一條真正要回答的是「有憑證時到底登進去了沒」，所以**任何一個登入後才會
+        #   出現的元素都算數**，判準用併聯而不是挑一個：Claude Code 的首頁文案會改
+        #   （2026-08-27 實際踩到：`for shortcuts` → `for agents`，於是這裡逾時紅在一個
+        #   與 entrypoint 無關的地方），挑一個新的等於換一顆一樣會過期的地雷。
+        #   「沒憑證」那條路已經被 entrypoint 自己印的那句擋在前面走 SKIP，不會混進來。
+        idx = child.expect(
+            [r"usage credits|bypass permissions|for shortcuts|for agents", pexpect.TIMEOUT],
+            timeout=60,
+        )
+        check("④b 已登入進到提示畫面", idx != 2)
 finally:
     with open("/tmp/claude-pty-humanpath.log", "w") as f:
         f.write("".join(transcript))  # 供人工比對畫面
@@ -143,5 +196,99 @@ plain = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", text)
 #   也不會紅——操作者就此失去畫面上唯一一句「這一場實際套到哪種模式」（審查 F-021）。
 check("⑦ 有印出 firewall/網路能力的結論行", "● 網路能力：" in plain)
 
-print(f"\n{'done' if _fails == 0 else f'{_fails} FAILED'}（完整輸出：/tmp/claude-pty-humanpath.log）")
+
+# --- 第二段：錄製那一條分支（start_capture 真的被執行到）-------------------------
+#
+# 這一段用 stub claude（`tests/stub_claude.sh`）而不是真的 CLI：要看的東西全部在
+# driver 啟動**之前**就印完了，換成 stub 只是讓尾巴確定、跑得快，不影響任何一條斷言。
+print("\n== 起容器（錄製選 y，照 run script 的形狀；不設 NCR_MARK、不設 NCR_MITM_WEB_PASSWORD）==")
+CAP_NAME = "claude-pty-humanpath-capture"
+WEB_PORT = "40099"  # run script 會動態挑一個；這裡釘死一個值才驗得到 URL 逐字
+# （不會佔用 host 上的這個 port，見下面 cap_argv 裡不帶 `-p` 的理由）
+STUB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stub_claude.sh")
+os.chmod(STUB, 0o755)
+subprocess.run(["docker", "rm", "-f", CAP_NAME], capture_output=True)
+
+cap_home = tempfile.mkdtemp(prefix="claude-pty-humanpath-cap-")
+atexit.register(shutil.rmtree, cap_home, True)
+os.makedirs(os.path.join(cap_home, ".claude"), exist_ok=True)
+with open(os.path.join(cap_home, ".claude.json"), "w") as f:
+    f.write("{}")
+
+cap_argv = [
+    "run",
+    "--rm",
+    "-it",
+    "--name",
+    CAP_NAME,
+    # 這兩項照 dev-container/run-ncr-dev-container.sh：告訴 entrypoint host 視角的
+    # port 與落盤目錄。它們只影響**印出來的那行字**，而那正是這一段要比對的東西。
+    #
+    # ⚠ **刻意不帶 `-p`。** run script 會把 8081 發布到 host，但這一段驗的是
+    #   「那行 URL 印對了沒有」，不是「轉發通不通」，而 `-p` 會讓這支測試佔一個
+    #   寫死的 host port：那台機器上剛好有人在用 40099（或兩份測試同時跑）的話，
+    #   容器起不來，而失敗訊息會是 docker 的 port 已被占用，看起來與 entrypoint
+    #   一點關係都沒有。不轉發就沒有這個外部相依。
+    "-e",
+    f"NCR_MITM_WEB_PORT={WEB_PORT}",
+    "-e",
+    f"NCR_CAPTURE_HOST_DIR={cap_home}/ncr/mitm",
+    "-v",
+    f"{REPO}/dev-container/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro",
+    # 沒有脫敏 addon 的話 start_capture 會 fail-closed 直接不錄，這一段就白跑了
+    "-v",
+    f"{REPO}/mitm:/home/nathan/ncr-mitm:ro",
+    "-v",
+    f"{STUB}:/home/nathan/.local/bin/claude:ro",
+    "-v",
+    f"{cap_home}/.claude:/home/nathan/.claude",
+    "-v",
+    f"{cap_home}/.claude.json:/home/nathan/.claude.json",
+    IMAGE,
+]
+
+cap_child = pexpect.spawn("docker", cap_argv, encoding="utf-8", timeout=180, dimensions=(40, 140))
+cap_lines: list[str] = []
+cap_child.logfile_read = type("W", (), {"write": cap_lines.append, "flush": lambda self: None})()
+try:
+    cap_child.expect(r"請選擇 \[1\]:")
+    cap_child.sendline("2")  # 網路能力：完全開放（這一段不驗防火牆）
+    cap_child.expect(r"錄製流量\? \[y/N\]:")
+    cap_child.sendline("y")  # ← 與第一段的差別就在這裡
+    cap_child.expect(r"請選擇 \[1\]:")
+    cap_child.sendline("1")  # 錄製範圍：全部流量
+    idx = cap_child.expect([r"送 Jaeger\? \[Y/n\]:", "REACHED-DRIVER-LAUNCH", pexpect.TIMEOUT], timeout=120)
+    if idx == 0:
+        cap_child.sendline("n")
+        cap_child.expect("REACHED-DRIVER-LAUNCH", timeout=150)
+    elif idx == 2:
+        # 🔴 **逾時不可以靜默落下。** 落下去的話下面那幾條會對著一份**半截的**畫面比對，
+        #    而「還沒印到」與「印錯了」在那些斷言上長得一模一樣：容器根本沒走到 driver
+        #    啟動，測試卻可能因為前面幾行剛好都在而全綠。
+        check("🔴 ⑦½ 等到 driver 啟動（逾時＝下面幾條比對的是半截畫面）", False)
+finally:
+    cap_child.close(force=True)
+    subprocess.run(["docker", "rm", "-f", CAP_NAME], capture_output=True)
+
+cap_text = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", "".join(cap_lines)).replace("\r", "")
+with open("/tmp/claude-pty-humanpath-capture.log", "w") as f:
+    f.write(cap_text)
+
+check("⑧ 錄製真的開起來了（不是 fail-closed 跳過，否則下面幾條驗不到東西）", "● 錄製中 →" in cap_text)
+# 🔴 **逐字**比對那兩行。控制平面那條路把它們 gate 在 NCR_MARK 上了，人這條路一個字都不能變。
+_m = re.search(r"● 即時畫面 → http://localhost:(\d+)/\?token=(\S+)", cap_text)
+check("🔴 ⑨ 帶 token 的即時畫面 URL 還在，形狀沒變", _m is not None)
+check("　└ port 是 run script 傳進來的那個（NCR_MITM_WEB_PORT）", _m is not None and _m.group(1) == WEB_PORT)
+_tok = _m.group(2) if _m else ""
+# 沒有設 NCR_MITM_WEB_PASSWORD，所以這裡必須是 entrypoint 自己現產的那一串。
+check("🔴 ⑩ token 仍是現產的 24 字元英數亂數", len(_tok) == 24 and _tok.isalnum())
+check(
+    "🔴 ⑪ 後面那句說明也逐字沒變",
+    "  （畫面上是未脫敏的即時內容，host 側只綁本機且要 token；落地的是脫敏版）" in cap_text,
+)
+check("⑫ 這條路上仍然沒有就緒標記（沒設 NCR_MARK）", MARKER not in cap_text)
+check("⑬ 沒有出現非互動模式的提示", "非互動" not in cap_text)
+
+_verdict = "done" if _fails == 0 else f"{_fails} FAILED"
+print(f"\n{_verdict}（完整輸出：/tmp/claude-pty-humanpath.log、/tmp/claude-pty-humanpath-capture.log）")
 sys.exit(1 if _fails else 0)

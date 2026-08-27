@@ -268,6 +268,201 @@ finally:
     _views_probe.open_view = _orig_open
     _app_manager._docker = _orig_docker
 
+print("== /api/auth/mitm：流量畫面的 auth_request（ADR 0021）==")
+# 🔴 **GET 是純查詢**（nginx 對每個 asset 與 WS upgrade 都打一次，副作用會被放大）：
+#    擁有權（純 DB）、capture 判斷、peek 既有的 relay——沒有就 403，**不建**。
+#    建立的責任在 `POST /api/sessions/<sid>/mitm`，它的行為矩陣在這裡一起驗。
+from server import crypto as _crypto  # noqa: E402
+from server import mitm_views as _mitm  # noqa: E402
+
+# ⚠ 這兩場**掛在專屬使用者名下，不掛 alice**。下面「改密碼要收掉終端」那一段斷言的是
+#   `close_user_views` 收到的**完整清單**，而它是「這個人擁有的每一場」：把 session 加到
+#   alice 頭上會讓那條在一個完全無關的地方紅掉（本次實際踩到）。
+_mitm_user = auth.create_user("mitmowner", "mitmowner-password-1")
+
+with db.session_scope() as s:
+    s.add(
+        SessionRow(
+            id="capon00001",
+            container_name="claude-pty-capon00001",
+            container_id="cid-capon00001",
+            user_id=_mitm_user["id"],
+            status="running",
+            profile={"capture": True},
+        )
+    )
+    s.add(
+        SessionRow(
+            id="capoff0001",
+            container_name="claude-pty-capoff0001",
+            container_id="cid-capoff0001",
+            user_id=_mitm_user["id"],
+            status="running",
+            profile={"capture": False},
+        )
+    )
+
+_relays: list = []
+_touched: list = []
+_peeked: list = []
+_orig_open_mitm, _orig_peek_mitm = _mitm.open_mitm_view, _mitm.peek_mitm_view
+_orig_touch, _orig_status = _app_manager.touch, _app_manager.status
+_orig_behind = config.BEHIND_PROXY
+_mitm.open_mitm_view = lambda sid, cid: (
+    _relays.append((sid, cid)),
+    {"port": 41234, "session_id": sid, "path": f"/session/{sid}/mitm/"},
+)[1]
+_mitm.peek_mitm_view = lambda sid: (_peeked.append(sid), None)[1]
+_app_manager.touch = lambda sid: _touched.append(sid)
+try:
+    ca_mitm = app.test_client()
+    ca_mitm.post("/api/auth/login", json={"username": "mitmowner", "password": "mitmowner-password-1"})
+
+    config.BEHIND_PROXY = True
+    # POST 走 `_owned(sid)`（＝manager.status，會問 dockerd 要容器當下狀態）。這台機器的
+    # daemon 裡沒有 cid-capon00001，會把它判成 gone → 409；這一節要驗的是 API 的行為
+    # 矩陣，不是 docker 的狀態，所以把 status stub 成 running。409 的情境在下面用
+    # 「state=exited」的替身專門驗。
+    _stub_status_row = {
+        "user_id": _mitm_user["id"],
+        "profile": {"capture": True},
+        "container_id": "cid-capon00001",
+        "state": "running",
+    }
+    _app_manager.status = lambda sid, with_ready=False: (
+        _stub_status_row if sid == "capon00001" else _orig_status(sid, with_ready=with_ready)
+    )
+    # ── GET：純查詢 ──────────────────────────────────────────────────────────────
+    # 🔴 沒有可用 relay 的 GET 不得建立任何東西——它每一發 asset 都會被 nginx 打一次。
+    r = ca_mitm.get("/api/auth/mitm?session=capon00001")
+    check("🔴 GET 有錄製、沒有可用 relay → 403（建立是 POST 的責任）", r.status_code == 403)
+    check("🔴 GET 沒有呼叫 relay 建立（open_mitm_view 一次都沒被碰）", _relays == [])
+    check("🔴 GET 沒有 touch session（auth_request 熱路徑不寫 DB）", _touched == [])
+    check("🔴 GET 走的是純查詢（peek_mitm_view 真的被問了）", _peeked == ["capon00001"])
+
+    # relay 在的時候 GET 只回報它
+    _mitm.peek_mitm_view = lambda sid: (
+        _peeked.append(sid),
+        {"port": 41999, "session_id": sid, "path": f"/session/{sid}/mitm/"},
+    )[1]
+    r = ca_mitm.get("/api/auth/mitm?session=capon00001")
+    check("擁有者 + 有錄製 + 有可用 relay → 200", r.status_code == 200)
+    check("回報 relay 的 port 給 nginx", r.headers.get("X-Mitm-Port") == "41999")
+    # 🔴 token 是**當場用 SECRET_KEY 對 sid 重算**的，不是查出來的、也不是隨機的：
+    #    建容器時送進去的那一串必須算得出同一個答案，否則 mitmweb 對每一發請求回 403。
+    check(
+        "🔴 回報的 token 就是那一場 mitmweb 的 web_password（同一個公式）",
+        r.headers.get("X-Mitm-Token") == _crypto.mitm_web_password("capon00001"),
+    )
+    check(
+        "🔴 換一場就是另一串（不是全站共用一個）",
+        r.headers.get("X-Mitm-Token") != _crypto.mitm_web_password("capoff0001"),
+    )
+    check("🔴 body 是空的（token 只在標頭上，nginx 取走後不進瀏覽器）", r.get_data(as_text=True) == "")
+    check("🔴 回報之後也沒有多開一顆（GET 全程無副作用）", _relays == [])
+
+    r = ca_mitm.get("/api/auth/mitm?session=capoff0001")
+    check("🔴 沒開錄製 → 404（不承認有這個東西，比照 /api/auth/view 的慣例）", r.status_code == 404)
+
+    r = ca_mitm.get("/api/auth/mitm?session=otherses1")
+    check("非擁有者 → 403（nginx 據此擋下並導回）", r.status_code == 403)
+    check("不存在的 session → 403", ca_mitm.get("/api/auth/mitm?session=nonexistent").status_code == 403)
+    check(
+        "未登入 → 401（authn 由 gate 做，這支不豁免）",
+        app.test_client().get("/api/auth/mitm?session=capon00001").status_code == 401,
+    )
+
+    # 🔴 沒有 nginx 擋在前面時一律 403：建立要靠 POST，而 POST 在那個模式下同樣被擋
+    #    （抽屜在那個模式下不顯示按鈕，兩道互相兜底）。
+    config.BEHIND_PROXY = False
+    r = ca_mitm.get("/api/auth/mitm?session=capon00001")
+    check("🔴 BEHIND_PROXY=0 → 403（有 relay 也一樣：開發部署不支援這條路）", r.status_code == 403)
+    check("🔴 而且沒有生出任何 relay", _relays == [])
+    config.BEHIND_PROXY = True
+
+    # ── POST：副作用集中在這裡 ──────────────────────────────────────────────────
+    _relays.clear()
+    _touched.clear()
+    r = ca_mitm.post("/api/sessions/capon00001/mitm", headers={"X-Requested-With": "fetch"})
+    check("🔴 POST 有錄製 → 201 + path（建立 relay 的唯一入口）", r.status_code == 201)
+    check(
+        "　└ path 帶尾斜線（SPA 是路徑相對的，少了它資源解析錯）",
+        r.get_json().get("path") == "/session/capon00001/mitm/",
+    )
+    check(
+        "relay 是用 DB 裡的 container id 開的（不是名稱、更不是使用者輸入）",
+        _relays == [("capon00001", "cid-capon00001")],
+    )
+    check("🔴 POST 成功之後才 touch（失敗的操作不重置 idle 計時）", _touched == ["capon00001"])
+
+    _touched.clear()
+    r = ca_mitm.post("/api/sessions/capoff0001/mitm", headers={"X-Requested-With": "fetch"})
+    check("POST 沒開錄製 → 404（與 GET 同一個判準）", r.status_code == 404)
+    check("　└ 而且沒有開 relay、沒有 touch", _relays == [("capon00001", "cid-capon00001")] and _touched == [])
+
+    check(
+        "POST 非擁有者 → 403",
+        ca_mitm.post("/api/sessions/otherses1/mitm", headers={"X-Requested-With": "fetch"}).status_code == 403,
+    )
+    check(
+        "未登入 POST → 401",
+        app.test_client().post("/api/sessions/capon00001/mitm", headers={"X-Requested-With": "fetch"}).status_code
+        == 401,
+    )
+
+    config.BEHIND_PROXY = False
+    _touched.clear()
+    check(
+        "🔴 BEHIND_PROXY=0 的 POST → 403（開發部署沒有 nginx，開了也連不上）",
+        ca_mitm.post("/api/sessions/capon00001/mitm", headers={"X-Requested-With": "fetch"}).status_code == 403,
+    )
+    check("　└ 沒有生出 relay、沒有 touch", _relays == [("capon00001", "cid-capon00001")] and _touched == [])
+    config.BEHIND_PROXY = True
+
+    # 🔴 容器已結束 → 409。在 POST 這裡擋掉，open_mitm_view 的 docker 探測就不必白跑
+    #    （它會把「容器沒了」也報成 503「還沒準備好」，那是錯的訊息）。
+    _orig_peek_state = _app_manager.status
+    _status_stub = {
+        "user_id": _mitm_user["id"],
+        "profile": {"capture": True},
+        "container_id": "cid-capon00001",
+        "state": "exited",
+    }
+    _app_manager.status = lambda sid, with_ready=False: _status_stub
+    try:
+        _touched.clear()
+        r = ca_mitm.post("/api/sessions/capon00001/mitm", headers={"X-Requested-With": "fetch"})
+        check("🔴 容器已結束 → 409（不是 503 的「還沒準備好」）", r.status_code == 409)
+        check("　└ 沒有去開 relay、沒有 touch", len(_relays) == 1 and _touched == [])
+    finally:
+        _app_manager.status = _orig_peek_state
+
+    # 🔴 mitmweb 還沒就緒 → 503（暫時性），不是 403。使用者看到的畫面一樣
+    #    （error_page 全接到 @view_denied），分開的價值在 access log 的數字。
+    def _not_ready(sid, cid):
+        _relays.append((sid, cid))
+        raise _mitm.MitmNotReadyError("這一場的流量畫面還沒準備好（容器裡的 mitmweb 沒有回應），請稍後再試")
+
+    _mitm.open_mitm_view = _not_ready
+    _touched.clear()
+    r = ca_mitm.post("/api/sessions/capon00001/mitm", headers={"X-Requested-With": "fetch"})
+    check("🔴 mitmweb 還沒就緒 → 503（暫時性），不是 403", r.status_code == 503)
+    check("🔴 而且失敗路徑沒有 touch（看一眼但起不來，不算用過這一場）", _touched == [])
+
+    # 其餘的 MitmViewError（例如真的把整段 port 用完了）維持 403：那不是「等一下再來」。
+    def _no_port(sid, cid):
+        raise _mitm.MitmViewError("41200-41300 無可用 port")
+
+    _mitm.open_mitm_view = _no_port
+    check(
+        "其他 MitmViewError 仍然是 403（不是未處理的 500）",
+        ca_mitm.post("/api/sessions/capon00001/mitm", headers={"X-Requested-With": "fetch"}).status_code == 403,
+    )
+finally:
+    _mitm.open_mitm_view, _mitm.peek_mitm_view = _orig_open_mitm, _orig_peek_mitm
+    _app_manager.touch, _app_manager.status = _orig_touch, _orig_status
+    config.BEHIND_PROXY = _orig_behind
+
 print("== 權限只在建立時決定（沒有提權/降權端點）==")
 # 「最後一位管理員」不再需要專屬防線：能拿走管理員身分的兩條路（降權、停用）都不存在
 # 了。admin 改掉另一位 admin 的密碼不會動到 is_admin——帳號還是管理員，只是換了鑰匙，
