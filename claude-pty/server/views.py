@@ -791,7 +791,17 @@ def _group_ours_members(pgid: int, names: frozenset[str], bridge_hint: str) -> l
             if os.getpgid(proc.info["pid"]) != pgid:
                 continue
             argv = proc.info.get("cmdline") or []
-            if (argv and os.path.basename(argv[0]) in names) or bridge_hint in argv:
+            # ⚠ 三種形狀都要認得，缺一個就會把「listener 已死、children 還握著 WS」
+            #   那個**正是本機制存在理由**的場面誤判成「我們的都不在了」：
+            #     1. listener 本體：argv[0] 就是 socat／ttyd。
+            #     2. fork 出來、還沒 exec 的 bridge：argv[0] 是 mitm_bridge.sh 的路徑
+            #        （比子字串而不是整串相等：它也可能出現在 socat 的 `EXEC:…` 那一格）。
+            #     3. bridge `exec` 之後：argv 變成 `docker exec -i <cid> socat …`，
+            #        argv[0] 是 docker、bridge 路徑也不見了，**只剩下某一格是 socat**。
+            #   範圍已經被 pgid 限死，所以「任一格的 basename 在白名單裡」不會誤傷別人。
+            #   （Copilot 在 PR #4 指出第 3 種收不到；它建議的子字串版只補得到第 2 種。）
+            hit = any(os.path.basename(a) in names for a in argv) or any(bridge_hint in a for a in argv)
+            if hit:
                 out.append(proc)
     return out
 

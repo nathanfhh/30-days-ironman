@@ -12,7 +12,9 @@ relay 的真本事（socat + docker exec + mitmweb）由 test_mitm_bridge 對著
 
 import importlib
 import os
+import shlex
 import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -489,6 +491,27 @@ try:
         config.MITM_READY_TIMEOUT = _orig_ready
         os.environ["FAKE_DOCKER_EXIT"] = "0"
         os.environ.pop("FAKE_SOCAT_UPSTREAM", None)
+
+    print("== bridge exec 成 docker 之後，成員辨識還認得出它 ==")
+    # bridge 腳本最後一行是 `exec docker exec -i <cid> socat …`：exec 之後 argv[0] 變成
+    # docker、bridge 的路徑也不見了，只剩某一格是 socat。認不出它的話，「listener 已死、
+    # children 還握著 WebSocket」那個場面會被判成「我們的都不在了」，於是不送 killpg。
+    # 用一顆真的長這個形狀的行程來驗（不需要真的有 docker：exec -a 換掉 argv[0] 即可）。
+    _probe = subprocess.Popen(
+        [
+            "/bin/bash",
+            "-c",
+            f"exec -a docker {shlex.quote(sys.executable)} -c "
+            f'"import time; time.sleep(30)" exec -i cid0001 socat -t 10 STDIO TCP:127.0.0.1:8081',
+        ],
+        start_new_session=True,
+    )
+    time.sleep(0.4)
+    _pgid = os.getpgid(_probe.pid)
+    _members = views._group_ours_members(_pgid, mitm_views._OUR_RELAY_NAMES, config.MITM_BRIDGE)
+    check("🔴 argv[0] 是 docker、只有某一格是 socat 也算我們的成員", len(_members) >= 1)
+    _probe.kill()
+    _probe.wait(timeout=5)
 
     print("== in-flight 的宣告（ready 還是 NULL）不可以在寬限期內被別的 worker 刪掉 ==")
     # `_claim_port` 剛插進去的那一列 pid 與 ready 都是 NULL，要等 spawn 回來才寫。
