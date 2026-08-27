@@ -40,9 +40,16 @@ function el<T extends Element>(sel: string): T {
   return found;
 }
 
-function mountDrawer(over: { flavor?: string | null } = {}): VueWrapper {
+function mountDrawer(over: { flavor?: string | null; capture?: boolean } = {}): VueWrapper {
   const w = mount(TerminalDrawer, {
-    props: { sid: "sid1", label: "重構", path: "/session/sid1/", flavor: null, ...over },
+    props: {
+      sid: "sid1",
+      label: "重構",
+      path: "/session/sid1/",
+      flavor: null,
+      capture: false,
+      ...over,
+    },
     attachTo: document.body,
   });
   mounted.push(w);
@@ -448,6 +455,29 @@ describe("TerminalDrawer", () => {
     el<HTMLButtonElement>('[data-testid="drawer-font-dec"]').click();
     await nextTick();
     expect(f.term.options.fontSize).toBe(14);
+  });
+
+  it("有錄流量時才有那顆按鈕，而且是新分頁開 mitm/ 子路徑", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const w = mountDrawer({ capture: true });
+    await flushPromises();
+    el<HTMLButtonElement>('[data-testid="drawer-mitm"]').click();
+    await flushPromises();
+    /* 🔴 尾斜線不可省：mitmweb 的 SPA 是路徑相對的，停在 `/session/sid1/mitm` 的話
+       `./static/…` 會解析到 `/session/sid1/static/…`，落到終端那條路由去。 */
+    expect(open).toHaveBeenCalledWith("/session/sid1/mitm/", "_blank", "noopener");
+    // 同「新分頁」：開了不關抽屜（終端那條連線要留著）
+    expect(w.emitted("close")).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
+  it("🔴 沒錄流量就整顆不畫（不是畫一顆按了會失敗的）", async () => {
+    /* 後端對沒開錄製的 session 回 404、nginx 把它接成 302 導回首頁。畫一顆按了會把人
+       彈回列表的按鈕，比沒有按鈕難懂得多。 */
+    mountDrawer({ capture: false });
+    await flushPromises();
+    expect(document.querySelector('[data-testid="drawer-mitm"]')).toBeNull();
   });
 
   it("哪一顆 ttyd 在服務要寫出來；舊的 view 記錄沒有這個值就不畫", async () => {

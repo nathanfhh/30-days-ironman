@@ -121,7 +121,13 @@ start_capture() {
     local token
     # 不在尾巴再接一個 head：提前關掉管線會讓上游收到 SIGPIPE，在 pipefail 下
     # 整個 command substitution 回 141。取夠長的亂數再用參數展開切長度。
-    token=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+    #
+    # ⚠ `NCR_MITM_WEB_PASSWORD` 是**控制平面**那條路徑才會設的（見 claude-pty 的
+    #   run_kwargs.py；值由 SECRET_KEY 對 sid 做 HMAC 導出，ADR 0021）。網頁那邊要拿
+    #   同一個值當 Bearer 注入代理，所以它必須是雙方都算得出來的，不能是這裡現產的亂數。
+    # ⚠ 人自己開容器時**不設它**，於是這一行逐字等同舊行為（現產、印在畫面上）。
+    #   零偏差由 test_entrypoint_human_path 守。
+    token="${NCR_MITM_WEB_PASSWORD:-$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')}"
     token="${token:0:24}"
 
     # 用 mitmweb 而不是 mitmdump，是為了那個網頁 UI——錄的當下就看得到，
@@ -194,8 +200,13 @@ start_capture() {
     # 容器內路徑——那種情況下看的人本來就在容器裡。
     local shown="${NCR_CAPTURE_HOST_DIR:-$CAPTURE_DIR}/$(basename "$CAPTURE_SESSION_DIR")/"
     echo "● 錄製中 → ${shown}flows.mitm"
-    echo "● 即時畫面 → http://localhost:${NCR_MITM_WEB_PORT:-$CAPTURE_WEB_PORT}/?token=${token}"
-    echo "  （畫面上是未脫敏的即時內容，host 側只綁本機且要 token；落地的是脫敏版）"
+    # 那一行 URL 帶著 token，**只印給人看**（NCR_MARK 未設＝人自己開的容器）。
+    # 控制平面那條路徑不需要它：token 由 nginx 以 Bearer 注入，使用者從來不必知道
+    # （ADR 0021）；而 `docker logs` 是控制平面讀得到的，少印一行就少一個外洩點。
+    if [ -z "${NCR_MARK:-}" ]; then
+        echo "● 即時畫面 → http://localhost:${NCR_MITM_WEB_PORT:-$CAPTURE_WEB_PORT}/?token=${token}"
+        echo "  （畫面上是未脫敏的即時內容，host 側只綁本機且要 token；落地的是脫敏版）"
+    fi
 }
 
 # 收工時把這一場的環境寫在 capture 旁邊。

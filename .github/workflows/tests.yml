@@ -180,17 +180,35 @@ jobs:
         # ⚠ 「安靜地跳過」在 CI 上跟「跑過而且過了」長得一模一樣，這是假綠燈第一種形狀。
         #   瀏覽器沒裝、dist 沒 build 的話，run-all.sh 會把每一支瀏覽器測試都跳過並回
         #   exit 0，那一輪什麼都沒測到而綠勾長得跟真的一樣。
-        # ⚠ **預期是 14：需要 docker 的那 14 支（quick 模式本來就不跑）。** trivy 已由
-        #   setup-trivy 裝進 runner，前端相依掃描是真的跑，不再是跳過項（PR #2 第一輪 CI
-        #   就是因為 runner 沒有 trivy 而在 dev-container job 多跳一支）。
-        #   `test_entrypoint_human_path` 同時需要 docker，quick 模式下它是被 docker 那道
-        #   gate 擋掉的，已經算在 14 裡面（fable 快審 4b 低 3）。
+        # ⚠ **預期是 16：`run-all.sh` 的 `NEEDS_DOCKER` 那 16 支（quick 模式本來就不跑）。**
+        #   這個數字**等於那個陣列的長度**，改動它的唯一正當理由是那個陣列增減了成員，
+        #   而且要在這裡把新成員逐一寫出來：這道閘的精神是「每一個跳過都要有名有姓」，
+        #   不是「跳過幾支還在容忍範圍內」。
+        #   逐一對照（與 `tests/run-all.sh` 的 `NEEDS_DOCKER` 同序）：
+        #     test_session_lifecycle   test_view_lifecycle      test_reconciler
+        #     test_entrypoint_human_path                        test_entrypoint_profile
+        #     test_firewall_ssh_gate   test_user_proxy          test_network_isolation
+        #     test_gitlab_upstream_e2e test_restricted_proxy_reach                e2e_flow
+        #     test_token_fd            test_trivy_volume        test_ro_socket_mount
+        #     test_entrypoint_mitm_password                     test_mitm_bridge
+        # ⚠ **14 → 16 是 mitm-web-ui 這條分支加的兩支**（ADR 0021），兩支都要真的起容器：
+        #     · `test_entrypoint_mitm_password`：真容器跑 entrypoint，讀 mitmweb 的
+        #       `/proc/*/cmdline` 驗 `NCR_MITM_WEB_PASSWORD` 的兩個方向。
+        #     · `test_mitm_bridge`：真容器裡跑 `server/mitm_bridge.sh`，驗半關閉、Bearer、
+        #       403、不留行程。
+        #   它們同時也在 `NEEDS_NCR_IMAGE` 裡，但 quick 模式下擋下它們的是 docker 那道
+        #   gate（排在前面），所以算在這 16 裡、不是另外多兩支。
+        # ⚠ 其餘的跳過項在這個 job 上一支都不該有：trivy 已由 setup-trivy 裝進 runner
+        #   （PR #2 第一輪 CI 就是因為 runner 沒有 trivy 而在 dev-container job 多跳一支）、
+        #   node 與 playwright 也都裝了，所以 NEEDS_DIST 與瀏覽器那兩道 gate 不會觸發。
+        #   `test_entrypoint_human_path` 沒有憑證，但它同時需要 docker，quick 模式下是被
+        #   docker 那道 gate 擋掉的，已經算在 16 裡面（fable 快審 4b 低 3）。
         working-directory: claude-pty
         run: |
           n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-quick.log)
           n=${n:-0}
-          echo "跳過 ${n} 支（預期上限 14：需要 docker 的那 14 支）"
-          if [ "${n}" -gt 14 ]; then
+          echo "跳過 ${n} 支（預期上限 16：NEEDS_DOCKER 的那 16 支）"
+          if [ "${n}" -gt 16 ]; then
             sed -n '/^跳過/,$p' /tmp/pty-quick.log
             echo "::error::跳過的數量超出預期——CI 上的跳過幾乎都是設定漏了，不是正當的環境限制"
             exit 1
@@ -280,6 +298,11 @@ jobs:
         #   Linux runner 上不該再有平台性跳過（uid 鏈、ssh-agent socket 在這裡是驗得到的），
         #   image 也剛 build 過，ttyd 與 playwright 也裝了。**預期只剩一支**：沒有 claude
         #   憑證的 test_entrypoint_human_path——憑證不該進 CI，那條路只能在有登入的機器上驗。
+        # ⚠ **mitm-web-ui 新增的兩支不影響這個數字**（quick 那道閘從 14 加到 16 的那兩支）。
+        #   `test_entrypoint_mitm_password` 與 `test_mitm_bridge` 同時在 `NEEDS_DOCKER` 與
+        #   `NEEDS_NCR_IMAGE` 裡，而這個 job 兩個條件都給了（`--all` ＋ 上面現 build 的
+        #   ncr-dev-container），所以它們在這裡是**真的跑**、不進跳過清單。上限維持 1。
+        #   反過來說：這個數字要是變成 3，代表 image 那一步默默失敗了。
         working-directory: claude-pty
         run: |
           n=$(sed -n 's/^跳過 \([0-9]*\) 支.*/\1/p' /tmp/pty-all.log)

@@ -701,6 +701,73 @@ MIN_PASSWORD_LENGTH = int(os.environ.get("CLAUDE_PTY_MIN_PASSWORD_LENGTH", "8"))
 TTYD_PORT_MIN = int(os.environ.get("CLAUDE_PTY_TTYD_PORT_MIN", "41000"))
 TTYD_PORT_MAX = int(os.environ.get("CLAUDE_PTY_TTYD_PORT_MAX", "41100"))
 
+# ttyd 起來之後，等它「真的在服務這個 session」的上限秒數（見 `views._wait_ready`）。
+#
+# ⚠ 命名與 `MITM_READY_TIMEOUT` 成對，理由也一樣：**這個數字是失敗路徑上最壞情況的全部**
+#   （spawn 完卻等不到就緒時，`open_view` 每個 port 各付一次），是最壞情況的數字就該
+#   看得見、調得動、也讓測試縮得短，不該寫死在函式簽章裡。
+# ⚠ 比 mitm 那邊（20 秒）短得多是對的：這一發探測只在 host 的 loopback 上走一個來回，
+#   沒有 `docker exec`、沒有容器內的第二段連線。
+TTYD_READY_TIMEOUT = float(os.environ.get("CLAUDE_PTY_TTYD_READY_TIMEOUT", "5"))
+
+# --- mitmweb UI 的 relay（ADR 0021）------------------------------------------------
+
+# relay 的 port 範圍。分配由 `mitm_views.port` 的 UNIQUE 仲裁，與 ttyd 是**兩張表**。
+#
+# ⚠ **兩個範圍必須不重疊，這是設計的一部分而不是巧合。** 兩張表各自的 UNIQUE 只在自己
+#   表內仲裁：範圍重疊時，ttyd 與 relay 可以各自「合法」宣告同一個 port，兩邊的 INSERT
+#   都會成功，然後晚起的那個綁不上去。（那時 readiness 檢查會擋下來、換下一個 port，
+#   所以不會有人被導到錯的服務上，但那是安全網，不是設計。）
+#   一張表放兩種東西才是真正一勞永逸的解法，那要改 `views` 既有的 UNIQUE 約束，而輕量
+#   升級（db._add_missing_columns）加不了約束，得引入 alembic，見 ADR 0021 的取捨。
+MITM_PORT_MIN = int(os.environ.get("CLAUDE_PTY_MITM_PORT_MIN", "41200"))
+MITM_PORT_MAX = int(os.environ.get("CLAUDE_PTY_MITM_PORT_MAX", "41300"))
+
+# session 容器**內**的 mitmweb UI port。
+# ⚠ 這個值與 dev-container/entrypoint.sh 的 `CAPTURE_WEB_PORT` 是同一件事，兩邊寫死。
+#   對不上的症狀是 relay 連進去被 refuse（畫面 502 → 導回首頁），完全不像「port 寫錯」。
+#   test_mitm_relay 有一條零偏差斷言釘著（同 CAPTURE_DIR 的作法）。
+MITM_WEB_PORT = int(os.environ.get("CLAUDE_PTY_MITM_WEB_PORT", "8081"))
+
+# relay 每條連線實際執行的橋接腳本（住在套件裡，所以容器內外同一個路徑推導方式）。
+# ⚠ 它**必須是可執行的**：socat 的 EXEC 走 execvp，不經 shell。
+MITM_BRIDGE = os.environ.get(
+    "CLAUDE_PTY_MITM_BRIDGE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "mitm_bridge.sh"),
+)
+
+# client 走了之後，橋接程序還願意等對面把回應吐完的秒數。
+#
+# ⚠ **這個上限不是效能調校，是防漏。** 橋接在 stdin EOF（＝ client 不在了）之後會對
+#   mitmweb 半關閉，然後繼續讀：沒有上限的話，對面若不主動關（WebSocket 就是這種），
+#   那個行程會永遠停在 recv 上，而它跑在**使用者的 session 容器裡**。實測（2026-08-26）
+#   三條閒置長連線關掉之後不收，容器裡就多三顆 python3。
+MITM_LINGER = float(os.environ.get("CLAUDE_PTY_MITM_LINGER", "10"))
+
+# 起 relay **之前**先問一次「容器裡的 mitmweb 現在接得上嗎」的上限秒數（含 docker exec
+# 自己的啟動成本）。上限給 5 秒是留給忙碌的 docker daemon 的餘裕，不是預期值：
+# 2026-08-27 對真容器實測三個方向都是 0.13 秒以內（沒人在聽→False、有人在聽→True、
+# 容器不存在→False）。
+#
+# ⚠ **這一發探測是拿來換掉一段最壞三十四分鐘的迴圈的。** 沒有它的時候，容器是 running、
+#   `capture` 也是真、但 mitmweb 沒在服務（crash 或還在啟動）的話，`open_mitm_view` 會對
+#   41200-41300 每一個 port 都起一顆 socat，每一顆都等滿 `_wait_ready` 的 20 秒逾時才換
+#   下一個（socat 是 `TCP-LISTEN,fork`，父程序不會自己結束，所以只有逾時能離開那一圈）。
+#   2026-08-27 用三個 port 實測 60.6 秒（每個 port 20.2 秒），外推到出貨的 101 個 port ＝
+#   **34 分鐘**的同步 `auth_mitm` 請求佔住一條 Flask 執行緒，外加 **12,928 次 `docker exec`**
+#   （每一圈探兩次：`_port_open` 與 `_is_mitmweb_serving` 各一次，而每一條進來的連線都會
+#   讓 socat fork 一次橋接）。
+# ⚠ 代價是**成功路徑上多一次 `docker exec`**。一條 relay 只付一次：之後 `list_mitm_views`
+#   查得到活著的就直接沿用，不會再走到這裡。拿數百毫秒換掉那個尾巴，方向是對的。
+MITM_PROBE_TIMEOUT = float(os.environ.get("CLAUDE_PTY_MITM_PROBE_TIMEOUT", "5"))
+
+# relay 起來之後，等它「整條路走得通」的上限秒數（socat fork → docker exec → 容器 loopback
+# → mitmweb 回應，見 `mitm_views._wait_ready`）。
+#
+# ⚠ **修好「上游壞掉就別再換 port」之後，這個數字就是最壞情況的全部。** 先前它要乘以
+#   port 範圍的長度（101），現在最多付一次。是最壞情況的那個數字，就該看得見、調得動。
+MITM_READY_TIMEOUT = float(os.environ.get("CLAUDE_PTY_MITM_READY_TIMEOUT", "20"))
+
 # --- reconciler（ADR 0008 階段 5）------------------------------------------------
 RECONCILE_INTERVAL = int(os.environ.get("CLAUDE_PTY_RECONCILE_INTERVAL", "30"))
 

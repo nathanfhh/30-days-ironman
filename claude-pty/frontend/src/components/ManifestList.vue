@@ -44,6 +44,13 @@ const emit = defineEmits<{
   kill: [row: SessionRow];
 }>();
 
+/* 流量畫面的去處。路徑直接由 sid 組出來，不必先 POST 起 view：那條路由的授權在
+   nginx 的 auth_request（見 deploy/nginx.conf 與 ADR 0021），沒權限或沒在錄的人
+   會被它擋下並導回首頁，前端這顆按鈕只是入口。 */
+function openMitm(row: SessionRow): void {
+  globalThis.open(`/session/${row.id}/mitm/`, "_blank", "noopener");
+}
+
 const root = useTemplateRef<HTMLElement>("root");
 useClipTips(root);
 
@@ -275,6 +282,23 @@ const emptyText = computed(() =>
             @click="emit('kill', s)"
           >
             <i class="fa-solid fa-circle-stop"></i> 終止</button>
+          <!-- 流量畫面：只有這一場真的在錄才畫得出來（判準與後端 /api/auth/mitm 是同一個
+               事實：這一筆的 profile.capture）。放在「終止」右邊，是列表上這一列的最後
+               一顆；抽屜裡另有一顆同樣去處的 icon 按鈕，兩個入口共用同一條路由。
+               ⚠ 新分頁而非 iframe：mitmweb 送 X-Frame-Options: DENY。
+               ⚠ prettier-ignore 與上面兩顆同理：收尾標籤換行會讓 Vue 的 whitespace
+                 condense 在文字後留下一個空白，截圖 golden 會紅在別的地方。 -->
+          <!-- prettier-ignore -->
+          <button
+            v-if="s.profile?.capture === true"
+            class="btn"
+            data-act="mitm"
+            :data-id="s.id"
+            :data-testid="`row-mitm-${s.id}`"
+            title="流量畫面（這一場錄到的請求，新分頁開啟）"
+            @click="openMitm(s)"
+          >
+            <i class="fa-solid fa-network-wired"></i> 流量</button>
         </div>
       </article>
     </template>

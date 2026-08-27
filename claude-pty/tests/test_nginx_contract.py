@@ -51,8 +51,70 @@ check("401/403 都接到", {"401", "403"} <= _codes)
 check("🔴 5xx 也接得到（auth_request 的其餘失敗不可以漏出裸錯誤頁）", bool(_codes & {"500", "502", "503", "504"}))
 check("導回首頁（302）", re.search(r"location @view_denied \{\s*\n\s*return 302 /;", code) is not None)
 
+print("== 路由 C：流量畫面（mitmweb UI，ADR 0021）==")
+check("mitm 路由套 auth_request", "auth_request /_auth_mitm;" in code)
+check("子請求端點標 internal（外部打不到）", re.search(r"location = /_auth_mitm \{\s*\n\s*internal;", code) is not None)
+check("取回 relay 的 port", "auth_request_set $mitm_port  $upstream_http_x_mitm_port;" in code)
+check("取回這一場的 token", "auth_request_set $mitm_token $upstream_http_x_mitm_token;" in code)
+# 🔴 **token 只能由 nginx 注入。** 取回來卻沒用＝mitmweb 對每一發請求回 403，而畫面上
+#    看起來是「一按就跳回首頁」；而如果改成讓瀏覽器帶（`?token=`），那串明文就進了
+#    網址列、瀏覽紀錄與任何一次複製貼上。
+check(
+    "🔴 token 由 nginx 組成 Bearer 注入（同時蓋掉 client 自己送的 Authorization）",
+    'proxy_set_header Authorization "Bearer $mitm_token";' in code,
+)
+_mitm_pass = re.search(r"proxy_pass http://\$mitm_upstream:\$mitm_port(\S*);", code)
+check("port 真的被用在 proxy_pass（取回來卻沒用＝路由斷掉）", _mitm_pass is not None)
+# 🔴 **前綴要用 `rewrite … break` 去掉，不可以把路徑拼進 proxy_pass。** 兩者送出去的
+#    東西不一樣：URI 由變數拼出來時 nginx 把那串**原樣**放進請求行，而那串是從已經解碼
+#    的 `$uri` 擷取的，於是 `/a%20b` 會變成請求行裡的裸空白（`GET /a b HTTP/1.1`，不合法）。
+#    rewrite 之後 proxy_pass 沒有 URI 部分，送的是 nginx 重新 escape 過的 URI。
+#    2026-08-26 用 echo upstream 對照量過改前改後。
+check(
+    "🔴 前綴由 rewrite … break 去掉（proxy_pass 拼變數會讓 %20 變成裸空白）",
+    re.search(r"rewrite \^/session/\[A-Za-z0-9\]\+/mitm\(/\.\*\)\$ \$1 break;", code) is not None,
+)
+check(
+    "🔴 proxy_pass 沒有 URI 部分（有的話 rewrite 就白做了）",
+    _mitm_pass is not None and _mitm_pass.group(1) == "",
+)
+# 🔴 `rewrite` 的替換字串裡沒有 `?`，原本的 query string 會自動帶著走。再加一份就是
+#    **重複**（`?a=1&b=2?a=1&b=2`），而先前那條測試守的正好是相反的事，前提已經變了。
+check(
+    "🔴 那條 location 裡沒有 $is_args$args（rewrite 已經帶著 query 走，再加是重複）",
+    "$is_args$args" not in code,
+)
+check(
+    "🔴 尾斜線由 308 補（SPA 是路徑相對的，少了它資源會解析到 ttyd 那條路由）",
+    re.search(r"location ~ \^/session/\(\?<\w+>\[A-Za-z0-9\]\+\)/mitm\$ \{\s*\n\s*return 308 ", code) is not None,
+)
+check("WebSocket 升級（mitmweb 的 /updates）", code.count('proxy_set_header Connection "upgrade";') >= 2)
+# 🔴 **`$http_host` 不是 `$host`。** `$host` 依定義不含 port，而 mitmweb 跑在 tornado 上，
+#    `WebSocketHandler.check_origin` 拿瀏覽器的 `Origin`（一定帶 port）比對請求的 `Host`。
+#    抹掉 port 就永遠對不上，每一次 WS 握手回 403，而頁面照樣載入、靜態資源全部 200，
+#    只是流量清單永遠不會更新（2026-08-26 用真瀏覽器打出來的）。
+_mitm_loc = re.search(r"location ~ \^/session/\(\?<claude_pty_mitm_sid>[^\n]*\{([\s\S]*?)\n    \}", code)
+check("mitm 的代理 location 抓得到", _mitm_loc is not None)
+check(
+    "🔴 Host 用 $http_host（保留 port，否則 WS 握手一律 403）",
+    _mitm_loc is not None and "proxy_set_header Host $http_host;" in _mitm_loc.group(1),
+)
+_mitm_ep = re.search(r"error_page ([\d ]+)= @view_denied;[\s\S]*?\$mitm_port", code)
+check(
+    "🔴 5xx 也接得到（沒開錄製時 /api/auth/mitm 回 404，auth_request 會把它當 5xx）",
+    _mitm_ep is not None and bool(set(_mitm_ep.group(1).split()) & {"500", "502", "503", "504"}),
+)
+# 🔴 **順序**：nginx 取第一個命中的 regex location，而 `^/session/<sid>/` 也吃得下
+#    `/session/<sid>/mitm/…`。排錯的話這兩條一條都不會被走到，而且沒有任何錯誤：
+#    使用者按下「流量畫面」看到的會是終端。
+_i_bare = code.find("/mitm$")
+_i_rest = code.find("/mitm(?<")
+_i_ttyd = code.find("location ~ ^/session/(?<claude_pty_sid>")
+check("兩條 mitm 路由都在", _i_bare > 0 and _i_rest > 0 and _i_ttyd > 0)
+check("🔴 兩條都排在 ttyd 那條 regex **之前**（否則永遠不會被命中）", _i_bare < _i_ttyd and _i_rest < _i_ttyd)
+
 print("== 內部端點對外一律 404（不承認存在）==")
-for ep in ("/api/auth/view", "/api/auth/check"):
+for ep in ("/api/auth/view", "/api/auth/check", "/api/auth/mitm"):
     check(f"{ep} 對外 404", re.search(rf"location = {re.escape(ep)} \{{ return 404; \}}", code) is not None)
 
 print("== CSP：終端只給同源嵌（抽屜是 same-origin iframe）==")

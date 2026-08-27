@@ -32,6 +32,14 @@ Claude Code skills, and the tests that keep their scripts honest.
 - `GITLAB_SSH_HOST` 這個 build ARG 餵兩個地方：`known_hosts`，以及防火牆讀的
   `/etc/ncr/gitlab-ssh-host`。**刻意不用環境變數**——env 是容器裡的 `nathan` 寫得到的，
   政策的來源如果是 env，等於讓被關的人自己挑監獄。
+- **`NCR_MITM_WEB_PASSWORD` 由 claude-pty 餵給 entrypoint**（ADR 0021）。控制平面在建
+  session 容器時用它指定 mitmweb 的 `web_password`，之後 `/api/auth/mitm` 用同一個公式
+  （`SECRET_KEY` 對 sid 做 HMAC）重算，交給 nginx 組 Bearer。**兩邊算出來的必須是同一串**，
+  而且兩邊都不會因為對不上而報錯：mitmweb 照樣起得來、UI 照樣在，只是每一發請求回 403，
+  nginx 把它接成 302，症狀是「按了流量畫面就跳回列表」。改公式或改截斷長度時
+  （entrypoint 那邊是 `${token:0:24}`）要一起看，`tests/test_entrypoint_mitm_password.py`
+  對真容器讀 mitmweb 的 argv 守著這件事。
+  ⚠ 人自己開容器時**不設它**，entrypoint 現產亂數、行為與先前逐字相同。
 - **`init-firewall.sh` 不吃位置參數，sudoers 也把參數鎖成空**
   （`... init-firewall.sh ""`）。sudoers 的語義是「沒列參數 ＝ 任何參數都准」，
   而只要腳本會把參數用進白名單，agent 就能自己擴大白名單、重建整道牆，

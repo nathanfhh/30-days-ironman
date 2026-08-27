@@ -162,6 +162,27 @@ check(
     "🔴 capture 開著時一定帶 NCR_CAPTURE_SCOPE（否則容器卡在 read）",
     env.get("NCR_CAPTURE_SCOPE") in ("all", "model", "1", "2"),
 )
+# mitmweb 的網頁密碼（ADR 0021）：控制平面送進去、/api/auth/mitm 之後重算，兩端要算出同一串。
+# ⚠ 這裡**不抄一份公式**，而是問 crypto 本身：抄一份的話，改公式時這條會繼續比對舊的，
+#   而症狀（按了按鈕就跳回首頁）跟「密碼對不上」一點都不像。
+from server.crypto import mitm_web_password as _mitm_pw  # noqa: E402
+
+check("capture 開著時帶 NCR_MITM_WEB_PASSWORD", env.get("NCR_MITM_WEB_PASSWORD") == _mitm_pw("sidC"))
+# 🔴 **這一場的密碼要綁這一場。** 一個「所有 session 共用一串」的錯誤實作在上面那條會全綠
+#    （公式兩邊都用同一個），只有跨場比對才看得出來，而共用的後果是任一場的 token
+#    打得開全部場次那個顯示未脫敏即時流量的畫面。
+check(
+    "🔴 換一場就換一串（不是全站共用一個密碼）",
+    env["NCR_MITM_WEB_PASSWORD"]
+    != build_run_kwargs("c", "sidC2", Profile(capture=True), _UID)["environment"]["NCR_MITM_WEB_PASSWORD"],
+)
+# 🔴 條件題成對送的另一半：capture 關著時 entrypoint 根本不會走到 start_capture，
+#    送了就是死信。上面「預設 profile」那段的**精確**env 比對已經涵蓋，這裡明寫一條
+#    是因為那條的失敗訊息會是一整份 dict 的 diff，看不出是這個鍵跑出來了。
+check(
+    "🔴 capture 關著時整份 env 裡沒有這個鍵（送了是死信）",
+    "NCR_MITM_WEB_PASSWORD" not in build_run_kwargs("c", "sidC3", Profile(capture=False), _UID)["environment"],
+)
 # ADR 0007 的落盤要求還在，但落點改成 per-user（ADR 0014）——見下方「per-user 狀態空間」
 # 段落。這裡 MOUNTS 是空的（測試隔離），所以連 addon 都不會掛，只驗 env 與 port。
 # ADR 0008：port 屬 on-demand view 範疇，create 不再發布 host port

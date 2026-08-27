@@ -12,9 +12,15 @@
 #
 #   ./build.sh                                   # 就這樣
 #   ./build.sh --build-arg GITLAB_SSH_HOST=…     # 其餘參數原樣透傳
+#   ./build.sh --load                            # 若 active builder 是 docker-container，要顯式載回本機 daemon
 #   NCR_IMAGE=my-tag ./build.sh                  # 換 tag
 #
 # 完整推導見 claude-pty/docs/adr/0017-uid-alignment.md。
+#
+# Note: image 會不會出現在 `docker images`，取決於目前使用的 builder driver，不是這支 script
+# 本身。若 active buildx builder 是 `docker` driver，build 完通常會直接進本機 Docker image
+# store；若是 `docker-container` driver（常見於自建 buildx builder），產物預設只留在 builder
+# cache，需要額外帶 `--load`（載回本機 daemon）或 `--push`。
 set -euo pipefail
 cd "$(dirname "$0")"
 

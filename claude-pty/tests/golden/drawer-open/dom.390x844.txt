@@ -92,6 +92,7 @@ span tip="最後一次有人對它操作（開終端／改尺寸）。Claude 自
 span tip="2026/08/25 11:58:00"
 button testid=row-open-aa11bb22cc33 act=open id=aa11bb22cc33 title="開啟終端（按住 ⌘/Ctrl 改開新分頁）"
 button act=kill id=aa11bb22cc33
+button testid=row-mitm-aa11bb22cc33 act=mitm id=aa11bb22cc33 title=流量畫面（這一場錄到的請求，新分頁開啟）
 article testid=session-row
 span testid=session-lamp state=running title=running
 span testid=session-title
@@ -185,6 +186,7 @@ output testid=drawer-font-value
 button testid=drawer-font-inc act=font+ title=放大字級
 button testid=drawer-upload act=upload title=上傳檔案（路徑進剪貼簿）
 input testid=drawer-file hidden
+button testid=drawer-mitm act=mitm title=流量畫面（錄到的請求，新分頁開啟）
 button act=pop
 button testid=drawer-close act=close title=關閉
 iframe testid=drawer-frame title=終端：重構登入流程

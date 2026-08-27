@@ -165,6 +165,53 @@ describe("ManifestList", () => {
     expect(w.find('[data-testid="checked-sid00000001"]').exists()).toBe(true);
   });
 
+  it("🔴 有錄流量的那一列才有「流量」按鈕，位置在終止右邊", () => {
+    const w = mount(ManifestList, {
+      props: {
+        ...base,
+        rows: [
+          row(),
+          row({
+            id: "capsid0001",
+            profile: { cli: "claude", network: "restricted", capture: true },
+          }),
+        ],
+      },
+    });
+    // 沒在錄的那一列不畫（不是畫出來再停用：沒有可去的地方就不該有入口）
+    expect(w.find('[data-testid="row-mitm-sid00000001"]').exists()).toBe(false);
+    const btn = w.find('[data-testid="row-mitm-capsid0001"]');
+    expect(btn.exists()).toBe(true);
+    // 位置：同一列的操作區裡排在終止之後，也就是最後一顆
+    const acts = w
+      .findAll('[data-testid="session-row"]')[1]
+      .findAll(".manifest__actions button")
+      .map((b) => b.attributes("data-act"));
+    expect(acts).toEqual(["open", "kill", "mitm"]);
+  });
+
+  it("🔴 「流量」按鈕開的是那一場的 mitm 路由，而且是新分頁", () => {
+    const opened: unknown[][] = [];
+    const spy = vi
+      .spyOn(globalThis, "open")
+      .mockImplementation((...a: unknown[]) => (opened.push(a), null));
+    const w = mount(ManifestList, {
+      props: {
+        ...base,
+        rows: [
+          row({
+            id: "capsid0001",
+            profile: { cli: "claude", network: "restricted", capture: true },
+          }),
+        ],
+      },
+    });
+    w.find('[data-testid="row-mitm-capsid0001"]').trigger("click");
+    // 尾斜線不可省：mitmweb 的 SPA 用相對路徑取資源，少了它會解析到終端那條路由
+    expect(opened[0]).toEqual(["/session/capsid0001/mitm/", "_blank", "noopener"]);
+    spy.mockRestore();
+  });
+
   it("沒取名字就用 sid 並套等寬字體", () => {
     const w = mount(ManifestList, {
       props: { ...base, rows: [row(), row({ id: "b", display_name: "重構" })] },

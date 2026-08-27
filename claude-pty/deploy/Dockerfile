@@ -135,7 +135,13 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
         https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
         > /etc/apt/sources.list.d/docker.list \
-    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
+    # socat：mitmweb UI 的 relay（ADR 0021）。它 listen 在內部 port，每條連線 fork 一次
+    # `docker exec` 進 session 容器接那顆綁在容器 loopback 的 mitmweb。
+    # ⚠ **不必比照 ttyd 那套 sha256 流程**：那是給「從 GitHub release 直接下載的裸 binary」
+    #   用的（沒有任何佐證）。socat 走 Debian 的套件庫，完整性由 InRelease 的 GPG 簽章保護，
+    #   與這一整份 Dockerfile 對其他 apt 套件的處置一致。
+    # ⚠ 也**不 purge**：它是執行期的東西，不是 build 期的工具。
+    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli socat \
     && case "$(dpkg --print-architecture)" in \
          amd64) TTYD_ARCH=x86_64;  TTYD_SHA="${TTYD_SHA256_AMD64}" ;; \
          arm64) TTYD_ARCH=aarch64; TTYD_SHA="${TTYD_SHA256_ARM64}" ;; \
@@ -146,6 +152,8 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     && echo "${TTYD_SHA}  /usr/local/bin/ttyd" | sha256sum --check --strict - \
     && chmod +x /usr/local/bin/ttyd \
     && ttyd --version \
+    # relay 少了它的症狀是「開得起來但一按就跳回首頁」，在 build 時就攔下來
+    && socat -V | head -1 \
     # ⚠ curl 也要 purge：它只在 build 期用來抓 keyring 與 ttyd，而這顆容器掛著
     #   docker.sock（審查 F-030）。執行期沒有任何東西呼叫它——redeploy.sh 的健康檢查
     #   跑在 host 上，不在容器內。
