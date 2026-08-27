@@ -93,7 +93,14 @@ _FAKE = os.path.join(_BIN, "ttyd")
 with open(_FAKE, "w", encoding="utf-8") as _f:
     # ⚠ `exec -a ttyd` 是 bash builtin（dash 沒有），同 test_ttyd_identity 的理由。
     #   沒有它的話 exec 之後 argv[0] 會是直譯器的路徑，`_kill` 永遠認不出來。
-    _f.write(f'#!/bin/bash\nsleep "${{FAKE_TTYD_DELAY:-1.0}}"\nexec -a ttyd {sys.executable} {_IMPL} "$@"\n')
+    # ⚠ 在 uv/venv 內把 argv[0] 偽裝成 `ttyd` 之後，CPython 會從假的名字推 prefix，
+    #   於是連 stdlib 的 encodings 都找不到。這支替身只需要標準庫，所以明確把
+    #   `PYTHONHOME` 釘回 base interpreter 的家，保住 `exec -a` 這個測試前提。
+    _f.write(
+        f'#!/bin/bash\nsleep "${{FAKE_TTYD_DELAY:-1.0}}"\n'
+        f"export PYTHONHOME='{sys.base_prefix}'\n"
+        f'exec -a ttyd {sys.executable} {_IMPL} "$@"\n'
+    )
 os.chmod(_FAKE, 0o755)
 os.environ["PATH"] = _BIN + os.pathsep + os.environ["PATH"]
 

@@ -98,7 +98,11 @@ with open(_IMPL, "w", encoding="utf-8") as _f:
 _FAKE = os.path.join(_tmp, "bin", "socat")
 os.makedirs(os.path.dirname(_FAKE), exist_ok=True)
 with open(_FAKE, "w", encoding="utf-8") as _f:
-    _f.write(f'#!/bin/bash\nexec -a socat {sys.executable} {_IMPL} "$@"\n')
+    _f.write(
+        f'#!/bin/bash\n'
+        f"export PYTHONHOME='{sys.base_prefix}'\n"
+        f'exec -a socat {sys.executable} {_IMPL} "$@"\n'
+    )
 os.chmod(_FAKE, 0o755)
 _ARGV_LOG = os.path.join(_tmp, "argv.log")
 os.environ["FAKE_SOCAT_ARGV"] = _ARGV_LOG

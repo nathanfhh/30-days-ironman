@@ -169,7 +169,9 @@ try:
     if "容器內沒有憑證" in "".join(transcript):
         print("  SKIP  ④b 已登入進到提示畫面（沙盒沒有可複製的憑證：keychain 不算）")
     else:
-        idx = child.expect(["bypass permissions", "for shortcuts", pexpect.TIMEOUT], timeout=60)
+        # ⚠ Claude Code 的首頁 footer 文案會改（例如 `for shortcuts` → `for agents`），
+        #   但登入後那條 `usage credits` 提示是目前較穩的訊號，而且 login 畫面不會有。
+        idx = child.expect([r"usage credits", "for shortcuts", pexpect.TIMEOUT], timeout=60)
         check("④b 已登入進到提示畫面", idx != 2)
 finally:
     with open("/tmp/claude-pty-humanpath.log", "w") as f:
