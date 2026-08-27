@@ -184,7 +184,12 @@ def list_mitm_views(session_id: str) -> list[dict]:
     cutoff = utcnow() - _dt.timedelta(seconds=config.VIEW_CLAIM_GRACE)
     with session_scope() as s:
         for row in s.query(MitmView).filter(MitmView.session_id == session_id).all():
-            if row.ready is False:
+            # ⚠ `is not True` 而不是 `is False`：剛 `_claim_port` 完的那一列 **ready 是
+            #   NULL**（欄位可為空、沒有預設），要等 spawn 回來才寫成 False。只比 False
+            #   的話，那個窗口裡的 in-flight 宣告會掉到下面「pid 是 None → 當死的收掉」
+            #   那一支，被**不經寬限期**直接刪掉；別的 worker 於是拿得到同一個 port，而
+            #   正在 spawn 的那個 worker 回頭找不到自己的列（Copilot 在 PR #4 指出）。
+            if row.ready is not True:
                 # in-flight：另一個 worker 正在 build。過了寬限期還是這個狀態＝worker
                 # 死在半路，pid/pgid 已寫進列（見 open_mitm_view 的先寫再等），可以收。
                 if row.created_at < cutoff and _kill_row(row):

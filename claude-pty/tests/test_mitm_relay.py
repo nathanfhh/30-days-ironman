@@ -49,6 +49,8 @@ db.init_db()
 
 from server import mitm_views, sessions as sessions_mod, views  # noqa: E402
 from server.models import MitmView, Session as SessionRow  # noqa: E402
+from datetime import timedelta as _timedelta  # noqa: E402
+from server.models import utcnow as _now_utc  # noqa: E402
 
 _pass = _fail = 0
 
@@ -488,6 +490,29 @@ try:
         os.environ["FAKE_DOCKER_EXIT"] = "0"
         os.environ.pop("FAKE_SOCAT_UPSTREAM", None)
 
+    print("== in-flight 的宣告（ready 還是 NULL）不可以在寬限期內被別的 worker 刪掉 ==")
+    # `_claim_port` 剛插進去的那一列 pid 與 ready 都是 NULL，要等 spawn 回來才寫。
+    # 這個窗口裡別的 worker 呼叫 list_mitm_views，不可以把它當成死列收走（那會讓同一個
+    # port 被兩個 worker 拿到，而正在 spawn 的那個回頭找不到自己的列）。
+    seed("relay0004")  # FK：沒有 session 那一列就宣告不了
+    _claimed = mitm_views._claim_port("relay0004", config.MITM_PORT_MAX)
+    check("前提：宣告拿到了，而且 pid／ready 都還是 NULL", _claimed is not None)
+    with db.session_scope() as _s:
+        _row = _s.get(MitmView, _claimed)
+        check("　└ 確認形狀", _row is not None and _row.pid is None and _row.ready is None)
+    check(
+        "寬限期內：list_mitm_views 不回它（還沒就緒），但也不刪它",
+        mitm_views.list_mitm_views("relay0004") == [] and alive_rows("relay0004") != [],
+    )
+    # 把 created_at 往回撥超過寬限期，那時它就是「worker 死在半路」，該收
+    with db.session_scope() as _s:
+        _row = _s.get(MitmView, _claimed)
+        _row.created_at = _now_utc() - _timedelta(seconds=config.VIEW_CLAIM_GRACE + 5)
+    check(
+        "🔴 過了寬限期才收：那時它是死在半路的宣告",
+        mitm_views.list_mitm_views("relay0004") == [] and alive_rows("relay0004") == [],
+    )
+
     print("== 收一場沒有 relay 的：等冪，回 0 ==")
     check("close_mitm_views 對沒有 relay 的 session 回 0", mitm_views.close_mitm_views("relay0002") == 0)
 
@@ -503,7 +528,7 @@ finally:
     # ⚠ relay0003 也要在這裡收。上游那一節中途拋例外時（例如有人把修法改壞了）內層的
     #   收尾不會跑到，那顆替身 socat 會留下來聽著 45200，**下一次跑這支測試會被它毒到**：
     #   新起的 socat bind 失敗，而就緒探測連上的是上一輪的殘留，於是紅在完全無關的地方。
-    for _sid in ("relay0001", "relay0002", "relay0003"):
+    for _sid in ("relay0001", "relay0002", "relay0003", "relay0004"):
         with __import__("contextlib").suppress(Exception):
             mitm_views.close_mitm_views(_sid)
     db.reset_engine()
