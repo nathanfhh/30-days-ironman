@@ -86,8 +86,11 @@ def open_mitm_view(session_id: str, container_id: str) -> dict:
         if row_id is None:
             continue  # 這個 port 被別的 session 佔走 → 換下一個
         pid = None
+        # 同 views.open_view：argv 與 spawn 時刻留給失敗路徑的 `_kill_spawned` 當證據。
+        argv = _socat_argv(port, container_id)
+        spawn_time = time.time()
         try:
-            pid = views._spawn_detached(_socat_argv(port, container_id))
+            pid = views._spawn_detached(argv)
             if _wait_ready(port, pid):
                 with session_scope(immediate=True) as s:
                     row = s.get(MitmView, row_id)
@@ -98,7 +101,7 @@ def open_mitm_view(session_id: str, container_id: str) -> dict:
         except Exception:
             # spawn 之後任一步失敗都必須收掉那顆 socat，否則它活著卻沒有人記得 pid
             # （同 views.open_view 的 review H3）。
-            _kill_spawned(pid)
+            _kill_spawned(pid, argv, spawn_time=spawn_time)
             _drop(row_id)
             raise
         # 就緒失敗。**換下一個 port 只對其中一種有意義**，兩種混在一起就是那段 34 分鐘：
@@ -111,7 +114,7 @@ def open_mitm_view(session_id: str, container_id: str) -> dict:
         #   已經退出了，那時 `_port_open` 仍為真，只看它會把「port 被占」誤判成上游壞掉，
         #   而換 port 正是那一種該做的事（ADR 0021 說的那道安全網）。
         upstream_dead = _process_alive(pid) and views._port_open(port)
-        _kill_spawned(pid)
+        _kill_spawned(pid, argv, spawn_time=spawn_time)
         _drop(row_id)
         if upstream_dead:
             raise MitmNotReadyError(
@@ -286,14 +289,19 @@ def _kill(pid: int | None) -> bool:
     return views._kill(pid, _OUR_RELAY_NAMES)
 
 
-def _kill_spawned(pid: int | None, grace: float = 1.0) -> bool:
+def _kill_spawned(
+    pid: int | None,
+    argv: list[str] | None = None,
+    grace: float = 1.0,
+    spawn_time: float | None = None,
+) -> bool:
     """收掉「我們剛 spawn、但可能還沒 exec 成 socat」的那個行程。
 
     ⚠ 本體搬去 `views._kill_spawned` 了：ttyd 那條路的 `open_view` 有**一模一樣**的失敗
       路徑，而它原本只呼叫 `_kill()`（同一個坑）。這裡只換白名單，理由同 `_kill`／
       `_process_alive`：能共用的都直接用 views 的，不留第二份會漂的副本。
     """
-    return views._kill_spawned(pid, _OUR_RELAY_NAMES, grace)
+    return views._kill_spawned(pid, argv, _OUR_RELAY_NAMES, grace, spawn_time)
 
 
 def _process_alive(pid: int | None) -> bool:

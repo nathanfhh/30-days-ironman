@@ -701,6 +701,15 @@ MIN_PASSWORD_LENGTH = int(os.environ.get("CLAUDE_PTY_MIN_PASSWORD_LENGTH", "8"))
 TTYD_PORT_MIN = int(os.environ.get("CLAUDE_PTY_TTYD_PORT_MIN", "41000"))
 TTYD_PORT_MAX = int(os.environ.get("CLAUDE_PTY_TTYD_PORT_MAX", "41100"))
 
+# ttyd 起來之後，等它「真的在服務這個 session」的上限秒數（見 `views._wait_ready`）。
+#
+# ⚠ 命名與 `MITM_READY_TIMEOUT` 成對，理由也一樣：**這個數字是失敗路徑上最壞情況的全部**
+#   （spawn 完卻等不到就緒時，`open_view` 每個 port 各付一次），是最壞情況的數字就該
+#   看得見、調得動、也讓測試縮得短，不該寫死在函式簽章裡。
+# ⚠ 比 mitm 那邊（20 秒）短得多是對的：這一發探測只在 host 的 loopback 上走一個來回，
+#   沒有 `docker exec`、沒有容器內的第二段連線。
+TTYD_READY_TIMEOUT = float(os.environ.get("CLAUDE_PTY_TTYD_READY_TIMEOUT", "5"))
+
 # --- mitmweb UI 的 relay（ADR 0021）------------------------------------------------
 
 # relay 的 port 範圍。分配由 `mitm_views.port` 的 UNIQUE 仲裁，與 ttyd 是**兩張表**。

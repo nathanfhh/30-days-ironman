@@ -79,8 +79,12 @@ def open_view(
         # ⚠ 先收斂再用：argv[0] 與記進 DB 的必須是**同一個**字串，否則標記說的是一回事、
         #   實際跑的是另一回事——那比不標更糟。
         binary = config.ttyd_bin_or_default(ttyd_bin)
+        # argv 與 spawn 時刻要留著：失敗路徑上的 `_kill_spawned` 靠它們證明「這個號碼上的
+        # 還是我們 spawn 的那一顆」，見 `_still_our_spawn`。
+        argv = _ttyd_argv(port, container_name, session_id, binary)
+        spawn_time = time.time()
         try:
-            pid = _spawn_detached(_ttyd_argv(port, container_name, session_id, binary))
+            pid = _spawn_detached(argv)
             if _wait_ready(port, pid, session_id):
                 with session_scope(immediate=True) as s:
                     row = s.get(View, view_id)
@@ -92,7 +96,7 @@ def open_view(
         except Exception:
             # spawn 之後任一步失敗（含寫 pid 進 DB 失敗）都必須收掉那個 ttyd，
             # 否則它會活著卻沒人記得 pid，永遠不會被回收（review H3）。
-            _kill_spawned(pid)
+            _kill_spawned(pid, argv, spawn_time=spawn_time)
             _drop_view(view_id)
             raise
         # 起不來（多半是 port 被 DB 以外的程序佔住）→ 收乾淨，換下一個 port
@@ -100,7 +104,7 @@ def open_view(
         #   的窗口（最明確的一種：`_wait_ready` 逾時，而那顆替身／慢啟動的 ttyd 到那一刻
         #   都還沒把自己換掉），而 `_kill()` 在那個窗口裡會判定「不是我們的程序」直接回
         #   True 什麼都不做，接著下一行就把唯一的追蹤記錄刪掉。詳見 `_kill_spawned`。
-        _kill_spawned(pid)
+        _kill_spawned(pid, argv, spawn_time=spawn_time)
         _drop_view(view_id)
     raise ViewError(f"{config.TTYD_PORT_MIN}-{config.TTYD_PORT_MAX} 無可用 port")
 
@@ -569,8 +573,81 @@ def _kill(pid: int | None, names: frozenset[str] | None = None) -> bool:
     return _await_gone(pid, proc, config.VIEW_KILL_GRACE)
 
 
-def _kill_spawned(pid: int | None, names: frozenset[str] | None = None, grace: float = 1.0) -> bool:
+def _still_our_spawn(
+    pid: int,
+    names: frozenset[str],
+    argv: list[str] | None,
+    spawn_time: float | None,
+) -> bool:
+    """這個號碼上的，還是我們 spawn 的那一顆嗎？
+
+    只有 `_kill_spawned` 的**最後那一段**會問：那一段要對一個「名字還認不出來」的號碼
+    送訊號，而 `_kill()` 那道 argv[0] 白名單在那裡剛好不成立（它還沒 exec 完），所以
+    白名單以外得另外拿一份證據出來。
+
+    ⚠ **為什麼這道證據是必要的（而不是防禦性程式設計）。** `_wait_ready` 的中止條件改成
+      存在性之後，「socat／ttyd bind 失敗、立刻退出」這條路不再當場中止，而是**等滿整個
+      逾時**（ttyd 5 秒、relay 20 秒）才落到這裡。那段時間足夠讓那個號碼被別的程序接手，
+      而接手的那顆與我們毫無關係。修法前的行為是對它直接 SIGTERM／SIGKILL。
+
+    三種證據，任一成立就算是我們的：
+
+      1. **cmdline 的尾段就是我們的 argv。** `_spawn_detached` 是
+         `/bin/sh -c '"$@" …' sh <argv>`，`$!` 拿到的那顆在 exec 之前逐字繼承這一串，
+         所以 `cmdline[-(len(argv)-1):] == argv[1:]`。
+         ⚠ 比的是 **`argv[1:]`**，不是整串 argv：exec 之後 argv[0] 會變成解析過的路徑
+           （`ttyd` → `/usr/local/bin/ttyd`；替身腳本更是變成 `/bin/bash <路徑>`），
+           整串比對在**那個形狀上永遠不成立**，而那正好是最常落到這裡的形狀。
+           `argv[1:]` 帶著 port、session id 與容器名，撞名的機率可以忽略。
+      2. **argv[0] 的 basename 在白名單裡**——它在我們讀 cmdline 的這一瞬間 exec 完了。
+      3. **`create_time()` ≥ spawn 的時刻**，且**只在 cmdline 問不到的時候**才輪到它。
+         ⚠ 這條很弱，弱到不可以拿它當主要判準：號碼被接手時，接手的那顆也一定是在我們
+           spawn 之後才建立的，所以它對「接手」這件事幾乎一律成立。它排除得掉的只有
+           「這個號碼上是一顆比我們還老的程序」（＝`$!` 給的數字根本不對）。放在最後
+           是因為 cmdline 問不到時（AccessDenied，多半正是別人的程序）沒有更好的東西。
+
+    問不到就往「是我們的」倒（沒有 psutil、呼叫端沒給 argv、psutil 拒答）：那是修法前的
+    行為，這道證據要收的是**問得到而且答案是否定的**那一種，不是把不確定也一起收掉。
+    """
+    if psutil is None or argv is None:
+        return True  # 無從佐證：沿用舊行為（見上）
+    try:
+        proc = psutil.Process(pid)
+    except psutil.NoSuchProcess:
+        return False
+    except (psutil.AccessDenied, OSError):
+        return True
+    try:
+        cmdline = proc.cmdline()
+    except psutil.NoSuchProcess:
+        return False
+    except (psutil.AccessDenied, OSError):
+        cmdline = []
+    if cmdline:
+        if len(argv) >= 2 and cmdline[-(len(argv) - 1) :] == list(argv[1:]):
+            return True  # 還沒 exec 的那顆（或 exec 完但 argv[0] 換了形狀）
+        return os.path.basename(cmdline[0]) in names  # 剛剛 exec 完
+    if spawn_time is None:
+        return True
+    try:
+        return proc.create_time() >= spawn_time
+    except psutil.NoSuchProcess:
+        return False
+    except (psutil.AccessDenied, OSError):
+        return True
+
+
+def _kill_spawned(
+    pid: int | None,
+    argv: list[str] | None = None,
+    names: frozenset[str] | None = None,
+    grace: float = 1.0,
+    spawn_time: float | None = None,
+) -> bool:
     """收掉「我們剛 spawn、但可能還沒 exec 成目標程序」的那個行程。
+
+    `argv` 是**交給 `_spawn_detached` 的那一串**，`spawn_time` 是呼叫它之前的時刻；
+    兩者都只餵給 `_still_our_spawn`（見那支的三種證據）。
 
     ⚠ **spawn 之後的失敗路徑上不可以只呼叫 `_kill()`。** 它在送訊號之前會先確認 argv[0]
       在白名單裡，而 `_spawn_detached` 是 double-fork：`$!` 拿到的 pid 一開始是 `sh` 的。
@@ -583,12 +660,19 @@ def _kill_spawned(pid: int | None, names: frozenset[str] | None = None, grace: f
       那一頁的時候。那個 port 就此消失，畫面上與 log 裡都沒有跡象。
 
     做法：先給它 `grace` 秒把 exec 走完（走完就交給 `_kill()` 那一整套「等到它真的從
-    行程表上消失才算數」）；到時間還沒變成我們認得的名字，就直接對這個號碼送訊號。
+    行程表上消失才算數」）；到時間還沒變成我們認得的名字，就**先驗明正身再**對這個號碼
+    送訊號。
 
-    ⚠ 直接送訊號的那一段有一個窄窗口：`sh` 剛好在這幾毫秒退出、而號碼被別人接手。
-      這個 pid 是我們自己在幾百毫秒前從 `$!` 拿到的，接手的機率極低；而另一側的代價是
-      **確定**漏掉一顆沒有人記得的行程。往「收得掉」那一側倒，理由同上面 `_kill` 那段
-      「psutil 保護的是等待判斷、不是訊號投遞」的取捨。
+    ⚠ **那道驗明正身是後來補的，因為窗口變寬了。** 這一段原本的理由是「pid 是我們幾百
+      毫秒前從 `$!` 拿到的，被接手的機率極低」。`_wait_ready` 的中止條件改成存在性之後
+      那句話不再成立：socat／ttyd bind 失敗、立刻退出時，這條路會**等滿整個逾時**
+      （ttyd `TTYD_READY_TIMEOUT` 5 秒、relay `MITM_READY_TIMEOUT` 20 秒）才走到這裡，
+      那個號碼早就可能是別人的了。所以送訊號前多問一句 `_still_our_spawn`；問不到的
+      那幾種情形仍然往「收得掉」那一側倒（理由同 `_kill` 那段「psutil 保護的是等待判斷、
+      不是訊號投遞」），但**問得到而且答案是否定**的時候，記一行 log 放過它。
+
+    ⚠ 放過它的代價要說清楚：那顆若其實是我們的（證據判錯），它會變成沒有人記得的孤兒。
+      這個方向是刻意的——誤殺別人的程序沒有上限，漏掉一顆孤兒有 log 可查。
 
     ⚠ 本體住在這裡、`mitm_views._kill_spawned` 只換白名單來委派：那一支是 2026-08-26 為
       socat 寫的，而 ttyd 這條路的 `open_view` 有一模一樣的失敗路徑卻只呼叫 `_kill()`。
@@ -605,6 +689,14 @@ def _kill_spawned(pid: int | None, names: frozenset[str] | None = None, grace: f
             return _kill(pid, names)  # 已經 exec 完了，走完整的那一套
         time.sleep(0.05)
     if not _pid_exists(pid):
+        return True
+    if not _still_our_spawn(pid, names, argv, spawn_time):
+        # 放過它。這一行是這種情形唯一的痕跡，所以要把判斷得出來的東西都寫進去。
+        print(
+            f"[claude-pty] ⚠ pid {pid} 上的程序已經不是我們 spawn 的那一顆（號碼被接手），"
+            f"不送訊號；原本要收的是：{' '.join(argv or [])}",
+            flush=True,
+        )
         return True
     for sig in (signal.SIGTERM, signal.SIGKILL):
         with suppress(OSError):
@@ -683,8 +775,12 @@ def _is_ttyd_serving(port: int, session_id: str) -> bool:
     return b"server: ttyd/" in head.lower()
 
 
-def _wait_ready(port: int, pid: int, session_id: str, timeout: float = 5.0) -> bool:
+def _wait_ready(port: int, pid: int, session_id: str, timeout: float | None = None) -> bool:
     """等 ttyd 就緒；它先死掉、逾時、或該 port 上是別的服務都回 False。
+
+    ⚠ 逾時值住在 `config.TTYD_READY_TIMEOUT`（預設仍是 5 秒）而不是寫死在簽章裡，
+      理由與命名都比照 `mitm_views._wait_ready` 的 `MITM_READY_TIMEOUT`：這是失敗路徑上
+      每個 port 各付一次的那個數字，該看得見、調得動。
 
     ⚠ **中止條件是「那個號碼上沒東西了」（`_pid_exists`），不是 `_process_alive`
       （它還要比對 argv[0]）。** `_spawn_detached` 是 double-fork：`$!` 拿到的是
@@ -705,6 +801,7 @@ def _wait_ready(port: int, pid: int, session_id: str, timeout: float = 5.0) -> b
     ⚠ `mitm_views._wait_ready` 早一天就修過同一個坑（ADR 0021），這裡是把同一份判斷
       補回 ttyd 這條路，用的是同一支 `_pid_exists`。
     """
+    timeout = config.TTYD_READY_TIMEOUT if timeout is None else timeout
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not _pid_exists(pid):
