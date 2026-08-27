@@ -740,8 +740,11 @@ MITM_BRIDGE = os.environ.get(
 #
 # ⚠ **這個上限不是效能調校，是防漏。** 橋接在 stdin EOF（＝ client 不在了）之後會對
 #   mitmweb 半關閉，然後繼續讀：沒有上限的話，對面若不主動關（WebSocket 就是這種），
-#   那個行程會永遠停在 recv 上，而它跑在**使用者的 session 容器裡**。實測（2026-08-26）
-#   三條閒置長連線關掉之後不收，容器裡就多三顆 python3。
+#   那個行程會永遠停在 recv 上，而它跑在**使用者的 session 容器裡**。
+# ⚠ 2026-08-27 起內層從 `python3 -c` 換成容器裡的 socat，這個值變成 socat 的
+#   **`-t`（closewait：EOF 之後再等 N 秒，對面先講完就先走）**，不是 `-T`
+#   （inactivity timeout，它會殺閒置中的活 WebSocket，不能用錯）。語義同原來的
+#   linger，但「慢回應在 N 秒內照常送達」這一點已由實測釘住（見 mitm_bridge.sh）。
 MITM_LINGER = float(os.environ.get("CLAUDE_PTY_MITM_LINGER", "10"))
 
 # 起 relay **之前**先問一次「容器裡的 mitmweb 現在接得上嗎」的上限秒數（含 docker exec

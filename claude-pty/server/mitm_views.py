@@ -1,7 +1,8 @@
 """mitmweb UI 的 on-demand relay（ADR 0021）。
 
     開網頁看流量 → 臨時起一顆 `socat`（listen 在 TTYD_BIND 的某個 port）
-                 → 每條連線 fork 一次 `docker exec` 進 session 容器接它 loopback 的 mitmweb
+                 → 每條連線 fork 一次 `docker exec -i`，由 **session 容器裡的另一顆 socat**
+                   接它 loopback 的 mitmweb
     session 收掉    → `sessions.archive()` 連帶把這顆 socat 收掉
 
 形狀刻意與 `views.py`（ttyd）一模一樣，而且**能共用的都直接用它的**：`_spawn_detached`
@@ -237,7 +238,7 @@ def _alive_relay(session_id: str) -> dict | None:
 # ⚠ 這裡刻意**不驗身分**（不看 `Server: mitmproxy`），只驗「TCP 接得上」。要驗身分就得帶
 #   Bearer，那等於把這一場的密碼多送進容器一次；而這一關要回答的只是「值不值得起 relay」，
 #   真正的驗明正身在 `_is_mitmweb_serving`（relay 起來之後，從控制平面這一側問）。
-# ⚠ `python3 -c` 收到的 `sys.argv[1]` 是 `-c` 後面接的第一個位置參數（同 mitm_bridge.sh）。
+# ⚠ `python3 -c` 收到的 `sys.argv[1]` 是 `-c` 後面接的第一個位置參數。
 _PROBE_SRC = "import socket, sys\nsocket.create_connection(('127.0.0.1', int(sys.argv[1])), timeout=2).close()\n"
 
 

@@ -19,50 +19,27 @@
 # 的即時流量**。`docker exec` 是唯一進得去的路，而它由控制平面發起、只吃 DB 裡的
 # container id，不吃使用者輸入。
 #
-# ## 為什麼內層是 python3 而不是 bash 的 /dev/tcp
+# ## 內層是容器裡的另一顆 socat（2026-08-27 起；之前是 `python3 -c` 的雙向搬運）
 #
-# `bash -c 'exec 3<>/dev/tcp/…; cat <&0 >&3 & cat <&3'` 這種寫法沒有**半關閉**：
-# client 送完請求把寫入端關掉時（curl 之類會這樣做），要嘛把讀方向一起砍掉（回應被截斷，
-# 實測第一發請求就空的），要嘛永遠不收。python 分得開這兩件事：stdin EOF 只 shutdown
-# 寫入端，讀繼續。session 容器裡本來就有 python3（mitmproxy 就是 python）。
+#   docker exec -i <cid> socat -t <linger> STDIO TCP:127.0.0.1:<port>
+#
+# 換掉 python 的理由：socat 的雙向轉發是原生 C，位元組原樣過、HTTP 與 WebSocket 都吃；
+# python 版存在只是因為當時 session image 沒有 socat（ADR 0021 背景第 2 點），
+# 現在 image 有了（dev-container/Dockerfile），就沒有理由維護一份手寫的搬運迴圈。
+#
+# 三個容易搞混的點，寫清楚：
+#
+# 1. **`docker exec -i`（互動 stdin），但絕對不是 `-it`。** TTY 會做行規則轉換、
+#    破壞 binary stream；HTTP body 與 WebSocket frame 都是 raw binary。
+# 2. **socat 的 `-t` ≠ docker 的 `-t`。** docker 的 `-t` 是配置 TTY（不可用，見上）；
+#    socat 的 `-t N` 是 *closewait*：stdin EOF 之後再等 N 秒讓對面把話講完。
+# 3. **linger 由 socat 的 closewait 接手，語義比 python 版更好。** python 版是
+#    「EOF 之後 N 秒整個殺掉」；socat 是「EOF 之後最多等 N 秒，對面先講完就先走、
+#    對面不關才強制收」。已實測（2026-08-27，socat 1.8.0，同 image 的 ubuntu:24.04）：
+#      - 半關閉後慢回應照常送達（-t 3 時 1.5s 的回應完整收到）；
+#      - 上游收到 FIN 卻永不關時（WebSocket 那種），-t 到期整條收掉，不留在容器裡；
+#      - **它不殺閒置中的活連線**（那是 `-T` inactivity timeout，不要用錯）——
+#        開著分頁但沒流量的 WebSocket 不會被收掉。
 set -eu
 
-exec docker exec -i "$1" python3 -c '
-import os, socket, sys, threading
-
-LINGER = float(sys.argv[2])
-sock = socket.create_connection(("127.0.0.1", int(sys.argv[1])))
-
-
-def upstream():
-    """client → mitmweb。"""
-    try:
-        while True:
-            chunk = os.read(0, 65536)
-            if not chunk:
-                break
-            sock.sendall(chunk)
-    except OSError:
-        pass
-    try:
-        # 半關閉：只收掉寫入端，讀的那一半留著把回應收完。
-        sock.shutdown(socket.SHUT_WR)
-    except OSError:
-        pass
-    # 但不可以無上限地等：對面若不主動關（WebSocket 就是這種），主緒會永遠停在 recv 上，
-    # 而這個行程跑在使用者的 session 容器裡。時間到就整個收掉。
-    timer = threading.Timer(LINGER, os._exit, (0,))
-    timer.daemon = True
-    timer.start()
-
-
-threading.Thread(target=upstream, daemon=True).start()
-try:
-    while True:
-        chunk = sock.recv(65536)
-        if not chunk:
-            break
-        os.write(1, chunk)
-except OSError:
-    pass
-' "$2" "$3"
+exec docker exec -i "$1" socat -t "$3" STDIO "TCP:127.0.0.1:$2"

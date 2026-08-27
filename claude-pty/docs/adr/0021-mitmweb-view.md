@@ -1,6 +1,6 @@
 # ADR 0021：從管理畫面直達 mitmweb UI（auth_request + relay，token 不進瀏覽器）
 
-- 狀態：已接受；已實作（2026-08-26）
+- 狀態：已接受；已實作（2026-08-26）；relay 內層換成容器內 socat（2026-08-27）
 
 ## 背景
 
@@ -14,8 +14,12 @@ session 開了流量錄製（`profile.capture`）時，容器裡跑的是 `mitmw
    `NCR_MITM_WEB_BIND=127.0.0.1`，因為那些容器掛在共用的 per-user network 上，
    兄弟容器連得到 8081；而 token 又印在 `docker logs` 裡。收回 loopback 之後，
    拿到 token 也沒有用，得先進得了那顆容器。
-2. **控制平面沒有 socat，但有 docker CLI**（掛著 host 的 docker socket）。
-   session 容器沒有 socat，但有 bash 與 python3。
+2. **控制平面沒有 socat**（註，見下），**但有 docker CLI**（掛著 host 的 docker socket）。
+   session 容器有 bash 與 python3；2026-08-27 起也有了 socat（dev-container/Dockerfile）。
+   註：「控制平面沒有 socat」指的是部署環境的原始假設——relay 的外層 listener 實際上
+   是 control 容器裡的 socat（見決策節），它的 binary 由 claude-pty 自己的 image 提供；
+   這一點成立與否不影響這裡的推導：內層（session 容器裡）的 socat 必須由 session
+   image 自己提供，不能借用控制平面的。
 3. **「動態 port + auth_request」這套模式已經在跑**：`/api/auth/view` 回 `X-Ttyd-Port`，
    nginx 用 `auth_request_set` 取出來放進變數化的 `proxy_pass`（ADR 0005 路由 B、ADR 0008）。
 
@@ -42,7 +46,7 @@ proxy_set_header Authorization "Bearer $mitm_token"
    ▼
 control 容器內的 relay：socat TCP-LISTEN:<port>,bind=<TTYD_BIND>,fork,reuseaddr
    │  每條連線 → EXEC:server/mitm_bridge.sh <container-id> 8081 <linger>
-   │            → docker exec -i <container> python3 -c '<雙向搬運>'
+   │            → docker exec -i <container> socat -t <linger> STDIO TCP:127.0.0.1:8081
    ▼
 session 容器 127.0.0.1:8081 的 mitmweb
 ```
@@ -139,7 +143,7 @@ socat 的 `EXEC:` **依空白切詞、沒有引號機制**；`SYSTEM:` 更糟，
 而檔案裡是一般的 shell，愛怎麼引就怎麼引。腳本住在 `server/` 底下隨套件走，
 容器內外用同一個路徑推導方式。
 
-### 4. 橋接的內層是 python3，不是 bash 的 `/dev/tcp`
+### 4. 橋接的內層是 python3，不是 bash 的 `/dev/tcp`（2026-08-27 已由容器內 socat 取代）
 
 `bash -c 'exec 3<>/dev/tcp/…; cat <&0 >&3 & cat <&3'` 沒有**半關閉**：client 送完請求把
 寫入端關掉時（curl 之類會這樣做），要嘛把讀方向一起砍掉（實測第一發請求回應就是空的），
@@ -148,6 +152,9 @@ socat 的 `EXEC:` **依空白切詞、沒有引號機制**；`SYSTEM:` 更糟，
 另加一個 `MITM_LINGER`（預設 10 秒）上限：半關閉之後對面若不主動關（WebSocket 就是這種），
 主緒會永遠停在 `recv` 上，而**那個行程跑在使用者的 session 容器裡**。
 實測三條閒置長連線關掉之後不收，容器裡就多三顆 python3。
+
+> 這一節留下的理由：python 版的半關閉與 linger 語義正是 socat 版接手時要對齊的規格。
+> 取代的細節見文末「2026-08-27：relay 內層換成 session 容器裡的 socat」。
 
 ### 5. WebSocket 那條要 `proxy_set_header Host $http_host;`
 
@@ -258,6 +265,46 @@ socat 是 `TCP-LISTEN,fork`：**父程序不會自己結束**，所以那一圈�
 修好之後**這個數字就是最壞情況的全部**（先前要乘以 101），是最壞情況的數字就該看得見、
 調得動。
 
+## 2026-08-27：relay 內層換成 session 容器裡的 socat
+
+原本橋接的內層是 `docker exec -i <cid> python3 -c '<雙向搬運>'`——那並不是偏好，是
+**當時 session image 沒有 socat**（背景第 2 點）之下的權宜：半關閉要自己用
+`shutdown(SHUT_WR)` 分出來、WebSocket 不關時要靠 `MITM_LINGER` 計時器整個殺掉。
+image 補上 socat 之後（dev-container/Dockerfile 的 apt 那一串），內層換成：
+
+```
+control 容器內的外層 socat（TCP-LISTEN,fork）
+  → EXEC:server/mitm_bridge.sh <cid> <port> <linger>
+    → docker exec -i <cid>           （互動 stdin，**不是 -it**：TTY 會破壞 binary stream）
+      → session 容器裡的 socat -t <linger> STDIO TCP:127.0.0.1:<port>
+        → 127.0.0.1:8081 的 mitmweb
+```
+
+三個執行細節，全部實測過（socat 1.8.0，ubuntu:24.04，同 session image 的基底）：
+
+- **`MITM_LINGER` 從「python 計時器硬殺」變成 socat 的 `-t`（closewait）**：stdin EOF
+  之後最多再讓對面講 N 秒，對面先講完就先走。語義比舊的更好——慢回應在 N 秒內
+  照常完整送達（1.5s 的回應在 `-t 3` 下完整收到），只有對面真的不關才到期強收。
+  預設 closewait 只有 **0.5 秒**，所以這個值不能不給；給了也不會誤殺閒置中的活
+  WebSocket——會殺閒置連線的是 `-T`（inactivity timeout），與 `-t` 只差一個字母，
+  寫錯方向的話「開著分頁但沒流量」的連線 10 秒就斷，畫面看起來永遠不更新。
+  （socat `-t` 與 docker `-t` 的命名撞車也得當心：後者是 TTY，絕對不能用。）
+- **連線不在時的逐段回收**：瀏覽器關掉 → 外層 socat 的 fork child 半關閉 EXEC 側
+  → `docker exec` stdin EOF → 內層 socat 對 mitmweb SHUT_WR → tornado 關 → 內層
+  socat、docker exec、外層 child 依序退出。任何一段卡住，closewait 兜底。
+- **上游 8081 不在時**：內層 socat connect refuse → 非 0 退出 → `docker exec` 跟著
+  非 0，外層 child 收掉這條連線。外層 listener parent 不受影響。
+
+**Relay 的生命週期不因這次更動而改變**：
+
+- 瀏覽器關閉／WS 關閉只回收**那一條連線**的 child 鏈（外層 child、docker exec、內層
+  socat）；外層 `TCP-LISTEN` parent 繼續聽著，直到 session archive、明確 cleanup、
+  reconciler 掃殘列、或 control 容器重建。
+- session archive 時 `close_mitm_views` 仍收整條：外層 parent、所有 fork children，
+  以及（經由上面的逐段回收）尚未結束的 docker exec 與內層 socat。
+- mitmweb 本身照樣跟著 session 容器活；`NCR_MITM_WEB_BIND=127.0.0.1` 與
+  per-user network 的隔離模型**都沒有動**。
+
 ## 已知未做（fable 完整審點出來、這次刻意不處理的）
 
 - **relay 沒有一支「真 socat」的整合測試。** `test_mitm_relay` 用的是同名替身（`exec -a socat`），
@@ -276,9 +323,9 @@ socat 是 `TCP-LISTEN,fork`：**父程序不會自己結束**，所以那一圈�
 | env 覆寫的兩個方向（給了就用給的、沒給就現產且照印） | `tests/test_entrypoint_mitm_password.py`（真容器，讀 mitmweb 的 `/proc` argv） |
 | token 的導出性質（確定性、跨場不同、字母表、換金鑰即作廢） | `tests/test_mitm_token.py` |
 | 只跟 capture 成對送 | `tests/test_profile_mapping.py` |
-| relay 生命週期（port 仲裁、起收、archive 連帶收、殘列回收、位址不含空白） | `tests/test_mitm_relay.py`（假 socat） |
+| relay 生命週期（port 仲裁、起收、archive 連帶收、殘列回收、位址不含空白、橋接指令契約：`docker exec -i`、無 TTY、內層是容器裡的 socat） | `tests/test_mitm_relay.py`（假 socat） |
 | 上游沒在服務時不掃整段 port（探測擋下、迴圈只試一個、port 被占仍要換下一個） | `tests/test_mitm_relay.py`（假 socat ＋ 假 docker） |
-| 橋接對真 mitmweb（半關閉、Bearer、403、不留行程） | `tests/test_mitm_bridge.py`（真容器，不經 socat） |
+| 橋接對真 mitmweb（image 有 socat、半關閉、Bearer、403、WS 握手+雙向 frame、上游不在時非 0 收乾淨、不留行程） | `tests/test_mitm_bridge.py`（真容器，不經外層 socat） |
 | `/api/auth/mitm` 的 200/404/403/401/503 與 BEHIND_PROXY gate | `tests/test_auth.py` |
 | nginx 的 location 順序、rewrite 去前綴、Bearer 注入、`Host $http_host`、對外 404 | `tests/test_nginx_contract.py` |
 | 按鈕只在有錄製時出現、開的是 `mitm/` 子路徑 | `frontend/src/__tests__/drawer.spec.ts`、`tests/golden/drawer-open/` |

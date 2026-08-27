@@ -190,6 +190,22 @@ try:
         "🔴 有執行位元（沒有的話 socat 每條連線都失敗，而 listener 照樣起得來）", os.access(config.MITM_BRIDGE, os.X_OK)
     )
 
+    print("== 契約：橋接的內層是容器裡的 socat（docker exec -i，無 TTY，無 python 搬運）==")
+    # 資料路徑的文字契約：control socat → docker exec -i → session 內 socat → 127.0.0.1:8081。
+    # 這幾條不跑真容器（真容器那半在 test_mitm_bridge），只在這裡釘住腳本長什麼樣，
+    # 免得哪天有人把 -it 加回去（TTY 會破壞 binary stream），或把 python 版搬運請回來。
+    _bridge_src = open(config.MITM_BRIDGE, encoding="utf-8").read()
+    # 只比對真正的指令行，註解不算數：把 # 起頭的行整行剃掉再看。
+    _bridge_code = "\n".join(ln for ln in _bridge_src.splitlines() if not ln.lstrip().startswith("#"))
+    check("🔴 用 `docker exec -i`（互動 stdin）", "docker exec -i " in _bridge_code)
+    check("🔴 沒有 `-it`（TTY 會做行規則轉換，HTTP/WebSocket 的 binary 會被吃掉）", "exec -it" not in _bridge_code)
+    check(
+        "🔴 內層是容器裡的 socat（STDIO ⇄ TCP），不是手寫搬運",
+        "socat -t " in _bridge_code and "STDIO" in _bridge_code,
+    )
+    check("🔴 上游仍是容器 loopback 的 mitmweb（127.0.0.1）", "TCP:127.0.0.1:" in _bridge_code)
+    check("🔴 python 搬運真的走了（python3 -c 不再出現）", "python3 -c" not in _bridge_code)
+
     print("== 契約：容器內的 mitmweb port 與 entrypoint 的 CAPTURE_WEB_PORT 零偏差 ==")
     _ep = open(
         os.path.join(

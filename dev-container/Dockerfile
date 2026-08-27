@@ -52,9 +52,12 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && \
     #   `ca-certificates`、`nftables`。這顆容器裡住著一個會執行任意指令的 agent，
     #   少一個常用工具的代價是「它某天做不到某件事」，而症狀不會指回這一行。
     #   省下來的是 image 體積，不是攻擊面上的關鍵項目，換不過來。
+    # socat 在這串裡不是日常工具：它是 mitmweb relay 的**內層**（ADR 0021）。bridge 由
+    # 控制平面 `docker exec -i <cid> socat STDIO TCP:127.0.0.1:8081` 起動，所以可執行的
+    # binary 必須在**這個** image 裡，不能借用控制容器的。
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         curl git jq tzdata shellcheck vim openssh-client \
-        sudo iptables ipset iproute2 dnsutils && \
+        sudo iptables ipset iproute2 dnsutils socat && \
     ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
     echo "Asia/Taipei" > /etc/timezone && \
     rm -rf /var/lib/apt/lists/* && \
