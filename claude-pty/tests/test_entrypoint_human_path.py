@@ -169,9 +169,15 @@ try:
     if "容器內沒有憑證" in "".join(transcript):
         print("  SKIP  ④b 已登入進到提示畫面（沙盒沒有可複製的憑證：keychain 不算）")
     else:
-        # ⚠ Claude Code 的首頁 footer 文案會改（例如 `for shortcuts` → `for agents`），
-        #   但登入後那條 `usage credits` 提示是目前較穩的訊號，而且 login 畫面不會有。
-        idx = child.expect([r"usage credits", "for shortcuts", pexpect.TIMEOUT], timeout=60)
+        # ⚠ 這一條真正要回答的是「有憑證時到底登進去了沒」，所以**任何一個登入後才會
+        #   出現的元素都算數**，判準用併聯而不是挑一個：Claude Code 的首頁文案會改
+        #   （2026-08-27 實際踩到：`for shortcuts` → `for agents`，於是這裡逾時紅在一個
+        #   與 entrypoint 無關的地方），挑一個新的等於換一顆一樣會過期的地雷。
+        #   「沒憑證」那條路已經被 entrypoint 自己印的那句擋在前面走 SKIP，不會混進來。
+        idx = child.expect(
+            [r"usage credits|bypass permissions|for shortcuts|for agents", pexpect.TIMEOUT],
+            timeout=60,
+        )
         check("④b 已登入進到提示畫面", idx != 2)
 finally:
     with open("/tmp/claude-pty-humanpath.log", "w") as f:
