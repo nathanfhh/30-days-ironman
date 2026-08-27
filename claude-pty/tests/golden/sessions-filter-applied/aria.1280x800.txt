@@ -53,6 +53,7 @@
   - text: claude-pty-aa11bb22cc33 claude-pty-aa11bb22cc33  就緒 20 秒前確認 狀態於 2026/08/25 11:59:40 向 dockerd 求證  golden-admin claude  網路：開放  流量錄製：開  Telemetry：不送  GitLab：本場可用  opus  high 啟動 4.0 秒 已跑 3 分 0 秒 建立 3 分鐘前 2026/08/25 11:57:00 操作 最後一次有人對它操作（開終端／改尺寸）。Claude 自己在跑不會更新這個時間 2 分鐘前 2026/08/25 11:58:00
   - button " 終端"
   - button " 終止"
+  - button " 流量"
 - contentinfo:
   - text: claude-pty 0.0.0-golden
   - code: "0000000"
