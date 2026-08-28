@@ -7,7 +7,7 @@ telemetry-report.py（同資料夾）管時間與 token（來源是 Jaeger 的 t
 這支管錢（來源是 transcript 的 usage，逐請求精確）。兩支合起來才是完整的分析層。
 
 用法：
-    uv run opentelemetry/cost-report.py                          # 最新改動的 session（掃 ~/.claude/projects 全部專案）
+    uv run opentelemetry/cost-report.py                          # 最新改動的 session（掃所有 transcript 根，見 transcript_roots）
     uv run opentelemetry/cost-report.py <session.jsonl 或其目錄>  # 指定 session（目錄也可給含多場的專案目錄，取最新）
 
 角色的認法：session 目錄下 subagents/<agent-id>.meta.json 的 agentType 欄位，
@@ -226,6 +226,78 @@ def tally(paths: list[str]) -> dict:
     return agg
 
 
+# --------------------------------------------------------------------------
+# session 的落點有兩條路徑，而且**不是同一個 $HOME**
+#
+#   · run script 起的容器（TUI 那條）：host 的 $HOME 原樣掛進去，所以 transcript 在
+#     `~/.claude/projects`、審查報告的 archive 在 `~/ncr`。
+#   · 網頁（claude-pty）起的：ADR 0014 之後 session 的 `~/.claude` 與 `~/ncr` 都來自
+#     **per-user 空間** `${CLAUDE_PTY_SPACE}/user-{id}/`，host 這一側長的是
+#     `user-{id}/claude/`（沒有那個點）與 `user-{id}/ncr/`。
+#
+# 只認前者的話，網頁開的場次在這裡是**完全看不見**的：不會報錯，只是 token 與成本
+# 那幾欄整片空白、report.json 永遠顯示「未封存」，而報表本身看起來一切正常。
+#
+# space 的位置可以在 deploy/.env 改，而那份 .env 不會出現在跑報表的這個 shell 的環境裡，
+# 所以：先看 NCR_SPACE / CLAUDE_PTY_SPACE，沒有才退回 `~/claude-pty-space*` 的猜測。
+# 猜不到就把 space 用環境變數指給它——不猜第二層。
+# --------------------------------------------------------------------------
+
+
+# 派遣時沒有具名 agent 就會落到這個值：skill 的 agent 定義要在 `~/.claude/agents/`
+# 才叫得動，不在的話 SKILL.md 明寫「改用 general-purpose subagent 並帶對應的 prompt」。
+# 於是五個角色會**全部**掛成同一個字串，報表就拆不開了。
+GENERIC_AGENT_TYPE = "general-purpose"
+
+
+def role_label(meta: dict) -> str:
+    """一個 subagent 在報表裡叫什麼。
+
+    `agentType` 具名（`ncr-scan-trivy`…）就用它。掉進 general-purpose 那條 fallback 時
+    它對每個角色都是同一個字，唯一分得開的是 `description`（"Trivy scan"、"Lint scan"…）
+    ——那是派遣當下寫進 meta 的，不是猜的。
+
+    兩個都印，因為兩件事都要看得見：**是誰**（description），以及**它是 fallback**
+    （agentType）。只印後者就是現在這樣五個塌成一列；只印前者則會讓「agent 沒安裝」
+    這個真正的病灶從報表上消失，而那正是要修的東西。
+    """
+    at = (meta.get("agentType") or "").strip()
+    desc = (meta.get("description") or "").strip()
+    if at and at != GENERIC_AGENT_TYPE:
+        return at
+    if desc:
+        return f"{at or '?'}：{desc}"
+    return "（未標名的 subagent）"
+
+
+def user_spaces() -> list[str]:
+    """claude-pty 的 per-user 空間（`.../user-{id}` 那一層）。"""
+    space = os.environ.get("NCR_SPACE") or os.environ.get("CLAUDE_PTY_SPACE")
+    roots = (
+        [os.path.expanduser(space)]
+        if space
+        else sorted(glob.glob(os.path.expanduser("~/claude-pty-space*")))
+    )
+    out: list[str] = []
+    for r in roots:
+        out.extend(sorted(glob.glob(os.path.join(r, "user-*"))))
+    return [d for d in out if os.path.isdir(d)]
+
+
+def transcript_roots() -> list[str]:
+    """所有存放 session transcript 的 `projects` 目錄（host 的，加上每個 per-user 的）。"""
+    roots = [os.path.expanduser("~/.claude/projects")]
+    roots += [os.path.join(u, "claude", "projects") for u in user_spaces()]
+    return [r for r in roots if os.path.isdir(r)]
+
+
+def archive_roots() -> list[str]:
+    """所有審查報告 archive 的根（skill 的 workspace-paths 說的那個 `$HOME/ncr`）。"""
+    roots = [os.path.expanduser("~/ncr")]
+    roots += [os.path.join(u, "ncr") for u in user_spaces()]
+    return [r for r in roots if os.path.isdir(r)]
+
+
 def find_session(arg: str | None) -> tuple[str, str]:
     """回 (主 jsonl 路徑, session 目錄或空字串)。
 
@@ -251,10 +323,16 @@ def find_session(arg: str | None) -> tuple[str, str]:
             return main, base if os.path.isdir(base) else ""
         base = os.path.splitext(arg)[0]
         return arg, base if os.path.isdir(base) else ""
-    # 沒指定：掃 ~/.claude/projects 全部專案，拿最新改動的 session
-    cands = glob.glob(os.path.expanduser("~/.claude/projects/*/*.jsonl"))
+    # 沒指定：掃所有 transcript 根（host + 每個 per-user 空間），拿最新改動的 session
+    roots = transcript_roots()
+    cands = [g for r in roots for g in glob.glob(os.path.join(r, "*", "*.jsonl"))]
     if not cands:
-        sys.exit("找不到任何 session transcript（~/.claude/projects 是空的）")
+        sys.exit(
+            "找不到任何 session transcript。已找過："
+            + "、".join(roots or ["~/.claude/projects"])
+            + "（claude-pty 的 per-user 空間不在預設位置時，"
+            "用 NCR_SPACE 或 CLAUDE_PTY_SPACE 指給它）"
+        )
     main = max(cands, key=os.path.getmtime)
     base = os.path.splitext(main)[0]
     return main, base if os.path.isdir(base) else ""
@@ -300,12 +378,16 @@ def main() -> None:
                 meta = json.load(f)
             jsonl = meta_path.replace(".meta.json", ".jsonl")
             if os.path.exists(jsonl):
-                role = meta.get("agentType") or "（未標名的 subagent）"
+                role = role_label(meta)
                 roles.setdefault(role, []).append(jsonl)
     else:
         print("（沒有 subagents/ 目錄：舊格式或無派遣，只有 session 總額可算）")
 
-    widths = (30, 24, 10, 10, 12, 12, 11)
+    # 角色欄寬跟著實際內容走。寫死 30 的時候，agent 沒安裝而落到
+    # `general-purpose：Report quality check` 那種長名字會直接把 model 欄擠掉，
+    # 而 lpad 只補不截，所以症狀是整列欄位錯開、不是被截斷。
+    role_w = max(30, max(_w(r) for r in roles) + 2)
+    widths = (role_w, 24, 10, 10, 12, 12, 11)
     hdr = (
         lpad("角色", widths[0])
         + lpad("model", widths[1])

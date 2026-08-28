@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"   # 不是抄來的：mitmproxy 12.2.3 自己就要 >=3.12
 # dependencies = ["mitmproxy>=12.2.3"]   # 下限＝容器裡寫檔的那個版本，見下方說明
 # ///
 """從一顆 .mitm 算出「線上到底流過什麼」，輸出單頁 dashboard。
@@ -23,6 +23,11 @@
 遇到新格式是直接拋例外，不是盡力而為地讀。容器裡寫檔的是 12.2.3（格式 v21），所以
 這裡的相依下限就釘在同一個版本。用 `uv run` 執行這支腳本會拿到它自己的環境，
 不會誤用到 host 上那支可能很舊的 mitmproxy。
+
+⚠ **`requires-python` 要跟著相依走，不是跟著同資料夾的其他腳本走。** mitmproxy 12.2.3
+自己要求 `>=3.12`；這裡寫 `>=3.11` 的話，在預設解譯器是 3.11 的機器上 `uv run` 會直接
+解不出相依而中止（"the current Python version (3.11.5) does not satisfy Python>=3.12"），
+而錯誤訊息講的是 mitmproxy、不是這個標頭，所以第一眼會以為是套件裝壞了。
 
 用法：
 

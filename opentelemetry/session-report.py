@@ -103,18 +103,31 @@ def fetch_spans(
     return by_sid, all_sids, len(data) >= limit
 
 
-def role_of(span: dict, spans: dict, dispatch: dict) -> str:
+def role_of(span: dict, spans: dict, dispatch: dict, labels: dict | None = None) -> str:
+    """沿父子鏈往上找派遣 span，撞到誰就屬於誰。
+
+    ⚠ **`labels` 優先於 span 上的 `subagent_type`。** 那個標籤在 agent 沒安裝時會是
+    `general-purpose`——五個角色同一個字，甘特圖上就塌成一列。transcript 的
+    `subagents/*.meta.json` 帶著 `toolUseId`，與派遣 span 的 `tool_use_id` 是同一個值，
+    所以兩邊接得起來，接上之後拿得到 `description` 這個真正分得開角色的東西。
+    對照表拿不到（沒有 transcript）就退回原本的標籤，不猜。
+    """
     p, seen = span.get("_parent"), set()
     while p and p in spans and p not in seen:
         seen.add(p)
         if p in dispatch:
-            return dispatch[p].get("subagent_type") or "（未標名的 subagent）"
+            tags = dispatch[p]
+            by_id = (labels or {}).get(tags.get("tool_use_id"))
+            return by_id or tags.get("subagent_type") or "（未標名的 subagent）"
         p = spans[p]["_parent"]
     return MAIN_ROLE
 
 
-def collect_roles(spans: dict) -> tuple[dict, list[dict]]:
-    """回 (每角色聚合, 甘特用的 span 清單)。純函式，測試從這裡進。"""
+def collect_roles(spans: dict, labels: dict | None = None) -> tuple[dict, list[dict]]:
+    """回 (每角色聚合, 甘特用的 span 清單)。純函式，測試從這裡進。
+
+    `labels`：toolUseId → 角色名，來自 transcript（見 role_of）。不給就純看 span。
+    """
     dispatch = {
         k: v
         for k, v in spans.items()
@@ -123,7 +136,7 @@ def collect_roles(spans: dict) -> tuple[dict, list[dict]]:
     agg: dict[str, dict] = defaultdict(lambda: {"first": None, "last": 0, "llm_us": 0})
     chart: list[dict] = []
     for s in spans.values():
-        r = role_of(s, spans, dispatch)
+        r = role_of(s, spans, dispatch, labels)
         a = agg[r]
         end = s["_start"] + s["_dur"]
         a["first"] = s["_start"] if a["first"] is None else min(a["first"], s["_start"])
@@ -169,22 +182,34 @@ def hit_rate(tk: dict) -> float | None:
     return tk.get("cr", 0) / denom if denom else None
 
 
-def collect_transcript(sid: str) -> dict:
-    """每角色 token / 成本 / model，來自 transcript。找不到就回空 dict。"""
-    hits = glob.glob(os.path.expanduser(f"~/.claude/projects/*/{sid}.jsonl"))
+def collect_transcript(sid: str) -> tuple[dict, dict]:
+    """回 (每角色的 token/成本/model, toolUseId → 角色名)。找不到 transcript 就回兩個空 dict。
+
+    第二項是給 trace 那側用的：兩邊的角色名必須逐字相同，同一個角色才不會在報表裡
+    裂成兩列（一列有時間沒 token、一列有 token 沒時間）。
+    """
+    # 兩條路徑都要找（見 cost-report.py 的 transcript_roots）：run script 那條在
+    # host 的 ~/.claude，網頁那條在 claude-pty 的 per-user 空間底下。
+    hits = [
+        g
+        for r in costmod.transcript_roots()
+        for g in glob.glob(os.path.join(r, "*", f"{sid}.jsonl"))
+    ]
     if not hits:
-        return {}
+        return {}, {}
     main_jsonl = hits[0]
     base = os.path.splitext(main_jsonl)[0]
     role_files = {MAIN_ROLE: [main_jsonl]}
+    labels: dict[str, str] = {}
     for mp in glob.glob(os.path.join(base, "subagents", "*.meta.json")):
         with open(mp) as f:
             meta = json.load(f)
+        role = costmod.role_label(meta)
+        if meta.get("toolUseId"):
+            labels[meta["toolUseId"]] = role
         jl = mp.replace(".meta.json", ".jsonl")
         if os.path.exists(jl):
-            role_files.setdefault(
-                meta.get("agentType") or "（未標名的 subagent）", []
-            ).append(jl)
+            role_files.setdefault(role, []).append(jl)
     out: dict[str, dict] = {}
     for role, files in role_files.items():
         per_model = costmod.tally(files)
@@ -198,22 +223,28 @@ def collect_transcript(sid: str) -> dict:
                 tk["cost"] += c
             tk["model"] = model.removeprefix("claude-")
         out[role] = tk
-    return out
+    return out, labels
 
 
-def find_report_json(t0_us: int, t1_us: int, root: str = "~/ncr") -> dict | None:
+def find_report_json(t0_us: int, t1_us: int, root: str | None = None) -> dict | None:
     """在 archive 找屬於這個 session 的 report.json。
 
     report.json 沒有記 session id，只能用時間比對：報告寫檔（含發佈後回寫）發生在
     session 活動範圍內或其後不久，所以判準是「mtime 落在 [t0−1h, t1＋6h] 視窗內、
     且離 session 結束最近的一份」。視窗內沒有 → 回 None——寧可顯示未封存，不亂配。
+
+    `root` 不給就找**所有** archive 根：host 的 `~/ncr`，加上 claude-pty 每個 per-user
+    空間底下的那一份（見 cost-report.py 的 archive_roots）。給了就只找那一個。
     """
     lo = t0_us / 1e6 - 3600
     hi = t1_us / 1e6 + 6 * 3600
     best: tuple[float, dict] | None = None
-    for p in glob.glob(
-        os.path.expanduser(f"{root.rstrip('/')}/**/*.json"), recursive=True
-    ):
+    cands = [
+        g
+        for r in ([os.path.expanduser(root)] if root else costmod.archive_roots())
+        for g in glob.glob(os.path.join(r, "**", "*.json"), recursive=True)
+    ]
+    for p in cands:
         mt = os.path.getmtime(p)
         if not (lo <= mt <= hi):
             continue
@@ -515,9 +546,11 @@ def main() -> None:
             f"前綴 {args.session} 命中 {len(by_sid)} 場：{hits}\n請給更長的前綴，一場一報，不合併。"
         )
     sid, spans = next(iter(by_sid.items()))
-    agg, chart = collect_roles(spans)
+    # transcript 先讀：它帶著 toolUseId → 角色名的對照，trace 那側要靠它才分得開
+    # 那些全部掛成 general-purpose 的派遣（見 role_of）。
+    tokens, labels = collect_transcript(sid)
+    agg, chart = collect_roles(spans, labels)
     gaps = find_gaps(chart)
-    tokens = collect_transcript(sid)
     t0 = min(a["first"] for a in agg.values())
     t1 = max(a["last"] for a in agg.values())
     report = find_report_json(t0, t1)
