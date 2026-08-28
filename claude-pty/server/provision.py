@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 from contextlib import suppress
 
@@ -74,6 +75,144 @@ def _claude_json_seed() -> dict:
         # 不可以寫死字面值。
         "projects": {config.WORKDIR: {"hasTrustDialogAccepted": True}},
     }
+
+
+def _open_child_dir(parent_fd: int, name: str) -> int:
+    """在 `parent_fd` 底下建（若無）並開啟子目錄，確認它**真的是目錄**。
+
+    ⚠ 這一層住在 `claude/` 底下，而 `claude/` 是 session 容器的 rw 掛載——掛載點本身
+    容器換不掉，**它裡面的東西容器換得掉**。所以不能用字串路徑 `makedirs`／`copytree`：
+    容器把 `skills` 換成一條指向別處的連結之後，控制平面就會以自己的身分照著那條連結
+    去別的地方建目錄、寫檔案。這正是 `persistent-data/uploads` 那段在防的事，換一個
+    目錄名不會換一個結論。
+    """
+    with suppress(FileExistsError):
+        os.mkdir(name, 0o700, dir_fd=parent_fd)
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
+    except OSError as e:
+        # 開不起來＝它不是一個正常目錄（被換成連結或普通檔）。**拒絕開場**，不是繞過：
+        # 繞過等於接受一個已經被動過手腳的空間。
+        raise SessionError(
+            f"使用者空間裡的 claude/{name} 不是一個正常目錄（{e}）。"
+            f"這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
+        ) from e
+    with suppress(OSError):
+        os.fchmod(fd, 0o700)
+    return fd
+
+
+def _replace_tree(dest_dir: str, name: str, src: str) -> None:
+    """把 `src` 這棵樹整個換到 `dest_dir/name`（先刪後複製）。
+
+    先刪再建，不是就地覆寫：覆寫留得下上一版多出來的檔案（skill 改名、reference 刪掉），
+    而那些殘檔會被模型照樣讀進去。symlink 直接拒絕——`shutil.rmtree` 本來就不肯對
+    symlink 動手，這裡明著擋一次，錯誤訊息才講得出發生什麼事。
+    """
+    target = os.path.join(dest_dir, name)
+    if os.path.islink(target):
+        raise SessionError(
+            f"使用者空間裡的 {target} 是一條 symlink，不是目錄。"
+            f"這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
+        )
+    shutil.rmtree(target, ignore_errors=True)
+    shutil.copytree(src, target, symlinks=True)
+
+
+def _write_agent(agents_fd: int, name: str, body: bytes) -> None:
+    """把一份 agent 定義寫進 `claude/agents/<name>`，不跟著任何連結走。
+
+    ⚠ **不可以用 `shutil.copyfile`。** 它開目的地是 `open(dst, "wb")`——**跟著目的地的
+    symlink 走**：truncate 連結指到的那個檔，連結本身原封不動留著。而 `claude/agents/`
+    是 session 容器寫得到的，於是容器裡放一條
+    `ncr-fresh-eyes.md → ../../../user-2/owner.json`（相對連結在容器裡是斷的，在 host
+    側那一層解析出來正好是別人的空間），下一場 provision 就會以控制平面的身分把別人的
+    `owner.json` 蓋成一份 markdown——那個使用者從此永久撞「擁有者標記讀不出來」開不了場。
+    同一手可以指向 registry 的 SQLite，或任何 APP_UID 寫得到的檔。
+    **沒有競速視窗，一次就成**（2026-08-28 實測）。
+
+    所以：先 unlink（連結本身就是這樣被拆掉的，而不是被寫穿），再用
+    `O_CREAT|O_EXCL|O_NOFOLLOW` 對著 `agents_fd` 建新檔——中間被搶著補一條連結進來的話
+    `O_EXCL` 會擋下，寧可拒絕開場也不寫出去。
+    """
+    with suppress(OSError):
+        os.unlink(name, dir_fd=agents_fd)
+    try:
+        fd = os.open(
+            name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=agents_fd,
+        )
+    except OSError as e:
+        raise SessionError(
+            f"寫不進使用者空間的 claude/agents/{name}（{e}）。"
+            f"這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
+        ) from e
+    try:
+        os.write(fd, body)
+    finally:
+        os.close(fd)
+
+
+def sync_skills_and_agents(root: str) -> list[str]:
+    """把 repo 的 `skills/` 與各 skill 的 `agents/*.md` 鋪進這個使用者的 `claude/`。
+
+    回傳這次鋪進去的 skill 名稱（測試與 log 用）。來源不在就什麼都不做——**不是錯**：
+    有人只想用容器跑別的東西，沒有 skill 也該開得起來。
+
+    每次開場都重鋪一遍，所以這裡同時是安裝與自我修復：repo 改了一行，下一場就吃得到，
+    而使用者在容器裡把 skill 改壞了，下一場自己會好。ADR 0022。
+
+    ⚠ **`agents/*.md` 要另外鋪一份到 `claude/agents/`。** 那是 Claude Code 真正認的位置；
+      只把它們留在 `skills/<name>/agents/` 底下等於沒安裝，而沒安裝**不會報錯**——
+      skill 會退到「用 general-purpose subagent 帶同一份 prompt」那條 fallback，
+      掃描照跑、報表卻分不出誰是誰（見 config.SKILLS_SRC_SELF）。
+    """
+    src_root = config.SKILLS_SRC_SELF
+    if not os.path.isdir(src_root):
+        return []
+    skills = sorted(
+        d for d in os.listdir(src_root) if os.path.isdir(os.path.join(src_root, d))
+    )
+    if not skills:
+        return []
+
+    claude_fd = os.open(
+        os.path.join(root, "claude"), os.O_RDONLY | os.O_DIRECTORY
+    )
+    try:
+        skills_fd = _open_child_dir(claude_fd, "skills")
+        agents_fd = _open_child_dir(claude_fd, "agents")
+    finally:
+        os.close(claude_fd)
+    try:
+        # fd 驗過之後才換回字串路徑做樹的複製。`/proc/self/fd/<fd>` 是核心維護的
+        # magic symlink，每次 syscall 都解析回**那個 fd 指的 inode**，所以驗過什麼就寫進
+        # 什麼——中途有人把 `skills` 換掉也影響不到這裡。
+        # ⚠ **不可以對它做 `os.path.realpath()`。** realpath 會把它攤平成一個**字串路徑**，
+        #   而字串路徑之後每個 syscall 都會重走一次名稱解析——O_NOFOLLOW 驗過的結果當場作廢，
+        #   容器只要在驗證後把 `skills` rename 掉再補一條 symlink 就能讓寫入落到別處，
+        #   而且不必競速。（rmdir 的版本更陰：realpath 會回 `.../skills (deleted)`，
+        #   於是 copytree 靜靜建一個叫那個名字的目錄，skill 永遠沒鋪上且不報錯。）
+        #   2026-08-28 實測兩種行為。
+        skills_dir = f"/proc/self/fd/{skills_fd}"
+        for name in skills:
+            _replace_tree(skills_dir, name, os.path.join(src_root, name))
+            # 一檔兩用：agents/*.md 既是 skill 的一部分（上面那棵樹裡有），也要單獨
+            # 出現在 agents/ 才叫得動。檔名直接用原檔名，與 install.sh 的連法一致。
+            src_agents = os.path.join(src_root, name, "agents")
+            if not os.path.isdir(src_agents):
+                continue
+            for md in sorted(os.listdir(src_agents)):
+                if not md.endswith(".md"):
+                    continue
+                with open(os.path.join(src_agents, md), "rb") as fh:
+                    _write_agent(agents_fd, md, fh.read())
+    finally:
+        os.close(skills_fd)
+        os.close(agents_fd)
+    return skills
 
 
 def provision_user_space(user_id: int, username: str) -> None:
@@ -197,6 +336,10 @@ def provision_user_space(user_id: int, username: str) -> None:
             f"繼續下去會把別人的對話與 capture 交給現在這個帳號。請人工確認後"
             f"改名或移走那個目錄再試。"
         )
+
+    # ⚠ 位置有講究：**擁有者驗證之後**（不確定這個空間屬於誰就不該往裡面鋪東西），
+    #   **`.claude.json` 那段之前**（那段有一條 early return，擺在後面會被跳過）。
+    sync_skills_and_agents(root)
 
     seed_path = os.path.join(root, "claude", ".claude.json")
     try:

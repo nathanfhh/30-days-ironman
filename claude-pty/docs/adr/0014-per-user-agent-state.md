@@ -8,7 +8,7 @@
 mount。如果那份目錄是**共用**的，續命的代價就是使用者 A 能 `/resume` 到 B 的對話、讀寫
 B 的 transcript。這份 ADR 就是把狀態層切成 per-user 的那次變更。
 
-動手前先盤點：設定目錄（transcript / settings / skills）、`.claude.json`（onboarding
+動手前先盤點：設定目錄（transcript / settings / skills / **agents**）、`.claude.json`（onboarding
 狀態、專案清單）、錄製產出（`.mitm` 裡有 prompt 全文，比 transcript 更敏感）——都含使用者
 資料，都要隔離。而 `config.WORKDIR` 本來就沒掛（它是容器 writable layer，terminate 就
 消失），所以 cwd 不必額外處理，只需**維持不動**（`/resume` 按 cwd 分桶，同一人的前後
@@ -21,11 +21,18 @@ B 的 transcript。這份 ADR 就是把狀態層切成 per-user 的那次變更�
 ```
 ${CLAUDE_PTY_SPACE}/user-{userId}/
 ├── claude/            → /home/nathan/.claude       （rw；含 .claude.json）
+│   ├── skills/<name>/     skill 本體（provision 開場時從 repo 複製，ADR 0022）
+│   └── agents/<name>.md   subagent 定義（同上，但**要另外鋪一份**，見下）
 ├── persistent-data/   → /home/nathan/persistent-data（rw；給使用者自己放東西）
 └── ncr/               → /home/nathan/ncr            （rw）
     ├── mitm/          錄製產出（entrypoint.sh 的 CAPTURE_DIR）
     └── {group}/{repo}/…  審查報告的 archive
 ```
+
+⚠ **`agents/` 這一項是後來補的（ADR 0022），這份 ADR 最初的盤點漏了它。** 漏掉的代價
+不是「agent 不能用」這種看得見的壞，而是 skill 會**靜靜地**退到「改用 general-purpose
+subagent 帶同一份 prompt」那條 fallback：掃描照跑、報告照出，只有事後看報表時會發現
+每個角色都叫 general-purpose、拆不開誰花了多少。清單漏了什麼，實作就漏了什麼。
 
 ⚠ 第三項掛的是**那個根**（`config.NCR_HOME_BIND`），不是 `mitm/`。容器內兩條寫入路徑
 （錄製與報告）都落在它底下，只掛一個根就同時涵蓋——而且**不可以**把 `mitm/` 另外再掛
@@ -57,7 +64,7 @@ iCloud Drive 常同步 Documents——執行期狀態會被送上雲，而且檔
 
 ### 憑證是另一個模型：每人自己的 setup-token
 
-per-user 空間切的是 transcript / 設定 / skills / 錄製。**憑證不走這條**——每個使用者在
+per-user 空間切的是 transcript / 設定 / skills / agents / 錄製。**憑證不走這條**——每個使用者在
 自己的機器上執行 `claude setup-token`，把輸出貼到帳號管理頁，控制平面加密存 DB
 （金鑰由 `SECRET_KEY` 導出），開場時交給那一場的 CLI。所以憑證天生 per-user，
 host 上不需要準備任何憑證檔（也不去讀——那種「檔案在就順便用」的後路是一條平常不走、

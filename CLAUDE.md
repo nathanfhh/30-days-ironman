@@ -9,7 +9,8 @@ Claude Code skills, and the tests that keep their scripts honest.
 ├── skills/<skill-name>/       一個 skill 一個目錄
 │   ├── SKILL.md               入口，frontmatter 有 name / description / version
 │   ├── references/            隨用隨讀的參考文件
-│   ├── agents/                subagent 定義（會被 install.sh 另外連進 ~/.claude/agents）
+│   ├── agents/                subagent 定義（install.sh 另外連進 ~/.claude/agents；
+│   │                          claude-pty 那條由 provision 另外複製一份，見 ADR 0022）
 │   ├── assets/                樣板
 │   └── scripts/               PEP 723 單檔腳本，用 `uv run <script>` 執行
 ├── tests/                     所有 skill 共用一組測試

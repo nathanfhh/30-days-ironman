@@ -71,6 +71,16 @@ def host_is_linux() -> bool:
 ENTRYPOINT_SH_SELF = os.path.join(_SELF_REPO_ROOT, "dev-container", "entrypoint.sh")
 ENTRYPOINT_SH = os.path.join(HOST_REPO_ROOT, "dev-container", "entrypoint.sh")
 
+# skill 與 subagent 定義的來源（ADR 0022）。**只有 SELF 這一側**：這兩樣不是掛進 session
+# 的，是 provision 在開場時從 repo 複製進使用者空間的，複製的動作發生在控制平面自己身上，
+# 從頭到尾用不到 host 路徑。
+# ⚠ `agents/` 要跟 `skills/` **分開**鋪：Claude Code 認的 subagent 定義在
+#   `~/.claude/agents/`，不是 `~/.claude/skills/<name>/agents/`。install.sh 也是分兩步連的
+#   （skill 一次、agents 一次）——只鋪前者的話 skill 叫得動、agent 叫不動，而那個症狀不會
+#   報錯：SKILL.md 明寫「agent 沒安裝就改用 general-purpose」，於是每個角色都掛成同一個
+#   字串，掃描照跑、報表卻拆不開誰是誰。
+SKILLS_SRC_SELF = os.path.join(_SELF_REPO_ROOT, "skills")
+
 # --- session 執行 profile 預設（ADR 0006）---------------------------------------
 # 預設 restricted（白名單出網），與 run script 的預設一致——安全預設應該是「限制」而非
 # 「開放」，要放行是明確的選擇。代價：需要 NET_ADMIN 與 session network 存在；啟動

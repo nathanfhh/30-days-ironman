@@ -23,6 +23,32 @@
 `agents/ncr-*.md` 當 prompt 讀進去。差別只在 transcript 裡看到的 `subagent_type`，
 以及能不能釘住模型。
 
+### 怎麼確認 agents 真的裝到了
+
+那條 fallback **不會報錯**，所以它壞掉的時候唯一的訊號在事後的報表上：每個角色的
+`subagent_type` 都是 `general-purpose`，五個軌道塌成一列，「誰花了多少時間與錢」
+就答不出來了。掃描本身照跑、結論照出，從審查結果完全看不出來。
+
+當場檢查：
+
+```bash
+ls ~/.claude/agents/ncr-*.md          # 應該有六個
+```
+
+事後檢查（審查跑完之後）：
+
+```bash
+uv run opentelemetry/cost-report.py            # 角色欄位長什麼樣
+```
+
+看到 `general-purpose：Trivy scan` 這種前綴，就代表那一場走的是 fallback
+（冒號後面是報表從 `subagents/*.meta.json` 的 `description` 還原出來的角色）。
+裝好的話看到的會是 `ncr-scan-trivy`。
+
+⚠ **網頁（claude-pty）那條路徑不吃 `install.sh`。** 它的 `~/.claude` 是 per-user 空間，
+由控制平面在開場時自己鋪 skill 與 agents（ADR 0022）；host 上連好的 symlink 進不去。
+那條路徑上這件事壞掉時的檢查點在 `${CLAUDE_PTY_SPACE}/user-{id}/claude/agents/`。
+
 ## 環境需求
 
 | 項目 | 用途 | 沒有的話 |

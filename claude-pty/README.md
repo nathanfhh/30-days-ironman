@@ -121,6 +121,33 @@ docker run --rm -v "$HOME/.cache/ncr-trivy":/old \
   - docker socket proxy 只能按 API 類別過濾，而這套系統**本來就要**建容器、掛目錄，
     proxy 擋不住「建一顆帶特權掛載的容器」這種在放行類別內的濫用
 
+## skill 與 agents：網頁這條路徑跟 TUI 不一樣
+
+session 容器裡的 `~/.claude` **不是** host 那一份（ADR 0014），而是
+`${CLAUDE_PTY_SPACE}/user-{id}/claude/`。所以 `install.sh` 在 host 上連好的 skill 與
+subagent 定義，網頁開的 session **看不到**——那是 run script 那條路徑靠「整個掛 host 的
+`~/.claude`」順帶得到的。
+
+控制平面在開場時自己鋪（ADR 0022）：
+
+```
+<repo>/skills/<name>/            → user-{id}/claude/skills/<name>/
+<repo>/skills/<name>/agents/*.md → user-{id}/claude/agents/*.md      ← 另外一份
+```
+
+⚠ **`agents/*.md` 那一行是分開的，不是重複。** Claude Code 認的 subagent 定義在
+`~/.claude/agents/`，不是 `~/.claude/skills/<name>/agents/`。只鋪前者的話 skill 叫得動、
+agent 叫不動，而且**不會報錯**：skill 會退到「用 general-purpose subagent 帶同一份
+prompt」那條 fallback，掃描照跑、報告照出，只有事後看報表時會發現每個角色都叫
+general-purpose、拆不開誰花了多少時間與錢。
+
+每場重鋪，所以安裝與自我修復是同一件事：repo 改一行下一場就吃得到，容器裡改壞了下一場
+自己會好。要改就改 repo。
+
+⚠ **覆寫的範圍只到 repo 裡有的那些名字，兩邊都不 prune。** repo 移除掉的 skill 目錄或
+agent 檔會留在使用者空間裡（`claude/agents/` 使用者自己放得進東西，開場順手掃掉不是
+provision 該有的權力）。刪一個 agent 要人工清，否則模型還是叫得動它。
+
 ## 安全邊界：先講清楚，再談功能
 
 **開帳號給誰，就等於請他信任你。** 這套系統的營運者（拿得到部署機、`.env`、資料庫
