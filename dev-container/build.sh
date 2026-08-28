@@ -13,6 +13,7 @@
 #   ./build.sh                                   # 就這樣
 #   ./build.sh --build-arg GITLAB_SSH_HOST=…     # 其餘參數原樣透傳
 #   ./build.sh --load                            # 若 active builder 是 docker-container，要顯式載回本機 daemon
+#   ./build.sh --builder extdns --load          # daemon 的 DNS 是純內網時（這台就是）：換能出外網的 builder 再載回
 #   NCR_IMAGE=my-tag ./build.sh                  # 換 tag
 #
 # 完整推導見 claude-pty/docs/adr/0017-uid-alignment.md。

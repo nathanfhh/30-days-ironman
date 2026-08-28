@@ -17,13 +17,16 @@ WebSocket 的紀錄要等連線關閉才寫得出完整的一筆，那條路徑�
 原始 flow 寫出去，那就沒有意義了）：
 
     mitmweb -q --listen-host 127.0.0.1 --listen-port 8880 \\
+        --set stream_large_bodies=1 \\
         --set store_streamed_bodies=true \\
         -s mitm/capture_addon.py \\
         --set capture_out=/path/flows-<時間>.mitm \\
         --set capture_hosts=api.anthropic.com
 
-`store_streamed_bodies=true` 是必要的：沒有它，SSE 的 body 在 response hook
-的當下還沒就位，錄出來的回應會是空的。
+`stream_large_bodies=1` 是必要的：mitmproxy 預設不串流，整條 SSE 會 buffer 到結束
+才交給 client，模型一步想太久 Claude Code 就會判「No response from API」。
+`store_streamed_bodies=true` 也是必要的：串流開了之後，沒有它 SSE 的 body 在
+response hook 的當下就不在了，錄出來的回應會是空的。兩個要一起設。
 
 產出就是一顆正常的 .mitm，mitmweb -r 跟 mitm/wire_report.py 都讀得動。
 """

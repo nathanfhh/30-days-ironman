@@ -133,12 +133,17 @@ start_capture() {
     # 用 mitmweb 而不是 mitmdump，是為了那個網頁 UI——錄的當下就看得到，
     # 不必等收工後才知道錄到了什麼。
     # 不加 -w：內建的 save addon 排在我們前面，會先把未脫敏的原始 flow 寫出去。
-    # store_streamed_bodies：SSE 的 body 要靠它才會在 response hook 就位。
+    # stream_large_bodies=1：mitmproxy 預設**不串流**回應，整條 SSE 會 buffer 到串流結束才交給
+    # client（mitmproxy#4469）。模型一步想超過 Claude Code 的等待上限（實測 198 秒）就變成
+    # 「API Error: No response from API」，而且重送同一個 request 一樣久、一樣失敗——症狀是
+    # 「錄一陣子、context 變長之後才開始斷」。設成 1 byte ＝ 什麼都串流。
+    # store_streamed_bodies：串流開了之後 body 才不會在 response hook 缺席；兩個要一起設。
     nohup mitmweb -q \
         --listen-host "$CAPTURE_PROXY_HOST" --listen-port "$CAPTURE_PROXY_PORT" \
         --no-web-open-browser \
         --web-host "$CAPTURE_WEB_BIND" --web-port "$CAPTURE_WEB_PORT" \
         --set web_password="$token" \
+        --set stream_large_bodies=1 \
         --set store_streamed_bodies=true \
         -s "$CAPTURE_ADDON" \
         --set capture_out="$flow_file" \

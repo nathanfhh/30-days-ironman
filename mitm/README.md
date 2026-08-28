@@ -174,6 +174,7 @@ WebSocket 沒做，不是漏掉。`.mitm` 是一串一寫定就不再改的紀�
 
 ```bash
 mitmweb -q --listen-host 127.0.0.1 --listen-port 8880 \
+    --set stream_large_bodies=1 \
     --set store_streamed_bodies=true \
     -s mitm/capture_addon.py \
     --set capture_out=./flows.mitm \
@@ -184,6 +185,9 @@ NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem \
     claude
 ```
 
-`store_streamed_bodies=true` 是必要的：沒有它，SSE 的 body 在 response hook 的當下
-還沒就位，錄出來的回應是空的。**不要**加 `-w`：內建的存檔 addon 排在前面，會先把
+`stream_large_bodies=1` 是必要的：mitmproxy 預設**不串流**回應，整條 SSE 會 buffer 到
+串流結束才交給 client（mitmproxy#4469）。模型一步想超過 Claude Code 的等待上限（實測約
+198 秒）就變成「API Error: No response from API」，重送也一樣。`store_streamed_bodies=true`
+同樣必要：串流開了之後，沒有它 SSE 的 body 在 response hook 的當下已經流走，錄出來的回應
+是空的。兩個要一起設。**不要**加 `-w`：內建的存檔 addon 排在前面，會先把
 未脫敏的原始 flow 寫出去。
