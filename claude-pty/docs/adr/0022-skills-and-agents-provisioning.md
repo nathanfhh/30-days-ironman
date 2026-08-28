@@ -57,17 +57,61 @@ general-purpose subagent 並帶對應的 prompt」，於是：
 ——容器可以把 `claude/skills` 刪掉、換成一條指向別處的 symlink，然後控制平面就會以
 自己的身分照著那條連結去別的地方建目錄、寫檔案。
 
-所以 `skills` 與 `agents` 這兩層走 `mkdir` + `O_NOFOLLOW` 開 fd 驗過是真目錄，才用
-`/proc/self/fd/<fd>` 當前綴做樹的複製。不是目錄就**拒絕開場**，不繞過：繞過等於接受一個
-已經被動過手腳的空間。
+所以 `skills` 與 `agents` 這兩層走 `mkdir` + `O_NOFOLLOW` 開 fd 驗過是真目錄，才動樹。
+不是目錄就**拒絕開場**，不繞過：繞過等於接受一個已經被動過手腳的空間。
 
-⚠ **`/proc/self/fd/<fd>` 要原樣用，不可以先 `os.path.realpath()`。** 它是核心維護的
-magic symlink，每次 syscall 都解析回那個 fd 指的 inode——驗過什麼就寫進什麼。realpath 會
-把它攤平成一個**字串路徑**，而字串路徑之後每個 syscall 都重走一次名稱解析，O_NOFOLLOW
-驗過的結果當場作廢：容器只要在驗證後把 `skills` rename 掉再補一條 symlink，寫入就落到
-別處，而且不必競速。rmdir 的版本更陰——realpath 回 `.../skills (deleted)`，於是靜靜建出
-一個叫那個名字的目錄，skill 永遠沒鋪上且不報錯。這一版初稿就是這樣寫錯的，
-2026-08-28 的驗收實測抓到。
+`mkdir` 與 `O_NOFOLLOW` 是一組，缺一不可：`mkdir` 對「這個名字已經是一條 symlink」回的是
+EEXIST、**不會跟著連結走**，而 `O_NOFOLLOW`（配 `O_DIRECTORY`）把那條 EEXIST 兜起來，
+名字被佔住時拒絕開。所以**不可以改寫成 `makedirs(..., exist_ok=True)`**：它吞掉 EEXIST
+之後還會多做一次 `os.path.isdir()`，而那是解析連結的檢查，指向目錄的連結會被判成「已經
+有了，沒事」，下一步就照著走出去。另外，判斷「它是不是被換掉了」**只能看 open 有沒有
+失敗，不可以拿 errno 分型別**：同一個 `O_NOFOLLOW|O_DIRECTORY` 打在 symlink 上，macOS 回
+ENOTDIR、Linux 回 ELOOP。
+
+### ⚠ 已被取代（2026-08-28）：`/proc/self/fd/<fd>` 當前綴
+
+初版是把驗過的 fd 轉成 `/proc/self/fd/<fd>` 字串再交給 `shutil.copytree`。**當初的理由
+仍然成立，值得留著**：那是核心維護的 magic symlink，每次 syscall 都解析回那個 fd 指的
+inode，所以驗過什麼就寫進什麼；而且**不可以先 `os.path.realpath()`**：realpath 會把它攤平
+成一個字串路徑，之後每個 syscall 都重走一次名稱解析，O_NOFOLLOW 驗過的結果當場作廢：
+容器只要在驗證後把 `skills` rename 掉再補一條 symlink，寫入就落到別處，而且不必競速；
+rmdir 的版本更陰：realpath 回 `.../skills (deleted)`，於是靜靜建出一個叫那個名字的目錄，
+skill 永遠沒鋪上且不報錯。這一版初稿就是這樣寫錯的，2026-08-28 的驗收實測抓到。
+
+**它被換掉的原因是 `/proc` 只有 Linux 有。** macOS 上根本沒有那個檔案系統，於是
+`OSError: [Errno 30] Read-only file system: '/proc'` 讓四支測試同時紅，其中兩支
+（`test_upload`、`test_profile_mapping`）與這個功能完全無關，是被拖紅的。
+
+### 現在的做法：staging + rename，fd 全程不落地成路徑
+
+```python
+staging = tempfile.mkdtemp(dir=root, prefix=".skills-")   # root＝<space>/user-N/
+shutil.copytree(src, os.path.join(staging, name), symlinks=True)
+shutil.rmtree(name, dir_fd=skills_fd, ignore_errors=True)
+os.rename(os.path.join(staging, name), name, dst_dir_fd=skills_fd)
+```
+
+三個前提，缺一個這段就不安全：
+
+1. **`shutil.rmtree` 從 Python 3.11 起支援 `dir_fd=`**（pyproject 的
+   `requires-python = ">=3.11"` 正好在線上），macOS 上 `shutil._use_fd_functions` 也是
+   True，內部走的就是 fd 相對的 `_rmtree_safe_fd`，它逐層 `O_NOFOLLOW` 開、再比對
+   st_dev/st_ino。**不要自己寫一支 `_rmtree_at`**，自己寫只會少幾道。
+2. **`os.rename(..., dst_dir_fd=)` 的目的端最後一個路徑元件不解析 symlink。** 目的地是
+   symlink 而來源是目錄 → ENOTDIR；目的地是非空目錄 → ENOTEMPTY。**兩種都是失敗，
+   不是誤寫到別處**（2026-08-28 實測，`/etc` 完好）。這就是取代 `/proc/self/fd` 的關鍵。
+3. **暫存目錄放在 `root`（`<space>/user-N/`）而不是 `claude/` 底下。** `config.user_mounts()`
+   只把 `claude/`、`persistent-data/`、`ncr/` 這三層掛進容器，**root 那一層容器碰不到**，
+   所以那裡是可信地面，可以放心用字串路徑組樹。**改 `user_mounts()` 要回來看這裡。**
+
+名字用 `tempfile.mkdtemp` 不用 pid（同 `_write_json_atomic` 的警告：控制平面是 threaded，
+同一個使用者同時開兩場是正常的）。`sync_skills_and_agents` 開頭會順手清掉 `root` 底下的
+舊 `.skills-*`：硬 kill（OOM、重新部署）會留。
+
+所有 `OSError`（rename 的 ENOTDIR／ENOTEMPTY／EEXIST、mkdtemp 與 copytree 的失敗）與
+`RecursionError`（容器可以在目的地造一棵萬層深的樹，把遞迴版本的 rmtree 爆掉；3.13 的
+`_rmtree_safe_fd` 已改成堆疊式，3.11／3.12 還是遞迴）都轉成 `SessionError`。不接的話
+使用者拿到的是 500 HTML traceback，`app.py` 只有 `SessionError` 的 errorhandler。
 
 **`claude/agents/` 底下的個別檔案要對著 fd 寫，不可以 `shutil.copyfile`。** 那支函式開
 目的地是 `open(dst, "wb")`——跟著目的地的 symlink 走：truncate 連結指到的檔，連結留著。
@@ -91,15 +135,33 @@ magic symlink，每次 syscall 都解析回那個 fd 指的 inode——驗過什
   代價是「repo 刪掉一個 agent」不會傳播出去，要人工清。
 - 只掃 `skills/` 底下的**第一層目錄**，散檔略過；兩個 skill 有同名 agent 檔的話後鋪的
   蓋前鋪的（與 `install.sh` 的 symlink 行為一致，都是先到先得的相反）。
-- **同一個使用者同時開兩場會打架**：兩條路徑同時 rmtree + copytree 同一棵樹，輸的那條
-  收到 `FileNotFoundError`（500），而且會在**執行中**的容器腳下把 `claude/skills` 砍掉重建。
-  配額允許同時 10 場，所以這不是理論情境。目前沒有處理，要處理就是加一把 per-user 的鎖。
+- **同一個使用者同時開兩場還是會打架，但視窗變窄了。** 兩條路徑各自有自己的暫存目錄
+  （`tempfile.mkdtemp`），複製那一段互不干擾；打架只剩最後的 `rmtree` + `rename` 兩步，
+  而輸的那條現在拿到的是講得清楚的 `SessionError`（rename 撞上另一條剛放好的樹 →
+  ENOTEMPTY），不再是裸的 `FileNotFoundError`（500）。**沒根治**：仍然會在**執行中**的
+  容器腳下把 `claude/skills/<name>` 換掉，而配額允許同時 10 場，所以這不是理論情境。
+  要根治就是加一把 per-user 的鎖。
 - 已經跑過的舊場次救不回 `agentType`，但救得回角色：`subagents/*.meta.json` 的
   `description` 與 `toolUseId` 都在，`opentelemetry/` 的報表據此把角色還原出來
   （`cost-report.py` 的 `role_label()`）。
 
 ## 驗證
 
-`tests/test_provision_skills.py`——三條都對應一個**不會報錯**的壞掉方式：agents 有沒有
+`tests/test_provision_skills.py`：原本三條都對應一個**不會報錯**的壞掉方式：agents 有沒有
 單獨落到 `claude/agents/`、重鋪會不會留下殘檔、`claude/skills` 被換成 symlink 時會不會
 照著寫出去。
+
+2026-08-28 換掉 `/proc/self/fd` 之後再加六組，因為**上面那三條在舊做法上也全過，證明不了
+新做法賣的東西**：
+
+- `claude/skills/<name>` **自己**被換成 symlink（舊那條蓋的是 `claude/skills` 那一層，
+  被 `_open_child_dir` 擋在更前面，根本走不到 `_replace_tree`）→ `SessionError`，
+  而且外部目錄不被寫也不被刪。
+- 樹**裡面**（`<name>/references`）被塞一條指向外部目錄的 symlink → 外部目錄整個沒動。
+- **fd 驗過之後 `claude/skills` 被整個抽換**（用 copytree 當掛鉤注入）→ 寫入仍落在當初
+  驗過的那個 inode，新補上的 symlink 指的地方一個字都沒有。這條是唯一測得到
+  `dir_fd=`／`dst_dir_fd=` 的形狀：拿掉它們改成字串路徑，只有這一節會紅。
+- 目的地是 40 層深樹 → 刪得掉；再把 `RecursionError` 直接注進 rmtree → `SessionError`
+  而不是 500（40 層在 3.13 上刪得動，所以那一半證明不了「爆掉時接得住」）。
+- 來源含 dangling symlink → 目的地是原樣的斷連結（`copytree(symlinks=True)` 的語義）。
+- `.skills-*` 暫存目錄有被清掉，**含中途拋例外那條路**。

@@ -85,6 +85,16 @@ def _open_child_dir(parent_fd: int, name: str) -> int:
     容器把 `skills` 換成一條指向別處的連結之後，控制平面就會以自己的身分照著那條連結
     去別的地方建目錄、寫檔案。這正是 `persistent-data/uploads` 那段在防的事，換一個
     目錄名不會換一個結論。
+
+    ⚠ 兩行合起來才擋得住，缺一不可，**不要改寫成 `makedirs(..., exist_ok=True)`**：
+      · `mkdir` 對「這個名字已經是一條 symlink」回的是 **EEXIST，不會跟著連結走**去
+        對方指定的地方建目錄。`exist_ok=True` 的 `makedirs` 把這個 EEXIST 吞掉之後
+        還會多做一次 `os.path.isdir()`，而那是**解析連結**的檢查，指向目錄的連結會被
+        判成「已經有了，沒事」，於是下一步就照著它走出去。
+      · `os.open` 的 `O_NOFOLLOW`（配 `O_DIRECTORY`）把上面那條 EEXIST 兜起來：名字被
+        佔住時它拒絕開，我們才有機會拒絕開場而不是接手一個被動過手腳的空間。
+    ⚠ 所以判斷「它是不是被換掉了」**只能看 open 有沒有失敗，不可以拿 errno 分型別**：
+      同一個 `O_NOFOLLOW|O_DIRECTORY` 打在 symlink 上，macOS 回 ENOTDIR、Linux 回 ELOOP。
     """
     with suppress(FileExistsError):
         os.mkdir(name, 0o700, dir_fd=parent_fd)
@@ -102,20 +112,57 @@ def _open_child_dir(parent_fd: int, name: str) -> int:
     return fd
 
 
-def _replace_tree(dest_dir: str, name: str, src: str) -> None:
-    """把 `src` 這棵樹整個換到 `dest_dir/name`（先刪後複製）。
+def _replace_tree(parent_fd: int, root: str, name: str, src: str) -> None:
+    """把 `src` 這棵樹整個換到 `parent_fd` 底下的 `name`（先在別處組好，再一次換過去）。
 
     先刪再建，不是就地覆寫：覆寫留得下上一版多出來的檔案（skill 改名、reference 刪掉），
-    而那些殘檔會被模型照樣讀進去。symlink 直接拒絕——`shutil.rmtree` 本來就不肯對
-    symlink 動手，這裡明著擋一次，錯誤訊息才講得出發生什麼事。
+    而那些殘檔會被模型照樣讀進去。
+
+    ⚠ **全程不可以出現一條從字串路徑走下來、指到 `parent_fd` 那一層的名稱。** `claude/`
+      是 session 容器的 rw 掛載，它裡面的東西容器換得掉；而字串路徑的每個 syscall 都會
+      重走一次名稱解析，`_open_child_dir` 用 `O_NOFOLLOW` 驗過的結果當場作廢：容器只要
+      在驗證後把 `skills` rename 掉再補一條 symlink，寫入就落到它指定的地方，不必競速。
+      所以刪與換都對著 `parent_fd` 做：
+
+      · `shutil.rmtree(..., dir_fd=)`：Python 3.11 起支援（pyproject 的
+        `requires-python = ">=3.11"` 正好在線上），macOS 上 `shutil._use_fd_functions`
+        也是 True，內部走的就是 fd 相對的 `_rmtree_safe_fd`。**不要自己寫一支
+        `_rmtree_at`**：標準庫這支已經逐層 `O_NOFOLLOW` 開、再比對 st_dev/st_ino，
+        自己寫只會少幾道。
+      · `os.rename(..., dst_dir_fd=)`：目的端的**最後一個路徑元件不解析 symlink**。
+        於是 `skills/<name>` 被換成 symlink 時 rename 回 ENOTDIR（來源是目錄、目的地不是），
+        被換成非空目錄時回 ENOTEMPTY；**兩種都是失敗，不是誤寫到別處**。這就是拿來取代
+        舊版 `/proc/self/fd/<fd>` 前綴的東西（那條路只有 Linux 有，macOS 上整套測試會紅）。
+
+    ⚠ 暫存目錄放在 `root`（也就是 `<space>/user-N/`），**不是** `claude/` 底下。它安全的
+      唯一理由是 `config.user_mounts()` 只把 `claude/`、`persistent-data/`、`ncr/` 這三層
+      掛進容器，**root 那一層容器碰不到**，那裡是可信地面，才可以放心用字串路徑組樹。
+      要動 `user_mounts()` 就要回來看這裡。
+    ⚠ 名字用 `tempfile.mkdtemp` 不用 pid：控制平面是 threaded，同一個使用者同時開兩場是
+      正常的，pid 命名會讓兩條執行緒共用同一個暫存目錄（同 `_write_json_atomic` 的警告）。
     """
-    target = os.path.join(dest_dir, name)
-    if os.path.islink(target):
+    staging = None
+    try:
+        staging = tempfile.mkdtemp(dir=root, prefix=".skills-")
+        # 先在可信地面上把整棵樹組好（`symlinks=True`：來源裡的連結原樣複製，不解析、
+        # 不跟著走），再一次 rename 過去，中途失敗不會在使用者空間留下半棵樹。
+        shutil.copytree(src, os.path.join(staging, name), symlinks=True)
+        shutil.rmtree(name, dir_fd=parent_fd, ignore_errors=True)
+        os.rename(os.path.join(staging, name), name, dst_dir_fd=parent_fd)
+    except (OSError, RecursionError) as e:
+        # OSError：rename 的 ENOTDIR／ENOTEMPTY／EEXIST（＝目的地被動過手腳）、mkdtemp 與
+        #   copytree 的失敗（`shutil.Error` 本身就是 OSError 的子類）。
+        # RecursionError：容器可以在目的地造一棵萬層深的樹，把遞迴版本的 rmtree 爆掉。
+        # 兩者都要變成講得清楚的 SessionError，不接的話使用者拿到的是 500 HTML traceback，
+        # 而 app.py 只有 SessionError 的 errorhandler。
         raise SessionError(
-            f"使用者空間裡的 {target} 是一條 symlink，不是目錄。這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
-        )
-    shutil.rmtree(target, ignore_errors=True)
-    shutil.copytree(src, target, symlinks=True)
+            f"鋪不進使用者空間的 claude/skills/{name}（{e}）。這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
+        ) from e
+    finally:
+        # 成功時 staging 只剩一個空殼（`name` 已經被 rename 走），失敗時裡面還有半棵樹。
+        # 兩種都要清，否則使用者空間會慢慢長出一堆 `.skills-xxxx`。
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
 
 
 def _write_agent(agents_fd: int, name: str, body: bytes) -> None:
@@ -174,6 +221,14 @@ def sync_skills_and_agents(root: str) -> list[str]:
     if not skills:
         return []
 
+    # 上一輪被硬 kill（OOM、重新部署）會在 root 底下留一個 `.skills-xxxx`。留著不影響
+    # 正確性，但會一直長，所以每次開場順手清一遍。`root` 沒掛進容器，這裡用字串路徑是
+    # 安全的（見 `_replace_tree` 的說明）。
+    with suppress(OSError):
+        for leftover in os.listdir(root):
+            if leftover.startswith(".skills-"):
+                shutil.rmtree(os.path.join(root, leftover), ignore_errors=True)
+
     claude_fd = os.open(os.path.join(root, "claude"), os.O_RDONLY | os.O_DIRECTORY)
     try:
         skills_fd = _open_child_dir(claude_fd, "skills")
@@ -181,18 +236,13 @@ def sync_skills_and_agents(root: str) -> list[str]:
     finally:
         os.close(claude_fd)
     try:
-        # fd 驗過之後才換回字串路徑做樹的複製。`/proc/self/fd/<fd>` 是核心維護的
-        # magic symlink，每次 syscall 都解析回**那個 fd 指的 inode**，所以驗過什麼就寫進
-        # 什麼——中途有人把 `skills` 換掉也影響不到這裡。
-        # ⚠ **不可以對它做 `os.path.realpath()`。** realpath 會把它攤平成一個**字串路徑**，
-        #   而字串路徑之後每個 syscall 都會重走一次名稱解析——O_NOFOLLOW 驗過的結果當場作廢，
-        #   容器只要在驗證後把 `skills` rename 掉再補一條 symlink 就能讓寫入落到別處，
-        #   而且不必競速。（rmdir 的版本更陰：realpath 會回 `.../skills (deleted)`，
-        #   於是 copytree 靜靜建一個叫那個名字的目錄，skill 永遠沒鋪上且不報錯。）
-        #   2026-08-28 實測兩種行為。
-        skills_dir = f"/proc/self/fd/{skills_fd}"
+        # ⚠ 這裡曾經把 `skills_fd` 換回字串路徑 `/proc/self/fd/<fd>` 再交給 copytree。
+        #   那條路只有 Linux 有：**macOS 上 `/proc` 不存在**，於是整支功能連同兩支不相干的
+        #   測試一起紅在 `OSError: [Errno 30] Read-only file system: '/proc'`。
+        #   現在改成 fd 全程不落地成路徑（`rmtree(dir_fd=)` + `rename(dst_dir_fd=)`），
+        #   理由與前提寫在 `_replace_tree` 的 docstring。
         for name in skills:
-            _replace_tree(skills_dir, name, os.path.join(src_root, name))
+            _replace_tree(skills_fd, root, name, os.path.join(src_root, name))
             # 一檔兩用：agents/*.md 既是 skill 的一部分（上面那棵樹裡有），也要單獨
             # 出現在 agents/ 才叫得動。檔名直接用原檔名，與 install.sh 的連法一致。
             src_agents = os.path.join(src_root, name, "agents")
