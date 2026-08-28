@@ -103,10 +103,14 @@ services:
       #   root 擁有的狀態下被寫進去，它就**永久**卡在 root:root（實測）。不掛也達得到目的。
       #   控制平面判斷「要不要更新」改看自己寫的時間戳（config.TRIVY_DB_STAMP，在 /data）。
       # semgrep-rules（A4 SAST 軌道的規則 repo）：唯讀，供存在性檢查 + 當 session 的掛載
-      # 來源（同一路徑，ADR 0009）。host 上要**自己先 git clone 一份到 $HOME/semgrep-rules**
-      # ——不存在時 compose 會以 root 建出空目錄頂替，所以 session 那側驗的是 `.git`
+      # 來源（同一路徑，ADR 0009）。host 上要**自己先 git clone 一份**，clone 在別的地方
+      # 就在 .env 設 `NCR_OPENGREP_RULES=<路徑>`——用的是與 dev-container run script、
+      # skill 腳本同一個變數名，三條路徑同一個 SSOT（多一組同義變數就多一張會漂的對照表）。
+      # ⚠ 這一行與下面兩個 CLAUDE_PTY_SEMGREP_RULES* **必須同值**：掛的與檢查的不是同一個
+      #   路徑時，症狀是「A4 軌道自動跳過」這種不會報錯的安靜缺席。
+      # ——來源不存在時 compose 會以 root 建出空目錄頂替，所以 session 那側驗的是 `.git`
       # 不是 isdir：空殼＝不掛，A4 軌道 gate 不過、自動跳過。
-      - ${HOME}/semgrep-rules:${HOME}/semgrep-rules:ro
+      - ${NCR_OPENGREP_RULES:-${HOME}/semgrep-rules}:${NCR_OPENGREP_RULES:-${HOME}/semgrep-rules}:ro
       # per-user 的 agent 狀態空間（ADR 0014）。**可寫**——控制平面要在裡面建目錄、
       # 寫 .claude.json 種子。host 自己的 ~/.claude 完全不進來：session 的狀態全在這裡。
       # 以同一個路徑掛進來，host 與 self 兩個視角才對得上（見下方 CLAUDE_PTY_SPACE_SELF）。
@@ -133,9 +137,13 @@ services:
       # 控制平面自己讀寫的檔案放 volume
       CLAUDE_PTY_DB_PATH: /data/claude-pty.db
       CLAUDE_PTY_SECRET_KEY: ${CLAUDE_PTY_SECRET_KEY:?請設定一個穩定的隨機值（多 worker 需共用、跨重啟需不變）}
-      # 控制平面自己看到的 semgrep-rules 路徑（存在性檢查用；容器內 $HOME 是 /home/app，
-      # 預設值推不出 host 路徑，故必須明講——同 trivy cache 的理由）。
-      CLAUDE_PTY_SEMGREP_RULES_SELF: ${HOME}/semgrep-rules
+      # semgrep-rules 的兩個視角（ADR 0009）。HOST 版交給 daemon 掛進 session，SELF 版給
+      # 控制平面自己驗 `.git` 是否存在；compose 把它掛在**同一個**路徑上，所以兩者同值。
+      # ⚠ 兩個都得明講：容器內 $HOME 是 /home/app，config.py 的預設值推不出 host 路徑
+      #   （同 trivy cache 的理由），而 SELF 沒指對就會拿 /home/app/semgrep-rules 去驗，
+      #   永遠驗不過 → A4 軌道靜靜跳過。
+      CLAUDE_PTY_SEMGREP_RULES: ${NCR_OPENGREP_RULES:-${HOME}/semgrep-rules}
+      CLAUDE_PTY_SEMGREP_RULES_SELF: ${NCR_OPENGREP_RULES:-${HOME}/semgrep-rules}
       # per-user 空間：控制平面自己看到的路徑。compose 把它掛在**同一個**路徑上，所以與
       # CLAUDE_PTY_SPACE 同值；分成兩個變數是因為 ADR 0009 的路徑解耦（給 daemon 的與
       # 自己 mkdir 用的可以不同），而不是因為這裡真的會不一樣。
