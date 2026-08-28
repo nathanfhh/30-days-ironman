@@ -594,10 +594,15 @@ def test_endpoint_authority_keeps_the_port_when_it_is_not_the_default(wr):
     兩個服務會塌成同一列，兩份流量被加在一起。實測 2026-08-28：`gitlab-proxy:5678`
     印成 `gitlab-proxy`。
     """
-    assert wr.endpoint_authority("api.anthropic.com", 443, "https") == "api.anthropic.com"
+    assert (
+        wr.endpoint_authority("api.anthropic.com", 443, "https") == "api.anthropic.com"
+    )
     assert wr.endpoint_authority("example.com", 80, "http") == "example.com"
     assert wr.endpoint_authority("gitlab-proxy", 5678, "http") == "gitlab-proxy:5678"
-    assert wr.endpoint_authority("api.anthropic.com", 8443, "https") == "api.anthropic.com:8443"
+    assert (
+        wr.endpoint_authority("api.anthropic.com", 8443, "https")
+        == "api.anthropic.com:8443"
+    )
     # scheme 不明時寧可多印一個數字，也不要無聲地把兩個端點併成一個
     assert wr.endpoint_authority("h", 443, "") == "h:443"
     assert wr.endpoint_authority("h", None, "https") == "h"
@@ -606,10 +611,26 @@ def test_endpoint_authority_keeps_the_port_when_it_is_not_the_default(wr):
 def test_same_host_different_ports_do_not_collapse_into_one_endpoint(wr):
     """這才是 port 消失的真正代價：兩個服務的流量被加在一起。"""
     rows = [
-        {"ts": 1, "host": "h", "port": 80, "scheme": "http", "path": "/a",
-         "up": 10, "down": 1, "req_encoding": ""},
-        {"ts": 2, "host": "h", "port": 9000, "scheme": "http", "path": "/a",
-         "up": 20, "down": 2, "req_encoding": ""},
+        {
+            "ts": 1,
+            "host": "h",
+            "port": 80,
+            "scheme": "http",
+            "path": "/a",
+            "up": 10,
+            "down": 1,
+            "req_encoding": "",
+        },
+        {
+            "ts": 2,
+            "host": "h",
+            "port": 9000,
+            "scheme": "http",
+            "path": "/a",
+            "up": 20,
+            "down": 2,
+            "req_encoding": "",
+        },
     ]
     summary = wr.summarize(rows)
     eps = {e["authority"]: e for e in summary["endpoints"]}
@@ -628,7 +649,10 @@ def test_site_labels_say_where_the_boundary_ends_not_which_message(wr):
     assert wr.site_label("tools[-1]") == "工具定義為止"
     assert wr.site_label("system[0]") == "系統提示第 1 段為止"
     # 只報最深的那一個，其餘帶過——並講清楚被略過的是「較淺的」，不是同級的另一個選擇
-    assert wr.cache_boundary(["system[0]", "messages[-1]"]) == "整段對話（另有 1 個較淺的）"
+    assert (
+        wr.cache_boundary(["system[0]", "messages[-1]"])
+        == "整段對話（另有 1 個較淺的）"
+    )
     assert wr.cache_boundary([]) == "沒有標記（整段重算）"
 
 

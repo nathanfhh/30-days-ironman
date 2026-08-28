@@ -112,8 +112,7 @@ def _replace_tree(dest_dir: str, name: str, src: str) -> None:
     target = os.path.join(dest_dir, name)
     if os.path.islink(target):
         raise SessionError(
-            f"使用者空間裡的 {target} 是一條 symlink，不是目錄。"
-            f"這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
+            f"使用者空間裡的 {target} 是一條 symlink，不是目錄。這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
         )
     shutil.rmtree(target, ignore_errors=True)
     shutil.copytree(src, target, symlinks=True)
@@ -146,8 +145,7 @@ def _write_agent(agents_fd: int, name: str, body: bytes) -> None:
         )
     except OSError as e:
         raise SessionError(
-            f"寫不進使用者空間的 claude/agents/{name}（{e}）。"
-            f"這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
+            f"寫不進使用者空間的 claude/agents/{name}（{e}）。這通常代表容器內有東西把它換掉了，先人工檢查再開場。"
         ) from e
     try:
         os.write(fd, body)
@@ -172,15 +170,11 @@ def sync_skills_and_agents(root: str) -> list[str]:
     src_root = config.SKILLS_SRC_SELF
     if not os.path.isdir(src_root):
         return []
-    skills = sorted(
-        d for d in os.listdir(src_root) if os.path.isdir(os.path.join(src_root, d))
-    )
+    skills = sorted(d for d in os.listdir(src_root) if os.path.isdir(os.path.join(src_root, d)))
     if not skills:
         return []
 
-    claude_fd = os.open(
-        os.path.join(root, "claude"), os.O_RDONLY | os.O_DIRECTORY
-    )
+    claude_fd = os.open(os.path.join(root, "claude"), os.O_RDONLY | os.O_DIRECTORY)
     try:
         skills_fd = _open_child_dir(claude_fd, "skills")
         agents_fd = _open_child_dir(claude_fd, "agents")

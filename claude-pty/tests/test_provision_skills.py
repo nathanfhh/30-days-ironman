@@ -68,9 +68,7 @@ check(
 )
 check(
     "reference 也跟著進去",
-    os.path.isfile(
-        os.path.join(space, "claude", "skills", "demo-skill", "references", "r.md")
-    ),
+    os.path.isfile(os.path.join(space, "claude", "skills", "demo-skill", "references", "r.md")),
 )
 # 🔴 這一條就是這次的病灶：只鋪 skills/ 不鋪 agents/ 時，上面全過、這裡全滅，
 #    而 session 跑起來完全不報錯。
@@ -145,9 +143,7 @@ try:
     )
     check(
         "開場之後 claude/skills/<name> 真的在",
-        os.path.isfile(
-            os.path.join(space4, "claude", "skills", "demo-skill", "SKILL.md")
-        ),
+        os.path.isfile(os.path.join(space4, "claude", "skills", "demo-skill", "SKILL.md")),
     )
 finally:
     config.MOUNTS, config.user_space = _saved

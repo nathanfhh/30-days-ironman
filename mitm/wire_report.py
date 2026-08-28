@@ -446,9 +446,7 @@ def summarize(rows: list[dict]) -> dict:
         # 會被加在同一列裡（見 endpoint_authority）。
         slot = endpoints[
             (
-                endpoint_authority(
-                    row["host"], row.get("port"), row.get("scheme", "")
-                ),
+                endpoint_authority(row["host"], row.get("port"), row.get("scheme", "")),
                 row["path"],
             )
         ]
@@ -886,9 +884,7 @@ def site_label(site: str) -> str:
     # 陣列從 0 起算，講給人聽要 +1
     ordinal = int(idx) + 1 if idx.lstrip("-").isdigit() else idx
     return (
-        f"對話前 {ordinal} 則"
-        if name == "messages"
-        else f"{label}第 {ordinal} 段為止"
+        f"對話前 {ordinal} 則" if name == "messages" else f"{label}第 {ordinal} 段為止"
     )
 
 
