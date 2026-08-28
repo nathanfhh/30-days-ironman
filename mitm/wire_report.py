@@ -120,6 +120,24 @@ def _sse_usage(text: str) -> dict:
     return usage
 
 
+def endpoint_authority(host: str, port: int | None = None, scheme: str = "") -> str:
+    """端點在報表上的寫法：非預設 port 要寫出來。純函式，測試從這裡進。
+
+    ⚠ `request.pretty_host` **不含 port**，而端點清單是按 (host, path) 聚合的——於是同一台
+    主機上不同 port 的兩個服務會塌成同一列。那不只是少顯示一個數字，是**兩個服務的流量
+    被加在一起**，而「除了模型 API 還有誰在講話」正是這份報表存在的理由之一。
+    實測 2026-08-28：`gitlab-proxy:5678` 印成 `gitlab-proxy`，port 明明就在 capture 裡。
+
+    預設 port（http 80 / https 443）省略——寫出來只是雜訊，而且會讓 `api.anthropic.com`
+    這種每個人都認得的名字變得難讀。scheme 不明時一律寫出 port：寧可多一個數字，
+    也不要把兩個端點無聲地併成一個。
+    """
+    default = {"https": 443, "http": 80}.get(scheme)
+    if port is None or port == default:
+        return host
+    return f"{host}:{port}"
+
+
 def _breakpoint_sites(req: dict) -> list[str]:
     """找出這一次請求把 cache_control 斷點下在哪裡。
 
@@ -332,6 +350,9 @@ def load_flows(path: str) -> list[dict]:
             row = {
                 "ts": started or 0.0,
                 "host": request.pretty_host,
+                # `pretty_host` 不含 port，而 port 是端點身分的一部分（見 endpoint_authority）
+                "port": getattr(request, "port", None),
+                "scheme": getattr(request, "scheme", "") or "",
                 "path": request.path.split("?")[0],
                 "method": request.method,
                 "status": getattr(response, "status_code", None),
@@ -421,7 +442,16 @@ def summarize(rows: list[dict]) -> dict:
         lambda: {"count": 0, "up": 0, "down": 0}
     )
     for row in rows:
-        slot = endpoints[(row["host"], row["path"])]
+        # 身分是 authority（含非預設 port），不是 host——否則同一台主機上的兩個服務
+        # 會被加在同一列裡（見 endpoint_authority）。
+        slot = endpoints[
+            (
+                endpoint_authority(
+                    row["host"], row.get("port"), row.get("scheme", "")
+                ),
+                row["path"],
+            )
+        ]
         slot["count"] += 1
         slot["up"] += row["up"]
         slot["down"] += row["down"]
@@ -476,8 +506,8 @@ def summarize(rows: list[dict]) -> dict:
             "gaps": [{"start": s, "end": e, "seconds": e - s} for s, e in gaps],
         },
         "endpoints": [
-            {"host": host, "path": path, **slot}
-            for (host, path), slot in sorted(
+            {"authority": authority, "path": path, **slot}
+            for (authority, path), slot in sorted(
                 endpoints.items(), key=lambda kv: -kv[1]["up"]
             )
         ],
@@ -771,7 +801,10 @@ __FIREWALL__
 <div class="card">
   <h2>每一個模型呼叫</h2>
   <p class="sub"><b>「快取存到哪」</b>：請求可以標記「從開頭到這裡請存起來」，
-  伺服器把那段算成一個雜湊值。下一次開頭一樣就命中，<b>差一個字元就整段作廢</b>。</p>
+  伺服器把那段算成一個雜湊值。下一次開頭一樣就命中，<b>差一個字元就整段作廢</b>。
+  這一欄講的是那個邊界的<b>終點</b>：<b>整段對話</b>＝連最新一則都在裡面（最省，
+  「新輸入」通常只剩個位數）；<b>對話前 N 則</b>＝第 N 則之後的內容不在邊界內，
+  每一次都重算，那幾列才是要看的。</p>
   <div class="wrap">__CALLS__</div>
   <div class="note">__COMPRESSION_NOTE__</div>
 </div>
@@ -834,6 +867,13 @@ def site_label(site: str) -> str:
     """把 `system[-1]` 這種機器可讀的位置換成人看得懂的字。
 
     JSON 裡留原形（後續分析要拿它比對），只有畫面上換。
+
+    ⚠ **措詞要讀得出「存到哪為止」，不能只報位置。** 這一欄先前把 `messages[-1]` 印成
+    「最後一則訊息」，而那六個字在一張每列都是一次請求的表裡，第一眼會被讀成「最後
+    一次請求」——於是滿滿一整欄的「最後一則訊息」看起來像壞掉，實際上那是**最健康**的
+    情況（斷點壓在對話尾巴＝整段都進快取，新輸入只剩個位數 token）。
+    cache_control 標的是一個**前綴邊界**：從開頭到標記處都進快取，之後的每次重算。
+    所以標籤講的是那個邊界的終點，不是某一則訊息的身分。
     """
     if "[" not in site:
         return SITE_NAMES.get(site, site)
@@ -841,10 +881,15 @@ def site_label(site: str) -> str:
     idx = rest.rstrip("]")
     label = SITE_NAMES.get(name, name)
     if idx == "-1":
-        return f"{label}末段" if name != "messages" else "最後一則訊息"
+        # messages 的尾巴＝整段對話都在邊界內，直接這樣講，不要讓人自己推。
+        return "整段對話" if name == "messages" else f"{label}為止"
     # 陣列從 0 起算，講給人聽要 +1
     ordinal = int(idx) + 1 if idx.lstrip("-").isdigit() else idx
-    return f"{label}第 {ordinal} 段" if name != "messages" else f"第 {ordinal} 則訊息"
+    return (
+        f"對話前 {ordinal} 則"
+        if name == "messages"
+        else f"{label}第 {ordinal} 段為止"
+    )
 
 
 def cache_boundary(sites: list[str]) -> str:
@@ -863,7 +908,7 @@ def cache_boundary(sites: list[str]) -> str:
     deepest = max(reversed(sites), key=lambda x: order.get(x.split("[")[0], 3))
     extra = len(sites) - 1
     label = site_label(deepest)
-    return f"{label}（另有 {extra} 個標記）" if extra else label
+    return f"{label}（另有 {extra} 個較淺的）" if extra else label
 
 
 def _kpi(value: str, label: str) -> str:
@@ -994,6 +1039,28 @@ def build_firewall_card(sidecars: dict) -> str:
     )
 
 
+def calls_compression_note(rows: list[dict], capture_compressed: int) -> str:
+    """「每一個模型呼叫」那張表底下那行註腳。純函式，測試從這裡進。
+
+    ⚠ **只算模型呼叫，不是整顆 capture。** 這行先前直接印
+    `capture.requests_compressed`，那是**所有** flow 的數字。實測 2026-08-28 那一場的
+    3 次壓縮全是 git clone 的 upload-pack、模型呼叫一次都沒有——於是註腳說「3 次請求
+    有壓縮」，讀的人卻在這張表裡怎麼也找不到那三列，還會以為表上的 byte 不能拿來對帳。
+    註腳要講它腳下那張表。
+    """
+    compressed = sum(1 for r in rows if r.get("model") and r.get("req_encoding"))
+    if compressed:
+        return f"{compressed} 次模型呼叫有壓縮，那幾列的 byte 是壓縮後的量。"
+    if capture_compressed:
+        # 整顆 capture 裡有壓縮、但不在這張表裡：兩件事都要講。只講前半會讓人以為這些
+        # 數字不能對帳，只講後半又會跟整體摘要那句打架。
+        return (
+            "這張表裡的模型呼叫都沒有壓縮，數字可以直接跟網卡上的量對帳"
+            f"（整顆 capture 另有 {capture_compressed} 次壓縮過的請求，不在這張表裡）。"
+        )
+    return "沒有任何一次請求壓縮過，所以這些數字可以直接跟網卡上的量對帳。"
+
+
 def build_page(
     name: str, summary: dict, rows: list[dict], sidecars: dict | None = None
 ) -> str:
@@ -1013,7 +1080,7 @@ def build_page(
         [("端點", False), ("次", True), ("上行", True), ("下行", True)],
         [
             [
-                f"{e['host']}{e['path']}",
+                f"{e['authority']}{e['path']}",
                 str(e["count"]),
                 fmt_bytes(e["up"]),
                 fmt_bytes(e["down"]),
@@ -1090,14 +1157,7 @@ def build_page(
         + compress_caveat
     )
 
-    if cap["requests_compressed"]:
-        compression_note = (
-            f"{cap['requests_compressed']} 次請求有壓縮，數字是壓縮後的量。"
-        )
-    else:
-        compression_note = (
-            "沒有任何一次請求壓縮過，所以這些數字可以直接跟網卡上的量對帳。"
-        )
+    compression_note = calls_compression_note(rows, cap["requests_compressed"])
 
     meta_line = f"{name} · 起始 {started} · 共 {cap['requests']} 次請求"
     if info.get("network"):
@@ -1135,7 +1195,7 @@ def print_terminal(summary: dict) -> None:
     for e in summary["endpoints"]:
         print(
             f"  {e['count']:>4}  {fmt_bytes(e['up']):>9} ↑  "
-            f"{fmt_bytes(e['down']):>9} ↓  {e['host']}{e['path']}"
+            f"{fmt_bytes(e['down']):>9} ↓  {e['authority']}{e['path']}"
         )
     for m in summary["models"]:
         cost = "無牌價" if not m["priced"] else f"${m['cost']:.2f}"

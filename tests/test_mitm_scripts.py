@@ -583,7 +583,76 @@ def test_redacted_copy_keeps_the_body_compact(rd):
 def test_cache_boundary_picks_the_deepest_marker_on_a_tie(wr):
     """同一段裡有兩個標記時，決定省下多少的是比較深的那一個。"""
     assert wr.cache_boundary(["system[0]", "messages[3]", "messages[-1]"]).startswith(
-        "最後一則"
+        "整段對話"
+    )
+
+
+def test_endpoint_authority_keeps_the_port_when_it_is_not_the_default(wr):
+    """port 是端點身分的一部分，不是可有可無的裝飾。
+
+    `pretty_host` 不含 port，而端點清單按 (host, path) 聚合——同一台主機上不同 port 的
+    兩個服務會塌成同一列，兩份流量被加在一起。實測 2026-08-28：`gitlab-proxy:5678`
+    印成 `gitlab-proxy`。
+    """
+    assert wr.endpoint_authority("api.anthropic.com", 443, "https") == "api.anthropic.com"
+    assert wr.endpoint_authority("example.com", 80, "http") == "example.com"
+    assert wr.endpoint_authority("gitlab-proxy", 5678, "http") == "gitlab-proxy:5678"
+    assert wr.endpoint_authority("api.anthropic.com", 8443, "https") == "api.anthropic.com:8443"
+    # scheme 不明時寧可多印一個數字，也不要無聲地把兩個端點併成一個
+    assert wr.endpoint_authority("h", 443, "") == "h:443"
+    assert wr.endpoint_authority("h", None, "https") == "h"
+
+
+def test_same_host_different_ports_do_not_collapse_into_one_endpoint(wr):
+    """這才是 port 消失的真正代價：兩個服務的流量被加在一起。"""
+    rows = [
+        {"ts": 1, "host": "h", "port": 80, "scheme": "http", "path": "/a",
+         "up": 10, "down": 1, "req_encoding": ""},
+        {"ts": 2, "host": "h", "port": 9000, "scheme": "http", "path": "/a",
+         "up": 20, "down": 2, "req_encoding": ""},
+    ]
+    summary = wr.summarize(rows)
+    eps = {e["authority"]: e for e in summary["endpoints"]}
+    assert set(eps) == {"h", "h:9000"}
+    assert eps["h"]["up"] == 10 and eps["h:9000"]["up"] == 20
+
+
+def test_site_labels_say_where_the_boundary_ends_not_which_message(wr):
+    """措詞要讀得出「存到哪為止」。
+
+    先前 `messages[-1]` 印成「最後一則訊息」，而在一張每列都是一次請求的表裡，那六個字
+    第一眼會被讀成「最後一次請求」——滿滿一欄看起來像壞掉，實際上那是最健康的情況。
+    """
+    assert wr.site_label("messages[-1]") == "整段對話"
+    assert wr.site_label("messages[166]") == "對話前 167 則"
+    assert wr.site_label("tools[-1]") == "工具定義為止"
+    assert wr.site_label("system[0]") == "系統提示第 1 段為止"
+    # 只報最深的那一個，其餘帶過——並講清楚被略過的是「較淺的」，不是同級的另一個選擇
+    assert wr.cache_boundary(["system[0]", "messages[-1]"]) == "整段對話（另有 1 個較淺的）"
+    assert wr.cache_boundary([]) == "沒有標記（整段重算）"
+
+
+def test_compression_note_counts_only_the_table_it_sits_under(wr):
+    """註腳掛在「每一個模型呼叫」底下，就不能拿整顆 capture 的壓縮次數來講。
+
+    實測那一場的 3 次壓縮全是 git clone 的 upload-pack、模型呼叫一次都沒有，
+    於是註腳說「3 次請求有壓縮」，讀的人卻在表裡怎麼也找不到那三列。
+    """
+    rows = [
+        {"model": "claude-opus-5", "req_encoding": ""},
+        {"model": None, "req_encoding": "gzip"},  # git clone，不在這張表裡
+    ]
+    note = wr.calls_compression_note(rows, capture_compressed=1)
+    assert note.startswith("這張表裡的模型呼叫都沒有壓縮")
+    assert "另有 1 次" in note
+
+    rows[0]["req_encoding"] = "gzip"
+    assert wr.calls_compression_note(rows, capture_compressed=2).startswith(
+        "1 次模型呼叫有壓縮"
+    )
+    assert (
+        wr.calls_compression_note([{"model": "m", "req_encoding": ""}], 0)
+        == "沒有任何一次請求壓縮過，所以這些數字可以直接跟網卡上的量對帳。"
     )
 
 
