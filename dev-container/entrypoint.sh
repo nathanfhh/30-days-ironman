@@ -48,7 +48,9 @@ fi
 #   - CA 每一場在容器內現產（~/.mitmproxy 不持久化），炸開的範圍就是這個容器。
 #   - 落地的是脫敏過的副本，addon fail-closed：脫敏出錯就整條丟掉，
 #     絕不改寫成未脫敏版落地；addon 不在就整場不錄，而不是退回錄原始流量。
-#   - 範圍由人在啟動時選，**預設全錄**；選「只錄模型 API」時其餘 host 直連、不走 proxy。
+#   - 範圍由人在啟動時選，**預設全錄**；「只錄模型 API」收斂的是**落地哪些 flow**，
+#     不是誰走 proxy：其餘 host 的 HTTP(S) 仍可能經過 proxy，只是不寫進 capture。
+#     真正繞開 proxy 的只有 NO_PROXY 列的那幾個（見下面設 NO_PROXY 那段）。
 #   - ⚠ 「全部」的範圍是**這一場 CLI 及其子行程**，不是這顆容器：proxy 靠環境變數交出去，
 #     而環境變數只往下傳。`docker exec` 另外開的行程繼承的是 PID 1 那份（還沒 export），
 #     所以不經過 mitm、也不會被錄到。要涵蓋它們得改用 iptables 透明轉址。
@@ -196,7 +198,9 @@ start_capture() {
         # 錄也錄不到有用的東西。這個例外會寫進 meta.json，報表據此揭露。
         export NO_PROXY="jaeger,localhost,127.0.0.1,::1"
     else
-        # 只錄模型 API：內部流量不必繞經 proxy，proxy 也就不在工作的關鍵路徑上。
+        # 只錄模型 API：比全錄多排除一個 gitlab-proxy（內部流量不必繞經 proxy）。
+        # ⚠ 只有這份清單上的目的地會繞開 proxy。其餘 host 照樣經過它，只是 addon 的
+        #   capture_hosts 不收，所以不會落地。「只錄模型」不等於「其餘直連」。
         export NO_PROXY="gitlab-proxy,jaeger,localhost,127.0.0.1,::1"
     fi
     export no_proxy="$NO_PROXY"
@@ -478,7 +482,7 @@ if [ "$CAPTURE_ON" = "1" ]; then
     echo "錄製範圍："
     echo "  1 = 全部流量（預設） — 憑證裝進容器的系統信任庫，proxy 進關鍵路徑"
     echo "      （範圍是這一場 CLI 及其子行程；另外 docker exec 進來的不在裡面）"
-    echo "  2 = 只錄模型 API     — 只收 ${CAPTURE_MODEL_HOSTS}，其餘直連不經過 proxy"
+    echo "  2 = 只錄模型 API     — 只落地 ${CAPTURE_MODEL_HOSTS}；其餘流量照樣經過 proxy，只是不寫進紀錄"
     echo ""
     if [ -n "${NCR_CAPTURE_SCOPE:-}" ]; then
         case "$NCR_CAPTURE_SCOPE" in

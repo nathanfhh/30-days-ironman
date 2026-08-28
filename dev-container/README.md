@@ -222,7 +222,7 @@ wrapper 會明講並教你重建。啟動收集端與輸出報表的方式見 `.
 
 錄製範圍：
   1 = 全部流量（預設） — 憑證裝進容器的系統信任庫，proxy 進關鍵路徑
-  2 = 只錄模型 API     — 只收 api.anthropic.com，其餘直連不經過 proxy
+  2 = 只錄模型 API     — 只落地 api.anthropic.com；其餘流量照樣經過 proxy，只是不寫進紀錄
 ```
 
 範圍預設全部，因為這份紀錄要回答「有沒有東西走漏」——只錄自己允許的那一條，
@@ -230,7 +230,7 @@ wrapper 會明講並教你重建。啟動收集端與輸出報表的方式見 `.
 
 答 y 之後，entrypoint 在容器內起一個 mitmweb，把 `HTTPS_PROXY` 指過去、用
 `NODE_EXTRA_CA_CERTS` 讓 Claude Code 信任它現產的根憑證，並印出檔案位置與
-即時畫面的網址（帶一次性 token）。非互動環境用 `NCR_CAPTURE=1`。
+即時畫面的網址（帶這一場的 token：每場隨機產生，該場期間可重複使用）。非互動環境用 `NCR_CAPTURE=1`。
 
 幾個接線上的決定：
 
