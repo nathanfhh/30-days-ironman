@@ -11,12 +11,15 @@
 ```
 瀏覽器 ── nginx ──┬── Flask 控制平面 ──── docker socket ──── session 容器（一場一顆）
                   │      （帳號/授權/生命週期；SQLite 是唯一的狀態仲裁者）
-                  └── ttyd（on-demand，開網頁才起）──── docker attach ──── 同一顆容器
+                  ├── ttyd（on-demand，開網頁才起）──── docker attach ──── 同一顆容器
+                  └── mitm relay（錄製時 on-demand）─ docker exec -i → socat ── 同一顆容器的 mitmweb
 ```
 
-兩條資料路徑刻意分開：控制流（開場、終止、帳號）走 Flask；終端資料流走
-nginx → ttyd → `docker attach`，**不經過 Flask**。授權掛在 nginx 把連線交給 ttyd
-之前那一刻（`auth_request`），ttyd 端還有第二層（`--auth-url`，見下）。
+三條資料路徑刻意分開：控制流（開場、終止、帳號）走 Flask；終端資料流走
+nginx → ttyd → `docker attach`；流量畫面則走 nginx → mitm relay → `docker exec -i`
+→ 容器內 `socat` → mitmweb，**兩者都不經過 Flask 的資料面**。授權掛在 nginx 把連線交給
+ttyd / mitm relay 之前那一刻（`auth_request`）；ttyd 端另外還有第二層 `--auth-url`
+（見下）。
 
 畫面是一支 Vue 3 SPA（`frontend/`，Vite build 到 `server/static/dist/`），三條頁面路由
 （`/`、`/login`、`/account`）都吐同一份殼，資料一律走 `/api/*`。**產物不進版控**，所以

@@ -21,7 +21,7 @@
         <mxCell id="p1-note-left" value="此路徑另有：Keychain／ssh-agent、&lt;br&gt;mitm UI port、trivy DB／semgrep 掛載" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="30" y="300" width="230" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="p1-note-right" value="此路徑另有：per-user 狀態空間、&lt;br&gt;fd 憑證交付、對帳迴圈、per-user 代理" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+        <mxCell id="p1-note-right" value="此路徑另有：per-user 狀態空間、&lt;br&gt;fd 憑證交付、對帳迴圈、per-user 代理、mitm relay" style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="950" y="300" width="260" height="50" as="geometry" />
         </mxCell>
         <!-- shared session container -->
@@ -115,6 +115,9 @@
         <mxCell id="p2-nginx-rb" value="路由 B：/session/&lt;sid&gt;/ → auth_request 子請求&lt;br&gt;通過才 proxy 到 ttyd（終端資料流，不經 Flask）" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="250" y="115" width="310" height="45" as="geometry" />
         </mxCell>
+        <mxCell id="p2-nginx-rc" value="路由 C：/session/&lt;sid&gt;/mitm/ → auth_request 子請求&lt;br&gt;通過才 proxy 到 mitm relay（流量畫面，不經 Flask）" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="250" y="155" width="310" height="45" as="geometry" />
+        </mxCell>
         <!-- control container -->
         <mxCell id="p2-controlbox" value="control 容器" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;dashed=1;fillColor=none;strokeColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="650" y="30" width="500" height="250" as="geometry" />
@@ -125,7 +128,10 @@
         <mxCell id="p2-ttyd" value="ttyd（on-demand）&lt;br&gt;只綁 127.0.0.1:動態 port" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="940" y="70" width="180" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="p2-db" value="SQLite（唯一仲裁者）&lt;br&gt;session 列・view port UNIQUE・加密憑證" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+        <mxCell id="p2-mitm" value="mitm relay（on-demand）&lt;br&gt;proxy 後 `docker exec -i` 進&lt;br&gt;session 容器的 mitmweb" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="940" y="175" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-db" value="SQLite（唯一仲裁者）&lt;br&gt;session 列・view/mitm_view port UNIQUE・加密憑證" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
           <mxGeometry x="680" y="175" width="190" height="90" as="geometry" />
         </mxCell>
         <!-- reconciler -->
@@ -189,7 +195,18 @@
             </Array>
           </mxGeometry>
         </mxCell>
+        <mxCell id="p2-e-n-m" value="路由 C：proxy_pass control:$mitm_port" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=1;exitY=0.95;entryX=1;entryY=0.5;" edge="1" parent="1" source="p2-nginx" target="p2-mitm">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="600" y="220" />
+              <mxPoint x="1140" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
         <mxCell id="p2-e-f-t" value="開網頁才 spawn（view）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;fontSize=10;exitX=1;exitY=0.3;entryX=0;entryY=0.3;" edge="1" parent="1" source="p2-flask" target="p2-ttyd">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-e-f-m" value="開流量畫面才 spawn（mitm_views）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;fontSize=10;exitX=1;exitY=0.85;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2-flask" target="p2-mitm">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="p2-e-t-f" value="--auth-url 再驗一次（rust 版）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;fontSize=10;exitX=0;exitY=0.8;entryX=1;entryY=0.8;" edge="1" parent="1" source="p2-ttyd" target="p2-flask">
@@ -247,6 +264,15 @@
             </Array>
           </mxGeometry>
         </mxCell>
+        <mxCell id="p2-e-m-sA1" value="docker exec -i → 容器內 socat → mitmweb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="p2-mitm" target="p2-sA1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1030" y="300" />
+              <mxPoint x="330" y="300" />
+              <mxPoint x="330" y="665" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
         <mxCell id="p2-e-sA1-pA" value="git／API（不帶憑證）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.25;" edge="1" parent="1" source="p2-sA1" target="p2-pA">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
@@ -297,7 +323,7 @@
         <mxCell id="pty-highlevel_q0" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;唯一對外口&lt;/b&gt;" vertex="1">
           <mxGeometry height="26" width="340" x="44" y="194" as="geometry" />
         </mxCell>
-        <mxCell id="pty-highlevel_b0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="全系統只發布這一個 port。&lt;br&gt;控制流與終端資料流在這裡就分開，&lt;br&gt;之後不再交會。" vertex="1">
+        <mxCell id="pty-highlevel_b0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="全系統只發布這一個 port。&lt;br&gt;控制流、終端資料流與流量畫面資料流&lt;br&gt;都在這裡分開。" vertex="1">
           <mxGeometry height="140" width="340" x="44" y="226" as="geometry" />
         </mxCell>
         <mxCell id="pty-highlevel_h1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e40af;strokeColor=#1e3a8a;fontColor=#ffffff;fontSize=13;verticalAlign=middle;" value="&lt;b&gt;決策&lt;/b&gt;&lt;br&gt;control plane" vertex="1">
@@ -306,7 +332,7 @@
         <mxCell id="pty-highlevel_q1" parent="1" style="text;html=1;fontSize=17;fontStyle=1;align=center;fontColor=#1e40af;" value="&lt;b&gt;開一場、關一場&lt;/b&gt;" vertex="1">
           <mxGeometry height="26" width="340" x="410" y="194" as="geometry" />
         </mxCell>
-        <mxCell id="pty-highlevel_b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="帳號、授權、生命週期。&lt;br&gt;它不碰終端的資料，你敲的每一個鍵&lt;br&gt;都繞過它直接到 ttyd。" vertex="1">
+        <mxCell id="pty-highlevel_b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;align=center;spacingLeft=12;spacingRight=10;verticalAlign=middle;spacingTop=8;" value="帳號、授權、生命週期。&lt;br&gt;它不碰終端與流量畫面的資料面；&lt;br&gt;兩條都在授權後繞過它。" vertex="1">
           <mxGeometry height="140" width="340" x="410" y="226" as="geometry" />
         </mxCell>
         <mxCell id="pty-highlevel_a1" edge="1" parent="1" style="edgeStyle=none;html=1;strokeColor=#3b82f6;strokeWidth=2;endArrow=block;">
