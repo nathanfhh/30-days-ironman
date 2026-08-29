@@ -372,15 +372,20 @@ git 與 API 呼叫都在 TLS 那關回 502。上一節那條「代理起不來�
 
 兩件容易想錯的事，寫在這裡省得下一個人重試：
 
-- **C 版對它沒有的旗標是靜默忽略，不是拒絕啟動。** 把 `--title` 塞給 C 版不會炸，
-  終端照常開，只是那道保護根本沒生效、也沒有任何錯誤。所以「哪顆 binary 拿到哪些
-  旗標」由控制平面的參數策略保證（`server/views.py` 的 `_TTYD_EXTRAS`），不是靠
-  「塞錯會壞」防呆。
+- **C 版對它沒有的旗標會喊一句，但不會拒絕啟動；帶值的那種還會更歪。**
+  C 版拿到未知旗標時 `getopt_long` 會在 stderr 印 `unrecognized option`，但
+  `case '?'` 只是 break，行程照樣起來。而 `--title VALUE` 這種它不認得的帶值旗標，
+  C 版不知道 `VALUE` 是旗標的參數，會把它當成要執行的 child command，後面每一個
+  真正的旗標（`-p` / `-i`）都跟著被吞進去：實測 port 掉回預設 7681、介面沒綁。
+  再加上控制平面起 ttyd 時把 stdio 導向 `/dev/null`（`_spawn_detached`），那句警告
+  沒有任何人讀得到。所以「哪顆 binary 拿到哪些旗標」由控制平面的參數策略保證
+  （`server/views.py` 的 `_TTYD_EXTRAS`），不靠錯誤處理防呆；證據在
+  `tests/test_ttyd_unknown_flag.py`（對真 binary 跑）。
 - **差異在 build 時就被釘死。** `deploy/Dockerfile` 在編出 Rust 版之後、搬進 image
   之後，各對真的 binary 斷言一次：Rust 版的 `--help` 必須列出
   `--title` / `--auth-url` / `--auth-cache-ttl`（缺任一支 build 直接失敗），
   C 版必須沒有 `--title`。fork 哪天改了旗標，會在 build 當場現形，不會等到
-  執行時靜默少一層。
+  執行時才發現。
 
 ### Build 時間
 

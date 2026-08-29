@@ -303,11 +303,14 @@ def _c_extras(session_id: str) -> list[str]:
 
 
 def _rust_extras(session_id: str) -> list[str]:
-    """ttyd-rust 特有參數。⚠ 拆 strategy 的真正理由（真 binary 實測 2026-08-07）：
-    C 版（1.7.7）對這些它沒有的旗標**不是拒起，而是靜默忽略照樣啟動**——所以塞進
-    共用模板不會炸、不會有任何錯誤，只會得到一個**沒有標題遮蔽、沒有第二層授權**的
-    終端。靜默的安全降級比 crash 難發現得多（正是 Day 26 在講的「宣稱大於機制」）。
-    所以這些旗標只能給認得它們的 binary，且要有測試釘住 C 版拿不到。
+    """ttyd-rust 特有參數。⚠ 拆 strategy 的真正理由（真 binary 實測，見
+    tests/test_ttyd_unknown_flag.py）：C 版（1.7.7）拿到它沒有的旗標**會在 stderr 喊
+    一句 `unrecognized option`，但不會因此退出**（src/server.c 的 `case '?'` 只是
+    break）。帶值的那種更歪：C 版不知道 `--title` 吃一個值，於是把那個值當成要執行的
+    **child command**，後面每一個真正的旗標（`-p` / `-i`）都被吞進去、一個都沒被解析
+    ——實測結果是 port 掉回預設 7681、介面沒綁。而 `_spawn_detached` 把 ttyd 的 stdio
+    全部導向 /dev/null，那句警告在這套系統裡沒有任何人讀得到。所以這些旗標只能給認得
+    它們的 binary，且要有測試釘住 C 版拿不到；不能靠「塞錯會壞」防呆。
 
     --title：伺服器端換掉宣告給 client 的標題——命令列一個字都不上線，標題只剩
       固定字樣加這一場的編號。C 版那個洞仍然存在、只是被共用模板裡的 titleFixed

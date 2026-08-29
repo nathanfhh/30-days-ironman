@@ -94,9 +94,9 @@ try:
 
     print("== 參數建構策略：每顆 binary 一組，特有旗標不進共用模板 ==")
     # Rust 特有旗標（--title / --auth-url / --auth-cache-ttl）C 版沒有。真 binary 實測
-    # （test_ttyd_real_binary）：C 版對它沒有的旗標是**靜默忽略照跑**，不是拒起——
-    # 所以塞給 C 不會炸，只會靜靜少掉標題遮蔽與第二層授權。strategy 拆開守的就是
-    # 「這些旗標永遠不會落到不認得它們的 binary 上」。
+    # 見 tests/test_ttyd_unknown_flag.py：C 版拿到未知旗標會在 stderr 喊一句，但不拒起；
+    # 而 `--title VALUE` 的值還會被當成 child command、後面的旗標整串被吞掉（實測 port
+    # 掉回預設 7681）。strategy 拆開守的就是「這些旗標永遠不會落到不認得它們的 binary 上」。
     rust = views._ttyd_argv(41000, "claude-pty-xyz789", "xyz789", "ttyd-rust")
     c = views._ttyd_argv(41000, "claude-pty-xyz789", "xyz789", "ttyd")
     check(

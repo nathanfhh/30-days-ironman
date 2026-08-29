@@ -60,7 +60,7 @@ WORKDIR /src/rust
 RUN cargo build --release --locked && /src/rust/target/release/ttyd --version
 # ⚠ 真 binary 的能力斷言（發表阻擋項 #17 的兌現）：控制平面靠 --title 把命令列擋在瀏覽器
 #   之外、靠 --auth-url 掛第二層授權。這三支旗標若哪天 fork 改掉，**build 當場失敗**，
-#   而不是等到執行時靜默少一層。這是「用真 binary 驗旗標真的被接受」，不是讀 --version。
+#   而不是等到執行時才發現。這是「用真 binary 驗旗標真的被接受」，不是讀 --version。
 RUN for flag in --title --auth-url --auth-cache-ttl; do         /src/rust/target/release/ttyd --help 2>&1 | grep -q -- "$flag"         || { echo "FATAL: Rust ttyd 缺旗標 $flag（fork 版本不對？）" >&2; exit 1; };     done
 
 # --- 第二階段：把 Vue 版前端 build 出來（階段 4）----------------------------------
@@ -165,11 +165,13 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
 # 兩顆同時在 image 裡才切得動：切換即時生效，不必重新 build、也不必重啟。
 COPY --from=ttyd-rust /src/rust/target/release/ttyd /usr/local/bin/ttyd-rust
 RUN ttyd-rust --version
-# ⚠ 兩 binary 契約在 build 時就釘死（真 binary 實測 2026-08-07）：
+# ⚠ 兩 binary 契約在 build 時就釘死（真 binary 實測，見 tests/test_ttyd_unknown_flag.py）：
 #   · Rust 版有 --title / --auth-url（上一階段已斷言，這裡再確認搬進來的是對的那顆）
-#   · C 版**沒有**這些旗標，而且它對沒有的旗標是**靜默忽略照跑**（不是拒起）——所以
-#     絕不能靠「塞了會壞」來防呆，必須靠 server 端 strategy 不把旗標交給它
-#     （views._TTYD_EXTRAS）。這裡斷言 C 版 help 確實沒有，作為那個 strategy 的地基。
+#   · C 版**沒有**這些旗標。它拿到未知旗標會在 stderr 喊一句 unrecognized option，但
+#     不會因此拒起；而 `--title VALUE` 這種帶值的，值還會被當成 child command，後面的
+#     旗標整串被吞掉（實測：port 掉回預設 7681、介面沒綁）。所以絕不能靠「塞了會壞」
+#     來防呆，必須靠 server 端 strategy 不把旗標交給它（views._TTYD_EXTRAS）。
+#     這裡斷言 C 版 help 確實沒有，作為那個 strategy 的地基。
 RUN ttyd-rust --help 2>&1 | grep -q -- --title     || { echo "FATAL: 搬進來的 ttyd-rust 沒有 --title" >&2; exit 1; }
 RUN if ttyd --help 2>&1 | grep -q -- --title; then         echo "FATAL: C 版 ttyd 竟然有 --title，兩 binary 差異的前提不成立" >&2; exit 1;     fi
 

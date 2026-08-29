@@ -39,7 +39,8 @@ NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
               test_firewall_ssh_gate test_user_proxy test_network_isolation
               test_gitlab_upstream_e2e test_restricted_proxy_reach e2e_flow
               test_token_fd test_trivy_volume test_ro_socket_mount
-              test_entrypoint_mitm_password test_mitm_bridge)
+              test_entrypoint_mitm_password test_mitm_bridge
+              test_ttyd_unknown_flag)
 # ⚠ 判準是「會不會真的起容器／建 volume」，不是「檔案裡有沒有出現 docker」。用假 client
 #   的那幾支（test_host_platform／test_jaeger_wiring／test_trivy_db／test_ttyd_identity）
 #   一個容器都不起，留在 quick 模式是對的。自我 SKIP 不能取代這道 gate：docker 在的開發機
@@ -58,6 +59,13 @@ NEEDS_DOCKER=(test_session_lifecycle test_view_lifecycle
 NEEDS_NCR_IMAGE=(test_token_fd test_trivy_volume test_entrypoint_mitm_password test_mitm_bridge)
 have_ncr_image=0
 docker image inspect "${CLAUDE_PTY_IMAGE:-ncr-dev-container}" >/dev/null 2>&1 && have_ncr_image=1
+
+# 需要**控制平面自己那顆 image**（不是 dev-container 那顆）：裡面才有兩顆真的 ttyd binary。
+# ⚠ 跟上面同一個理由進清單：缺 image 時那支會自己 print SKIP 再 exit 0，而那個形狀跟
+#   「跑過而且過了」在 CI 上長得一模一樣。讓它進跳過清單、看得見。
+NEEDS_CONTROL_IMAGE=(test_ttyd_unknown_flag)
+have_control_image=0
+docker image inspect "${CLAUDE_PTY_CONTROL_IMAGE:-claude-pty-control:latest}" >/dev/null 2>&1 && have_control_image=1
 
 # 另外需要 host 上有 ttyd binary 的：這兩支會真的把 ttyd 生出來（不是在容器裡跑）。
 # 沒裝的話所有 port 都起不來，會以「無可用 port」這種完全不像缺工具的訊息失敗。
@@ -200,6 +208,9 @@ run_one() {
   #   驗不到，先報「缺 image」會把人送去做一件白做的事。
   if in_list "${base}" "${NEEDS_NCR_IMAGE[@]}" && [ "${have_ncr_image}" -eq 0 ]; then
     skipped+=("${base}（沒有 ${CLAUDE_PTY_IMAGE:-ncr-dev-container} image，先跑 dev-container/build.sh）"); return
+  fi
+  if in_list "${base}" "${NEEDS_CONTROL_IMAGE[@]}" && [ "${have_control_image}" -eq 0 ]; then
+    skipped+=("${base}（沒有 ${CLAUDE_PTY_CONTROL_IMAGE:-claude-pty-control:latest} image，先跑 docker compose -f deploy/docker-compose.yml build control）"); return
   fi
   if in_list "${base}" "${NEEDS_CLAUDE_CRED[@]}" && [ "${have_claude_cred}" -eq 0 ]; then
     # ⚠ 訊息要講得出「哪幾個地方都問過了」。原本只寫「沒有 claude 憑證」，而在 macOS 上
