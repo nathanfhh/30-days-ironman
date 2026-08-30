@@ -24,10 +24,8 @@ import { useSiteStore } from "@/stores/site";
  *   3. 講一句話，而且**只有這一句**。各呼叫端那些「◯◯失敗／未登入」由 `toastError` 統一
  *      吞掉（見 lib/toast），否則畫面上會堆著三四則毫無資訊的字，真正該讀的那則被埋在裡面。
  *
- * ⚠ toast 用 `toast()` 不是 `toastAfterNav()`。後者是寄在 sessionStorage 給**下一次整份
- *   app 重新載入**的人接（main.ts 的 `drainPendingToast`），而這裡是 SPA 之內換頁，
- *   main.ts 不會再跑一次，寄過去的話那則通知要到不知道多久以後才會冒出來。SPA 內換頁不會
- *   清掉畫面上的 toast，直接發就是對的。
+ * ⚠ 直接 `toast()`。這裡是 SPA 之內換頁，畫面上的 toast 不會被清掉，發了就看得到。
+ *   別把它寄到「下一次整頁重載再顯示」那種地方去：這條路徑根本不會整頁重載。
  */
 export function createUnauthorizedHandler(router: Router): () => void {
   let redirecting = false;

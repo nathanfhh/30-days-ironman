@@ -159,11 +159,9 @@ async function doLogout(): Promise<void> {
     await router.push("/login");
     return;
   }
-  /* ⚠ 用 `toast()` 不是 `toastAfterNav()`。登出是 **SPA 內換頁**（下面那行 push），
-   *   `main.ts` 不會再跑一次，也就沒有人去 `drainPendingToast()`：寄放的話這則「已登出」
-   *   會一直躺在 sessionStorage 裡，直到下一次整頁重載才在一個完全無關的時機冒出來
-   *   （2026-08-26 在寫 401 的測試時，從 sessionStorage 裡撿到上一條測試留下的那一則才
-   *   發現）。SPA 之內換頁不會清掉畫面上的 toast，直接發就是對的。 */
+  /* ⚠ 直接 `toast()`。登出是 **SPA 內換頁**（下面那行 push），畫面上的 toast 不會被清掉，
+   *   所以發了就看得到。這裡曾經把訊息寄在 sessionStorage 等下次整頁重載再顯示，結果那則
+   *   「已登出」一直躺著，直到某次整頁重載才在完全無關的時機冒出來（2026-08-26 修）。 */
   toast("已登出", "success", { body: "工作階段已結束，session 本身仍在背景執行" });
   await router.push("/login");
 }

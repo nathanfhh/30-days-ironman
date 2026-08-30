@@ -906,10 +906,6 @@ describe("401 之後回得去登入頁", () => {
        ⚠ 不掛的話用的是 api/client 的預設值，那是 `location.href = "/login"`（還沒接上
          router 時的退路），在 jsdom 裡會變成一句 Not implemented 的雜訊。 */
     setUnauthorizedHandler(() => {});
-    // ⚠ 這一份是跨測試留下來的：AppMasthead 的登出走 `toastAfterNav`，而 SPA 內換頁沒有人
-    //   會去 drain 它（`drainPendingToast` 只在 main.ts 進站時跑一次）。下面那條「不要寄放」
-    //   的斷言要驗的是**這次**有沒有寄放，所以先歸零。
-    sessionStorage.clear();
     installFetch({
       "/api/account/bootstrap": () =>
         authed
@@ -958,15 +954,13 @@ describe("401 之後回得去登入頁", () => {
     expect(w.find('[data-testid="footer"]').exists()).toBe(false);
   });
 
-  it("說一句人話，而且只說一次（用 toast 不是 toastAfterNav：SPA 換頁沒人 drain）", async () => {
+  it("說一句人話，而且只說一次", async () => {
     setUser();
     await mountAt("/");
     authed = false;
     createUnauthorizedHandler(router)();
     await flushPromises();
     expect(toasts.map((t) => t.title)).toContain("登入已失效，請重新登入");
-    // 寄放區是空的：寄過去的話這則通知要等下一次整頁重載才會冒出來
-    expect(sessionStorage.getItem("claude-pty:pending-toast")).toBeNull();
   });
 
   it("🔴 同一時間兩發 401 只導一次（vue-router 對重複導覽會出 warning）", async () => {
@@ -1033,7 +1027,7 @@ describe("401 之後回得去登入頁", () => {
     expect(toasts.map((t) => t.title)).toEqual(["登入已失效，請重新登入"]);
   });
 
-  it("🔴 登出成功那則用 toast 不是 toastAfterNav（SPA 內換頁沒有人來取寄放）", async () => {
+  it("🔴 登出成功會說一句「已登出」，而且當場就看得到（SPA 內換頁）", async () => {
     setUser();
     const w = await mountAt("/");
     installFetch({ "/api/auth/logout": { status: 204 } });
@@ -1042,7 +1036,6 @@ describe("401 之後回得去登入頁", () => {
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/login");
     expect(toasts.map((t) => t.title)).toContain("已登出");
-    expect(sessionStorage.getItem("claude-pty:pending-toast")).toBeNull();
   });
 
   it("🔴 登出失敗也要照樣離開（同一個坑：只 push 會被守衛彈回 `/`）", async () => {

@@ -21,13 +21,12 @@ import { nextTick, watch } from "vue";
 import { dismissToast, toasts, TOAST_LEVELS, type ToastItem } from "@/lib/toast";
 
 // 下一影格才加 shown，讓進場過渡有起始狀態可以過渡（同一影格內設會被合併掉）
-// ⚠ `immediate: true` 不是裝飾：main.ts 在 `app.mount()` **之前**就 `drainPendingToast()`，
-//   取出來的那一則在這個元件掛上時已經躺在 toasts 裡。watch 只看之後的變化的話，那一則
-//   永遠拿不到 shown，CSS 讓它停在 opacity 0 直到倒數結束自己消失，畫面上從頭到尾沒有人
-//   看到它（Copilot review 2026-08-26 抓到的）。
-//   ⚠ 當時舉的例子是「登出後跳回登入頁的那則『已登出』」，那個例子已經不存在了（登出改成
-//     SPA 內換頁 ＋ 直接 `toast()`，2026-08-26）。守的性質沒變，只是現在寄放區恆空：這一行
-//     守的是**任何在掛載之前就進佇列的 toast**，而 drainPendingToast() 仍然跑在 mount 之前。
+// ⚠ `immediate: true` 不是裝飾，守的是**任何在這個元件掛上之前就進佇列的 toast**：watch
+//   只看之後的變化的話，那一則永遠拿不到 shown，CSS 讓它停在 opacity 0 直到倒數結束自己
+//   消失，畫面上從頭到尾沒有人看到它（Copilot review 2026-08-26 抓到的，當時的來源是
+//   main.ts 在 mount 前 drain 出來的跨頁通知）。
+//   ⚠ 那個來源在 2026-08-30 跟著跨頁通知一起拆了，目前沒有任何路徑會在 mount 前入列。
+//     留著這個字是因為它零成本，而下一個想在 mount 前 toast 的人不必再撞一次同樣的坑。
 watch(
   () => toasts.length,
   () => {

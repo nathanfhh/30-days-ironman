@@ -869,8 +869,9 @@ describe("AppFooter", () => {
 });
 
 describe("ToastStack", () => {
-  it("掛上之前就已經在佇列裡的 toast 也要進場（登出後整頁跳轉那一則）", async () => {
-    // main.ts 是先 drainPendingToast() 再 app.mount()：這一則在元件掛上時就已經存在。
+  it("掛上之前就已經在佇列裡的 toast 也要進場", async () => {
+    // 守的是 ToastStack 那個 `immediate: true`：在元件掛上之前就入列的那一則，watch 若只看
+    // 之後的變化就永遠拿不到 shown，畫面上從頭到尾看不到它。
     const { toast, toasts, dismissToast } = await import("@/lib/toast");
     const { default: ToastStack } = await import("@/components/ToastStack.vue");
     toasts.splice(0, toasts.length);

@@ -5,14 +5,7 @@ import { activeFilterKeys, filterParams } from "@/lib/filters";
 import { chipsOf, freshness, liveState, type SessionRow } from "@/lib/sessions";
 import { lsDel, lsGet, lsJson, lsSet } from "@/lib/storage";
 import { absTime, relTime, span } from "@/lib/time";
-import {
-  dismissToast,
-  drainPendingToast,
-  toast,
-  toastAfterNav,
-  toastError,
-  toasts,
-} from "@/lib/toast";
+import { dismissToast, toast, toastError, toasts } from "@/lib/toast";
 
 const row = (over: Partial<SessionRow> = {}): SessionRow => ({
   id: "abc123",
@@ -193,14 +186,6 @@ describe("lib/toast", () => {
   it("沒有標題就不發（空的通知只是一塊會動的空白）", () => {
     expect(toast("")).toBeUndefined();
     expect(toasts).toHaveLength(0);
-  });
-
-  it("跨頁通知只會被取出一次", () => {
-    toastAfterNav("嗨", "success", "內文");
-    drainPendingToast();
-    expect(toasts).toHaveLength(1);
-    drainPendingToast();
-    expect(toasts).toHaveLength(1);
   });
 
   it("重複收掉同一則是安全的", () => {

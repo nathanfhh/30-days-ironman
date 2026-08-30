@@ -100,41 +100,12 @@ export function toastError(
   return toast(`${action}失敗`, "danger", { body: message, ...opts });
 }
 
-/* ── 跨頁通知 ─────────────────────────────────────────────────────────────────
- * 寄一則給「下一次整份 app 重新載入」的人（`main.ts` 進站時 `drainPendingToast()` 去取）。
- * 用 sessionStorage 而非 localStorage：訊息屬於「這個分頁的這一次操作」。
- *
- * ⚠ **現在沒有任何生產呼叫端。** 原本的兩個都不在了：legacy 與 vue 並存期間的互跳隨
- *   legacy 於 2026-08-26 拆掉；登出那則「已登出」曾經寄放在這裡，但登出是 SPA 內換頁、
- *   `main.ts` 不會再跑一次，於是那則通知一直躺著等到下一次整頁重載才在一個無關的時機
- *   冒出來（2026-08-26 修，改成直接 `toast()`）。唯一還在的整頁跳轉是改完密碼那條
- *   （PasswordPanel 的 `location.href`），而它選擇**先顯示夠久再跳**，也用不到寄放。
- *   留著機制而不是刪掉，是因為「離開 SPA 的跳轉」這個形狀還在；要不要拆是另一個決定。
+/* ⚠ 這裡曾經有一組「跨頁通知」（`toastAfterNav` ／ `drainPendingToast`）：把一則訊息寄在
+ *   sessionStorage，等下一次整份 app 重新載入時取出來顯示。2026-08-30 拆掉，因為它的
+ *   兩個呼叫端先後消失、而且都不是意外：legacy 與 vue 並存期間的互跳隨 legacy 於
+ *   2026-08-26 拆除；登出那則「已登出」是 SPA 內換頁，寄放的話會躺到下一次整頁重載才在
+ *   無關的時機冒出來，同日改成直接 `toast()`。全站唯一還在的整頁跳轉是改完密碼那條
+ *   （PasswordPanel 的 `location.href`），而它選擇先顯示夠久再跳，也用不到寄放。
+ *   要再用的時候重寫是十行；留著的成本是一組沒有人呼叫的匯出、一支測試，以及三處
+ *   「為什麼這裡不用它」的註解。
  */
-const PENDING_TOAST_KEY = "claude-pty:pending-toast";
-
-export function toastAfterNav(title: string, level = "info", body = ""): void {
-  try {
-    sessionStorage.setItem(PENDING_TOAST_KEY, JSON.stringify({ title, level, body }));
-  } catch {
-    /* 無痕模式等情境下 storage 不可用——不顯示通知即可，別擋住流程 */
-  }
-}
-
-/** 取出上一頁寄放的通知並顯示。只該出現一次，所以先移除再顯示。 */
-export function drainPendingToast(): void {
-  let raw: string | null = null;
-  try {
-    raw = sessionStorage.getItem(PENDING_TOAST_KEY);
-    if (raw) sessionStorage.removeItem(PENDING_TOAST_KEY);
-  } catch {
-    return;
-  }
-  if (!raw) return;
-  try {
-    const t = JSON.parse(raw) as { title: string; level?: string; body?: string };
-    toast(t.title, t.level ?? "info", { body: t.body ?? "" });
-  } catch {
-    /* 內容壞掉就當作沒有 */
-  }
-}
