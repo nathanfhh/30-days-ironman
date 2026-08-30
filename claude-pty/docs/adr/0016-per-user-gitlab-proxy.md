@@ -477,8 +477,10 @@ SSH 的兩種也要改，因為 session 裡 SSH agent 預設不掛、防火牆�
   並講出下一步；真的不夠就改 `daemon.json` 的 `default-address-pools`。
   ⚠ **刻意沒有做啟動時的預先探測**：那要在啟動路徑上攪動一個全機器共用的資源，而且多個
   worker 會互相搶同名的探測網路。**在事情發生時講清楚，勝過事先猜一個數字。**
-- **不支援 git-lfs**：LFS 的 batch API 會回外部 href（可能直指物件儲存），nginx 改不掉。
-  有用 LFS 的 repo 會靜默壞掉。
+- **不支援 git-lfs**：白名單只放行 `info/refs`／`git-upload-pack`／`git-receive-pack`，
+  LFS 的 `….git/info/lfs/objects/batch` 對不上，落到地板 `location /` 拿到 403。所以是
+  **明確失敗**，不是靜默壞掉；只有設了 `GIT_LFS_SKIP_SMUDGE` 才會安靜地只剩 pointer file。
+  就算放行了也還不夠：batch API 回的是外部 href（可能直指物件儲存），nginx 改不掉。
 - **session 存活期間，裡面的東西仍能透過代理做白名單允許的任何事。** 買到的是「帶不走」
   與「範圍收斂」，不是「不能濫用」。
 

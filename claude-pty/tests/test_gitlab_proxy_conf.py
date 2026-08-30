@@ -18,6 +18,7 @@
 """
 
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -208,6 +209,25 @@ check(
     "git 用連線數上限而不是 req rate（clone 是少數幾條長連線，429 對 git 讀不懂）",
     "limit_conn gitlab_git" in git_block and "limit_req" not in git_block,
 )
+
+# git-lfs 的失敗形狀。**釘住的是「怎麼失敗」，不是「不支援」**：說明文件（模組
+# docstring、README、ADR 0016）原本寫成「batch API 回外部 href 所以靜默壞掉」，那描述
+# 的是一個走不到的第二層。真正生效的是白名單沒放行它，而地板回的 403 帶著訊息，所以
+# 是明確失敗。哪天有人把 LFS 加進白名單，這幾條會紅，那時三份說明也都該跟著改。
+_git_re = re.compile(gitlab_proxy._GIT_LOCATION.removeprefix("location ~ "))
+check(
+    "🔴 一般 git smart HTTP 三個端點都在白名單裡（不然下一條的對照不成立）",
+    all(_git_re.search(f"/group/repo.git/{p}") for p in ("info/refs", "git-upload-pack", "git-receive-pack")),
+)
+check(
+    "🔴 LFS 的 batch API 不在白名單裡，所以落到地板，不是被代理出去",
+    _git_re.search("/group/repo.git/info/lfs/objects/batch") is None,
+)
+check(
+    "🔴 地板是帶訊息的 403，不是靜默丟掉（git-lfs 因此會明確報錯，不是安靜地留 pointer）",
+    'return 403 \'{"error": "Forbidden: endpoint not whitelisted"}\';' in conf,
+)
+check("整份設定沒有任何 lfs 條目（有的話上面三條的敘述就過期了）", "lfs" not in conf.lower())
 check(
     "限流的鍵是常數不是來源 IP（每場 session 是不同 IP，用 IP 就退回 per-session）",
     "limit_req_zone $server_name" in code and "$binary_remote_addr" not in code,

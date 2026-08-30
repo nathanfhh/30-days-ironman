@@ -31,8 +31,16 @@ network 上、network alias 叫 `gitlab-proxy`，聽 5678。該使用者的所�
   不合併是因為產生方式不同：那邊是 `envsubst` 展開的靜態 template（沒有控制平面），
   這邊是依 PAT 現算的——硬要共用會讓兩邊都得遷就對方的機制。
 
-⚠ 已知**不支援 git-lfs**：LFS 的 batch API 會回外部 href（可能直指物件儲存），nginx 改不掉。
-  有用 LFS 的 repo 會靜默壞掉，所以文件裡要講明，不要讓人以為它會通。
+⚠ 已知**不支援 git-lfs**。原因有兩層，第一層才是現在真正生效的那個：
+  1. **白名單沒放行它。** `_GIT_LOCATION` 只收 `info/refs`／`git-upload-pack`／
+     `git-receive-pack` 三個端點，LFS 的 `….git/info/lfs/objects/batch` 對不上，
+     於是落到地板 `location /`，拿到 `403 {"error": "Forbidden: endpoint not whitelisted"}`。
+     **所以它是明確失敗，不是靜默壞掉**：git-lfs 會在取物件那一步報錯。只有呼叫端自己
+     設了跳過下載錯誤（`GIT_LFS_SKIP_SMUDGE`），工作目錄才會安靜地只剩 pointer file。
+  2. 就算放行了也還不夠：batch API 回的是外部 href（可能直指物件儲存），nginx 改不掉。
+  所以文件裡要講明，不要讓人以為它會通。
+  （2026-08-30 更正：這段原本只寫第 2 層，並說「會靜默壞掉」。用 render_conf() 產出的
+   設定實測過，LFS 根本走不到第 2 層，而地板回的 403 是帶訊息的。）
 """
 
 from __future__ import annotations

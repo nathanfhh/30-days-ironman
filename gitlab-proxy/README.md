@@ -142,8 +142,10 @@ location ~ ^/.+\.git/(info/refs|git-upload-pack|git-receive-pack)$ {
 啟用它同時要改 skill 端的 clone URL（指向代理、拿掉 `http.extraHeader`），
 所以這裡先不預設開啟。
 
-另外，git-lfs 沒辦法這樣代理：LFS 的 batch API 會回外部 href，可能直指物件儲存，
-nginx 改不掉。有用 LFS 的 repo 會靜默壞掉。
+另外，git-lfs 沒辦法這樣代理。上面那個 git 的 location 只收 `info/refs`／
+`git-upload-pack`／`git-receive-pack` 三個端點，LFS 的 `….git/info/lfs/objects/batch`
+對不上，會落到地板 `location /` 拿 403，也就是**明確失敗**，不是靜默壞掉。而且就算
+把它也加進白名單還是不夠：LFS 的 batch API 會回外部 href，可能直指物件儲存，nginx 改不掉。
 
 ## 這還不是終點
 

@@ -318,8 +318,10 @@ git 與 API 呼叫都在 TLS 那關回 502。上一節那條「代理起不來�
 
 ### 已知限制
 
-- **不支援 git-lfs**：LFS 的 batch API 回的是外部 href（可能直指物件儲存），nginx 改不掉。
-  有用 LFS 的 repo 會靜默壞掉
+- **不支援 git-lfs**：代理的白名單只放行一般 Git smart HTTP 的三個端點，LFS 的
+  `….git/info/lfs/objects/batch` 對不上，落到地板拿 403。有用 LFS 的 repo 會在取
+  LFS 物件時**明確失敗**（設了 `GIT_LFS_SKIP_SMUDGE` 才會安靜地只剩 pointer file）。
+  就算放行了也還不夠：batch API 回的是外部 href（可能直指物件儲存），nginx 改不掉
 - session 存活期間，裡面的東西仍能透過代理做**白名單允許的任何事**。買到的是「帶不走」
   與「範圍收斂」，不是「不能濫用」
 
