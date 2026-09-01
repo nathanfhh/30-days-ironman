@@ -10,10 +10,6 @@
 
 文章談的是為什麼這樣選；這個 repo 放的是怎麼做的。
 
-▶️ **67 秒實機 Demo**：登入 → 建立 Session → 在瀏覽器裡操作 Claude Code → 終止容器
-
-[![claude-pty 67 秒實機 Demo：登入後建立 Session，在瀏覽器操作 Claude Code，再終止容器](https://img.youtube.com/vi/LJwRVK3R16I/0.jpg)](https://www.youtube.com/watch?v=LJwRVK3R16I)
-
 ![專案架構圖：使用者→claude-pty 控制平面→每場 session 一顆容器→經 iptables／GitLab 代理／MITM 連外；OpenTelemetry 與 Jaeger 觀測](docs/architecture-overview.webp)
 
 左到右：使用者（瀏覽器，或本機 Claude Code 直接跑）→ claude-pty 控制平面 → 每場 session 一顆可拋棄的容器，
@@ -162,6 +158,10 @@ git clone 也走這個代理，這行就得搬進各自的 location」）。
 
 把上面那一整套搬到瀏覽器後面：打開網頁、開一場環境、跑完一套審查、關掉。
 一場 Session 的真身就是一個容器，生命週期交給 Docker Daemon 管。
+
+🎥 **67 秒實機 Demo**：登入 → 建立 Session → 在瀏覽器裡操作 Claude Code → 終止容器
+
+[![claude-pty 67 秒實機 Demo：登入後建立 Session，在瀏覽器操作 Claude Code，再終止容器](https://img.youtube.com/vi/LJwRVK3R16I/0.jpg)](https://www.youtube.com/watch?v=LJwRVK3R16I)
 
 它可以有很多人，但不是給很多人「一起」用的：各自登入、各自的狀態空間、各自的
 GitLab 憑證都做了；沒做的是同一場裡兩個人一起看、一起打字。
