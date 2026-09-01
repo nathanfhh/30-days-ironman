@@ -10,6 +10,10 @@
 
 文章談的是為什麼這樣選；這個 repo 放的是怎麼做的。
 
+▶️ **67 秒實機 Demo**：登入 → 建立 Session → 在瀏覽器裡操作 Claude Code → 終止容器
+
+[![claude-pty 67 秒實機 Demo：登入後建立 Session，在瀏覽器操作 Claude Code，再終止容器](https://img.youtube.com/vi/LJwRVK3R16I/0.jpg)](https://www.youtube.com/watch?v=LJwRVK3R16I)
+
 ![專案架構圖：使用者→claude-pty 控制平面→每場 session 一顆容器→經 iptables／GitLab 代理／MITM 連外；OpenTelemetry 與 Jaeger 觀測](docs/architecture-overview.webp)
 
 左到右：使用者（瀏覽器，或本機 Claude Code 直接跑）→ claude-pty 控制平面 → 每場 session 一顆可拋棄的容器，
