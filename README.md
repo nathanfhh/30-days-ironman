@@ -161,7 +161,7 @@ git clone 也走這個代理，這行就得搬進各自的 location」）。
 
 🎥 **67 秒實機 Demo**：登入 → 建立 Session → 在瀏覽器裡操作 Claude Code → 終止容器
 
-[![claude-pty 67 秒實機 Demo：登入後建立 Session，在瀏覽器操作 Claude Code，再終止容器](https://images.nathan-fu.tw/day24-05-session-starting.webp)](https://www.youtube.com/watch?v=LJwRVK3R16I)
+[![claude-pty 67 秒實機 Demo：登入後建立 Session，在瀏覽器操作 Claude Code，再終止容器](https://images.nathan-fu.tw/claude-pty-intro-lite.webp)](https://www.youtube.com/watch?v=LJwRVK3R16I)
 
 它可以有很多人，但不是給很多人「一起」用的：各自登入、各自的狀態空間、各自的
 GitLab 憑證都做了；沒做的是同一場裡兩個人一起看、一起打字。
