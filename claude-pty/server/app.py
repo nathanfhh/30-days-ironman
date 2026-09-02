@@ -756,6 +756,25 @@ def auth_view():
             # 沒有 nginx 擋在前面（開發部署），這條就是一個外部打得到、且會生行程的 GET。
             # 查得到就回、查不到就 403，不在這裡生任何東西。
             return "", 403
+        # ⚠ **重建之前先確認 container 還在。** 少了這一步，對一顆已經死掉的 container 起
+        #   ttyd 是**會成功的**（ttyd 要等 WS 連上才 fork child，所以它照樣綁得到 port、
+        #   照樣通過 `_wait_ready`），接著 `docker attach` 立刻以非 0 退出。Rust 版對非乾淨
+        #   退出**不送 close frame**，瀏覽器因此收到 1006 卻**不會 fire error**，前端的
+        #   `doReconnect` 保持 true，於是零延遲重連回到這裡，每一圈再生一顆 ttyd、再佔一個
+        #   port、再寫一列，直到對帳器那一輪（最久 30 秒）才收得掉。擋在這裡會讓**握手本身**
+        #   失敗（nginx 把 403 轉成 302，見 deploy/nginx.conf 的 @view_denied），瀏覽器這時
+        #   才 fire error 把 doReconnect 關掉，一圈就停。
+        #   ⚠ 這裡**不另外問 dockerd**：`_owned` 走的是 `manager.status()`，它剛問過一次，
+        #     答案就在 `session_info["state"]`。dockerd 問不到時那個值是 `_last_known_state()`
+        #     退回的「上次真的看到的狀態」，**fail-open 由那個預設提供**，不需要在這裡再判一次
+        #     （它永遠是字串，不會是 None）。`POST /api/sessions/<sid>/view` 的同一道防護多打
+        #     一次 `probe_container`，是因為那條路要回一個帶訊息的 409、也順手更新畫面；
+        #     這條只需要 403，而且是 nginx 每次都會打的路徑。
+        #   ⚠ `creating`（登錄已佔、container 還沒出現）**不在** ALIVE_STATES 裡，所以會被擋。
+        #     這是對的：那時 attach 一樣會失敗，而且直接輸入或用書籤打 `/session/<sid>/` 就
+        #     走得到這裡，不必先經過 POST。probe 版在這一格拿到的是 `gone`，結果相同。
+        if session_info["state"] not in sessions_mod.ALIVE_STATES:
+            return "", 403
         try:
             view = views.open_view(
                 sid,

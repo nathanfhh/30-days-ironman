@@ -226,12 +226,89 @@ check("🔴 既有 cookie 立即失效", cb.get("/api/auth/me").status_code == 4
 check("可逆：把新密碼告訴他，就回來了", auth.authenticate("bob", "exit-password-1")["id"] == bob_id)
 
 print("== nginx auth_request 端點 ==")
+from server import views as _views_probe_va  # noqa: E402
+
+_app_manager_va = __import__("server.app", fromlist=["manager"]).manager
+
 # auth_view 是給 nginx auth_request 用的，一律回 403（nginx 據此擋下並導回）——
 # 與一般 API 的 404 不同，因為 nginx 的 auth_request 只認 2xx/401/403。
 r = c.get("/api/auth/view?session=otherses1")
 check("非擁有者 → 403（nginx 據此擋下）", r.status_code == 403)
 r = c.get("/api/auth/view?session=nonexistent")
 check("不存在的 session → 403", r.status_code == 403)
+
+# 🔴 **沒有存活 view 時它會當場重建一顆 ttyd**，而重建之前必須先確認 container 還在。
+#    少了那道檢查，對一顆已死的 container 起 ttyd 是會成功的（ttyd 等 WS 連上才 fork
+#    child），接著 attach 失敗 → Rust 版不送 close frame → 瀏覽器收到 1006 但不 fire
+#    error → 前端 doReconnect 保持 true → 零延遲重連回到這裡 → 每圈再生一顆 ttyd。
+#    這四格釘的就是那道閘：**只有活著的容器才重建**。
+_orig_behind = config.BEHIND_PROXY
+_va_opened: list = []
+_va_touched: list = []
+_va_orig_open = _views_probe_va.open_view
+_va_orig_touch = _app_manager_va.touch
+_va_orig_status = _app_manager_va.status
+_va_orig_list = _views_probe_va.list_views
+_va_state = {"state": "running"}
+
+config.BEHIND_PROXY = True  # 沒有這行整段走不到重建分支（上面就先 403 了）
+_views_probe_va.open_view = lambda *a, **k: (_va_opened.append(a), {"port": 45999})[1]
+_views_probe_va.list_views = lambda sid: []  # 一律「沒有存活 view」，強制走重建分支
+_app_manager_va.touch = lambda sid: _va_touched.append(sid)
+_app_manager_va.status = lambda sid, with_ready=False: (
+    {
+        "user_id": admin["id"],
+        "container": "claude-pty-otherses1",
+        "state": _va_state["state"],
+    }
+    if sid == "otherses1"
+    else _va_orig_status(sid, with_ready=with_ready)
+)
+try:
+    ca_view = app.test_client()
+    ca_view.post("/api/auth/login", json={"username": "admin", "password": "admin-password-1"})
+
+    for _dead in ("exited", "gone"):
+        _va_state["state"] = _dead
+        _va_opened.clear()
+        _va_touched.clear()
+        r = ca_view.get("/api/auth/view?session=otherses1")
+        check(f"🔴 container 已 {_dead} → 403（nginx 轉成 302，前端才會 fire error 停下重連）", r.status_code == 403)
+        check(f"🔴 container 已 {_dead} 時一顆 ttyd 都沒生（否則就是那個無限迴圈本身）", _va_opened == [])
+        check(f"🔴 container 已 {_dead} 時沒有 touch（擋下的路徑不留副作用）", _va_touched == [])
+
+    # 🔴 creating＝登錄已佔、container 還沒出現。它**不在** ALIVE_STATES 裡（那裡是 docker
+    #    的 "created"，不是我們的 "creating"），所以會被擋，而這是刻意的：那時 attach 一樣
+    #    會失敗，而且直接輸入或用書籤打 /session/<sid>/ 就走得到這裡，不必先經過 POST。
+    #    這一格存在是為了擋住未來「好心」把 creating 加進 ALIVE_STATES 的修改。
+    _va_state["state"] = "creating"
+    _va_opened.clear()
+    r = ca_view.get("/api/auth/view?session=otherses1")
+    check("🔴 creating（container 還沒出現）→ 403，不是先生一顆再說", r.status_code == 403)
+    check("🔴 creating 時也沒生 ttyd", _va_opened == [])
+
+    _va_state["state"] = "running"
+    _va_opened.clear()
+    r = ca_view.get("/api/auth/view?session=otherses1")
+    check("container 活著 → 照常重建，200", r.status_code == 200)
+    check("回報新 view 的 port 給 nginx", r.headers.get("X-Ttyd-Port") == "45999")
+    check("重建了正好一顆", len(_va_opened) == 1)
+
+    # 🔴 有存活 view 時走的是另一條分支：直接回報它，不看 state、也不重建。
+    _views_probe_va.list_views = lambda sid: [{"port": 44001, "session_id": sid}]
+    _va_state["state"] = "exited"  # 就算狀態說已結束，既有的 view 仍該被回報
+    _va_opened.clear()
+    r = ca_view.get("/api/auth/view?session=otherses1")
+    check(
+        "🔴 已有存活 view → 直接回報它，不進重建分支", r.status_code == 200 and r.headers.get("X-Ttyd-Port") == "44001"
+    )
+    check("🔴 已有存活 view 時不會多生一顆", _va_opened == [])
+finally:
+    config.BEHIND_PROXY = _orig_behind
+    _views_probe_va.open_view = _va_orig_open
+    _views_probe_va.list_views = _va_orig_list
+    _app_manager_va.touch = _va_orig_touch
+    _app_manager_va.status = _va_orig_status
 
 print("== /api/auth/check：ttyd --auth-url 的第二層，純判定零副作用 ==")
 # 這支被每個 asset 與 WS 升級各打一次。斷言三件事：判定對、不開 view、不碰 dockerd。
