@@ -181,7 +181,7 @@ _C_HEAD = (
     b"HTTP/1.0 200 OK\r\nserver: ttyd/1.7.7-40e79c7 (libwebsockets/4.3.3)\r\n"
     b"content-type: text/html\r\n\r\n<!DOCTYPE html>"
 )
-_RUST_HEAD = b"HTTP/1.0 401 Unauthorized\r\nserver: ttyd/2.0.1-4d6dc35 (rust)\r\ncontent-length: 0\r\n\r\n"
+_RUST_HEAD = b"HTTP/1.0 401 Unauthorized\r\nserver: ttyd/2.0.1-5057c69 (rust)\r\ncontent-length: 0\r\n\r\n"
 _OTHER = b"HTTP/1.0 200 OK\r\nserver: nginx/1.27\r\ncontent-type: text/html\r\n\r\n<html>"
 
 

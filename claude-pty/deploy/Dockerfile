@@ -33,7 +33,7 @@
 #   不這樣做的話預設值要在兩個 stage 各寫一份，而那兩份遲早會分岔（改了 builder 卻忘了
 #   改最後那個 ENV，頁尾就會顯示一個沒有在跑的 commit）。
 ARG TTYD_RUST_REPO=https://github.com/nathanfhh/ttyd.git
-ARG TTYD_RUST_REF=4d6dc35a870da8158016c804809cc28de28607cc
+ARG TTYD_RUST_REF=5057c69a4ac68cb9db09bc95893db7ea8669bf0f
 
 FROM rust:1.86-slim-bookworm AS ttyd-rust
 ARG TTYD_RUST_REPO
