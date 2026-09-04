@@ -18,6 +18,7 @@ Claude Code skills, and the tests that keep their scripts honest.
 ├── gitlab-proxy/              nginx 反向代理：憑證不進 session、端點白名單
 ├── opentelemetry/             Jaeger compose + 三支報表腳本（telemetry / cost / session）
 ├── benchmarks/                code-review-bench：評測資料集（data/）與計分 harness（harness/）
+├── site/                      互動關聯圖：template.html + data/*.json，build.py 產生 dist/（不進版控）
 ├── pyproject.toml             uv 專案（測試工具鏈）
 └── install.sh                 把 skills/ 連進 ~/.claude
 ```
@@ -93,6 +94,15 @@ uv run pytest tests/test_gitlab_api.py -v
 judge 一定要是 subagent，不能由主 agent 自己判——剛改完 skill 的人腦中有作者意圖，會把「我知道我想講什麼」誤讀成「文件講清楚了」，而那正是要測的東西。
 
 **改 skill 前先跑一次當 baseline，改完重跑；baseline 過的 check 失守就 revert。** 完整的 gate 規則、豁免條件與維護慣例見 `tests/nathan-code-review/README.md`。
+
+## site/ 的資料規則
+
+節點 id 是引用的鍵（`days.json` 的 `repo`／`concepts`、`promises.json`、`tours.json`、`review.json` 都拿它指東西）。
+改名要一起改，`tests/test_site_build.py` 抓懸空引用與沒被任何一天引用的 repo 節點。
+`articles.json` 未發佈的日子是 `null`，這是正常狀態；最終版跑 `python3 site/build.py --check --strict` 掃乾淨。
+`review.json` 是外部審閱，有署名，不是 repo 的自述。
+文章發佈或改稿之後照 `site/PLAYBOOK.md` 走：`python3 site/build.py --refs dNN` 列出牽動的格子，逐項對照最終版。
+`site/data/embed.json` 是向量區段的資料，文章文字變了就要用 `site/embed.py --reuse` 與 `site/embed_analyze.py` 重算；向量本身不進 repo。
 
 ## 離線是設計前提，不是降級情境
 

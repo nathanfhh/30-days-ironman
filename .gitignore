@@ -30,3 +30,11 @@ diagram-png/
 
 # coverage.py 資料檔
 .coverage
+
+# 關聯圖的產物由 site/build.py 產生，CI 會重做
+site/dist/
+
+# embed.py 的產物含向量、約 5 MB，留在本機給下一次 --reuse；embed_analyze 的健檢報告也不進版控。
+# 進 repo 的是它們算出來的 site/data/embed.json。
+embeddings*.json
+audit*.json

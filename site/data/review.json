@@ -1,0 +1,196 @@
+{
+ "byline": "外部審閱：Claude，2026-09-03",
+ "about": "由 Claude 在 2026-09-03 對照當時 main 與 nathanfhh/ttyd 的 checkout 寫成，每一條都是審閱者的判斷，不是 repo 的宣稱；作者可以改寫、反駁或刪除任何一條。",
+ "notes": {
+  "r-skill-md": {
+   "lamp": "crit",
+   "text": "「發佈前要有人點頭」在這裡是第 207 行的一句散文。容器裡的 CLI 是 <code>--dangerously-skip-permissions</code>，代理白名單又放行那個 POST，所以三道關卡裡真正能擋的只剩這行字。作者 Day 27 自己認了。我會把它做成機制：<code>post-report</code> 子命令要求一個由互動確認才產生、幾分鐘就過期的 nonce（或乾脆檢查 stdin 是不是 TTY），讓 <code>claude -p</code> 那條路結構上發不出報告。"
+  },
+  "r-report-model": {
+   "lamp": "warn",
+   "text": "<code>counter_evidence_checked</code>（L252–256）是一個裸布林：finding 可以標 true 而 rationale 裡沒有任何反證搜尋的痕跡。baseline.md 第 53 行已把它列為漂移風險。同樣的問題在 <code>process_directed_text.detected</code>：false 分不出「沒找到」和「沒去看」。兩個都值得一個字串欄位或一條 validator。"
+  },
+  "r-eval-cases": {
+   "lamp": "warn",
+   "text": "四個 case 守的是四條軸線，但 pushback 六題、PHI 升級、入口枚舉閘、掃描器缺席揭露都還沒有 case；README 自己的 gate 規則（硬規則、Phase 增刪、嚴重度定義都要跑 eval）暗示這些都該有。私有版本累積到 60 案／13 留存，公開 repo 只有 4，讀者照做時會先撞到「4 個不能切留存集」這句。"
+  },
+  "c-version": {
+   "lamp": "warn",
+   "text": "版本號規則寫在 CLAUDE.md 靠 AI 自律，沒有任何測試或 CI 比對 <code>git diff --name-only</code> 與 frontmatter 是否同步。這正是文章反覆講的「承諾靠人記得」：一條 pre-commit 就能讓它變成結構。"
+  },
+  "r-bench-scores": {
+   "lamp": "warn",
+   "text": "README 說「分數以 summary.json 為準」，但 <code>corrected</code> 區塊同時裝著被作者自己判定自我膨脹的那組 recall／F1（84.2%）與後來的 <code>golden_recall</code>／<code>golden_f1</code>（87.1%）。留下錯的表是誠實，讓讀者要知道看哪個 key 才不會抄錯，是代價。另外 <code>ncr-quality-check</code> 在這 50 場裡跑了 0/50。"
+  },
+  "c-benchmark": {
+   "lamp": "good",
+   "text": "把 golden 和未命中候選拔掉標籤丟進同一個池、再請無 context 的稽核 agent 攻擊自己的算法，這兩步比任何名次都值錢。站得住的三條事實（golden 16.8% 未過、114 條裡命中 97、每句話效率最低）才是這兩篇的產出。"
+  },
+  "c-self-bias": {
+   "lamp": "good",
+   "text": "「算法是我訂的，它就會往我這邊偏，偏的時候我自己看不出來」被證明了兩次，而且第二次是重跑時自己撞上的。這是整個系列最有說服力的自我稽核。"
+  },
+  "c-hitl": {
+   "lamp": "crit",
+   "text": "這是宣稱與機制距離最大的一格：能力在（proxy 放行 POST、CLI 不問權限），承諾只在 skill 文字裡。作者在 Day 27 把它歸為「排在待辦、不是決定不做」。"
+  },
+  "c-scar": {
+   "lamp": "warn",
+   "text": "出生證明三問是全系列最可搬走的做法，但底帳與癒痕不在公開 repo 裡。Day 16 談的機制，讀者只看得到它的產物（render_report.py、共用編號序列），看不到帳本本身。"
+  },
+  "c-cost-author": {
+   "lamp": "good",
+   "text": "同仁回饋那一段是三十篇裡最誠實的轉折：底帳只算審查者避免了什麼，沒有一格記作者要動多大範圍。「每條都附修法的報告讀起來是工單」這句應該貼在每個 AI reviewer 專案的 README 上。"
+  },
+  "r-init-firewall": {
+   "lamp": "warn",
+   "text": "只設 iptables 不設 ip6tables（L184–189 自陳），前提是目前 bridge 沒有 IPv6；自我驗證靠 example.com 意外抓到 v6 洩漏，但沒有任何一行斷言 v6 真的不存在。DNS 那條缺口 README 已明講。"
+  },
+  "c-two-quotes": {
+   "lamp": "good",
+   "text": "這是全系列最好的一個案例：規則寫在模型外面、root 才改得動，還是被繞過，而且驗證照樣綠。它把「誰能改這道牆」變成每一道防線都要再問一次的問題。CLAUDE.md 也把它寫成耦合清單的一條。"
+  },
+  "r-redact": {
+   "lamp": "warn",
+   "text": "第三層 regex 的 docstring 自己列了抓不到的形狀：AWS AKIA、GitHub ghp_、PEM 區塊。配上錄製範圍預設「全部流量」與 CA 進系統信任庫，落地的目錄真的要當機敏目錄看待，文章講了，預設值卻往多的那邊倒。"
+  },
+  "r-run-wrapper": {
+   "lamp": "warn",
+   "text": "<code>--group-add 0</code> 的判斷在 <code>docker info</code> 失敗或逾時時往「加」的方向 fail-open；trivy DB 與 semgrep-rules 從外面拉進來沒有簽章或雜湊驗證，跟 token fd 那種 fail-closed 的紀律不在同一個水準。"
+  },
+  "r-nginx-template": {
+   "lamp": "warn",
+   "text": "白名單現在有三份副本要同步：這裡、gitlab_api.py 實際呼叫的端點、claude-pty 的 gitlab_proxy.py。限流的 key 是 <code>$binary_remote_addr</code>，等於每台機器一桶而不是每人一桶，Day 28 講的拓撲問題在單機版仍在。"
+  },
+  "r-dockerfile": {
+   "lamp": "warn",
+   "text": "四個 <code>curl | sh</code> 安裝器（Claude Code、uv、nvm、rtk）沒有釘 hash；Day 5 對 trivy 安裝腳本講的「先下載檢視再執行」在自己的 Dockerfile 裡沒有照做。"
+  },
+  "r-jaeger-compose": {
+   "lamp": "crit",
+   "text": "查詢介面沒有認證，而且每個使用者的 docker network 都接得到它。ADR 0016 的說法是「開帳號給誰就等於信任誰」，但那是人與人的信任；session 容器裡那個 <code>--dangerously-skip-permissions</code> 的 agent 是另一個信任邊界，它可以 <code>curl jaeger:16686/api/traces</code> 讀所有人的 user.email、session.id 與 token 量。"
+  },
+  "r-pty-provision": {
+   "lamp": "warn",
+   "text": "ADR 0022 自陳同一使用者同時開兩場仍會打架，而每人上限是 10 場；失敗形狀從 500 改成乾淨的 SessionError，per-user lock 點名了但沒做。"
+  },
+  "r-adr-0009": {
+   "lamp": "warn",
+   "text": "掛 host socket 約等於 host root，ADR 講得很白，README 也說要獨立主機或 VM。但 <code>docker compose up</code> 起來時沒有任何執行期訊號提醒這件事；rootless 是唯一真正的收法，還在待辦。"
+  },
+  "r-pty": {
+   "lamp": "warn",
+   "text": "外層 CLAUDE.md 說 <code>uv run pytest</code> 測全部；claude-pty 自己 50 支 <code>test_*.py</code> 用的是自製 <code>check()</code> 斷言、靠 <code>run-all.sh</code> 跑，pytest 不會照預期收集。兩套慣例都可以，但只讀外層手冊的人會以為綠燈涵蓋了這裡。"
+  },
+  "c-false-green": {
+   "lamp": "good",
+   "text": "五形狀是整個系列的收束器，而且每一種都有 repo 裡的實體：Trivy 空報告、代理沒被走過、鏡子測試、兩個引號、五週的紅燈。「這盞綠燈，我看過它紅嗎」比任何 checklist 都好記。"
+  },
+  "r-ttyd-parity": {
+   "lamp": "good",
+   "text": "三個分母分開報、承認共用測試下 Rust 覆蓋率比 C 低八個百分點、記憶體輸 4.8 倍照登、孤兒累積寫成未解問題：這份對照報告的誠實程度高於多數正式專案的 port。"
+  },
+  "c-red-five-weeks": {
+   "lamp": "warn",
+   "text": "紅了五週的根因是「沒人讀」，作者也說這次輸掉的是紀律。CI 上那支測試若有 required check，這五週會變成五分鐘；repo 現在的 tests.yml 有 gate，但 ttyd 那邊的 CI 是否把 parity 測試設成 required，文章沒交代。"
+  },
+  "c-structure-not-discipline": {
+   "lamp": "good",
+   "text": "「能夠被背叛的，只有存在的東西」把「不做」變成可查證：路由表沒有 /input、models.py 沒有私鑰欄位。這是 Day 27 之所以是全系列最強一篇的原因。"
+  },
+  "c-dns-egress": {
+   "lamp": "good",
+   "text": "知道、寫下來、沒有封，而且四條收法與各自的故障模式都留在 docs/dns-egress-notes.md。這是「已知限制」該有的形狀。"
+  },
+  "r-pty-user-proxy": {
+   "lamp": "warn",
+   "text": "不支援 git-lfs 是明講的缺口；有 LFS 的 repo 會在取物件時明確失敗，只要不設跳過下載錯誤就不會留下 pointer file 假裝成功，這一點守住了「失敗要出聲」。"
+  },
+  "c-40min": {
+   "lamp": "good",
+   "text": "把事故拆成「列表路徑不准碰 Docker」「狀態由對帳寫 DB」「畫面寫幾點確認的」三件事，第三件的措辭（對帳可能卡住，不是你的 Session 有問題）比機制本身更值得抄。"
+  },
+  "r-readme": {
+   "lamp": "good",
+   "text": "開頭就是 Day → 目錄對照表，並且把兩個設計上接受的缺口寫在架構圖正下方。這是我看過少數「文章與 repo 互為索引」做得成立的公開專案。"
+  },
+  "d11": {
+   "lamp": "warn",
+   "text": "17 題裡 15 題照建議，這段讀起來像產品示範多於工程紀錄；真正有價值的第 9 題（全專案掃、依 diff 歸因）值得獨立展開，因為它後來變成 scanners.md 的核心規則。"
+  },
+  "d06": {
+   "lamp": "warn",
+   "text": "九面向清單是三十篇裡最難「讀」的兩天，但也是最容易被抄走的部分；作者自己說「清單本身反而最容易抄」，★ 的出生證明才是這兩天的重點。"
+  },
+  "d22": {
+   "lamp": "warn",
+   "text": "一篇裡塞了流量量級、SSE 串流、格式版本、session id、全錄三代價、防火牆計數、快取規則與 reverse-mode 後記，資訊密度是全系列最高，也最需要拆成兩篇。"
+  }
+ },
+ "lamps": {
+  "good": [
+   {
+    "title": "每一道防線都配一次自己的證偽",
+    "text": "sudoers 兩個引號、代理沒被走過、ping 不在容器裡：三十篇裡的安全設計沒有一個是「做了就算」，都被作者自己或 AI 反過來打過一次。",
+    "node": "c-two-quotes"
+   },
+   {
+    "title": "數字都有出處與保存期限",
+    "text": "5.75 美金怎麼取樣、tokenizer 換過、n=1 的 A/B、驗證員自我一致率 81–97%：每個數字旁邊都寫著它能撐多久。這在鐵人賽文章裡很罕見。",
+    "node": "c-self-bias"
+   },
+   {
+    "title": "benchmark 兩篇的自我稽核",
+    "text": "最後一名與第一名都是真的、都不是重點；請無 context 的稽核員找偏袒自己的地方，然後在重跑時又抓到一次。",
+    "node": "c-benchmark"
+   },
+   {
+    "title": "Day 16 與 Day 27 是全系列的骨架",
+    "text": "規則的出生證明與退役條件，以及「能被背叛的只有存在的東西」，兩篇合起來就是這套治理觀真正能搬走的部分。",
+    "node": "c-structure-not-discipline"
+   },
+   {
+    "title": "repo 與文章互為索引",
+    "text": "README 的 Day → 目錄表、22 份記著推翻過程的 ADR、CLAUDE.md 的耦合清單：程式碼回答「怎麼做」，文章回答「為什麼」，兩邊對得上。",
+    "node": "r-readme"
+   },
+   {
+    "title": "假綠燈五形狀",
+    "text": "把散在五個層次的九次事故收成一個問句：「這盞綠燈，我看過它紅嗎」。這是整個系列最可傳播的一句。",
+    "node": "c-false-green"
+   }
+  ],
+  "crit": [
+   {
+    "title": "發佈前的人點頭仍是一句散文",
+    "text": "CLI 不問權限、代理放行 POST，只剩 SKILL.md 第 207 行擋著。作者認了，但這是宣稱與機制距離最大的地方，也是最容易做成機制的一格。",
+    "node": "r-skill-md"
+   },
+   {
+    "title": "Jaeger 對 session 裡的 agent 沒有邊界",
+    "text": "每個使用者的網路都接得到沒有認證的查詢介面；ADR 用人與人的信任來解釋，沒有處理容器裡那個不受信任 agent 的信任邊界。",
+    "node": "r-jaeger-compose"
+   },
+   {
+    "title": "validator 守不到的兩個布林",
+    "text": "counter_evidence_checked 與 process_directed_text.detected 都可以「說有做」而沒做；斷言閘是 skill 的招牌，卻只在散文層。",
+    "node": "r-report-model"
+   },
+   {
+    "title": "行為回歸測試只有四個案例",
+    "text": "作者自己的門檻是 4 個不能切留存集；pushback、PHI、入口枚舉、掃描器缺席都沒有 case。版本號 bump 也沒有任何機制守著。",
+    "node": "r-eval-cases"
+   },
+   {
+    "title": "fail-closed 的紀律沒有貫穿基礎設施",
+    "text": "token fd 與脫敏 addon 是 fail-closed，但 curl | sh 安裝器沒釘 hash、trivy DB 與規則沒驗簽、--group-add 0 在 docker info 失敗時 fail-open、redact 第三層自陳抓不到 AKIA／ghp_。",
+    "node": "r-run-wrapper"
+   },
+   {
+    "title": "文章太長，好句子會被淹掉",
+    "text": "全文約 54 萬 bytes，Day 22、23、25 各自可以拆成兩篇；限定詞疊三層的寫法讓「這只在當時版本成立」變成每段的背景噪音。給比賽讀者的建議：每篇開頭那一句結論已經夠好，把它放大。",
+    "node": "d22"
+   }
+  ]
+ }
+}

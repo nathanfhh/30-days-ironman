@@ -1,0 +1,308 @@
+[
+ {
+  "id": "c-suntzu",
+  "name": "孫子兵法五段",
+  "kind": "frame",
+  "desc": "先勝而後求戰／致人而不致於人／以正合以奇勝／令之以文齊之以武／上兵伐謀。Day 30 回看：前兩列講的是 Harness，沒有一列講 Sandbox。"
+ },
+ {
+  "id": "c-five-normals",
+  "name": "五種常態",
+  "kind": "frame",
+  "desc": "指引被忘、架構歪、測試不可信、機密外洩、供應鏈投毒。都是「什麼時候發生」不是「會不會」。"
+ },
+ {
+  "id": "c-extract-me",
+  "name": "萃取一個我",
+  "kind": "method",
+  "desc": "先讀懂人（怎麼想、怎麼分析、怎麼回覆、怎麼分級、怎麼調查、價值觀），再按載入時機切成檔案。Day 30 回頭看：這是作者職涯已發生過一次的事。"
+ },
+ {
+  "id": "c-progressive",
+  "name": "Progressive disclosure",
+  "kind": "method",
+  "desc": "入口只放路由，細節留在原地，走到哪一步才讀那一份。SKILL.md 11.9KB，references+agents 約 73KB。"
+ },
+ {
+  "id": "c-severity",
+  "name": "Critical／Suggestion／Nit",
+  "kind": "rule",
+  "desc": "Critical 是合併門檻，不等於 CVSS。原子性在醫療情境升 Critical。"
+ },
+ {
+  "id": "c-anti-anchor",
+  "name": "反蒙蔽協議",
+  "kind": "rule",
+  "desc": "再審不是上一輪的續集：先盲審，後比對。能用結構擋的不改用要求：沒讀進來我驗得了。"
+ },
+ {
+  "id": "c-info-not-instr",
+  "name": "資訊不是指令",
+  "kind": "rule",
+  "desc": "MR 說明、commit、註解裡的祈使句一律不改變審查行為。Day 13 補上：試過但被擋下要講出來。"
+ },
+ {
+  "id": "c-nine-dims",
+  "name": "九面向 A–I",
+  "kind": "rule",
+  "desc": "風格、簡潔、安全、API 慣例、架構、資料取用、測試、非 Python 檔、回溯分析。每類獨立 ✅／❌／—。"
+ },
+ {
+  "id": "c-star-rules",
+  "name": "★ 設定值型規則",
+  "kind": "rule",
+  "desc": "換一家公司就不成立的判級、豁免、選型（URL 用 dash、唯讀 package token、批次原子性）。模型再強也不會憑空知道。"
+ },
+ {
+  "id": "c-entry-gate",
+  "name": "入口枚舉閘",
+  "kind": "rule",
+  "desc": "問的不是「存不存在一張安全網」，是「每一條路徑是不是都經過安全網」。"
+ },
+ {
+  "id": "c-assertion-gate",
+  "name": "未驗證不掛等級",
+  "kind": "rule",
+  "desc": "宣稱缺了什麼的 finding 先找反證；找不到才掛等級，否則只能以提問浮出。誤報殺的是信任。"
+ },
+ {
+  "id": "c-ncr-tag",
+  "name": "ncr-* 記號",
+  "kind": "method",
+  "desc": "Day 7 為了「未來 grep」埋的 subagent_type 與 prompt 首行 tag；Day 21 成了遙測歸因的主路徑。"
+ },
+ {
+  "id": "c-conclusion-mech",
+  "name": "結論機械推導",
+  "kind": "rule",
+  "desc": "有存活 Critical → Request Changes；否則有 Suggestion → Approved with Comments；其餘 Approved。曾被「掃描結果自成一段」繞過一次。"
+ },
+ {
+  "id": "c-json-report",
+  "name": "報告 JSON + 確定性 render",
+  "kind": "method",
+  "desc": "Pydantic schema，Python 套模板渲染。Day 21 用秒數證明它值多少：803 秒與 2.47 美金歸零。"
+ },
+ {
+  "id": "c-hitl",
+  "name": "發佈前要有人點頭",
+  "kind": "rule",
+  "desc": "最重的一條規則，到 Day 30 仍是 skill 裡的一句話。代理管端點不管點頭；CLI 是 --dangerously-skip-permissions。作者自陳：能力在，承諾靠人記得。"
+ },
+ {
+  "id": "c-discussion-model",
+  "name": "Note 是原子、Discussion 是容器",
+  "kind": "method",
+  "desc": "主報告走 Discussions API 的真正理由：發佈當下就拿到 discussion_id 與 created_at。"
+ },
+ {
+  "id": "c-pushback",
+  "name": "Pushback 六題",
+  "kind": "rule",
+  "desc": "六題是欄位不是建議，少一題 validate 不放行。結局：撤回／維持／拆分，撤回要重算 conclusion。"
+ },
+ {
+  "id": "c-version",
+  "name": "版本號 YYYY.mm.dd.NN",
+  "kind": "method",
+  "desc": "寫進每份報告的 meta.skill_version；三個月後才回答得了「當時哪一版在跑」。"
+ },
+ {
+  "id": "c-no-install",
+  "name": "掃描不得安裝任何東西",
+  "kind": "rule",
+  "desc": "uv sync 會執行受審分支的 build backend。ty 的 bare 模式是正常狀態。"
+ },
+ {
+  "id": "c-llm-judge",
+  "name": "LLM Judge 行為回歸",
+  "kind": "method",
+  "desc": "YAML 固定場景＋行為斷言，judge 一定是 subagent。改 skill 前跑 baseline，失守就 revert。"
+ },
+ {
+  "id": "c-mirror",
+  "name": "鏡子（答案印在教材裡）",
+  "kind": "incident",
+  "desc": "測試案例的識別字抄自 skill 範例，從出生到現在沒失敗過。燒掉，換同構新場景。"
+ },
+ {
+  "id": "c-false-green",
+  "name": "假綠燈五形狀",
+  "kind": "frame",
+  "desc": "①檢查工具不在場 ②對象不是你以為的 ③循環論證 ④失敗沒有聲音 ⑤自己好了的紅燈。前四種壞的是儀器，第五種打的是人。"
+ },
+ {
+  "id": "c-trivy-empty",
+  "name": "Trivy 空報告 293 bytes",
+  "kind": "incident",
+  "desc": "沒有 manifest 的樹照樣 exit 0。「無標的」與「乾淨」是兩件事。形狀②。"
+ },
+ {
+  "id": "c-benchmark",
+  "name": "code-review-bench 四組算法",
+  "kind": "method",
+  "desc": "原規則 6/6、盲測校正 1/6、只對驗證過的 golden 6/6、共用考卷 6/6。名次不是產出。"
+ },
+ {
+  "id": "c-self-bias",
+  "name": "自己訂的算法會偏自己",
+  "kind": "incident",
+  "desc": "稽核 agent 抓一次（拿掉 precision 處罰卻留 recall 獎勵），重跑又撞一次（cluster 重複計分，拿最多的是自己）。"
+ },
+ {
+  "id": "c-scar",
+  "name": "疤痕與出生證明",
+  "kind": "method",
+  "desc": "每條踩坑補上的規則叫疤痕。加規則先答三問：覆蓋缺口或執行缺口、優先序、可證偽的退役條件。"
+ },
+ {
+  "id": "c-heal",
+  "name": "癒痕",
+  "kind": "method",
+  "desc": "退役後留一行記原規則、事故、退役理由。要分清「機制消滅了」和「模型學會了」。"
+ },
+ {
+  "id": "c-cost-author",
+  "name": "代價是作者在付",
+  "kind": "insight",
+  "desc": "每條都附修法的報告讀起來是工單。嚴重度、證據、歸屬拆開；既有債揭露不算作者頭上。"
+ },
+ {
+  "id": "c-sandbox",
+  "name": "先縮小出事範圍",
+  "kind": "frame",
+  "desc": "三個真實事故的共通點：agent 拿得到足以造成損害的能力。不是更用力叮囑，是先放進可驗證的邊界。"
+ },
+ {
+  "id": "c-cred-boundary",
+  "name": "憑證本體不進 session",
+  "kind": "frame",
+  "desc": "三種形狀：代理蓋章（GitLab token）、agent 簽章（SSH）、anonymous pipe fd（CLI token，非拿不可只能縮小暴露）。"
+ },
+ {
+  "id": "c-proxy-unused",
+  "name": "代理立在那裡卻沒被走過",
+  "kind": "incident",
+  "desc": "每個零件單獨都綠，整條鏈沒人走過。測了它能不能運作，沒測它有沒有被使用。形狀②。"
+ },
+ {
+  "id": "c-two-quotes",
+  "name": "少寫兩個引號",
+  "kind": "incident",
+  "desc": "sudoers 沒列參數＝任何參數都准；腳本又把參數加進白名單。agent 自己重建整道牆，自我驗證照樣通過。形狀④。"
+ },
+ {
+  "id": "c-dns-egress",
+  "name": "DNS 出境通道",
+  "kind": "gap",
+  "desc": "白名單靠解析才成立，查詢名稱本身就是通道；封 53 在自建網路封到的是一條零封包的規則。知道、寫下來、沒有封。"
+ },
+ {
+  "id": "c-connector",
+  "name": "Connector 在牆外",
+  "kind": "gap",
+  "desc": "我封鎖不了我允許連的那個對象替我連出去。控制點在帳號設定，不在 iptables。Day 22 在側錄裡看到 tool call 證據。"
+ },
+ {
+  "id": "c-803s",
+  "name": "最冤枉的 803 秒",
+  "kind": "incident",
+  "desc": "付錢請被禁止思考的 LLM 重打報告，再付錢請另一個 LLM 檢查。10:38 接儀器，18:54 砍掉。"
+ },
+ {
+  "id": "c-stateless",
+  "name": "上行是下行的 39 倍",
+  "kind": "insight",
+  "desc": "Messages API 無狀態，53.9% 的上傳是共同前綴。快取省的是它的算力，不是我的頻寬。"
+ },
+ {
+  "id": "c-circular",
+  "name": "循環論證",
+  "kind": "incident",
+  "desc": "只錄自己允許的那條路，拿來證明沒有外洩。真正的答案在防火牆的 REJECT 計數器。形狀③。"
+ },
+ {
+  "id": "c-one-session",
+  "name": "一場 Session 一顆容器",
+  "kind": "frame",
+  "desc": "PTY 由 Daemon 持有，只 attach 不 exec。容器可拋棄，對話不可以，DB 也不可以。"
+ },
+ {
+  "id": "c-privileged",
+  "name": "拿著 Docker socket 天生是特權元件",
+  "kind": "insight",
+  "desc": "容器化買到的是部署一致性，不是安全邊界。紅線：Session 容器一律不掛 socket。rootless 排在待辦。"
+ },
+ {
+  "id": "c-capability-in-script",
+  "name": "能力留在腳本，控制平面只決定要不要",
+  "kind": "rule",
+  "desc": "環境變數答選單，嚴格加法，人開容器的路徑逐字元相同。養兩份同義名字的代價是停在「建立中」。"
+ },
+ {
+  "id": "c-isolation-limit",
+  "name": "隔離不等於我碰不到",
+  "kind": "insight",
+  "desc": "一般使用者之間隔開；管理員與營運者仍在信任鏈裡。開帳號給誰就等於請他信任你。"
+ },
+ {
+  "id": "c-char-test",
+  "name": "特徵測試（雙向差異）",
+  "kind": "method",
+  "desc": "沒有規格時舊實作就是行為基準。同一套 108 支測試切兩顆 binary，差異必須被解釋，指向自己的那次最大聲。"
+ },
+ {
+  "id": "c-red-five-weeks",
+  "name": "紅了五週沒人讀",
+  "kind": "incident",
+  "desc": "4 MiB 上限的測試從某顆 commit 起一直紅，跨 11 個 commit。修法本身又是一盞假綠燈。形狀②＋紀律。"
+ },
+ {
+  "id": "c-claim-gt-mechanism",
+  "name": "宣稱的效果大於機制",
+  "kind": "insight",
+  "desc": "titleFixed 只改瀏覽器顯示，命令列早就送過線了。註解讀起來完全合理，會讓下一個人放棄檢查。"
+ },
+ {
+  "id": "c-structure-not-discipline",
+  "name": "結構性，不是靠自律",
+  "kind": "frame",
+  "desc": "能被背叛的只有存在的東西。路由表沒有 /input、models 沒有私鑰欄位。五條規矩只有兩條靠人記得。"
+ },
+ {
+  "id": "c-reconcile",
+  "name": "對帳迴圈",
+  "kind": "method",
+  "desc": "收拾只要判斷「不該存在」；重建要判斷「該存在、現在不在、而且我有足夠資訊做出來」。關閉的意思是收乾淨，不是停止管理。"
+ },
+ {
+  "id": "c-fd-leak",
+  "name": "沒關的 fd 與 208KB",
+  "kind": "incident",
+  "desc": "attach_socket 的 close() 只關包裝物件。垃圾回收跟緩衝區賽跑。rm -f 把單場升級成全站。"
+ },
+ {
+  "id": "c-40min",
+  "name": "40 分鐘全站卡死",
+  "kind": "incident",
+  "desc": "docker ps 秒回，列表端點打 logs 撞上 removing 的容器；60 秒 timeout × 15 秒輪詢 = 4 條 thread。列表從此只讀 DB。"
+ },
+ {
+  "id": "c-harness-sandbox",
+  "name": "Harness 與 Sandbox",
+  "kind": "frame",
+  "desc": "Harness 設計 agent 怎麼工作；Sandbox 是不賭它永遠照規則走的保險。六月那張表沒有一列講 Sandbox。"
+ },
+ {
+  "id": "c-flaky-label",
+  "name": "被貼上「偶發」的紅燈",
+  "kind": "incident",
+  "desc": "一支測試幾天內紅三次，讀它的是 AI、貼「偶發」標籤的也是。逐 commit 重跑零變異：那兩顆 commit 上建立 session 的主路徑對每個人都是壞的，快速測試 23 支紅 17 支、關鍵字出現 54 次。它被正確地讀成「重構中，改完就好」，然後那個解釋完成任務後沒有被撤銷。形狀⑤：打的是人，不是儀器。"
+ },
+ {
+  "id": "c-capability-owes-structure",
+  "name": "能力存在就得付出結構",
+  "kind": "rule",
+  "desc": "「當你決定讓一個能力存在，你就得為它付出結構」，不能只是「我會小心」。圖片上傳拆掉兩道自立的閘之後補回四道：自訂標頭、副檔名白名單、三道同向的大小上限、三層各自獨立的路徑穿越防護。Day 27 改稿版補的外部對照：GPT-6 Astra 系統卡在能力達到 Critical 的同時，也一起補上更嚴的隔離、checkpoint 加密、過不了就不能用的對齊評估，以及對工具推論的監控。尺度差好幾個數量級，問題的形狀同一種。"
+ }
+]

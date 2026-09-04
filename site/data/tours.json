@@ -1,0 +1,95 @@
+[
+ {
+  "id": "false-green",
+  "name": "假綠燈五形狀",
+  "desc": "Day 29 收攏的五種形狀，每一站都對到一個真實事故與 repo 裡守住它的位置。",
+  "stops": [
+   {
+    "node": "c-trivy-empty",
+    "caption": "② 對象不是你以為的：沒有 manifest 的樹照樣 exit 0，293 bytes 的空報告差點被讀成零命中。"
+   },
+   {
+    "node": "c-proxy-unused",
+    "caption": "② 每個零件都綠，整條鏈沒人走過：代理立在那裡，skill 直連 GitLab。"
+   },
+   {
+    "node": "c-mirror",
+    "caption": "③ 循環論證：答案印在教材裡的測試案例，從出生到現在沒失敗過。"
+   },
+   {
+    "node": "c-two-quotes",
+    "caption": "④ 失敗沒有聲音：sudoers 少兩個引號，agent 自己重建整道牆，畫面照印「防火牆已驗證」。"
+   },
+   {
+    "node": "c-red-five-weeks",
+    "caption": "② 量錯對象，加上紀律：4 MiB 上限的測試量的是主機的終端緩衝，不是上限本身；它紅了五週沒人讀，第一次修法本身又是一盞假綠燈。"
+   },
+   {
+    "node": "c-flaky-label",
+    "caption": "⑤ 自己好了的紅燈：三次紅被貼上「偶發」，逐 commit 重跑零變異；暫時性的解釋沒有到期日。"
+   },
+   {
+    "node": "c-false-green",
+    "caption": "收攏：這盞綠燈，我看過它紅嗎？"
+   }
+  ]
+ },
+ {
+  "id": "credentials",
+  "name": "憑證本體不進 session",
+  "desc": "三種憑證、三種形狀：代理蓋章、agent 簽章、anonymous pipe。",
+  "stops": [
+   {
+    "node": "r-nginx-template",
+    "caption": "GitLab API token 留在 nginx，PRIVATE-TOKEN 由代理注入；六條規則、每條只開必要方法、2r/s 限流。"
+   },
+   {
+    "node": "c-proxy-unused",
+    "caption": "但代理蓋好之後 skill 從來沒走過它，直到 NCR_GITLAB_API_BASE 補上。"
+   },
+   {
+    "node": "r-run-wrapper",
+    "caption": "SSH 私鑰不進容器：轉發 ssh-agent 的 socket，交出去的是簽章能力。"
+   },
+   {
+    "node": "r-init-firewall",
+    "caption": "簽章能力沒有目的地範圍，所以範圍只能在網路層畫：SSH 22 只到那台 GitLab。"
+   },
+   {
+    "node": "r-pty-user-proxy",
+    "caption": "網頁版改收可到期、可集中撤銷的 PAT，每個設了 token 的使用者一顆代理；文章講 clone／push 走它，README 的對照表另外寫明 API 呼叫也由它蓋章。"
+   },
+   {
+    "node": "r-adr-0019",
+    "caption": "CLI 自己的 token 非拿不可：從 env 改成 anonymous pipe 的 fd，讀一次就空。"
+   }
+  ]
+ },
+ {
+  "id": "promises",
+  "name": "埋下與兌現",
+  "desc": "幾條跨了十天以上的伏筆。",
+  "stops": [
+   {
+    "node": "c-hitl",
+    "caption": "Day 9：寫在文件裡的規則擋不擋得住拿到能力的 agent？"
+   },
+   {
+    "node": "c-two-quotes",
+    "caption": "Day 20：擋不住。"
+   },
+   {
+    "node": "c-ncr-tag",
+    "caption": "Day 7 為了「未來可以 grep」埋的 ncr-* 記號。"
+   },
+   {
+    "node": "c-803s",
+    "caption": "Day 21：那個未來到了，記號成了遙測歸因的主路徑，量出 803 秒。"
+   },
+   {
+    "node": "c-structure-not-discipline",
+    "caption": "Day 27：能力在、承諾靠人記得的只剩兩條，其餘由結構背著。"
+   }
+  ]
+ }
+]

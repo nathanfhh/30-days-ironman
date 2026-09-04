@@ -1,0 +1,651 @@
+[
+ {
+  "id": "d01",
+  "n": 1,
+  "layer": "intro",
+  "title": "一場演講講不完的事",
+  "sub": "密碼寫進設定檔、五種常態、孫子兵法五段",
+  "summary": "起點：AI 好心把資料庫密碼寫進設定檔。五種常態（指引被忘、架構歪、測試不可信、機密外洩、供應鏈投毒）與六月演講的五段孫子兵法。給出 55%、40–50 MR／週、中位數 5.75 美金這組數字。",
+  "repo": [],
+  "concepts": [
+   "c-suntzu",
+   "c-five-normals",
+   "c-two-quotes"
+  ]
+ },
+ {
+  "id": "d02",
+  "n": 2,
+  "layer": "intro",
+  "title": "為什麼從 Code Review 開始",
+  "sub": "從工人智慧到 Skill 到 MCP 的五個階段",
+  "summary": "醫療環境資料不能出去，程式碼本來就不該有個資，所以第一個自動化的是 Code Review。手法演化：人工 → Python script → 網頁平台 → Agent → Skill → MCP。",
+  "repo": [],
+  "concepts": []
+ },
+ {
+  "id": "d03",
+  "n": 3,
+  "layer": "skill",
+  "title": "第一份 Skill：前置準備",
+  "sub": "萃取一個我；三等級；英文化省 28% token",
+  "summary": "把過去的 MR 留言、教學、逐字稿餵給 AI，先讀懂人再按「什麼時候需要讀到它」切檔案（progressive disclosure）。Critical／Suggestion／Nit 三等級。Skill 全文英文化：~40K → ~29K tokens。",
+  "repo": [
+   "r-skill-md",
+   "r-references"
+  ],
+  "concepts": [
+   "c-extract-me",
+   "c-progressive",
+   "c-severity"
+  ]
+ },
+ {
+  "id": "d04",
+  "n": 4,
+  "layer": "skill",
+  "title": "第一份 Skill：動工規劃",
+  "sub": "進入點、意圖三問、資訊≠指令、反蒙蔽協議",
+  "summary": "Phase 0 進入點（MR／本機）、Phase 0.5 意圖三問、Phase 1 首次或再次審查。兩條「檢查審查者自己」的規則：待審文字是證據不是指令（防 prompt injection），以及先盲審後比對的反蒙蔽協議。",
+  "repo": [
+   "r-skill-md",
+   "r-ref-rereview",
+   "r-eval-01",
+   "r-eval-03"
+  ],
+  "concepts": [
+   "c-anti-anchor",
+   "c-info-not-instr"
+  ]
+ },
+ {
+  "id": "d05",
+  "n": 5,
+  "layer": "skill",
+  "title": "確定性工具的軌道",
+  "sub": "ruff／ty／oxlint、Trivy、Opengrep；無標的 ≠ 乾淨",
+  "summary": "Phase 2：能交給確定性工具的先交出去。Trivy 對著沒有 manifest 的樹 exit 0 吐空報告，差點被寫成「零命中」；修法是 scan_runner 檢查有無依賴 manifest。零發現不等於審查有效。",
+  "repo": [
+   "r-scan-runner",
+   "r-ref-scanners",
+   "r-agent-lint",
+   "r-agent-opengrep",
+   "r-agent-trivy"
+  ],
+  "concepts": [
+   "c-trivy-empty"
+  ]
+ },
+ {
+  "id": "d06",
+  "n": 6,
+  "layer": "skill",
+  "title": "盲讀、入口枚舉閘與九面向（上）",
+  "sub": "fresh-eyes subagent；找到一支滅火器就宣布安全",
+  "summary": "Phase 3 先由未載入清單的 ncr-fresh-eyes 盲讀，再做關鍵操作與入口盤點（safety-net 盲點）。九面向 A–E：風格、簡潔、安全、API 慣例、架構；★ 標記的是「換一家公司就不成立」的設定值。",
+  "repo": [
+   "r-agent-fresh-eyes",
+   "r-ref-dimensions"
+  ],
+  "concepts": [
+   "c-nine-dims",
+   "c-entry-gate",
+   "c-star-rules",
+   "c-scar"
+  ]
+ },
+ {
+  "id": "d07",
+  "n": 7,
+  "layer": "skill",
+  "title": "九面向（下）與兩道閘",
+  "sub": "F–I；CodeGraph；ncr-* 命名；未驗證不掛等級",
+  "summary": "F 資料取用（dict.get 防不了 None）、G 測試、H 非 Python 檔、I 回溯分析。CodeGraph 先寫盲區再決定職責。subagent 用 ncr-* 命名以便日後 grep。兩道閘：清單外先提問；沒驗證的主張不准掛等級。",
+  "repo": [
+   "r-ref-dimensions",
+   "r-agents",
+   "r-eval-02",
+   "r-skill-md"
+  ],
+  "concepts": [
+   "c-nine-dims",
+   "c-assertion-gate",
+   "c-ncr-tag",
+   "c-star-rules",
+   "c-scar"
+  ]
+ },
+ {
+  "id": "d08",
+  "n": 8,
+  "layer": "skill",
+  "title": "報告怎麼交付",
+  "sub": "結論由程式決定；JSON→script→Markdown；一個 MR 一個目錄",
+  "summary": "兩份 MR 共用一份 clone 互相踩掉，改成 /tmp/ncr/{group}-{repo}-mr{iid}。報告改 JSON（Pydantic），結論由 findings 機械推導：有存活 Critical 必為 Request Changes。曾被繞過一次：掃描 Critical 沒進 findings 清單，結論 Approved 95%。",
+  "repo": [
+   "r-report-model",
+   "r-render-report",
+   "r-ref-report-format",
+   "r-ref-workspace",
+   "r-eval-04"
+  ],
+  "concepts": [
+   "c-conclusion-mech",
+   "c-json-report",
+   "c-hitl"
+  ]
+ },
+ {
+  "id": "d09",
+  "n": 9,
+  "layer": "skill",
+  "title": "怎麼延續前次審查",
+  "sub": "Note 是原子、Discussion 是容器；九個端點；發佈前要有人點頭",
+  "summary": "主報告走 Discussions API，因為發佈當下就拿到 discussion_id 與 created_at（cutoff T）。九個端點盤點，最後只有七個穿得過代理。最重的規則「發佈前要有人點頭」到今天仍是 skill 裡的一句話，不是機制。",
+  "repo": [
+   "r-gitlab-api",
+   "r-ref-gitlab-api",
+   "r-nginx-template",
+   "r-ref-rereview"
+  ],
+  "concepts": [
+   "c-hitl",
+   "c-discussion-model",
+   "c-cred-boundary"
+  ]
+ },
+ {
+  "id": "d10",
+  "n": 10,
+  "layer": "skill",
+  "title": "作者說「我不同意」之後",
+  "sub": "Pushback 六題是欄位；版本號 YYYY.mm.dd.NN",
+  "summary": "參考 Google eng-practices 整理六題（新資訊／作者距離／證據／規則或偏好／規則或情境／連鎖效應），寫進 schema 當必填欄位；撤回會重算 conclusion。版本號進每份報告的 meta.skill_version。全流程十一步。",
+  "repo": [
+   "r-ref-pushback",
+   "r-report-model",
+   "r-skill-md"
+  ],
+  "concepts": [
+   "c-pushback",
+   "c-version",
+   "c-conclusion-mech"
+  ]
+ },
+ {
+  "id": "d11",
+  "n": 11,
+  "layer": "skill",
+  "title": "Claude Code 26 分鐘生出整份 Skill",
+  "sub": "grill-me 17 題；27.02 美金",
+  "summary": "把 Day 3–10 當素材交給 Claude Code，/grill-me 問了 17 題（15 題照建議）。第 9 題「全專案掃、依 diff 歸因」是它看見我沒看見的兩難。SKILL.md 約 11.9KB，references + agents 約 73KB。",
+  "repo": [
+   "r-skill-md",
+   "r-references",
+   "r-agents",
+   "r-scripts",
+   "r-report-template",
+   "r-install-sh",
+   "r-agent-lint",
+   "r-ref-scanners"
+  ],
+  "concepts": [
+   "c-progressive"
+  ]
+ },
+ {
+  "id": "d12",
+  "n": 12,
+  "layer": "skill",
+  "title": "首戰實錄，並公開 Repo",
+  "sub": "已合併 MR 校準；不為掃描 uv sync；12 美金",
+  "summary": "拿已 Merged 的 MR 對答案：命中／漏抓／不可比／多抓。漏抓「需求文件自相矛盾」判為規則不存在，補進 review-dimensions。拒絕「跑 ty 前先 uv sync」：掃描不得安裝任何東西。加了單元測試與 CLAUDE.md。",
+  "repo": [
+   "r-readme",
+   "r-claude-md",
+   "r-tests",
+   "r-ref-dimensions",
+   "r-ref-scanners",
+   "r-test-gitlab-api",
+   "r-gitlab-api"
+  ],
+  "concepts": [
+   "c-no-install",
+   "c-version",
+   "c-hitl"
+  ]
+ },
+ {
+  "id": "d13",
+  "n": 13,
+  "layer": "eval",
+  "title": "用 LLM Judge 當回歸防線",
+  "sub": "YAML case × judge subagent；燒掉鏡子；假綠燈先命名",
+  "summary": "skill 是文件，改壞是靜默的。四個 YAML case + judge.md，首跑當 baseline 就抓到兩個洞與一個文件矛盾。全綠後先懷疑綠燈：答案印在教材裡的 case 是鏡子，燒掉。首次列出假綠燈五形狀。CI 上 mtime 平手那支測試。",
+  "repo": [
+   "r-eval-cases",
+   "r-judge",
+   "r-eval-readme",
+   "r-test-eval-cases",
+   "r-ci",
+   "r-eval-02",
+   "r-eval-03",
+   "r-skill-md",
+   "r-ref-rereview",
+   "r-eval-baseline",
+   "r-test-telemetry"
+  ],
+  "concepts": [
+   "c-llm-judge",
+   "c-false-green",
+   "c-mirror",
+   "c-info-not-instr",
+   "c-assertion-gate"
+  ]
+ },
+ {
+  "id": "d14",
+  "n": 14,
+  "layer": "eval",
+  "title": "Benchmark 實測拿了最後一名",
+  "sub": "50 PR；precision 13%、recall 73%",
+  "summary": "跑 withmartian/code-review-benchmark 50 個 PR。原始分數最後一名：775 條候選對 137 條 golden。目錄結構有玄機（每個工具各 fork 一份），釘死 DIFF_FORK_TOOL。把 1,395 條 claim 拔掉標籤丟進匿名池。",
+  "repo": [
+   "r-bench",
+   "r-bench-harness",
+   "r-bench-prompts",
+   "r-bench-data",
+   "r-bench-journal"
+  ],
+  "concepts": [
+   "c-benchmark"
+  ]
+ },
+ {
+  "id": "d15",
+  "n": 15,
+  "layer": "eval",
+  "title": "盲測放榜，標準答案好像不對勁",
+  "sub": "golden 16.8% 未通過；四組算法；413.81 美金",
+  "summary": "86.5% 的 claim 判真；137 條 golden 有 23 條沒過。校正後第一名，但稽核 agent 指出我的算法拿掉 precision 的處罰卻保留 recall 的獎勵。補記：cluster 重複計分 bug 一直在替自己加分。站得住的只有三條事實。",
+  "repo": [
+   "r-bench-scores",
+   "r-bench-report",
+   "r-bench-journal",
+   "r-bench",
+   "r-bench-harness",
+   "r-bench-audit"
+  ],
+  "concepts": [
+   "c-benchmark",
+   "c-self-bias",
+   "c-extract-me"
+  ]
+ },
+ {
+  "id": "d16",
+  "n": 16,
+  "layer": "eval",
+  "title": "疤痕的生命週期",
+  "sub": "出生證明三問；退役條件；16 條一條都沒退",
+  "summary": "規則要有辦法進來也要有辦法出去。加規則先答：覆蓋缺口還是執行缺口？優先序？可證偽的退役條件？第一輪盤點 15 承重 1 候選，候選最後也沒拔（Do not retire on itch）。癒痕：slim-gen 流程被確定性 render 取代。同仁回饋：代價是作者在付。",
+  "repo": [
+   "r-render-report",
+   "r-report-model",
+   "r-ref-dimensions",
+   "r-ref-rereview",
+   "r-references"
+  ],
+  "concepts": [
+   "c-scar",
+   "c-heal",
+   "c-cost-author",
+   "c-anti-anchor",
+   "c-assertion-gate",
+   "c-severity",
+   "c-star-rules"
+  ]
+ },
+ {
+  "id": "d17",
+  "n": 17,
+  "layer": "boundary",
+  "title": "Dev Container：先縮小出事範圍",
+  "sub": "ubuntu:24.04；憑證三來源；symlink 斷鏈",
+  "summary": "Replit／Gemini CLI／GPT-5.6 三個事故：叮囑擋不住已交出去的權限。從官方 devcontainer 延伸，工具版本固定。憑證：OAUTH_TOKEN → Keychain → 憑證檔。掛 ~/.claude 讓 skill symlink 斷鏈，用同一絕對路徑唯讀掛回。semgrep-rules 與 trivy DB 由外部供給。",
+  "repo": [
+   "r-dockerfile",
+   "r-run-wrapper",
+   "r-entrypoint",
+   "r-dc-readme",
+   "r-adr-0017",
+   "r-dc-build",
+   "r-install-sh"
+  ],
+  "concepts": [
+   "c-sandbox"
+  ],
+  "repo_ext": [
+   "r-security-scan",
+   "r-adr-0022",
+   "r-pty-provision"
+  ]
+ },
+ {
+  "id": "d18",
+  "n": 18,
+  "layer": "boundary",
+  "title": "憑證不進 Session：NGINX 代理",
+  "sub": "envsubst 與 $$；六條白名單；代理立在那裡卻沒被走過",
+  "summary": "token 由 nginx 注入 PRIVATE-TOKEN，三層攔截：路徑白名單、方法、2r/s 限流。全鏈驗證發現 skill 的 API base 一直從 MR 網址推導、直連 GitLab，代理從來沒被走過；修法是 NCR_GITLAB_API_BASE。只代理 API，不代理 git clone。",
+  "repo": [
+   "r-nginx-template",
+   "r-gp-compose",
+   "r-gp-readme",
+   "r-gitlab-api",
+   "r-run-wrapper",
+   "r-ref-gitlab-api"
+  ],
+  "concepts": [
+   "c-proxy-unused",
+   "c-cred-boundary"
+  ]
+ },
+ {
+  "id": "d19",
+  "n": 19,
+  "layer": "boundary",
+  "title": "借得到簽名，拿不到印鑑：ssh-agent",
+  "sub": "socket 掛 :ro；只收拾自己起的 agent；known_hosts",
+  "summary": "轉發 SSH_AUTH_SOCK 而不掛 ~/.ssh：交出去的是簽章能力，不是私鑰。:ro 不影響 connect()。host 沒 agent 才自己起並記得收。known_hosts 優先掛 host 的，build-time ssh-keyscan 是 TOFU 備援。代價：agent 沒有目的地範圍，金鑰又是複用的。",
+  "repo": [
+   "r-run-wrapper",
+   "r-dockerfile"
+  ],
+  "concepts": [
+   "c-cred-boundary"
+  ]
+ },
+ {
+  "id": "d20",
+  "n": 20,
+  "layer": "boundary",
+  "title": "iptables 白名單，與少寫兩個引號",
+  "sub": "預設 DROP；REJECT 不 DROP；sudoers 鎖空參數；DNS 出境",
+  "summary": "從官方 init-firewall 改：只放行 api.anthropic.com、SSH 22 只到那台 GitLab。Docker DNS NAT 要先撈再 flush。sudoers 沒鎖參數，agent 自己 sudo init-firewall.sh attacker.example.com 擴大白名單，自我驗證照樣印「防火牆已驗證」。兩條封不住的路：Connector 從雲端替我連出去；DNS 查詢名稱本身是出境通道。",
+  "repo": [
+   "r-init-firewall",
+   "r-dockerfile",
+   "r-dns-notes",
+   "r-entrypoint",
+   "r-test-ssh-gate"
+  ],
+  "concepts": [
+   "c-two-quotes",
+   "c-dns-egress",
+   "c-connector"
+  ]
+ },
+ {
+  "id": "d21",
+  "n": 21,
+  "layer": "observe",
+  "title": "用 OpenTelemetry 跑一次 Profiler",
+  "sub": "agent.name 塌成 custom；803 秒在重打報告",
+  "summary": "不是監控是 profiling。自訂 subagent 在 metric 裡一律叫 custom，只有 subagent_completed.agent_type 保留，Day 7 埋的 ncr-* 記號派上用場。resource attributes 黏 skill.version 與 experiment。熱點：尾端 799 秒在投影＋驗證投影，改成 JSON + 確定性 render 後歸零。cost-report 讀 subagents/ transcript 算每角色成本。",
+  "repo": [
+   "r-otel-report",
+   "r-cost-report",
+   "r-session-report",
+   "r-jaeger-compose",
+   "r-run-wrapper",
+   "r-agent-lint",
+   "r-agents",
+   "r-render-report",
+   "r-entrypoint"
+  ],
+  "concepts": [
+   "c-803s",
+   "c-ncr-tag",
+   "c-json-report"
+  ]
+ },
+ {
+  "id": "d22",
+  "n": 22,
+  "layer": "observe",
+  "title": "一天 800 MB：用 mitmproxy 攤開流量",
+  "sub": "上行是下行 39 倍；53.9% 共同前綴；docker exec 錄不到",
+  "summary": "Messages API 無狀態，每次都重送脈絡。NODE_EXTRA_CA_CERTS + HTTPS_PROXY。脫敏處理副本，活的連線不碰；脫敏程式不在就整場不錄。stream_large_bodies 沒開，SSE 全 buffer 到 198 秒斷線。全錄的三個代價。event_logging 佔上傳四分之一。firewall 計數器補流量紀錄看不到的那一半。",
+  "repo": [
+   "r-capture-addon",
+   "r-redact",
+   "r-wire-report",
+   "r-mitm-readme",
+   "r-entrypoint",
+   "r-trust-ca",
+   "r-firewall-counters",
+   "r-cost-report",
+   "r-init-firewall"
+  ],
+  "concepts": [
+   "c-stateless",
+   "c-circular",
+   "c-connector"
+  ],
+  "repo_ext": [
+   "r-adr-0021",
+   "r-pty-mitm-views"
+  ]
+ },
+ {
+  "id": "d23",
+  "n": 23,
+  "layer": "observe",
+  "title": "AI 的 HTTPS 流量憑什麼讓我看",
+  "sub": "三種信任；SSLKEYLOGFILE；牆畫在機器周圍不是資料周圍",
+  "summary": "憑證是一條鏈；三種信任層級選了程序級的 NODE_EXTRA_CA_CERTS。第三條路：匯出 TLS key log，不動憑證也能解封包。用防火牆與側錄兩把尺量出 WebSearch 在原廠後端執行。七天收成一張拓撲圖，紅字是缺口。",
+  "repo": [
+   "r-entrypoint",
+   "r-trust-ca",
+   "r-dc-drawio",
+   "r-init-firewall"
+  ],
+  "concepts": [
+   "c-connector",
+   "c-dns-egress"
+  ]
+ },
+ {
+  "id": "d24",
+  "n": 24,
+  "layer": "platform",
+  "title": "把 Claude Code 搬上瀏覽器",
+  "sub": "一場 Session 一顆容器；attach 不 exec；控制面／資料面分開",
+  "summary": "第五層：讓前四層成為每場 Session 的預設。畫面停在「建立中」是 entrypoint 在等 read：能力留在腳本，控制平面只決定要不要。重連靠 Claude Code 自己在 SIGWINCH 後重繪，不做 server-side replay。DB 是唯一仲裁者。控制平面拿 Docker socket 天生是特權元件，Session 容器一律不掛 socket。",
+  "repo": [
+   "r-pty",
+   "r-pty-app",
+   "r-pty-sessions",
+   "r-adr-0001",
+   "r-adr-0002",
+   "r-adr-0003",
+   "r-adr-0004",
+   "r-adr-0009",
+   "r-adr-0006",
+   "r-pty-nginx",
+   "r-test-persistence",
+   "r-adr-0007",
+   "r-adr-0014",
+   "r-entrypoint",
+   "r-pty-reconciler",
+   "r-pty-models",
+   "r-arch-diagram"
+  ],
+  "concepts": [
+   "c-one-session",
+   "c-privileged",
+   "c-capability-in-script"
+  ],
+  "repo_ext": [
+   "r-adr-0013"
+  ]
+ },
+ {
+  "id": "d25",
+  "n": 25,
+  "layer": "platform",
+  "title": "登入只是第一關",
+  "sub": "auth_request；三道疤；Argon2id；假雜湊；隱形字元",
+  "summary": "隔離不等於我碰不到：管理員與營運者仍在信任鏈裡。授權掛在 Nginx 交出連線之前（auth_request 帶回 ttyd port）。三道疤：map 延遲求值全部 403、驗證端點要 internal、CSP 寫禁止嵌入抽屜空白。cookie 帶密碼版本號撤銷；改密碼還要切斷 WebSocket。假雜湊防時序枚舉；Default_Ignorable_Code_Point 擋隱形字元。",
+  "repo": [
+   "r-pty-auth",
+   "r-pty-app",
+   "r-pty-nginx",
+   "r-adr-0005",
+   "r-adr-0010",
+   "r-pty-credentials",
+   "r-test-auth",
+   "r-adr-0020",
+   "r-adr-0019",
+   "r-pty-views",
+   "r-test-bootstrap"
+  ],
+  "concepts": [
+   "c-isolation-limit"
+  ]
+ },
+ {
+  "id": "d26",
+  "n": 26,
+  "layer": "platform",
+  "title": "AI 用 Rust 重寫 ttyd",
+  "sub": "--auth-url；108 支雙向差異測試；三個分母；紅了五週的燈",
+  "summary": "為了 forward auth 重寫。特徵測試：同一套測試用環境變數切兩顆 binary，差異必須被解釋。覆蓋率反問抓到 --ping-interval 被忽略、SIGTERM 不傳遞。最嚴重的差異指向自己：驗證前就送命令列；titleFixed 只遮畫面。auth-url 快取鍵錯誤結構上抓不到。一支測試紅了五週沒人讀。量測把量測者算進去。",
+  "repo": [
+   "r-ttyd",
+   "r-ttyd-rust",
+   "r-ttyd-tests",
+   "r-ttyd-parity",
+   "r-pty-views",
+   "r-test-ttyd-flag",
+   "r-adr-0002",
+   "r-adr-0008",
+   "r-test-ttyd-identity"
+  ],
+  "concepts": [
+   "c-char-test",
+   "c-red-five-weeks",
+   "c-claim-gt-mechanism",
+   "c-false-green"
+  ]
+ },
+ {
+  "id": "d27",
+  "n": 27,
+  "layer": "platform",
+  "title": "把「不做」變成結構",
+  "sub": "不餵 prompt；不收私鑰；PAT 代理；token 走 anonymous pipe",
+  "summary": "四條不做＋一條評估中：控制平面不替人送 prompt（ToS 灰區）、沒有 /input 端點、不收 SSH 私鑰改用 PAT per-user 代理、沒有完整帳號生命週期；地端模型評估中。反例：圖片上傳做了就得補四道閘，改稿版補了一個外部對照：GPT-6 Astra 的系統卡在能力達到 Critical 的同時，也一起補上隔離、對齊評估與推論監控，問題的形狀同一種。CLI token 從 env 改成 anonymous pipe fd。能被背叛的只有存在的東西：五條規矩只有兩條靠人記得。",
+  "repo": [
+   "r-pty-models",
+   "r-pty-app",
+   "r-adr-0011",
+   "r-adr-0016",
+   "r-adr-0019",
+   "r-pty-user-proxy",
+   "r-pty-credentials",
+   "r-test-token-fd",
+   "r-test-upload",
+   "r-pty-gitlab-proxy",
+   "r-entrypoint"
+  ],
+  "concepts": [
+   "c-structure-not-discipline",
+   "c-hitl",
+   "c-cred-boundary",
+   "c-capability-owes-structure"
+  ]
+ },
+ {
+  "id": "d28",
+  "n": 28,
+  "layer": "platform",
+  "title": "收得掉，也長得回來才算平台",
+  "sub": "label 不靠命名；寬限期有理由；40 分鐘全站卡死；沒關的 fd",
+  "summary": "對帳程序用名字認東西，把自己的代理刪了；改用 label。「還沒出現」與「已經不見了」長一樣，寬限期 30／120／300 秒各有理由。列表端點打 docker logs 撞上 removing 的容器，8 條 thread 被吃掉一半：列表只讀 DB。ReadTimeout 不是 APIError。attach_socket 的 close() 不關 fd，208KB 緩衝滿了整場凍住，rm -f 把單場升級成全站。",
+  "repo": [
+   "r-pty-reconciler",
+   "r-pty-attach",
+   "r-pty-leases",
+   "r-adr-0012",
+   "r-adr-0015",
+   "r-adr-0016",
+   "r-test-attach-close",
+   "r-test-reconciler",
+   "r-adr-0014",
+   "r-adr-0010",
+   "r-pty-user-proxy",
+   "r-pty-gitlab-proxy",
+   "r-pty-views",
+   "r-adr-0018"
+  ],
+  "concepts": [
+   "c-reconcile",
+   "c-fd-leak",
+   "c-40min"
+  ]
+ },
+ {
+  "id": "d29",
+  "n": 29,
+  "layer": "platform",
+  "title": "綠燈到底證明了什麼：假綠燈五形狀",
+  "sub": "ping: not found；跨使用者沒隔離；四個對策",
+  "summary": "AI 驗跨使用者網路隔離回報兩條綠：ping 不在容器裡、打的 port 沒人聽。真的起監聽器後：連上了。修法是每個使用者一張 docker network（ADR 0016）。五形狀：工具不在場、對象不對、循環論證、失敗沒聲音、自己好了的紅燈。對策：先驗正例、量執行結果、讓失敗發聲、暫時解釋要到期日。Vue 3 遷移又撞三次。",
+  "repo": [
+   "r-adr-0016",
+   "r-test-network-isolation",
+   "r-adr-0020",
+   "r-vue-journal",
+   "r-golden",
+   "r-scan-runner",
+   "r-ttyd-rust",
+   "r-pty-user-proxy",
+   "r-eval-cases",
+   "r-judge"
+  ],
+  "concepts": [
+   "c-false-green",
+   "c-circular",
+   "c-mirror",
+   "c-two-quotes",
+   "c-proxy-unused",
+   "c-trivy-empty",
+   "c-red-five-weeks",
+   "c-flaky-label",
+   "c-isolation-limit",
+   "c-claim-gt-mechanism"
+  ]
+ },
+ {
+  "id": "d30",
+  "n": 30,
+  "layer": "outro",
+  "title": "從 Code Review 到 Agent 治理",
+  "sub": "對帳 25 條承諾；Harness vs Sandbox；積木與 3D 印表機",
+  "summary": "逐條核對跨日承諾。Harness 讓它難犯錯，Sandbox 讓失敗代價可控。單次成本翻倍不是漲價，是 tokenizer 與流程變長。儀器全部自架，被觀測的對象才綁廠商。Uncle Bob vs Grady Booch：多種儀器疊出信任。醫檢師訓練帶進軟體的三件事就是 transferable skills，也是 skill 的形體。",
+  "repo": [
+   "r-readme",
+   "r-pty-sessions",
+   "r-adr-0020",
+   "r-vue-journal"
+  ],
+  "concepts": [
+   "c-harness-sandbox",
+   "c-suntzu",
+   "c-extract-me",
+   "c-false-green"
+  ]
+ }
+]

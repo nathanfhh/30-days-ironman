@@ -33,6 +33,7 @@ LLM 走 MITM 側錄 → 觀測落到 OpenTelemetry／Jaeger 與場次報表。�
 | Day 22–23 | 線上實際流過什麼，以及為什麼看得到 | `mitm/` |
 | Day 24–25、27–29 | 把整套搬到瀏覽器後面 | `claude-pty/` |
 | Day 26 | 為了一個旗標重寫 ttyd，然後確認自己沒改壞 | [`nathanfhh/ttyd`](https://github.com/nathanfhh/ttyd)（Rust 版在 `rust/`，8,273 行、223 個測試）與 `claude-pty/` |
+| 全部 | 哪一天對到 repo 哪個檔案、哪支測試守著哪個事故、哪一天的伏筆在哪一天兌現 | [互動關聯圖](https://nathanfhh.github.io/30-days-ironman/)（原始資料在 `site/data/`） |
 
 Day 1–2（為什麼做這件事）、Day 16（規則什麼時候該拿掉）與 Day 30（收束）沒有列在上面，
 因為那幾天講的是判斷，沒有對應的程式產出物。
@@ -50,6 +51,7 @@ mitm/                   L7 流量側錄：脫敏 addon 與單頁報表，看線�
 opentelemetry/          觀測：Jaeger compose 與三支報表腳本（時間、錢、單場 HTML）
 tests/                  腳本的單元測試與 skill 的行為回歸 test case
 benchmarks/             code-review-bench：50 個真實 PR 的評測資料集與計分 harness
+site/                   互動關聯圖：文章的 30 天 × repo 的檔案／ADR／測試，發到 GitHub Pages
 ```
 
 **有一塊不在這個 repo 裡**：[`nathanfhh/ttyd`](https://github.com/nathanfhh/ttyd) 是 ttyd 的 fork，
@@ -196,6 +198,13 @@ harness。方法、數字、翻車的地方全部攤開，想量自己 skill 的
 
 要自己重算的話，**分數以 `benchmarks/code-review-bench/scores/summary.json` 為準**，
 `REPORT.md` 記著四組不同算法各自的偏向與名次。
+
+## site
+
+一張互動圖，把三十篇文章、反覆出現的機制與事故，以及 repo 裡真正落地的檔案、ADR 與測試接在一起：
+哪一天對到哪個目錄、哪支測試守著哪個事故、哪一天埋下的伏筆在哪一天兌現。資料是幾份 JSON，
+`site/build.py` 用標準庫把它們灌成一個沒有外部相依的 `index.html`，`pages.yml` 發到 GitHub Pages。
+網址列的 `#<node-id>` 可以直接打開某個節點，文章裡可以這樣深連結。細節見 [`site/README.md`](site/README.md)。
 
 ## 授權
 

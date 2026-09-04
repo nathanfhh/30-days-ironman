@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>駕馭之道關聯圖</title>
+<meta name="description" content="《AI 的駕馭之道》三十篇文章與 nathanfhh/30-days-ironman 的互動關聯圖：每一天對到 repo 裡的檔案、ADR 與測試。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f2f4f6; --surface:#ffffff; --surface-2:#e9edf1; --ink:#141a22; --ink-2:#4a5563; --ink-3:#7b8794; --line:#d6dce3; --line-2:#c1c9d2;
+  --day:#2a78d6; --day-soft:#dbe8f9; --repo:#eb6834; --repo-soft:#fbe3d8; --concept:#1baf7a; --concept-soft:#d5f2e6;
+  --good:#0ca30c; --crit:#d03b3b; --warn:#c98500;
+  --edge:#b9c2cc; --edge-strong:#6b7785; --promise:#2a78d6;
+  --l-intro:#2a78d6; --l-skill:#eb6834; --l-eval:#1baf7a; --l-boundary:#eda100; --l-observe:#e87ba4; --l-platform:#008300; --l-outro:#4a3aa7;
+  --ramp:#cde2fb,#9ec5f4,#6da7ec,#3987e5,#256abf,#184f95,#0d366b;
+  --shadow:0 1px 2px rgba(20,26,34,.06),0 8px 24px rgba(20,26,34,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#12171d; --surface:#1a2129; --surface-2:#222b35; --ink:#edf1f5; --ink-2:#b4bec9; --ink-3:#8593a1; --line:#2b3542; --line-2:#3a4655;
+    --day:#3987e5; --day-soft:#1c3050; --repo:#d95926; --repo-soft:#4a2617; --concept:#199e70; --concept-soft:#123b2c;
+    --good:#2fb52f; --crit:#e05a5a; --warn:#e0a53a;
+    --edge:#3a4655; --edge-strong:#8593a1; --promise:#3987e5;
+    --l-intro:#3987e5; --l-skill:#d95926; --l-eval:#199e70; --l-boundary:#c98500; --l-observe:#d55181; --l-platform:#008300; --l-outro:#9085e9;
+    --ramp:#0d366b,#184f95,#256abf,#3987e5,#6da7ec,#9ec5f4,#cde2fb;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#12171d; --surface:#1a2129; --surface-2:#222b35; --ink:#edf1f5; --ink-2:#b4bec9; --ink-3:#8593a1; --line:#2b3542; --line-2:#3a4655;
+  --day:#3987e5; --day-soft:#1c3050; --repo:#d95926; --repo-soft:#4a2617; --concept:#199e70; --concept-soft:#123b2c;
+  --good:#2fb52f; --crit:#e05a5a; --warn:#e0a53a;
+  --edge:#3a4655; --edge-strong:#8593a1; --promise:#3987e5;
+  --l-intro:#3987e5; --l-skill:#d95926; --l-eval:#199e70; --l-boundary:#c98500; --l-observe:#d55181; --l-platform:#008300; --l-outro:#9085e9;
+  --ramp:#0d366b,#184f95,#256abf,#3987e5,#6da7ec,#9ec5f4,#cde2fb;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;text-wrap:balance;margin:0}
+code,.mono{font-family:"IBM Plex Mono","SFMono-Regular",Menlo,Consolas,monospace;font-size:.86em}
+a{color:var(--day)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--day);outline-offset:2px}
+.wrap{max-width:1360px;margin:0 auto;padding:28px 24px 64px}
+
+.mast{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px 40px;align-items:end;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+.eyebrow a{color:inherit;text-decoration:none}
+.eyebrow a:hover{text-decoration:underline}
+h1{font-size:clamp(28px,4vw,40px);font-weight:700;line-height:1.2;margin-top:6px}
+.lede{color:var(--ink-2);margin-top:10px}
+.lede b{color:var(--ink);font-weight:500}
+.stats{display:flex;gap:22px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.stats b{display:block;font-size:22px;color:var(--ink);font-weight:500;line-height:1.1;font-variant-numeric:tabular-nums}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:16px 0 6px}
+.legend{display:flex;gap:14px;align-items:center;font-size:13px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:50%;display:inline-block}
+.sw.day{background:var(--day)} .sw.repo{background:var(--repo);border-radius:3px} .sw.concept{background:var(--concept);transform:rotate(45deg);border-radius:2px;width:10px;height:10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer;color:var(--ink-2);transition:background .15s,color .15s}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip .n{font-family:"IBM Plex Mono",monospace;font-size:11px;opacity:.75;margin-left:4px}
+.chip .sub{opacity:.7;font-size:12.5px}
+.search{margin-left:auto;display:flex;align-items:center;gap:8px;position:relative}
+.results{position:absolute;top:calc(100% + 6px);right:0;width:min(520px,92vw);max-height:60vh;overflow:auto;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);z-index:20;padding:6px}
+.results .grp{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding:8px 10px 2px}
+.results button{display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13.5px;line-height:1.4}
+.results button:hover,.results button.active{background:var(--surface-2)}
+.results .sw{flex:none;margin-top:6px}
+.results .t{display:block}
+.results .t mark{background:var(--day-soft);color:inherit;border-radius:2px;padding:0 1px}
+.results .s{display:block;font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.results .none{padding:10px;color:var(--ink-3);font-size:13px}
+.search input{border:1px solid var(--line-2);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 12px;font:inherit;font-size:14px;width:240px}
+.hint{font-size:12.5px;color:var(--ink-3)}
+.tours{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:4px 0 10px;font-size:13px;color:var(--ink-3)}
+.tours .chip{border-style:dashed}
+.tours .chip[aria-pressed="true"]{border-style:solid}
+.tours a.go{margin-left:auto;border-style:solid;background:var(--day);color:#fff;border-color:var(--day);text-decoration:none;font-weight:500}
+.tours a.go:hover{filter:brightness(1.08)}
+.vec .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-top:12px}
+.vec .chart{width:100%}
+.vec .ctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-top:14px}
+.vec .ctl .lab{font-size:12.5px;color:var(--ink-3)}
+.vec .chip.n{font-family:"IBM Plex Mono",monospace;padding:2px 8px;font-size:12px}
+.vec .cap{font-size:12.5px;color:var(--ink-3);margin-top:8px}
+.vec .two{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);gap:18px;align-items:start;margin-top:12px}
+.vec .side{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);position:sticky;top:16px}
+.vec .side h3{font-size:17px}
+.vec .side .sim{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink-3);margin-top:4px}
+.vec .side .q{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--surface-2);font-size:13.5px}
+.vec .side .q .h{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px}
+.vec .side .q .h button,.vec .side .go{background:none;border:0;padding:0;color:var(--day);cursor:pointer;font-family:"IBM Plex Mono",monospace;font-size:inherit}
+.vec .side .go:hover,.vec .side .q .h button:hover{text-decoration:underline}
+.vec .side .empty{color:var(--ink-3)}
+.vec h3.sub{margin-top:26px;font-size:18px}
+.vec td .h{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-3)}
+.vec td.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;color:var(--ink-2);white-space:nowrap}
+.vec .nearest{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:10px;font-family:"IBM Plex Mono",monospace;font-size:12.5px}
+.vec .nearest button{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--ink-2);text-align:left;cursor:pointer}
+.vec .nearest button:hover{border-color:var(--line-2)}
+.vec .nearest b{color:var(--ink);font-weight:500}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:18px;align-items:start;margin-top:8px}
+.graph{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;position:relative;box-shadow:var(--shadow)}
+.graph svg{display:block;width:100%;height:auto;touch-action:none;cursor:grab}
+.graph svg.panning{cursor:grabbing}
+.node.concept,.node.repo{cursor:grab}
+.zoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:4px;z-index:4}
+.zoom button{width:28px;height:28px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;padding:0}
+.zoom button:hover{background:var(--surface-2)}
+.ghint{border-top:1px solid var(--line);padding:6px 12px;font-size:11.5px;color:var(--ink-3)}
+.graph .band-label{font-family:"IBM Plex Mono",monospace;font-size:11px;fill:var(--ink-3);letter-spacing:.08em}
+.graph .layer-label{font-family:"Noto Serif TC",serif;font-size:12.5px;font-weight:600;fill:var(--ink-2)}
+.graph .layer-rule{stroke:var(--line);stroke-width:1}
+.graph .layer-fill{fill:var(--surface-2);opacity:.55}
+.node{cursor:pointer}
+.node text{font-family:"Noto Sans TC",sans-serif;font-size:10.5px;fill:var(--ink-2);pointer-events:none;paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round}
+.node.day text{font-family:"IBM Plex Mono",monospace;font-size:11px;fill:#fff;stroke:none;font-weight:500}
+.node.day circle{fill:var(--day);stroke:var(--surface);stroke-width:2}
+.node.day.unpublished circle{fill:var(--day-soft)}
+.node.day.unpublished text{fill:var(--ink-2)}
+.node.repo rect{fill:var(--repo);stroke:var(--surface);stroke-width:2;rx:3}
+.node.concept path{fill:var(--concept);stroke:var(--surface);stroke-width:2}
+.node.dim{opacity:.14}
+.node.sel circle,.node.sel rect,.node.sel path{stroke:var(--ink);stroke-width:2.5}
+.link{fill:none;stroke:var(--edge);stroke-width:1;opacity:.75}
+.link.concept{stroke-dasharray:3 3}
+.link.ext{stroke-dasharray:1.5 4;opacity:.5}
+.link.promise{stroke:var(--promise);stroke-width:1.4;opacity:.55}
+.link.lit{stroke:var(--edge-strong);stroke-width:1.8;opacity:1}
+.link.lit.promise{stroke:var(--promise)}
+.link.dim{opacity:.05}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;padding:6px 10px;border-radius:6px;max-width:280px;line-height:1.45;opacity:0;transition:opacity .12s;z-index:5}
+.tip.on{opacity:1}
+.tip .k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;opacity:.7;display:block}
+
+.panel{position:sticky;top:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);max-height:calc(100vh - 32px);overflow:auto}
+.panel .kind{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;font-family:"IBM Plex Mono",monospace;color:var(--ink-3)}
+.panel h2{font-size:21px;margin-top:6px;line-height:1.3}
+.panel h2 .tlink{color:inherit;text-decoration:none;border-bottom:1px solid var(--line-2)}
+.panel h2 .tlink:hover{border-bottom-color:var(--day);color:var(--day)}
+.panel h2 .ext{font-size:.7em;color:var(--ink-3)}
+.panel h2 .stub{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.08em;color:var(--ink-3);border:1px dashed var(--line-2);border-radius:4px;padding:1px 6px;vertical-align:middle}
+.panel .path{display:block;margin-top:6px;color:var(--ink-3);font-size:12px;word-break:break-all}
+.panel .sub{color:var(--ink-2);margin-top:8px;font-size:14px}
+.panel p{margin:10px 0 0}
+.panel h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink-3);margin-top:20px;padding-top:12px;border-top:1px solid var(--line)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.actions a,.actions button{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line-2);background:var(--surface);border-radius:6px;padding:4px 10px;font-size:12.5px;color:var(--ink);text-decoration:none;cursor:pointer}
+.actions .muted{color:var(--ink-3);border-style:dashed;cursor:default}
+.tourbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;background:var(--concept-soft);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:13px}
+.tourbar b{font-weight:700}
+.tourbar .cap{flex:1 0 100%;color:var(--ink-2)}
+.tourbar button{border:1px solid var(--line-2);background:var(--surface);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12.5px}
+.tourbar .x{border:0;background:none;color:var(--ink-3)}
+.rel{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:4px}
+.rel li{display:flex;gap:8px;align-items:flex-start;font-size:13.5px}
+.rel button{background:none;border:0;padding:0;text-align:left;cursor:pointer;color:var(--ink);line-height:1.45}
+.rel button:hover{text-decoration:underline}
+.rel .sw{flex:none;margin-top:7px}
+.rel .why{color:var(--ink-3);font-size:12.5px}
+.note{margin-top:10px;padding:12px 14px;border-radius:8px;background:var(--surface-2);font-size:13.5px}
+.note .lamp{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.note .by{display:block;margin-top:6px;font-size:11.5px;color:var(--ink-3)}
+.lamp i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.lamp.good i{background:var(--good)} .lamp.crit i{background:var(--crit)} .lamp.warn i{background:var(--warn)}
+.empty{color:var(--ink-3);font-size:14px}
+
+.strip{margin-top:18px;display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:3px}
+.strip button{border:0;border-radius:4px;padding:6px 0;background:var(--day-soft);color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:11.5px;cursor:pointer;font-variant-numeric:tabular-nums}
+.strip button[aria-current="true"]{background:var(--day);color:#fff}
+.strip button.off{opacity:.35}
+.strip button.unpublished{background:transparent;border:1px dashed var(--line-2);color:var(--ink-3)}
+.strip-cap{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:3px;margin-top:4px;font-size:11px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+.strip-cap span{grid-column:span var(--span);border-top:2px solid var(--line-2);padding-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+section.review{margin-top:44px}
+section.review h2{font-size:24px}
+section.review .intro{color:var(--ink-2);margin-top:8px}
+.matrix{margin-top:18px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;overflow-x:auto}
+.matrix table{border-collapse:collapse;font-size:11.5px;font-family:"IBM Plex Mono",monospace;white-space:nowrap;width:100%;min-width:900px;table-layout:fixed}
+.matrix col.lab{width:210px}
+.matrix th{font-weight:500;color:var(--ink-3);padding:2px 4px;text-align:left}
+.matrix th.col{text-align:center;padding:0 0 4px}
+.matrix tr.repo th{padding:10px 4px 4px;font-family:"Noto Sans TC",sans-serif;font-size:12.5px;font-weight:700;color:var(--ink-2);border-top:1px solid var(--line)}
+.matrix tr.repo:first-child th{border-top:0;padding-top:2px}
+.matrix tr.repo a{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.matrix tr.repo a:hover{color:var(--day)}
+.matrix tr.sub th{padding-left:16px}
+.matrix .tree{color:var(--line-2);margin-right:4px}
+.matrix td{padding:2px;text-align:center}
+.matrix td i{display:block;width:100%;height:18px;border-radius:3px;background:var(--surface-2);cursor:pointer}
+.matrix td i[data-v="1"]{background:var(--repo-soft)}
+.matrix td i[data-v="2"]{background:color-mix(in srgb,var(--repo) 55%,var(--surface))}
+.matrix td i[data-v="3"]{background:var(--repo)}
+.matrix .cap{font-size:12px;color:var(--ink-3);margin-top:10px;font-family:"Noto Sans TC",sans-serif;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.matrix .cap i{display:inline-block;width:22px;height:14px;border-radius:3px;background:var(--surface-2);vertical-align:-2px;margin-right:5px}
+.matrix .cap i[data-v="1"]{background:var(--repo-soft)}
+.matrix .cap i[data-v="2"]{background:color-mix(in srgb,var(--repo) 55%,var(--surface))}
+.matrix .cap i[data-v="3"]{background:var(--repo)}
+.lamps{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+.lampcol{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.lampcol h3{font-size:15px;display:flex;align-items:center;gap:8px;font-family:"Noto Sans TC",sans-serif;font-weight:700}
+.lampcol ol{margin:10px 0 0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:12px}
+.lampcol li{font-size:14px}
+.lampcol li b{display:block;font-weight:700}
+.lampcol li .go{background:none;border:0;padding:0;color:var(--day);cursor:pointer;font-size:12.5px;font-family:"IBM Plex Mono",monospace}
+.lampcol li .go:hover{text-decoration:underline}
+.promises{margin-top:18px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.promises table{border-collapse:collapse;width:100%;font-size:13.5px}
+.promises th{text-align:left;font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding:12px 16px;border-bottom:1px solid var(--line)}
+.promises td{padding:9px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+.promises tr:last-child td{border-bottom:0}
+.promises td.d{font-family:"IBM Plex Mono",monospace;white-space:nowrap;font-variant-numeric:tabular-nums}
+.promises td.d button{background:var(--day-soft);border:0;border-radius:4px;padding:1px 7px;cursor:pointer;font-family:inherit;color:var(--ink)}
+.promises .scroll{overflow-x:auto}
+.foot{margin-top:40px;color:var(--ink-3);font-size:12.5px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+
+@media (max-width:980px){
+  .stage{grid-template-columns:1fr}
+  .panel{position:static;max-height:none}
+  .lamps{grid-template-columns:1fr}
+  .vec .two{grid-template-columns:1fr} .vec .side{position:static}
+  .mast{grid-template-columns:1fr}
+  .search{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <div class="eyebrow"><a id="series-link" href="#" target="_blank" rel="noopener">AI 的駕馭之道 · 30 天</a> × <a href="https://github.com/nathanfhh/30-days-ironman" target="_blank" rel="noopener">nathanfhh/30-days-ironman</a> <span id="embed-link" hidden>· <a href="embed.html">向量圖</a></span></div>
+      <h1>駕馭之道關聯圖</h1>
+      <p class="lede">文章談的是<b>為什麼這樣選</b>，repo 放的是<b>怎麼做的</b>。這張圖把三十篇文章裡的 30 個日子、
+      反覆出現的機制與事故，以及 repo 裡真正落地的檔案、ADR 與測試接在一起。點任何一個節點，右側會列出它連到誰、
+      為什麼連、原文在哪一篇，以及哪支測試守著它。</p>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="controls">
+    <div class="legend">
+      <span><i class="sw day"></i>文章的一天</span>
+      <span><i class="sw repo"></i>repo 裡的檔案／ADR／測試</span>
+      <span><i class="sw concept"></i>機制、事故、觀點</span>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="search"><input id="q" type="search" placeholder="搜尋：兩個引號、fd、ADR 0016…" aria-label="搜尋節點" autocomplete="off"><span class="hint" id="qhint"></span><div class="results" id="results" hidden></div></div>
+  </div>
+  <div class="tours" id="tours"><span>導覽：</span><a class="chip go" id="embed-chip" href="#vectors" hidden>向量：哪幾天在講同一件事 ↓</a></div>
+
+  <div class="stage">
+    <div class="graph" id="graph"><div class="tip" id="tip"></div><div class="zoom"><button id="zin" aria-label="放大" title="放大">＋</button><button id="zout" aria-label="縮小" title="縮小">－</button><button id="zreset" aria-label="重設視野" title="重設視野">⟲</button></div><div class="ghint">拖曳空白處平移 · ⌘／Ctrl＋滾輪或雙指縮放 · 機制與 repo 節點可以拖著走，Day 那一排固定</div></div>
+    <aside class="panel" id="panel" aria-live="polite"><p class="empty">點一個節點。</p></aside>
+  </div>
+
+  <div class="strip" id="strip"></div>
+  <div class="strip-cap" id="stripcap"></div>
+
+  <section class="review">
+    <h2>哪一天動到哪個目錄</h2>
+    <p class="intro">每一格是那一天在圖上連到該目錄的節點數。Day 1、2 整列空白，因為那兩天只講為什麼；Day 16 與 Day 30
+    沒有那一天寫的程式，格子裡是它們回頭指到的既有檔案（退役規則的現在式、README 與架構圖）。點格子可以直接定位。</p>
+    <div class="matrix" id="matrix"></div>
+  </section>
+
+  <section class="review" id="review">
+    <h2>讀完之後：綠燈與紅燈</h2>
+    <p class="intro">這一節是外部審閱，不是 repo 的自述：<span id="about"></span>
+    借文章自己的說法來評它。綠燈是審閱者認為真的立住、值得別人照著描的部分；紅燈不是「錯」，
+    是宣稱與機制之間還有距離的地方，多數作者自己已在 Day 27／Day 30 認了帳，這裡把它們對到 repo 的具體位置。</p>
+    <div class="lamps">
+      <div class="lampcol"><h3><span class="lamp good"><i></i></span>綠燈</h3><ol id="good"></ol></div>
+      <div class="lampcol"><h3><span class="lamp crit"><i></i></span>紅燈</h3><ol id="crit"></ol></div>
+    </div>
+  </section>
+
+  <section class="review">
+    <h2>跨日承諾對帳</h2>
+    <p class="intro">Day 30 說跨日承諾共 25 條、「明天講」27 次，逐條都有對應。這裡列出在文章裡追到的 20 條，點日期可在圖上定位。</p>
+    <div class="promises"><div class="scroll"><table><thead><tr><th>埋下</th><th>兌現</th><th>內容</th></tr></thead><tbody id="ptable"></tbody></table></div></div>
+  </section>
+
+  <section class="review vec" id="vectors" hidden>
+    <h2>換一個量尺：向量</h2>
+    <p class="intro" id="vec-intro"></p>
+    <h3 class="sub">四百多段文字，攤在三維裡</h3>
+    <p class="intro" id="intro3d"></p>
+    <div class="ctl">
+      <div class="chips" id="method"><span class="lab">降維：</span><button class="chip" data-m="umap" aria-pressed="true">UMAP</button><button class="chip" data-m="pca" aria-pressed="false">PCA</button></div>
+      <div class="chips" id="daychips"><span class="lab">只亮：</span></div>
+      <div class="chips"><button class="chip" id="jump" aria-pressed="true" title="關掉的話，點一個點只選中上面的那一天，畫面留在這裡">點了捲回關聯圖</button></div>
+    </div>
+    <div class="card"><div class="chart" id="c3d" style="height:620px"></div></div>
+    <p class="cap" id="cap3d"></p>
+    <h3 class="sub">天與天有多像</h3>
+    <p class="intro" id="introheat"></p>
+    <div class="two">
+      <div class="card" style="margin-top:0"><div class="chart" id="heat" style="height:620px"></div></div>
+      <aside class="side" id="pairbox"><p class="empty">點熱圖的一格，這裡會列出那兩天最相近的一對段落：相似度是從哪裡來的。</p></aside>
+    </div>
+    <h3 class="sub">最相近的 25 對日子</h3>
+    <div class="promises"><div class="scroll"><table><thead><tr><th>這一天</th><th>那一天</th><th>相似度</th><th>最相近的兩段</th></tr></thead><tbody id="pairs"></tbody></table></div></div>
+    <h3 class="sub">每一天最近的鄰居</h3>
+    <div class="nearest" id="nearest"></div>
+    <p class="cap" id="vec-foot"></p>
+  </section>
+
+  <p class="foot" id="foot"></p>
+</div>
+<div class="toast" id="toast"></div>
+<!--VENDOR-->
+<script>
+/*DATA*/
+(function(){
+  const DAYS = DATA.days, CONCEPTS = DATA.concepts, REPO = DATA.repo, PROMISES = DATA.promises, TOURS = DATA.tours, REVIEW = DATA.review;
+  const NOTES = REVIEW.notes || {}, LAMPS = REVIEW.lamps || {good:[],crit:[]};
+  const LAYERS = [
+    {id:"intro",name:"起點",short:"起點"},
+    {id:"skill",name:"Skill 怎麼判斷",short:"Skill"},
+    {id:"eval",name:"怎麼知道沒變壞",short:"評測"},
+    {id:"boundary",name:"它拿得到什麼",short:"能力邊界"},
+    {id:"observe",name:"它實際做了什麼",short:"觀測"},
+    {id:"platform",name:"每一場的預設",short:"平台"},
+    {id:"outro",name:"收束",short:"收束"}
+  ];
+  // [id, label, depth]: depth 1 rows sit under the row before them in the matrix. Two repos
+  // are on the page; the matrix groups rows under a header per repo so that is visible.
+  const GROUPS = [["root","根目錄"],["skill","skills/nathan-code-review"],["test","tests/"],["bench","benchmarks/"],["dc","dev-container/"],["proxy","gitlab-proxy/"],["otel","opentelemetry/"],["mitm","mitm/"],["pty","claude-pty/"],["adr","claude-pty/docs/adr/",1],["ptytest","claude-pty/tests/",1],["ttyd-rust","rust/（Rust 重寫）"],["ttyd-tests","rust/tests/",1],["ttyd-parity","rust/PARITY、bench、soak",1],["ttyd","C 版（上游原樣，當基準）"]];
+  const REPOS = [{name:"nathanfhh/30-days-ironman",url:"https://github.com/nathanfhh/30-days-ironman",groups:GROUPS.slice(0,11)},
+    {name:"nathanfhh/ttyd",url:"https://github.com/nathanfhh/ttyd",groups:GROUPS.slice(11)}];
+  const REPO_ICON=`<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z"/></svg>`;
+  const TEST_GROUPS = new Set(["test","ptytest","ttyd-tests"]);
+  const CK={frame:"框架",method:"做法",rule:"規則",incident:"事故",insight:"觀點",gap:"已知缺口"};
+
+  const nodes = [], byId = new Map();
+  DAYS.forEach(d=>{ const n={...d,kind:"day",label:"D"+String(d.n).padStart(2,"0")}; nodes.push(n); byId.set(n.id,n); });
+  CONCEPTS.forEach(c=>{ const n={...c,kind:"concept",label:c.name,ckind:c.kind}; nodes.push(n); byId.set(n.id,n); });
+  REPO.forEach(r=>{ const n={...r,kind:"repo",label:r.name}; nodes.push(n); byId.set(n.id,n); });
+  const links=[]; const seen=new Set();
+  function addLink(a,b,type,why){ const k=a+"|"+b+"|"+type; if(seen.has(k)||!byId.has(a)||!byId.has(b)) return; seen.add(k); links.push({source:byId.get(a),target:byId.get(b),type,why}); }
+  // "repo_ext": files the repo has for this day's topic that the article itself never mentions
+  // (the web version's traffic viewer, the image self-scan). Drawn dotted and listed apart, so
+  // the graph does not claim the article said something it did not.
+  DAYS.forEach(d=>{ (d.repo||[]).forEach(r=>addLink(d.id,r,"repo")); (d.repo_ext||[]).forEach(r=>addLink(d.id,r,"ext")); (d.concepts||[]).forEach(c=>addLink(d.id,c,"concept")); });
+  DAYS.forEach(d=>{ (d.concepts||[]).slice(0,2).forEach(c=>{ (d.repo||[]).slice(0,3).forEach(r=>addLink(c,r,"cr")); }); });
+  PROMISES.forEach(p=>addLink(p.from,p.to,"promise",p.text));
+  const adj=new Map(); nodes.forEach(n=>adj.set(n.id,new Set()));
+  links.forEach(l=>{adj.get(l.source.id).add(l.target.id);adj.get(l.target.id).add(l.source.id);});
+
+  const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  // Where a node lives outside this page. Days go to the article (null until published),
+  // repo nodes to the file or directory on GitHub, nathanfhh/ttyd paths to that repo.
+  const GH="https://github.com/nathanfhh/30-days-ironman", GH_TTYD="https://github.com/nathanfhh/ttyd";
+  function urlOf(n){
+    if(n.kind==="day") return n.url||null;
+    if(n.kind!=="repo"||!n.path) return null;
+    if(n.path.startsWith("../ttyd/")){ const rest=n.path.slice(8); return rest? `${GH_TTYD}/tree/main/${rest}` : GH_TTYD; }
+    return `${GH}/${n.path.endsWith("/")?"tree":"blob"}/main/${n.path}`;
+  }
+  const linkLabel=n=> n.kind==="day"?"讀原文":"在 GitHub 看";
+  const kindName=k=> k==="day"?"文章":k==="repo"?"REPO":"機制";
+  if(DATA.series) document.getElementById("series-link").href=DATA.series;
+  if(DATA.embed){ ["embed-link","embed-chip","vectors"].forEach(id=>document.getElementById(id).hidden=false);
+    document.getElementById("embed-chip").onclick=e=>{ e.preventDefault(); document.getElementById("vectors").scrollIntoView({behavior:"smooth",block:"start"}); }; }
+  document.getElementById("stats").innerHTML =
+    `<span><b>${DAYS.length}</b>天</span><span><b>${REPO.length}</b>repo 節點</span><span><b>${CONCEPTS.length}</b>機制／事故</span><span><b>${links.length}</b>條關聯</span>`;
+
+  // ---- filters
+  const chips=document.getElementById("chips"); let activeLayer=null;
+  LAYERS.filter(l=>!["intro","outro"].includes(l.id)).forEach(l=>{
+    const cnt=DAYS.filter(d=>d.layer===l.id).length;
+    const b=document.createElement("button"); b.className="chip"; b.setAttribute("aria-pressed","false");
+    b.innerHTML=`${l.short}<span class="sub">｜${l.name}</span><span class="n">${cnt} 天</span>`;
+    b.onclick=()=>{ activeLayer = activeLayer===l.id?null:l.id; [...chips.children].forEach(c=>c.setAttribute("aria-pressed", String(c===b && activeLayer===l.id))); setSelected(null); };
+    chips.appendChild(b);
+  });
+
+  // ---- layout: days pinned on a row; concepts and repo nodes in two bands, x = mean x of linked days, then collision relaxation.
+  const W=960, H=860, PAD=40, dayY=78, bands={concept:[176,350], repo:[430,830]};
+  const dayX = n => PAD+30 + (n-1)*((W-2*PAD-60)/29);
+  const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+  nodes.forEach(n=>{ if(n.kind==="day"){ n.x=dayX(n.n); n.y=dayY; } });
+  let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  ["concept","repo"].forEach(kind=>{
+    const list=nodes.filter(n=>n.kind===kind); const [y0,y1]=bands[kind];
+    list.forEach(n=>{ const ds=[...adj.get(n.id)].map(i=>byId.get(i)).filter(m=>m.kind==="day"); n.tx = ds.length? mean(ds.map(m=>dayX(m.n))) : W/2; n.x=n.tx; n.y=y0+20+rnd()*(y1-y0-40); n.w = 12+Math.min(13,n.label.length)*10.5; });
+    const rowH=19;
+    for(let it=0;it<260;it++){
+      for(let i=0;i<list.length;i++){ const a=list[i];
+        for(let j=i+1;j<list.length;j++){ const b=list[j];
+          const dx=b.x-a.x, dy=b.y-a.y; const minX=(a.w+b.w)/2+6, minY=rowH;
+          if(Math.abs(dx)<minX && Math.abs(dy)<minY){
+            const ox=(minX-Math.abs(dx)), oy=(minY-Math.abs(dy));
+            if(oy*2.2<ox){ const s=(dy<0?-1:1)*oy/2; a.y-=s; b.y+=s; } else { const s=(dx<0?-1:1)*ox/2*0.5; a.x-=s; b.x+=s; }
+          } }
+        a.x += (a.tx-a.x)*0.06;
+        a.x=Math.max(PAD+a.w/2, Math.min(W-PAD-a.w/2, a.x)); a.y=Math.max(y0+8, Math.min(y1-8, a.y));
+      }
+    }
+  });
+
+  const NS="http://www.w3.org/2000/svg";
+  const el=(tag,attrs={},parent)=>{ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; };
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"文章、機制與 repo 的關聯圖"}); document.getElementById("graph").appendChild(svg);
+  const layerSpans=[]; LAYERS.forEach(l=>{ const ds=DAYS.filter(d=>d.layer===l.id); if(!ds.length) return; layerSpans.push({...l,from:Math.min(...ds.map(d=>d.n)),to:Math.max(...ds.map(d=>d.n))}); });
+  const view=el("g",{class:"view"},svg);
+  const gBands=el("g",{},view);
+  layerSpans.forEach((s,i)=>{ const x0=dayX(s.from)-14, x1=dayX(s.to)+14;
+    if(i%2===0) el("rect",{class:"layer-fill",x:x0,y:18,width:x1-x0,height:dayY+30-18,rx:6},gBands);
+    const t=el("text",{class:"layer-label",x:(x0+x1)/2,y:34,"text-anchor":"middle"},gBands); t.textContent = s.to-s.from>=5? s.short+"｜"+s.name : s.short; });
+  const bl=(y,txt)=>{ const t=el("text",{class:"band-label",x:PAD,y:y-14},gBands); t.textContent=txt; el("line",{class:"layer-rule",x1:PAD,x2:W-PAD,y1:y-8,y2:y-8},gBands); };
+  bl(bands.concept[0],"機制 · 事故 · 觀點"); bl(bands.repo[0],"REPO · 檔案 · ADR · 測試");
+
+  const gLinks=el("g",{},view), gNodes=el("g",{},view);
+  const pathOf=l=>{ const s=l.source,t=l.target;
+    if(l.type==="promise"){ const dx=t.x-s.x; const lift=Math.min(56,16+Math.abs(dx)*.11); return `M${s.x},${s.y-11} C${s.x},${s.y-11-lift} ${t.x},${t.y-11-lift} ${t.x},${t.y-11}`; }
+    const my=(s.y+t.y)/2; return `M${s.x},${s.y} C${s.x},${my} ${t.x},${my} ${t.x},${t.y}`; };
+  links.forEach(l=>{ l.el=el("path",{class:"link "+l.type,d:pathOf(l)},gLinks); });
+  const shorten=s=>s.length>14? s.slice(0,13)+"…" : s;
+  nodes.forEach(n=>{ const cls="node "+n.kind+(n.kind==="day"&&!n.url?" unpublished":"");
+    const g=el("g",{class:cls,transform:`translate(${n.x},${n.y})`,tabindex:0,role:"button","aria-label":n.kind==="day"?("Day "+n.n+" "+n.title):n.label},gNodes); n.el=g;
+    if(n.kind==="day"){ el("circle",{r:11},g); const t=el("text",{"text-anchor":"middle",dy:"3.5"},g); t.textContent=String(n.n); }
+    else if(n.kind==="repo"){ el("rect",{width:11,height:11,x:-5.5,y:-5.5},g); const t=el("text",{dx:9,dy:"3.5"},g); t.textContent=shorten(n.label); }
+    else { el("path",{d:"M0,-7 L7,0 L0,7 L-7,0 Z"},g); const t=el("text",{dx:9,dy:"3.5"},g); t.textContent=shorten(n.label); }
+    g.addEventListener("mouseenter",ev=>{ if(!selected) lightUp(n); showTip(ev,n); });
+    g.addEventListener("mousemove",ev=>showTip(ev,n));
+    g.addEventListener("mouseleave",()=>{ tip.classList.remove("on"); applyFilter(); });
+    g.addEventListener("click",ev=>{ ev.stopPropagation(); toggle(n); });
+    g.addEventListener("keydown",ev=>{ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); toggle(n);} });
+  });
+  svg.addEventListener("click",()=>{ if(!moved) setSelected(null); });
+
+  // ---- viewport: pan, zoom, drag. Day nodes stay pinned (their x is the day number, the
+  // layer bands above them depend on it); concept and repo nodes can be dragged and their
+  // edges follow. A plain wheel keeps scrolling the page: zoom is ⌘/Ctrl+wheel (which is
+  // also what a trackpad pinch sends), the buttons, or a two-finger pinch on touch.
+  const vp={k:1,tx:0,ty:0};
+  const applyView=()=>view.setAttribute("transform",`translate(${vp.tx},${vp.ty}) scale(${vp.k})`);
+  const unit=()=>W/svg.getBoundingClientRect().width;   // screen px → viewBox units (aspect is preserved)
+  const toSvg=(cx,cy)=>{ const r=svg.getBoundingClientRect(), u=W/r.width; return [(cx-r.left)*u,(cy-r.top)*u]; };
+  function zoomAt(f,sx,sy){ const k=Math.max(.5,Math.min(4,vp.k*f)); f=k/vp.k; vp.tx=sx-(sx-vp.tx)*f; vp.ty=sy-(sy-vp.ty)*f; vp.k=k; applyView(); }
+  document.getElementById("zin").onclick=()=>zoomAt(1.25,W/2,H/2);
+  document.getElementById("zout").onclick=()=>zoomAt(1/1.25,W/2,H/2);
+  document.getElementById("zreset").onclick=()=>{ vp.k=1; vp.tx=0; vp.ty=0; applyView(); };
+  svg.addEventListener("wheel",e=>{ if(!(e.ctrlKey||e.metaKey)) return; e.preventDefault(); const [sx,sy]=toSvg(e.clientX,e.clientY); zoomAt(Math.exp(-e.deltaY*0.002),sx,sy); },{passive:false});
+  const ptrs=new Map(); let gesture=null, moved=false;
+  function moveNode(n,x,y){ n.x=x; n.y=y; n.el.setAttribute("transform",`translate(${x},${y})`); links.forEach(l=>{ if(l.source===n||l.target===n) l.el.setAttribute("d",pathOf(l)); }); }
+  svg.addEventListener("pointerdown",e=>{ if(e.pointerType==="mouse"&&e.button!==0) return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); moved=false;
+    if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; gesture={type:"pinch",d:Math.hypot(a.x-b.x,a.y-b.y),mx:(a.x+b.x)/2,my:(a.y+b.y)/2}; return; }
+    const g=e.target.closest(".node"); const n=g&&nodes.find(m=>m.el===g);
+    if(n&&n.kind!=="day") gesture={type:"node",n,ox:n.x,oy:n.y,sx:e.clientX,sy:e.clientY};
+    else gesture={type:"pan",sx:e.clientX,sy:e.clientY,tx:vp.tx,ty:vp.ty}; });
+  svg.addEventListener("pointermove",e=>{ if(!ptrs.has(e.pointerId)||!gesture) return;
+    if(e.pointerType==="mouse"&&e.buttons===0){ endPtr(e); return; }   // button released outside the svg
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); const u=unit();
+    if(gesture.type==="pinch"){ if(ptrs.size<2) return; const [a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2; const [sx,sy]=toSvg(mx,my); zoomAt(d/gesture.d,sx,sy); vp.tx+=(mx-gesture.mx)*u; vp.ty+=(my-gesture.my)*u; applyView(); Object.assign(gesture,{d,mx,my}); moved=true; return; }
+    const dx=e.clientX-gesture.sx, dy=e.clientY-gesture.sy; if(!moved&&Math.hypot(dx,dy)>3){ moved=true; svg.setPointerCapture(e.pointerId); }
+    if(!moved) return;
+    if(gesture.type==="pan"){ vp.tx=gesture.tx+dx*u; vp.ty=gesture.ty+dy*u; applyView(); svg.classList.add("panning"); tip.classList.remove("on"); }
+    else moveNode(gesture.n, gesture.ox+dx*u/vp.k, gesture.oy+dy*u/vp.k); });
+  const endPtr=e=>{ ptrs.delete(e.pointerId); if(!ptrs.size){ gesture=null; svg.classList.remove("panning"); } else if(gesture&&gesture.type==="pinch") gesture=null; };
+  svg.addEventListener("pointerup",endPtr); svg.addEventListener("pointercancel",endPtr);
+  // The click that follows a drag is not a click: stop it before it reaches a node or the background.
+  svg.addEventListener("click",e=>{ if(moved) e.stopPropagation(); },true);
+
+  // ---- state: selection, tour, hash
+  const tip=document.getElementById("tip"); const graphEl=document.getElementById("graph");
+  let selected=null, query="", tour=null, tourStep=0;
+  function lightUp(n){ const nb=adj.get(n.id); nodes.forEach(m=>{ m.el.classList.toggle("dim", !(m.id===n.id||nb.has(m.id))); }); links.forEach(l=>{ const on=l.source.id===n.id||l.target.id===n.id; l.el.classList.toggle("lit",on); l.el.classList.toggle("dim",!on); }); }
+  function applyFilter(){
+    const q=query.trim().toLowerCase();
+    const match = n => {
+      if(activeLayer){ if(n.kind==="day") { if(n.layer!==activeLayer) return false; } else { const ds=[...adj.get(n.id)].map(i=>byId.get(i)).filter(m=>m.kind==="day"); if(!ds.some(m=>m.layer===activeLayer)) return false; } }
+      if(q){ const hay=(n.label+" "+(n.title||"")+" "+(n.sub||"")+" "+(n.desc||"")+" "+(n.summary||"")+" "+(n.path||"")).toLowerCase(); if(!hay.includes(q)) return false; }
+      return true; };
+    const vis=new Set(nodes.filter(match).map(n=>n.id));
+    if(selected){ lightUp(selected); nodes.forEach(m=>m.el.classList.toggle("sel",m.id===selected.id)); }
+    else { nodes.forEach(m=>{ m.el.classList.toggle("dim",!vis.has(m.id)); m.el.classList.remove("sel"); }); links.forEach(l=>{ l.el.classList.remove("lit"); l.el.classList.toggle("dim",!(vis.has(l.source.id)&&vis.has(l.target.id))); }); }
+    document.getElementById("qhint").textContent = (q||activeLayer)? `${vis.size} 個節點` : "";
+    document.querySelectorAll("#strip button").forEach(b=>{ b.classList.toggle("off", !vis.has(b.dataset.id)); b.setAttribute("aria-current", String(!!selected && selected.id===b.dataset.id)); });
+  }
+  function showTip(ev,d){ if(gesture) return; const r=graphEl.getBoundingClientRect(); const x=ev.clientX-r.left, y=ev.clientY-r.top; tip.innerHTML=`<span class="k">${kindName(d.kind)}${d.kind==="day"?" · Day "+d.n:""}</span>${esc(d.kind==="day"?d.title:d.label)}${d.kind==="day"?"<br><span style='opacity:.8'>"+esc(d.sub)+"</span>":""}`; tip.style.left=Math.max(0,Math.min(x+14, r.width-290))+"px"; tip.style.top=(y+14)+"px"; tip.classList.add("on"); }
+  function setSelected(n, opts={}){ selected=n; if(!opts.keepTour && tour) { tour=null; tourChips(null); }
+    applyFilter(); renderPanel(selected); if(window.__vecLight) __vecLight(selected);
+    const h = selected? "#"+selected.id : "";
+    if(location.hash!==h) history.replaceState(null,"",location.pathname+location.search+h);
+    if(selected && opts.scroll!==false){ const p=document.getElementById("panel"); p.scrollTop=0; }
+  }
+  function toggle(n){ setSelected(selected&&selected.id===n.id? null : n); }
+  window.__select = (id, opts) => { const n=byId.get(id); if(n){ setSelected(n, opts||{}); if(!(opts&&opts.noJump)) document.getElementById("graph").scrollIntoView({behavior:"smooth",block:"start"}); } };
+  // ---- keyword search: the graph dims to matches, and a result list under the box
+  // ranks them (label > title/sub > path > body) so a hit is one click away.
+  const qEl=document.getElementById("q"), resEl=document.getElementById("results");
+  let cursor=-1;
+  function score(n,q){ const L=s=>String(s||"").toLowerCase();
+    if(L(n.label).includes(q)||L(n.title).includes(q)) return 3; if(L(n.sub).includes(q)||L(n.path).includes(q)||L(n.name).includes(q)) return 2;
+    if(L(n.summary).includes(q)||L(n.desc).includes(q)) return 1; return 0; }
+  function snippet(n,q){ const src=String(n.summary||n.desc||""); const i=src.toLowerCase().indexOf(q); if(i<0) return src.slice(0,60); const a=Math.max(0,i-24); return (a>0?"…":"")+src.slice(a,i+q.length+40); }
+  const hl=(s,q)=>{ const i=s.toLowerCase().indexOf(q); return i<0? esc(s) : esc(s.slice(0,i))+"<mark>"+esc(s.slice(i,i+q.length))+"</mark>"+esc(s.slice(i+q.length)); };
+  function renderResults(){ const q=query.trim().toLowerCase(); cursor=-1;
+    if(!q){ resEl.hidden=true; resEl.innerHTML=""; return; }
+    const hits=nodes.map(n=>({n,s:score(n,q)})).filter(h=>h.s>0).sort((a,b)=>b.s-a.s||(a.n.kind==="day"?a.n.n:99)-(b.n.kind==="day"?b.n.n:99)).slice(0,40);
+    if(!hits.length){ resEl.innerHTML=`<div class="none">沒有符合「${esc(query.trim())}」的節點</div>`; resEl.hidden=false; return; }
+    let h="";
+    hits.forEach(({n})=>{ const t=n.kind==="day"?`Day ${n.n}｜${n.title}`:n.label;
+      h+=`<button data-id="${n.id}" role="option"><i class="sw ${n.kind}"></i><span><span class="t">${hl(t,q)}</span><span class="s">${hl(n.kind==="repo"?(n.path||""):snippet(n,q),q)}</span></span></button>`; });
+    resEl.innerHTML=h; resEl.hidden=false; }
+  resEl.addEventListener("mousedown",e=>{ const b=e.target.closest("button[data-id]"); if(b){ e.preventDefault(); window.__select(b.dataset.id); resEl.hidden=true; } });
+  // With an IME (注音 etc.) each keystroke fires `input` with half-composed text; searching then
+  // dims the whole graph to zero hits until the candidate is confirmed. Wait for compositionend.
+  let composing=false;
+  const runQuery=v=>{ query=v; setSelected(null); renderResults(); };
+  qEl.addEventListener("compositionstart",()=>{ composing=true; });
+  qEl.addEventListener("compositionend",e=>{ composing=false; runQuery(e.target.value); });
+  qEl.addEventListener("input",e=>{ if(composing||e.isComposing) return; runQuery(e.target.value); });
+  qEl.addEventListener("focus",()=>{ if(query.trim()) resEl.hidden=false; });
+  qEl.addEventListener("blur",()=>{ setTimeout(()=>{ resEl.hidden=true; },150); });
+  qEl.addEventListener("keydown",e=>{ if(e.isComposing||e.keyCode===229) return;   // Enter/arrows belong to the IME candidate list
+    const items=[...resEl.querySelectorAll("button[data-id]")]; if(!items.length) return;
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); cursor=(cursor+(e.key==="ArrowDown"?1:-1)+items.length)%items.length; items.forEach((b,i)=>b.classList.toggle("active",i===cursor)); items[cursor].scrollIntoView({block:"nearest"}); }
+    else if(e.key==="Enter"){ e.preventDefault(); const b=items[cursor>=0?cursor:0]; window.__select(b.dataset.id); resEl.hidden=true; qEl.blur(); }
+    else if(e.key==="Escape"){ resEl.hidden=true; } });
+  window.addEventListener("hashchange",()=>{ const n=byId.get(location.hash.slice(1)); if(n && (!selected||selected.id!==n.id)) setSelected(n); });
+
+  // ---- tours
+  const toursEl=document.getElementById("tours");
+  const embedChip=document.getElementById("embed-chip");
+  TOURS.forEach(t=>{ const b=document.createElement("button"); b.className="chip"; b.setAttribute("aria-pressed","false"); b.textContent=t.name; b.title=t.desc; b.onclick=()=>startTour(t); toursEl.insertBefore(b,embedChip); });
+  function tourChips(active){ [...toursEl.querySelectorAll(".chip")].forEach(c=>c.setAttribute("aria-pressed",String(!!active && c.textContent===active.name))); }
+  function startTour(t){ tour=t; tourStep=0; tourChips(t); gotoStop(); }
+  function gotoStop(){ const s=tour.stops[tourStep]; window.__select(s.node,{keepTour:true}); }
+  window.__tour = dir => { if(!tour) return; if(dir===0){ tour=null; tourChips(null); renderPanel(selected); return; } tourStep=Math.max(0,Math.min(tour.stops.length-1,tourStep+dir)); gotoStop(); };
+
+  // ---- panel
+  const panel=document.getElementById("panel");
+  function renderPanel(n){
+    if(!n){ panel.innerHTML=`<p class="empty">點一個節點。圓形是文章的一天（虛心的圓是尚未發佈的日子），方形是 repo 裡的檔案或 ADR，菱形是反覆出現的機制與事故。上方的藍色弧線是跨日的承諾：哪一天埋下、哪一天兌現。點狀的細線是文章沒講、但 repo 裡有的延伸。網址列的 <code>#id</code> 可以直接分享某個節點。</p>`; return; }
+    const nb=[...adj.get(n.id)].map(i=>byId.get(i));
+    const days=nb.filter(m=>m.kind==="day").sort((a,b)=>a.n-b.n), cons=nb.filter(m=>m.kind==="concept");
+    const extIds=new Set(n.kind==="day"?(n.repo_ext||[]):DAYS.filter(d=>(d.repo_ext||[]).includes(n.id)).map(d=>d.id));
+    const repos=nb.filter(m=>m.kind==="repo"&&!TEST_GROUPS.has(m.group)&&!extIds.has(m.id)), tests=nb.filter(m=>m.kind==="repo"&&TEST_GROUPS.has(m.group)&&!extIds.has(m.id));
+    const exts=nb.filter(m=>extIds.has(m.id));
+    const proms = PROMISES.filter(p=>p.from===n.id||p.to===n.id);
+    let h="";
+    if(tour){ const s=tour.stops[tourStep]; h+=`<div class="tourbar"><b>${esc(tour.name)}</b><span class="mono">${tourStep+1}/${tour.stops.length}</span><span class="cap">${esc(s.caption)}</span><button onclick="__tour(-1)" ${tourStep===0?"disabled":""}>上一站</button><button onclick="__tour(1)" ${tourStep===tour.stops.length-1?"disabled":""}>下一站</button><button class="x" onclick="__tour(0)" aria-label="結束導覽">✕</button></div>`; }
+    h+=`<span class="kind"><i class="sw ${n.kind}"></i>${kindName(n.kind)}${n.kind==="day"?" · Day "+n.n+" · "+((l=>l? l.short+"｜"+l.name : "")(LAYERS.find(l=>l.id===n.layer))):""}${n.kind==="concept"?" · "+(CK[n.ckind]||""):""}${n.kind==="repo"?" · "+((GROUPS.find(g=>g[0]===n.group)||[])[1]||""):""}</span>`;
+    const href=urlOf(n), title=esc(n.kind==="day"?n.title:n.label);
+    h+= href? `<h2><a class="tlink" href="${esc(href)}" target="_blank" rel="noopener" title="${linkLabel(n)}">${title} <span class="ext">↗</span></a></h2>`
+            : `<h2>${title}${n.kind==="day"?` <span class="stub" title="articles.json 這一天還是 null">尚未發佈</span>`:""}</h2>`;
+    if(n.path) h+=`<code class="path">${esc(n.path)}</code>`;
+    if(n.sub) h+=`<div class="sub">${esc(n.sub)}</div>`;
+    h+=`<p>${esc(n.summary||n.desc||"")}</p>`;
+    h+=`<div class="actions">`;
+    if(href) h+=`<a href="${esc(href)}" target="_blank" rel="noopener">${linkLabel(n)} ↗</a>`;
+    else if(n.kind==="day") h+=`<span class="muted">原文尚未發佈</span>`;
+    h+=`<button onclick="__share('${n.id}')">複製這個節點的連結</button></div>`;
+    const note=NOTES[n.id];
+    if(note){ h+=`<div class="note"><span class="lamp ${note.lamp}"><i></i>審閱者觀察</span><div>${note.text}</div><span class="by">${esc(REVIEW.byline||"")}</span></div>`; }
+    const li=(m,extra)=>`<li><i class="sw ${m.kind}"></i><div><button onclick="__select('${m.id}')">${m.kind==="day"?"Day "+m.n+"｜"+esc(m.title):esc(m.label)}</button>${extra?`<div class="why mono">${esc(extra)}</div>`:""}</div></li>`;
+    if(days.length&&n.kind!=="day"){ h+=`<h3>文章裡在哪幾天</h3><ul class="rel">`+days.map(m=>li(m)).join("")+`</ul>`; }
+    if(cons.length){ h+=`<h3>${n.kind==="day"?"這一天立下或撞到的":"相關機制"}</h3><ul class="rel">`+cons.map(m=>li(m)).join("")+`</ul>`; }
+    if(repos.length){ h+=`<h3>${n.kind==="day"?"repo 裡對應的位置":"落地在"}</h3><ul class="rel">`+repos.map(m=>li(m,m.path)).join("")+`</ul>`; }
+    if(tests.length){ h+=`<h3>守著它的測試</h3><ul class="rel">`+tests.map(m=>li(m,m.path)).join("")+`</ul>`; }
+    if(exts.length){ h+=`<h3>${n.kind==="day"?"repo 裡的延伸（文章沒講到）":"文章沒講到、但主題在這幾天"}</h3><ul class="rel">`+exts.map(m=>li(m,n.kind==="day"?m.path:undefined)).join("")+`</ul>`; }
+    if(proms.length){ h+=`<h3>跨日承諾</h3><ul class="rel">`+proms.map(p=>{ const o=p.from===n.id?byId.get(p.to):byId.get(p.from); const dir=p.from===n.id?"→ 在 Day "+o.n+" 兌現":"← 從 Day "+o.n+" 埋下"; return `<li><i class="sw day"></i><div><button onclick="__select('${o.id}')">${dir}</button><div class="why">${esc(p.text)}</div></div></li>`; }).join("")+`</ul>`; }
+    panel.innerHTML=h;
+  }
+  const toast=document.getElementById("toast");
+  // location.href, not origin+pathname: origin is the string "null" on file://.
+  window.__share = id => { const url=location.href.split("#")[0]+"#"+id; const done=()=>{ toast.textContent="已複製："+url; toast.classList.add("on"); setTimeout(()=>toast.classList.remove("on"),1800); };
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done,()=>{ toast.textContent=url; toast.classList.add("on"); setTimeout(()=>toast.classList.remove("on"),3000); }); else { toast.textContent=url; toast.classList.add("on"); setTimeout(()=>toast.classList.remove("on"),3000); } };
+
+  // ---- strip
+  const strip=document.getElementById("strip"), cap=document.getElementById("stripcap");
+  DAYS.forEach(d=>{ const b=document.createElement("button"); b.textContent=d.n; b.dataset.id=d.id; b.title=d.title+(d.url?"":"（尚未發佈）"); if(!d.url) b.classList.add("unpublished"); b.onclick=()=>window.__select(d.id); strip.appendChild(b); });
+  layerSpans.forEach(s=>{ const sp=document.createElement("span"); sp.style.setProperty("--span", s.to-s.from+1); sp.textContent=s.short; cap.appendChild(sp); });
+
+  // ---- coverage matrix: day × repo group
+  const mx=document.getElementById("matrix");
+  const counts=new Map(); DAYS.forEach(d=>{ const row=new Map(); [...(d.repo||[]),...(d.repo_ext||[])].forEach(r=>{ const g=byId.get(r).group; row.set(g,(row.get(g)||0)+1); }); counts.set(d.id,row); });
+  let mh=`<table><colgroup><col class="lab">${DAYS.map(()=>"<col>").join("")}</colgroup><thead><tr><th></th>`+DAYS.map(d=>`<th class="col">${d.n}</th>`).join("")+`</tr></thead><tbody>`;
+  REPOS.forEach(r=>{ mh+=`<tr class="repo"><th colspan="31"><a href="${r.url}" target="_blank" rel="noopener">${REPO_ICON}${esc(r.name)}</a></th></tr>`;
+    r.groups.forEach(([g,label,depth])=>{ const sub=depth? `<span class="tree">└</span>` : ""; const shown=depth? label.replace(/^(claude-pty|rust)\//,"") : label;
+      mh+=`<tr${depth?' class="sub"':""}><th>${sub}${esc(shown)}</th>`+DAYS.map(d=>{ const c=counts.get(d.id).get(g)||0; const v=c===0?0:c<=1?1:c<=3?2:3; return `<td><i data-v="${v}" title="Day ${d.n} · ${esc(r.name)} ${esc(label)} · ${c}" onclick="__select('${d.id}')"></i></td>`; }).join("")+`</tr>`; }); });
+  mh+=`</tbody></table><div class="cap"><span>那一天連到該目錄的節點數，越橘越多：</span><span><i data-v="0"></i>0</span><span><i data-v="1"></i>1</span><span><i data-v="2"></i>2–3</span><span><i data-v="3"></i>4 以上</span><span>點格子可定位那一天。</span></div>`; mx.innerHTML=mh;
+
+  // ---- lamps, promises, footer
+  function lampList(id, items){ document.getElementById(id).innerHTML=(items||[]).map(it=>`<li><b>${esc(it.title)}</b>${esc(it.text)} <button class="go" onclick="__select('${it.node}')">↗ ${esc(byId.get(it.node)?byId.get(it.node).label:it.node)}</button></li>`).join(""); }
+  lampList("good", LAMPS.good); lampList("crit", LAMPS.crit);
+  document.getElementById("about").textContent=REVIEW.about||"";
+  document.getElementById("ptable").innerHTML = PROMISES.map(p=>{ const a=byId.get(p.from), b=byId.get(p.to); return `<tr><td class="d"><button onclick="__select('${a.id}')">Day ${a.n}</button></td><td class="d"><button onclick="__select('${b.id}')">Day ${b.n}</button></td><td>${esc(p.text)}</td></tr>`; }).join("");
+  const unpub=DAYS.filter(d=>!d.url).map(d=>d.n);
+  document.getElementById("foot").textContent=`資料來源：文章全文（Day 1–30）與 repo 的 main（含 nathanfhh/ttyd）。節點的檔案路徑以當時的 checkout 為準。`+(unpub.length?` 尚未發佈的日子：${unpub.join("、")}。`:"")+` 資料在 site/data/，用 site/build.py 產生這一頁。`;
+
+
+  // ---- vectors: the same thirty days measured without reading them. Lives on this page so a
+  // point in the cloud is one click from its day in the graph above, and a selection above
+  // lights the days it touches down here. Charts initialise when the section scrolls into
+  // view (WebGL is not free) and only when build.py found data/embed.json.
+  if(DATA.embed) (function(){
+    const E=DATA.embed, byN=new Map(DAYS.map(d=>[d.n,d])), days=E.days.map(d=>d.n), M=E.meta;
+    const pad=n=>"d"+String(n).padStart(2,"0");
+    const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+    const layerOf=n=>(byN.get(n)||{}).layer||"intro";
+    const dayBtn=n=>`<button onclick="__select('${pad(n)}')" title="${esc((byN.get(n)||{}).title||"")}">Day ${n}</button>`;
+    const evr=(M.pca_explained_variance||[]).reduce((s,v)=>s+v,0);
+    document.getElementById("vec-intro").textContent=`上面的邊是人讀完文章手標的：哪一天講了哪個機制、落在 repo 的哪個檔案。這一節換一個不讀懂內容的量尺：把三十篇切成 ${E.chunks.length} 段，每段算一個 embedding（${M.model}，${M.dims} 維），只看向量之間的距離。點雲裡的任何一點、熱圖上的任何一天，點下去都會回到上面的關聯圖；在上面選了誰，這裡就亮它連到的那幾天。`;
+    document.getElementById("intro3d").textContent=`每個點是一段文字，顏色是那一天所屬的層次，大的有數字的點是每一天所有段落的中心。UMAP 把 ${M.dims} 維裡的鄰居關係盡量保留到三維，兩團靠在一起就是兩天在講相近的事；PCA 是線性投影，三個主成分只解釋了 ${(evr*100).toFixed(1)}% 的變異，看得出大方向，看不出細節。`;
+    document.getElementById("cap3d").textContent=`拖曳旋轉、滾輪縮放；點圖例可以關掉整個層次。UMAP n_neighbors ${M.umap.n_neighbors}、min_dist ${M.umap.min_dist}、cosine、seed ${M.umap.seed}。`;
+    document.getElementById("introheat").textContent=`每一天的向量是它所有段落向量的平均，格子是兩天向量的 cosine，不經降維。這個模型的相似度擠在很窄的一段（最低 ${M.scale.min}、中位數 ${M.scale.median}、最高 ${M.scale.max}），所以色階從最低值起算，不是從 0；顏色只表示相對遠近。對角線留白。`;
+    document.getElementById("vec-foot").textContent=`${M.model} · ${M.dims} 維 · ${E.chunks.length} 段 · ${String(M.created).slice(0,10)} · 文章 ${String(M.article_sha256).slice(0,8)}`;
+    document.getElementById("pairs").innerHTML=E.pairs.slice(0,25).map(p=>`<tr><td class="d">${dayBtn(p.a)}</td><td class="d">${dayBtn(p.b)}</td><td class="n">${p.sim.toFixed(3)}</td><td><span class="h">${esc(p.best.a.heading||"（開頭）")} ↔ ${esc(p.best.b.heading||"（開頭）")} · ${p.best.sim}</span><br>${esc(p.best.a.preview)}<br><span style="color:var(--ink-3)">↔</span> ${esc(p.best.b.preview)}</td></tr>`).join("");
+    document.getElementById("nearest").innerHTML=E.days.map(d=>`<button onclick="__select('${pad(d.n)}')" title="${esc((byN.get(d.n)||{}).title||"")}"><b>Day ${d.n}</b> → Day ${d.nearest.day} <span style="opacity:.7">${d.nearest.sim.toFixed(3)}</span></button>`).join("");
+
+    let col, ink, ink2, ink3, line, surface, ramp;
+    function readTheme(){ col={}; LAYERS.forEach(l=>col[l.id]=css("--l-"+l.id)); ink=css("--ink"); ink2=css("--ink-2"); ink3=css("--ink-3"); line=css("--line"); surface=css("--surface"); ramp=css("--ramp").split(",").map(x=>x.trim()); }
+    let method="umap", only=null, c3d=null, heat=null, ready=false;
+    const dc=document.getElementById("daychips");
+    const allBtn=document.createElement("button"); allBtn.className="chip n"; allBtn.textContent="全部"; allBtn.setAttribute("aria-pressed","true"); allBtn.onclick=()=>setOnly(null); dc.appendChild(allBtn);
+    days.forEach(n=>{ const b=document.createElement("button"); b.className="chip n"; b.dataset.n=n; b.textContent=n; b.title=(byN.get(n)||{}).title||""; b.setAttribute("aria-pressed","false"); b.onclick=()=>setOnly(only&&only.size===1&&only.has(n)?null:new Set([n])); dc.appendChild(b); });
+    function setOnly(set){ only=set&&set.size?set:null; [...dc.querySelectorAll(".chip")].forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.n? !!(only&&only.has(+b.dataset.n)) : !only))); if(ready) build3d(); }
+    // graph selection → which days to light: a day is itself, a concept or repo node is every day it links to
+    window.__vecLight=n=>{ if(!n) return setOnly(null); if(n.kind==="day") return setOnly(new Set([n.n])); setOnly(new Set([...adj.get(n.id)].map(i=>byId.get(i)).filter(m=>m.kind==="day").map(m=>m.n))); };
+    function tip3d(p){ const d=p.data; if(d.c){ const c=d.c, day=byN.get(c.day)||{}; return `<div style="max-width:320px;white-space:normal"><span class="mono" style="font-size:11px;opacity:.7">${c.id}${c.heading?" · "+esc(c.heading):""}</span><br><b>Day ${c.day}｜${esc(day.title||"")}</b><br><span style="opacity:.85">${esc(c.preview)}</span><br><span style="opacity:.6;font-size:11.5px">點一下回到關聯圖的 Day ${c.day}</span></div>`; }
+      if(d.d){ const day=byN.get(d.d.n)||{}; return `<b>Day ${d.d.n}｜${esc(day.title||"")}</b><br>${d.d.chunks} 段的中心 · 最近的一天：Day ${d.d.nearest.day}（${d.d.nearest.sim}）`; } return ""; }
+    function build3d(){
+      const lit=n=> !only || only.has(n);
+      const series=LAYERS.map(l=>({name:l.short,type:"scatter3D",symbolSize:6,itemStyle:{color:col[l.id]},
+        data:E.chunks.filter(c=>layerOf(c.day)===l.id).map(c=>({value:c[method],c,itemStyle:{color:col[l.id],opacity:only?(lit(c.day)?1:0.06):0.85}})),
+        emphasis:{itemStyle:{opacity:1}}}));
+      series.push({name:"每一天的中心",type:"scatter3D",symbolSize:15,itemStyle:{color:ink3},
+        data:E.days.map(d=>({value:d.centroid[method],d,itemStyle:{color:col[layerOf(d.n)],opacity:only?(lit(d.n)?1:0.18):1,borderWidth:1.5,borderColor:surface}})),
+        label:{show:true,distance:3,formatter:p=>String(p.data.d.n),color:ink,fontSize:11,textStyle:{color:ink,fontSize:11,fontWeight:"bold",fontFamily:"IBM Plex Mono, monospace",borderWidth:0,backgroundColor:"transparent"}},
+        emphasis:{itemStyle:{opacity:1}}});
+      c3d.setOption({backgroundColor:"transparent",
+        tooltip:{appendToBody:true,formatter:tip3d,backgroundColor:surface,borderColor:line,textStyle:{color:ink,fontSize:12.5}},
+        legend:{data:LAYERS.map(l=>l.short).concat(["每一天的中心"]),top:10,left:12,tooltip:{show:true,formatter:p=>{ const l=LAYERS.find(x=>x.short===p.name); return l? l.short+"｜"+l.name : p.name; }},textStyle:{color:ink2,fontSize:12},itemWidth:10,itemHeight:10,icon:"circle"},
+        grid3D:{boxWidth:100,boxHeight:100,boxDepth:100,top:30,axisLine:{lineStyle:{color:line,width:1}},splitLine:{show:true,lineStyle:{color:line,opacity:.45}},axisPointer:{show:false},
+          viewControl:{distance:165,alpha:22,beta:35,projection:"perspective",autoRotate:false,rotateSensitivity:1.4,zoomSensitivity:1.2},
+          environment:surface,light:{main:{intensity:1.1,shadow:false},ambient:{intensity:.7}}},
+        xAxis3D:{type:"value",name:"",axisLabel:{show:false},axisTick:{show:false}},yAxis3D:{type:"value",name:"",axisLabel:{show:false},axisTick:{show:false}},zAxis3D:{type:"value",name:"",axisLabel:{show:false},axisTick:{show:false}},
+        series},true);
+    }
+    const pairOf=(a,b)=>E.pairs.find(p=>(p.a===a&&p.b===b)||(p.a===b&&p.b===a));
+    function buildHeat(){
+      const data=[]; days.forEach((a,i)=>days.forEach((b,j)=>{ if(i!==j) data.push([j,i,E.sim[i][j]]); }));
+      heat.setOption({backgroundColor:"transparent",
+        tooltip:{appendToBody:true,position:(pt,params,dom,rect,size)=>{ const [w,h]=size.contentSize,[vw]=size.viewSize; const x=Math.max(8,Math.min(pt[0]-w/2,vw-w-8)); const y=pt[1]-h-14; return [x, y<0? pt[1]+18 : y]; },backgroundColor:surface,borderColor:line,textStyle:{color:ink,fontSize:12.5},
+          formatter:p=>{ const a=days[p.value[1]], b=days[p.value[0]]; const pr=pairOf(a,b); return `<b>Day ${a} ↔ Day ${b}</b> · ${p.value[2].toFixed(3)}${pr?`<br><span style="opacity:.8">最相近的段落：${esc(pr.best.a.heading||"（開頭）")} ↔ ${esc(pr.best.b.heading||"（開頭）")}（${pr.best.sim}）</span>`:""}<br><span style="opacity:.6">點一下看那兩段</span>`; }},
+        grid:{left:44,right:14,top:14,bottom:92},
+        xAxis:{type:"category",data:days,axisLabel:{color:ink3,fontSize:11,interval:0,fontFamily:"IBM Plex Mono, monospace"},axisLine:{lineStyle:{color:line}},axisTick:{show:false},splitArea:{show:false}},
+        yAxis:{type:"category",data:days,inverse:true,axisLabel:{color:ink3,fontSize:11,interval:0,fontFamily:"IBM Plex Mono, monospace"},axisLine:{lineStyle:{color:line}},axisTick:{show:false},splitArea:{show:false}},
+        visualMap:{min:M.scale.min,max:M.scale.max,calculable:true,orient:"horizontal",left:"center",bottom:10,precision:3,itemWidth:12,itemHeight:180,inRange:{color:ramp},textStyle:{color:ink3,fontFamily:"IBM Plex Mono, monospace",fontSize:11}},
+        series:[{type:"heatmap",data,itemStyle:{borderColor:surface,borderWidth:2,borderRadius:2},emphasis:{itemStyle:{borderColor:ink,borderWidth:2}},progressive:0}]},true);
+    }
+    const pairBox=document.getElementById("pairbox");
+    function showPair(a,b){ const pr=pairOf(a,b); const s=E.sim[days.indexOf(a)][days.indexOf(b)];
+      const ta=(byN.get(a)||{}).title||"", tb=(byN.get(b)||{}).title||"";
+      let h=`<h3>Day ${a} ↔ Day ${b}</h3><div class="sim">cosine ${s.toFixed(3)} · 在 ${E.pairs.length} 對裡排第 ${E.pairs.indexOf(pr)+1}</div><div style="font-size:13px;color:var(--ink-2);margin-top:6px">${esc(ta)}<br>${esc(tb)}</div>`;
+      if(pr){ const q=(side,n)=>`<div class="q"><span class="h">${side.id}${side.heading?" · "+esc(side.heading):""} · <button onclick="__select('${pad(n)}')">Day ${n} ↑</button></span>${esc(side.preview)}</div>`; h+=`<p style="margin:12px 0 0;font-size:12.5px;color:var(--ink-3)">最相近的一對段落（${pr.best.sim}）</p>`+q(pr.best.a,a)+q(pr.best.b,b); }
+      h+=`<p style="margin:12px 0 0"><button class="go" onclick="__vecOnly(${a},${b})">在點雲只亮這兩天</button></p>`;
+      pairBox.innerHTML=h; }
+    window.__vecOnly=(a,b)=>{ setOnly(new Set([a,b])); document.getElementById("c3d").scrollIntoView({behavior:"smooth",block:"center"}); };
+    let jump=true; try{ jump=localStorage.getItem("vec-jump")!=="0"; }catch(e){}
+    const jumpBtn=document.getElementById("jump"); jumpBtn.setAttribute("aria-pressed",String(jump));
+    jumpBtn.onclick=()=>{ jump=!jump; jumpBtn.setAttribute("aria-pressed",String(jump)); try{ localStorage.setItem("vec-jump",jump?"1":"0"); }catch(e){} };
+    document.querySelectorAll("#method .chip").forEach(b=>b.onclick=()=>{ method=b.dataset.m; document.querySelectorAll("#method .chip").forEach(c=>c.setAttribute("aria-pressed",String(c===b))); if(ready) build3d(); });
+    function init(){ if(ready||typeof echarts==="undefined") return; ready=true;
+      c3d=echarts.init(document.getElementById("c3d"),null,{renderer:"canvas"});
+      heat=echarts.init(document.getElementById("heat"),null,{renderer:"canvas"});
+      c3d.on("click",p=>{ const d=p.data||{}; const n=d.c?d.c.day:(d.d?d.d.n:null); if(!n) return; window.__select(pad(n),{noJump:!jump});
+        toast.textContent=(jump?"":"已選 Day "+n+"　")+(d.c?`${d.c.id}${d.c.heading?" · "+d.c.heading:""}`:`Day ${n} 的中心`); toast.classList.add("on"); setTimeout(()=>toast.classList.remove("on"),2200); });
+      heat.on("click",p=>{ if(p.componentType==="series") showPair(days[p.value[1]],days[p.value[0]]); });
+      const render=()=>{ readTheme(); build3d(); buildHeat(); };
+      render();
+      window.addEventListener("resize",()=>{ c3d.resize(); heat.resize(); });
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change",render);
+      new MutationObserver(render).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+    }
+    const sec=document.getElementById("vectors");
+    if("IntersectionObserver" in window){ const io=new IntersectionObserver(es=>{ if(es.some(e=>e.isIntersecting)){ init(); io.disconnect(); } },{rootMargin:"600px"}); io.observe(sec); } else init();
+  })();
+
+  // ---- initial state: hash wins, else open on the series' own summarising concept
+  const initial = byId.get(location.hash.slice(1)) || byId.get("c-false-green");
+  setSelected(initial,{scroll:false}); window.scrollTo(0,0);
+})();
+</script>
+</body>
+</html>

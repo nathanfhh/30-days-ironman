@@ -1,0 +1,71 @@
+# 發布 site/ 到 GitHub Pages。
+#
+# 產物是一個沒有外部 script 相依的 index.html（site/build.py 把 site/data/*.json
+# 灌進 site/template.html），所以這裡只需要 Python 標準庫，不需要 uv、不需要 node。
+#
+# ⚠ 刻意**不用** --strict：連載還在發，未發佈的日子在 articles.json 裡是 null，
+#   這是正常狀態。--check 只把它們印出來讓 log 看得到。最終版要清掉所有 null 與
+#   {{…}} 佔位符時，在本機跑 `python3 site/build.py --check --strict`，或把下面那行
+#   加上 --strict 讓它變成閘。
+# ⚠ 第一次啟用要到 repo 的 Settings → Pages 把 Source 選成「GitHub Actions」，
+#   否則 deploy 那個 job 會因為沒有 pages 環境而失敗。
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# ⚠ group 要帶 ref。同一個 group 裡新排隊的 run 會取消前一個「還在等」的 run；
+#   如果 PR 的 build 跟 main 的 deploy 共用一個 group，PR 連推兩次就能把排隊中的
+#   正式部署擠掉，而且沒有任何紅燈——站只是停在舊版。
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 資料引用與佔位符報告，然後產生 index.html
+        run: python3 site/build.py --check --out site/dist
+      - name: 產物自檢（資料真的灌進去了、沒有外部 script）
+        run: |
+          set -euo pipefail
+          test -f site/dist/index.html
+          grep -q 'const DATA=' site/dist/index.html
+          ! grep -q '/\*DATA\*/' site/dist/index.html
+          # 唯一准許的外部 script 是 vendor/ 底下的 ECharts（只有 site/data/embed.json 存在時才會載）
+          ! grep -Eo '<script[^>]+src="[^"]+"' site/dist/index.html | grep -vq 'src="vendor/'
+          if grep -q 'src="vendor/' site/dist/index.html; then test -f site/dist/vendor/echarts-6.1.0.min.js; fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    # PR 只 build 不部署；push 到 main 與手動觸發才上線。
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
