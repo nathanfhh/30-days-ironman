@@ -242,7 +242,7 @@ section.review .intro{color:var(--ink-2);margin-top:8px}
 <div class="wrap">
   <header class="mast">
     <div>
-      <div class="eyebrow"><a id="series-link" href="#" target="_blank" rel="noopener">AI 的駕馭之道 · 30 天</a> × <a href="https://github.com/nathanfhh/30-days-ironman" target="_blank" rel="noopener">nathanfhh/30-days-ironman</a> <span id="embed-link" hidden>· <a href="embed.html">向量圖</a></span></div>
+      <div class="eyebrow"><a id="series-link" href="#" target="_blank" rel="noopener">AI 的駕馭之道 · 30 天</a> × <a href="https://github.com/nathanfhh/30-days-ironman" target="_blank" rel="noopener">nathanfhh/30-days-ironman</a></div>
       <h1>駕馭之道關聯圖</h1>
       <p class="lede">文章談的是<b>為什麼這樣選</b>，repo 放的是<b>怎麼做的</b>。這張圖把三十篇文章裡的 30 個日子、
       反覆出現的機制與事故，以及 repo 裡真正落地的檔案、ADR 與測試接在一起。點任何一個節點，右側會列出它連到誰、
@@ -374,7 +374,7 @@ section.review .intro{color:var(--ink-2);margin-top:8px}
   const linkLabel=n=> n.kind==="day"?"讀原文":"在 GitHub 看";
   const kindName=k=> k==="day"?"文章":k==="repo"?"REPO":"機制";
   if(DATA.series) document.getElementById("series-link").href=DATA.series;
-  if(DATA.embed){ ["embed-link","embed-chip","vectors"].forEach(id=>document.getElementById(id).hidden=false);
+  if(DATA.embed){ ["embed-chip","vectors"].forEach(id=>document.getElementById(id).hidden=false);
     document.getElementById("embed-chip").onclick=e=>{ e.preventDefault(); document.getElementById("vectors").scrollIntoView({behavior:"smooth",block:"start"}); }; }
   document.getElementById("stats").innerHTML =
     `<span><b>${DAYS.length}</b>天</span><span><b>${REPO.length}</b>repo 節點</span><span><b>${CONCEPTS.length}</b>機制／事故</span><span><b>${links.length}</b>條關聯</span>`;
