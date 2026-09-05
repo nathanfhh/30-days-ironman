@@ -285,7 +285,7 @@
   "id": "c-40min",
   "name": "40 分鐘全站卡死",
   "kind": "incident",
-  "desc": "docker ps 秒回，列表端點打 logs 撞上 removing 的容器；60 秒 timeout × 15 秒輪詢 = 4 條 thread。列表從此只讀 DB。"
+  "desc": "docker ps 秒回，列表端點打 logs 撞上 removing 的容器；60 秒 timeout × 15 秒輪詢，同時卡著約 4 條 thread。列表從此只讀 DB。"
  },
  {
   "id": "c-harness-sandbox",

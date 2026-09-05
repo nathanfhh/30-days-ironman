@@ -52,6 +52,9 @@ button{font:inherit;color:inherit}
 .mast{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px 40px;align-items:end;padding-bottom:20px;border-bottom:1px solid var(--line)}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
 .eyebrow a{color:inherit;text-decoration:none}
+.eyebrow .theme{font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:1px 9px;margin-left:2px;cursor:pointer;vertical-align:baseline;transition:background .15s,color .15s,border-color .15s}
+.eyebrow .theme:hover{color:var(--ink);border-color:var(--ink-3)}
+.eyebrow .theme .ic{margin-right:5px}
 .eyebrow a:hover{text-decoration:underline}
 h1{font-size:clamp(28px,4vw,40px);font-weight:700;line-height:1.2;margin-top:6px}
 .lede{color:var(--ink-2);margin-top:10px}
@@ -235,14 +238,25 @@ section.review .intro{color:var(--ink-2);margin-top:8px}
   .mast{grid-template-columns:1fr}
   .search{margin-left:0}
 }
+/* 換配色時的同心圓擴散。預設的 view transition 是交叉淡出，這裡把它關掉，
+   讓新畫面整片壓在舊畫面上，再由 JS 用 clip-path 從按鈕位置開一個圓。 */
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+::view-transition-old(root){z-index:0}
+::view-transition-new(root){z-index:1}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
+<script>
+// 主題必須在第一次繪製之前定案，不然存了「暗色」的人會先看到一下亮色。
+// 沒有存過選擇時刻意不設 data-theme：那是「跟隨系統」，交給 CSS 的
+// @media (prefers-color-scheme) 去接，而且 OS 當場切換也會即時跟上。
+try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}
+</script>
 </head>
 <body>
 <div class="wrap">
   <header class="mast">
     <div>
-      <div class="eyebrow"><a id="series-link" href="#" target="_blank" rel="noopener">AI 的駕馭之道 · 30 天</a> × <a href="https://github.com/nathanfhh/30-days-ironman" target="_blank" rel="noopener">nathanfhh/30-days-ironman</a></div>
+      <div class="eyebrow"><a id="series-link" href="#" target="_blank" rel="noopener">AI 的駕馭之道 · 30 天</a> × <a href="https://github.com/nathanfhh/30-days-ironman" target="_blank" rel="noopener">nathanfhh/30-days-ironman</a> <button id="theme" class="theme" type="button" aria-live="polite"></button></div>
       <h1>駕馭之道關聯圖</h1>
       <p class="lede">文章談的是<b>為什麼這樣選</b>，repo 放的是<b>怎麼做的</b>。這張圖把三十篇文章裡的 30 個日子、
       反覆出現的機制與事故，以及 repo 裡真正落地的檔案、ADR 與測試接在一起。點任何一個節點，右側會列出它連到誰、
@@ -271,9 +285,10 @@ section.review .intro{color:var(--ink-2);margin-top:8px}
   <div class="strip-cap" id="stripcap"></div>
 
   <section class="review">
-    <h2>哪一天動到哪個目錄</h2>
-    <p class="intro">每一格是那一天在圖上連到該目錄的節點數。Day 1、2 整列空白，因為那兩天只講為什麼；Day 16 與 Day 30
-    沒有那一天寫的程式，格子裡是它們回頭指到的既有檔案（退役規則的現在式、README 與架構圖）。點格子可以直接定位。</p>
+    <h2>哪一天連到哪個目錄</h2>
+    <p class="intro">每一格是那一天在圖上連到該目錄的節點數，數的是文章講到哪些東西，不是那一天的 commit。
+    Day 1、2 整列空白，因為那兩天只講為什麼；Day 16 連到的是規則退役之後的現在式。Day 30 除了回頭指 README，
+    還連到它當天真的動過的兩件事：sessions.py 分三刀拆回各自模組，以及前端改 Vue 3。點格子可以直接定位。</p>
     <div class="matrix" id="matrix"></div>
   </section>
 
@@ -374,6 +389,43 @@ section.review .intro{color:var(--ink-2);margin-top:8px}
   const linkLabel=n=> n.kind==="day"?"讀原文":"在 GitHub 看";
   const kindName=k=> k==="day"?"文章":k==="repo"?"REPO":"機制";
   if(DATA.series) document.getElementById("series-link").href=DATA.series;
+  // 配色三段循環：跟隨系統 → 亮色 → 暗色。「跟隨系統」是不設 data-theme，
+  // 不是把系統當下的值抄成固定值，所以 OS 之後改了它還會跟著改。
+  // 向量區段那兩張圖自己掛了 data-theme 的 MutationObserver，這裡不用通知它們。
+  (function(){
+    const ORDER=["system","light","dark"];
+    const FACE={system:["◐","跟隨系統"],light:["☀","亮色"],dark:["☾","暗色"]};
+    const btn=document.getElementById("theme");
+    let mode="system";
+    try{ const s=localStorage.getItem("theme"); if(s==="light"||s==="dark") mode=s; }catch(e){}
+    function paint(){
+      const [ic,name]=FACE[mode];
+      if(mode==="system") delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme=mode;
+      btn.innerHTML=`<span class="ic" aria-hidden="true">${ic}</span>${name}`;
+      btn.title=`配色：${name}（點一下換成${FACE[ORDER[(ORDER.indexOf(mode)+1)%3]][1]}）`;
+    }
+    function next(){
+      mode=ORDER[(ORDER.indexOf(mode)+1)%ORDER.length];
+      try{ mode==="system"?localStorage.removeItem("theme"):localStorage.setItem("theme",mode); }catch(e){}
+      paint();
+    }
+    btn.onclick=e=>{
+      // 鍵盤按 Enter 時 clientX/Y 是 0，會從左上角擴散，所以沒有座標就用按鈕自己的中心。
+      const r=btn.getBoundingClientRect();
+      const x=e.clientX||r.left+r.width/2, y=e.clientY||r.top+r.height/2;
+      // 不支援 View Transition 或使用者要求減少動態時，直接換，不做動畫。
+      if(!document.startViewTransition||matchMedia("(prefers-reduced-motion:reduce)").matches){ next(); return; }
+      // 半徑要能蓋滿整個視窗：取到四個角裡最遠的那一個。
+      const rad=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y));
+      document.startViewTransition(next).ready.then(()=>{
+        document.documentElement.animate(
+          {clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${rad}px at ${x}px ${y}px)`]},
+          {duration:520,easing:"ease-in-out",pseudoElement:"::view-transition-new(root)"});
+      }).catch(()=>{});
+    };
+    paint();
+  })();
   if(DATA.embed){ ["embed-chip","vectors"].forEach(id=>document.getElementById(id).hidden=false);
     document.getElementById("embed-chip").onclick=e=>{ e.preventDefault(); document.getElementById("vectors").scrollIntoView({behavior:"smooth",block:"start"}); }; }
   document.getElementById("stats").innerHTML =
@@ -618,8 +670,8 @@ section.review .intro{color:var(--ink-2);margin-top:8px}
     const layerOf=n=>(byN.get(n)||{}).layer||"intro";
     const dayBtn=n=>`<button onclick="__select('${pad(n)}')" title="${esc((byN.get(n)||{}).title||"")}">Day ${n}</button>`;
     const evr=(M.pca_explained_variance||[]).reduce((s,v)=>s+v,0);
-    document.getElementById("vec-intro").textContent=`上面的邊是人讀完文章手標的：哪一天講了哪個機制、落在 repo 的哪個檔案。這一節換一個不讀懂內容的量尺：把三十篇切成 ${E.chunks.length} 段，每段算一個 embedding（${M.model}，${M.dims} 維），只看向量之間的距離。點雲裡的任何一點、熱圖上的任何一天，點下去都會回到上面的關聯圖；在上面選了誰，這裡就亮它連到的那幾天。`;
-    document.getElementById("intro3d").textContent=`每個點是一段文字，顏色是那一天所屬的層次，大的有數字的點是每一天所有段落的中心。UMAP 把 ${M.dims} 維裡的鄰居關係盡量保留到三維，兩團靠在一起就是兩天在講相近的事；PCA 是線性投影，三個主成分只解釋了 ${(evr*100).toFixed(1)}% 的變異，看得出大方向，看不出細節。`;
+    document.getElementById("vec-intro").textContent=`上面的邊是人讀完文章手標的：哪一天講了哪個機制、落在 repo 的哪個檔案。這一節換一把尺：把三十篇切成 ${E.chunks.length} 段，每段交給模型算一個文字向量（${M.model}，${M.dims} 維），只比向量之間的距離，不判斷誰講得對。點雲裡的任何一點、熱圖上的任何一天，點下去都會回到上面的關聯圖；在上面選了誰，這裡就亮它連到的那幾天。`;
+    document.getElementById("intro3d").textContent=`每個點是一段文字，顏色是那一天所屬的層次，大的有數字的點是每一天所有段落的中心。UMAP 把 ${M.dims} 維裡的鄰居關係盡量保留到三維，團與團之間的距離是它設計上想保留的東西，但那是目標不是保證，${M.dims} 維壓到三維一定有東西掉了；所以靠在一起是「值得回頭看一眼」的線索，要看沒有降維的數字請往下捲那張熱圖。PCA 是線性投影，三個主成分只解釋了 ${(evr*100).toFixed(1)}% 的變異，看得出大方向，看不出細節。`;
     document.getElementById("cap3d").textContent=`拖曳旋轉、滾輪縮放；點圖例可以關掉整個層次。UMAP n_neighbors ${M.umap.n_neighbors}、min_dist ${M.umap.min_dist}、cosine、seed ${M.umap.seed}。`;
     document.getElementById("introheat").textContent=`每一天的向量是它所有段落向量的平均，格子是兩天向量的 cosine，不經降維。這個模型的相似度擠在很窄的一段（最低 ${M.scale.min}、中位數 ${M.scale.median}、最高 ${M.scale.max}），所以色階從最低值起算，不是從 0；顏色只表示相對遠近。對角線留白。`;
     document.getElementById("vec-foot").textContent=`${M.model} · ${M.dims} 維 · ${E.chunks.length} 段 · ${String(M.created).slice(0,10)} · 文章 ${String(M.article_sha256).slice(0,8)}`;

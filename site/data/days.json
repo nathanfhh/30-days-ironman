@@ -572,12 +572,13 @@
   "n": 28,
   "layer": "platform",
   "title": "收得掉，也長得回來才算平台",
-  "sub": "label 不靠命名；寬限期有理由；40 分鐘全站卡死；沒關的 fd",
-  "summary": "對帳程序用名字認東西，把自己的代理刪了；改用 label。「還沒出現」與「已經不見了」長一樣，寬限期 30／120／300 秒各有理由。列表端點打 docker logs 撞上 removing 的容器，8 條 thread 被吃掉一半：列表只讀 DB。ReadTimeout 不是 APIError。attach_socket 的 close() 不關 fd，208KB 緩衝滿了整場凍住，rm -f 把單場升級成全站。",
+  "sub": "label 不靠命名；寬限期有理由；40 分鐘全站卡死；能收也能補；沒關的 fd",
+  "summary": "對帳程序用名字認東西，把反向代理和對帳程序自己刪了；改用 label。「還沒出現」與「已經不見了」長一樣，寬限期 30／120／300 秒各有理由。列表端點打 docker logs 撞上 removing 的容器，一個列表頁就可能占住 8 條執行緒的一半：列表只讀 DB。ReadTimeout 不是 APIError。收拾只是一半，重建要能從設定推導出正確的世界，關閉的意思是收乾淨不是停止管理。attach_socket 的 close() 不關 fd，208KB 緩衝滿了整場凍住，rm -f 把單場升級成全站。",
   "repo": [
    "r-pty-reconciler",
    "r-pty-attach",
    "r-pty-leases",
+   "r-pty-sessions",
    "r-adr-0012",
    "r-adr-0015",
    "r-adr-0016",
@@ -587,13 +588,15 @@
    "r-adr-0010",
    "r-pty-user-proxy",
    "r-pty-gitlab-proxy",
-   "r-pty-views",
-   "r-adr-0018"
+   "r-pty-views"
   ],
   "concepts": [
    "c-reconcile",
    "c-fd-leak",
    "c-40min"
+  ],
+  "repo_ext": [
+   "r-adr-0018"
   ]
  },
  {

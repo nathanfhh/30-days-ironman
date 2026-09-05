@@ -60,7 +60,13 @@ jobs:
 
   deploy:
     # PR 只 build 不部署；push 到 main 與手動觸發才上線。
-    if: github.event_name != 'pull_request'
+    # ⚠ 再加一道 repo 條件：這份 workflow 在前置的私有 repo 上也會跑，而那邊沒有
+    #   （也不該有）Pages 環境，deploy 會固定以 404「Ensure GitHub Pages has been
+    #   enabled」收場。一個永遠紅的 job 等於把紅燈的意義用掉了：以後真的壞掉時，
+    #   第一反應會是「喔那個本來就紅」。所以在私有那邊直接不跑，只留 build 當閘。
+    if: >-
+      github.event_name != 'pull_request'
+      && github.repository == 'nathanfhh/30-days-ironman'
     needs: build
     runs-on: ubuntu-latest
     environment:
