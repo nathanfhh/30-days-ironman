@@ -133,7 +133,7 @@
  },
  {
   "id": "c-trivy-empty",
-  "name": "Trivy 空報告 293 bytes",
+  "name": "Trivy 空報告",
   "kind": "incident",
   "desc": "沒有 manifest 的樹照樣 exit 0。「無標的」與「乾淨」是兩件事。形狀②。"
  },
@@ -297,7 +297,7 @@
   "id": "c-flaky-label",
   "name": "被貼上「偶發」的紅燈",
   "kind": "incident",
-  "desc": "一支測試幾天內紅三次，讀它的是 AI、貼「偶發」標籤的也是。逐 commit 重跑零變異：那兩顆 commit 上建立 session 的主路徑對每個人都是壞的，快速測試 23 支紅 17 支、關鍵字出現 54 次。它被正確地讀成「重構中，改完就好」，然後那個解釋完成任務後沒有被撤銷。形狀⑤：打的是人，不是儀器。"
+  "desc": "一支測試在一天之內紅過至少三次，讀它的是 AI、貼「偶發」標籤的也是。逐 commit 重跑把範圍縮到兩顆，但每顆只跑一次還不足以排除競態；定案的是固定根因：SESSION_NETWORK 已刪、sessions.py 還留九處引用，create() 固定拋 AttributeError。那兩顆上快速測試 23 支紅 17 支、關鍵字出現 54 次。它被正確地讀成「重構中，改完就好」，然後那個解釋完成任務後沒有被撤銷；斷言只印例外型別不印訊息，讓標籤更容易貼上去。形狀⑤。"
  },
  {
   "id": "c-capability-owes-structure",

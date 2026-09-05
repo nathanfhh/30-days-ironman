@@ -6,7 +6,7 @@
   "stops": [
    {
     "node": "c-trivy-empty",
-    "caption": "② 對象不是你以為的：沒有 manifest 的樹照樣 exit 0，293 bytes 的空報告差點被讀成零命中。"
+    "caption": "② 對象不是你以為的：沒有 manifest 的樹照樣 exit 0，空報告差點被讀成零命中。"
    },
    {
     "node": "c-proxy-unused",
@@ -26,7 +26,7 @@
    },
    {
     "node": "c-flaky-label",
-    "caption": "⑤ 自己好了的紅燈：三次紅被貼上「偶發」，逐 commit 重跑零變異；暫時性的解釋沒有到期日。"
+    "caption": "⑤ 自己好了的紅燈：一天內三次紅被貼上「偶發」，逐 commit 重跑把範圍縮到兩顆，定案的是固定根因；暫時性的解釋沒有到期日。"
    },
    {
     "node": "c-false-green",

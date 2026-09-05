@@ -616,7 +616,7 @@
    "r-ttyd-rust",
    "r-pty-user-proxy",
    "r-eval-cases",
-   "r-judge"
+   "r-pty-sessions"
   ],
   "concepts": [
    "c-false-green",
@@ -629,6 +629,9 @@
    "c-flaky-label",
    "c-isolation-limit",
    "c-claim-gt-mechanism"
+  ],
+  "repo_ext": [
+   "r-judge"
   ]
  },
  {
@@ -637,7 +640,7 @@
   "layer": "outro",
   "title": "從 Code Review 到 Agent 治理",
   "sub": "對帳 25 條承諾；Harness vs Sandbox；積木與 3D 印表機",
-  "summary": "逐條核對跨日承諾。Harness 讓它難犯錯，Sandbox 讓失敗代價可控。單次成本翻倍不是漲價，是 tokenizer 與流程變長。儀器全部自架，被觀測的對象才綁廠商。Uncle Bob vs Grady Booch：多種儀器疊出信任。醫檢師訓練帶進軟體的三件事就是 transferable skills，也是 skill 的形體。",
+  "summary": "逐條核對跨日承諾。Harness 讓它難犯錯，Sandbox 讓失敗代價可控。牌價沒漲、實付約翻倍，Fable、流程變長與 tokenizer 各占多少還沒拆開量。儀器全部自架，被觀測的對象才綁廠商。Uncle Bob vs Grady Booch：多種儀器疊出信任。醫檢師訓練帶進軟體的三件事就是 transferable skills，也是 skill 的形體。",
   "repo": [
    "r-readme",
    "r-pty-sessions",
