@@ -18,7 +18,7 @@
   "n": 2,
   "layer": "intro",
   "title": "為什麼從 Code Review 開始",
-  "sub": "從工人智慧到 Skill 到 MCP 的五個階段",
+  "sub": "從工人智慧到 Skill 到 MCP 的六個階段",
   "summary": "醫療環境資料不能出去，程式碼本來就不該有個資，所以第一個自動化的是 Code Review。手法演化：人工 → Python script → 網頁平台 → Agent → Skill → MCP。",
   "repo": [],
   "concepts": []
@@ -28,7 +28,7 @@
   "n": 3,
   "layer": "skill",
   "title": "第一份 Skill：前置準備",
-  "sub": "萃取一個我；三等級；英文化省 28% token",
+  "sub": "萃取一個我；三等級；英文化實測省 ~28% token",
   "summary": "把過去的 MR 留言、教學、逐字稿餵給 AI，先讀懂人再按「什麼時候需要讀到它」切檔案（progressive disclosure）。Critical／Suggestion／Nit 三等級。Skill 全文英文化：~40K → ~29K tokens。",
   "repo": [
    "r-skill-md",
@@ -55,7 +55,8 @@
   ],
   "concepts": [
    "c-anti-anchor",
-   "c-info-not-instr"
+   "c-info-not-instr",
+   "c-suntzu"
   ]
  },
  {
@@ -82,16 +83,18 @@
   "layer": "skill",
   "title": "盲讀、入口枚舉閘與九面向（上）",
   "sub": "fresh-eyes subagent；找到一支滅火器就宣布安全",
-  "summary": "Phase 3 先由未載入清單的 ncr-fresh-eyes 盲讀，再做關鍵操作與入口盤點（safety-net 盲點）。九面向 A–E：風格、簡潔、安全、API 慣例、架構；★ 標記的是「換一家公司就不成立」的設定值。",
+  "summary": "Phase 3 先由未載入清單的 ncr-fresh-eyes 盲讀，再做關鍵操作與入口盤點（safety-net 盲點）。九面向 A–E：風格、簡潔、安全、API 慣例、架構；★ 標記的是「換一家公司就不一定成立」的設定值。",
   "repo": [
    "r-agent-fresh-eyes",
-   "r-ref-dimensions"
+   "r-ref-dimensions",
+   "r-skill-md"
   ],
   "concepts": [
    "c-nine-dims",
    "c-entry-gate",
    "c-star-rules",
-   "c-scar"
+   "c-scar",
+   "c-severity"
   ]
  },
  {
@@ -105,14 +108,16 @@
    "r-ref-dimensions",
    "r-agents",
    "r-eval-02",
-   "r-skill-md"
+   "r-skill-md",
+   "r-ref-scanners"
   ],
   "concepts": [
    "c-nine-dims",
    "c-assertion-gate",
    "c-ncr-tag",
    "c-star-rules",
-   "c-scar"
+   "c-scar",
+   "c-suntzu"
   ]
  },
  {
@@ -178,7 +183,7 @@
   "layer": "skill",
   "title": "Claude Code 26 分鐘生出整份 Skill",
   "sub": "grill-me 17 題；27.02 美金",
-  "summary": "把 Day 3–10 當素材交給 Claude Code，/grill-me 問了 17 題（15 題照建議）。第 9 題「全專案掃、依 diff 歸因」是它看見我沒看見的兩難。SKILL.md 約 11.9KB，references + agents 約 73KB。",
+  "summary": "把前十天的文章當素材交給 Claude Code（給讀者的版本是 Day 3–10），/grill-me 問了 17 題（15 題照建議）。第 9 題「全專案掃、依 diff 歸因」是它看見我沒看見的兩難。SKILL.md 約 11.9KB，references + agents 約 73KB。",
   "repo": [
    "r-skill-md",
    "r-references",
@@ -187,10 +192,12 @@
    "r-report-template",
    "r-install-sh",
    "r-agent-lint",
-   "r-ref-scanners"
+   "r-ref-scanners",
+   "r-ref-workspace"
   ],
   "concepts": [
-   "c-progressive"
+   "c-progressive",
+   "c-anti-anchor"
   ]
  },
  {
@@ -207,7 +214,8 @@
    "r-ref-dimensions",
    "r-ref-scanners",
    "r-test-gitlab-api",
-   "r-gitlab-api"
+   "r-gitlab-api",
+   "r-report-template"
   ],
   "concepts": [
    "c-no-install",
@@ -233,14 +241,18 @@
    "r-skill-md",
    "r-ref-rereview",
    "r-eval-baseline",
-   "r-test-telemetry"
+   "r-test-telemetry",
+   "r-eval-01",
+   "r-eval-04"
   ],
   "concepts": [
    "c-llm-judge",
    "c-false-green",
    "c-mirror",
    "c-info-not-instr",
-   "c-assertion-gate"
+   "c-assertion-gate",
+   "c-anti-anchor",
+   "c-conclusion-mech"
   ]
  },
  {
@@ -274,12 +286,14 @@
    "r-bench-journal",
    "r-bench",
    "r-bench-harness",
-   "r-bench-audit"
+   "r-bench-audit",
+   "r-bench-prompts"
   ],
   "concepts": [
    "c-benchmark",
    "c-self-bias",
-   "c-extract-me"
+   "c-extract-me",
+   "c-version"
   ]
  },
  {
@@ -303,7 +317,9 @@
    "c-anti-anchor",
    "c-assertion-gate",
    "c-severity",
-   "c-star-rules"
+   "c-star-rules",
+   "c-conclusion-mech",
+   "c-json-report"
   ]
  },
  {
@@ -312,7 +328,7 @@
   "layer": "boundary",
   "title": "Dev Container：先縮小出事範圍",
   "sub": "ubuntu:24.04；憑證三來源；symlink 斷鏈",
-  "summary": "Replit／Gemini CLI／GPT-5.6 三個事故：叮囑擋不住已交出去的權限。從官方 devcontainer 延伸，工具版本固定。憑證：OAUTH_TOKEN → Keychain → 憑證檔。掛 ~/.claude 讓 skill symlink 斷鏈，用同一絕對路徑唯讀掛回。semgrep-rules 與 trivy DB 由外部供給。",
+  "summary": "Replit／Gemini CLI／GPT-5.6 三個事故：叮囑擋不住已交出去的權限。從官方 devcontainer 延伸，審查工具鏈多數釘版本（trivy 與 codegraph 不釘）。憑證：OAUTH_TOKEN → Keychain → 憑證檔。掛 ~/.claude 讓 skill symlink 斷鏈，用同一絕對路徑唯讀掛回。semgrep-rules 與 trivy DB 由外部供給。",
   "repo": [
    "r-dockerfile",
    "r-run-wrapper",
@@ -392,7 +408,7 @@
   "layer": "observe",
   "title": "用 OpenTelemetry 跑一次 Profiler",
   "sub": "agent.name 塌成 custom；803 秒在重打報告",
-  "summary": "不是監控是 profiling。自訂 subagent 在 metric 裡一律叫 custom，只有 subagent_completed.agent_type 保留，Day 7 埋的 ncr-* 記號派上用場。resource attributes 黏 skill.version 與 experiment。熱點：尾端 799 秒在投影＋驗證投影，改成 JSON + 確定性 render 後歸零。cost-report 讀 subagents/ transcript 算每角色成本。",
+  "summary": "不是監控是 profiling。自訂 subagent 在 metric 裡一律叫 custom，只有 subagent_completed.agent_type 保留（2.1.193 實測、2.1.222 重驗仍成立），Day 7 埋的 ncr-* 記號派上用場。resource attributes 黏 skill.version 與 experiment。熱點：尾端 799 秒在投影＋驗證投影，改成 JSON + 確定性 render 後歸零。cost-report 讀 subagents/ transcript 算每角色成本。",
   "repo": [
    "r-otel-report",
    "r-cost-report",
@@ -402,7 +418,9 @@
    "r-agent-lint",
    "r-agents",
    "r-render-report",
-   "r-entrypoint"
+   "r-entrypoint",
+   "r-agent-opengrep",
+   "r-init-firewall"
   ],
   "concepts": [
    "c-803s",
@@ -462,7 +480,7 @@
   "layer": "platform",
   "title": "把 Claude Code 搬上瀏覽器",
   "sub": "一場 Session 一顆容器；attach 不 exec；控制面／資料面分開",
-  "summary": "第五層：讓前四層成為每場 Session 的預設。畫面停在「建立中」是 entrypoint 在等 read：能力留在腳本，控制平面只決定要不要。重連靠 Claude Code 自己在 SIGWINCH 後重繪，不做 server-side replay。DB 是唯一仲裁者。控制平面拿 Docker socket 天生是特權元件，Session 容器一律不掛 socket。",
+  "summary": "第五層：讓前四層成為每場 Session 的預設。畫面停在「建立中」是 entrypoint 在等 read：能力留在腳本，控制平面只決定要不要。不做 server-side replay；實測那個版本是 Claude Code 在 SIGWINCH 後自己重繪，文章明說不能寫成每個版本都會。DB 是唯一仲裁者。控制平面拿 Docker socket 天生是特權元件，Session 容器一律不掛 socket。",
   "repo": [
    "r-pty",
    "r-pty-app",
@@ -488,7 +506,8 @@
    "c-capability-in-script"
   ],
   "repo_ext": [
-   "r-adr-0013"
+   "r-adr-0013",
+   "r-adr-0011"
   ]
  },
  {
@@ -512,7 +531,9 @@
    "r-test-bootstrap"
   ],
   "concepts": [
-   "c-isolation-limit"
+   "c-isolation-limit",
+   "c-cred-boundary",
+   "c-false-green"
   ]
  },
  {
@@ -588,12 +609,14 @@
    "r-adr-0010",
    "r-pty-user-proxy",
    "r-pty-gitlab-proxy",
-   "r-pty-views"
+   "r-pty-views",
+   "r-adr-0007"
   ],
   "concepts": [
    "c-reconcile",
    "c-fd-leak",
-   "c-40min"
+   "c-40min",
+   "c-one-session"
   ],
   "repo_ext": [
    "r-adr-0018"
@@ -616,7 +639,9 @@
    "r-ttyd-rust",
    "r-pty-user-proxy",
    "r-eval-cases",
-   "r-pty-sessions"
+   "r-pty-sessions",
+   "r-test-attach-close",
+   "r-jaeger-compose"
   ],
   "concepts": [
    "c-false-green",
@@ -639,7 +664,7 @@
   "n": 30,
   "layer": "outro",
   "title": "從 Code Review 到 Agent 治理",
-  "sub": "對帳 25 條承諾；Harness vs Sandbox；積木與 3D 印表機",
+  "sub": "逐條對帳跨日承諾（圖上收 20 條）；Harness vs Sandbox；積木與 3D 印表機",
   "summary": "逐條核對跨日承諾。Harness 讓它難犯錯，Sandbox 讓失敗代價可控。Opus 單價沒變，按 API 牌告價換算的每次等值成本約翻倍，Fable、流程變長與 tokenizer 各占多少還沒拆開量。儀器全部自架，被觀測的對象才綁廠商。Uncle Bob vs Grady Booch：多種儀器疊出信任。醫檢師訓練帶進軟體的三件事就是 transferable skills，也是 skill 的形體。",
   "repo": [
    "r-readme",
@@ -651,7 +676,11 @@
    "c-harness-sandbox",
    "c-suntzu",
    "c-extract-me",
-   "c-false-green"
+   "c-false-green",
+   "c-hitl",
+   "c-dns-egress",
+   "c-sandbox",
+   "c-privileged"
   ]
  }
 ]

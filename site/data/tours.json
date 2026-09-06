@@ -53,7 +53,7 @@
    },
    {
     "node": "r-init-firewall",
-    "caption": "簽章能力沒有目的地範圍，所以範圍只能在網路層畫：SSH 22 只到那台 GitLab。"
+    "caption": "簽章能力預設沒有目的地範圍（OpenSSH 的 destination constraints 作者當時漏掉了），所以範圍下推到網路層畫：SSH 22 只到那台 GitLab。"
    },
    {
     "node": "r-pty-user-proxy",

@@ -12,7 +12,7 @@
  {
   "from": "d07",
   "to": "d21",
-  "text": "ncr-* 記號「未來可以 grep」→ 遙測歸因主路徑"
+  "text": "ncr-* 記號「未來可以 grep」→ subagent_type 成結構化歸因主路徑，prompt tag 成人工復原線索"
  },
  {
   "from": "d08",

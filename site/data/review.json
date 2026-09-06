@@ -20,7 +20,7 @@
   },
   "r-bench-scores": {
    "lamp": "warn",
-   "text": "README 說「分數以 summary.json 為準」，但 <code>corrected</code> 區塊同時裝著被作者自己判定自我膨脹的那組 recall／F1（84.2%）與後來的 <code>golden_recall</code>／<code>golden_f1</code>（87.1%）。留下錯的表是誠實，讓讀者要知道看哪個 key 才不會抄錯，是代價。另外 <code>ncr-quality-check</code> 在這 50 場裡跑了 0/50。"
+   "text": "文章與這個節點都說「分數以 summary.json 為準」（README 本身沒有這句），但 <code>corrected</code> 區塊同時裝著被作者自己判定自我膨脹的那組 recall／F1（84.2%）與後來的 <code>golden_recall</code>／<code>golden_f1</code>（87.1%）。留下錯的表是誠實，讓讀者要知道看哪個 key 才不會抄錯，是代價。另外 <code>ncr-quality-check</code> 在這 50 場裡跑了 0/50。"
   },
   "c-benchmark": {
    "lamp": "good",
@@ -56,19 +56,19 @@
   },
   "r-run-wrapper": {
    "lamp": "warn",
-   "text": "<code>--group-add 0</code> 的判斷在 <code>docker info</code> 失敗或逾時時往「加」的方向 fail-open；trivy DB 與 semgrep-rules 從外面拉進來沒有簽章或雜湊驗證，跟 token fd 那種 fail-closed 的紀律不在同一個水準。"
+   "text": "<code>--group-add 0</code> 的判斷在 <code>docker info</code> 失敗或逾時時往「加」的方向 fail-open（腳本 :245-247 自陳這是刻意的取捨：把「問不到」當成原生 Linux 會讓 Docker Desktop 使用者的 socket 靜默 Permission denied）；trivy DB 與 semgrep-rules 從外面拉進來沒有簽章或雜湊驗證，跟 token fd 那種 fail-closed 的紀律不在同一個水準。"
   },
   "r-nginx-template": {
    "lamp": "warn",
-   "text": "白名單現在有三份副本要同步：這裡、gitlab_api.py 實際呼叫的端點、claude-pty 的 gitlab_proxy.py。限流的 key 是 <code>$binary_remote_addr</code>，等於每台機器一桶而不是每人一桶，Day 28 講的拓撲問題在單機版仍在。"
+   "text": "白名單現在有四份副本要同步：這裡、gitlab_api.py 實際呼叫的端點、claude-pty 的 gitlab_proxy.py 的 _API_LOCATIONS、以及 references/gitlab-api.md（template 第 91 至 98 行自己就把這四處列了出來）。限流的 key 是 <code>$binary_remote_addr</code>，等於每台機器一桶而不是每人一桶，Day 28 講的拓撲問題在單機版仍在。"
   },
   "r-dockerfile": {
    "lamp": "warn",
-   "text": "四個 <code>curl | sh</code> 安裝器（Claude Code、uv、nvm、rtk）沒有釘 hash；Day 5 對 trivy 安裝腳本講的「先下載檢視再執行」在自己的 Dockerfile 裡沒有照做。"
+   "text": "六處 <code>curl | sh</code> 安裝器（Claude Code、uv、nvm、rtk、trivy、codegraph）都沒有釘 hash，Dockerfile 第 3 行自己就寫著「下面六處」。其中 trivy 那支正是 Day 5 講「先下載檢視再執行、核對 checksum」的同一支 contrib/install.sh，連版本都沒釘。"
   },
   "r-jaeger-compose": {
    "lamp": "crit",
-   "text": "查詢介面沒有認證，而且每個使用者的 docker network 都接得到它。ADR 0016 的說法是「開帳號給誰就等於信任誰」，但那是人與人的信任；session 容器裡那個 <code>--dangerously-skip-permissions</code> 的 agent 是另一個信任邊界，它可以 <code>curl jaeger:16686/api/traces</code> 讀所有人的 user.email、session.id 與 token 量。"
+   "text": "查詢介面沒有認證，而且每個使用者的 docker network 都接得到它。ADR 0016 第 78 到 88 行自己就有一節「這條邊界上有一個刻意的例外：jaeger」，逐字寫出 session 裡的程式碼 curl 得到跨使用者的 user.email、user.id、session.id 與 token 計數，並標為「這是接受的，不是漏的」，理由是這套系統從未宣稱使用者之間有機密性（README 的〈安全邊界〉：「開帳號給誰，就等於請他信任你」）。我不同意這個接受：那句話講的是人與營運者之間，而 session 容器裡那個 <code>--dangerously-skip-permissions</code> 的 agent 是另一個主體。"
   },
   "r-pty-provision": {
    "lamp": "warn",
@@ -84,7 +84,7 @@
   },
   "c-false-green": {
    "lamp": "good",
-   "text": "五形狀是整個系列的收束器，而且每一種都有 repo 裡的實體：Trivy 空報告、代理沒被走過、鏡子測試、兩個引號、五週的紅燈。「這盞綠燈，我看過它紅嗎」比任何 checklist 都好記。"
+   "text": "五形狀是整個系列的收束器（作者自己的說法是「出現過至少九次」），每一種都指得回一次真實事故：①ping 不在容器裡、②Trivy 空報告／代理沒被走過／紅了五週的那支、③鏡子測試、④兩個引號、⑤被貼上「偶發」的那支。「這盞綠燈，我看過它紅嗎」比任何 checklist 都好記。"
   },
   "r-ttyd-parity": {
    "lamp": "good",
@@ -92,7 +92,7 @@
   },
   "c-red-five-weeks": {
    "lamp": "warn",
-   "text": "紅了五週的根因是「沒人讀」，作者也說這次輸掉的是紀律。CI 上那支測試若有 required check，這五週會變成五分鐘；repo 現在的 tests.yml 有 gate，但 ttyd 那邊的 CI 是否把 parity 測試設成 required，文章沒交代。"
+   "text": "紅了五週的根因是「沒人讀」，作者也說這次輸掉的是紀律。CI 上那支測試若有 required check，這五週會變成五分鐘；repo 現在的 tests.yml 有 gate，但 ttyd fork 的 .github/workflows/ 四支全是上游 C 版，grep cargo 與 rust 零命中，也就是 Rust 測試根本不在 CI 上；那支紅了五週的是 rust/src/pty.rs 裡的單元測試，不是 parity 套件。紅這麼久的結構性原因就在這裡。"
   },
   "c-structure-not-discipline": {
    "lamp": "good",
@@ -100,7 +100,7 @@
   },
   "c-dns-egress": {
    "lamp": "good",
-   "text": "知道、寫下來、沒有封，而且四條收法與各自的故障模式都留在 docs/dns-egress-notes.md。這是「已知限制」該有的形狀。"
+   "text": "知道、寫下來、沒有封，四種補法與各自卡在哪列在 Day 20 的表裡，其中兩條（開機解析後封 53、受控 resolver）在 docs/dns-egress-notes.md 展開成完整評估，含先決條件、故障模式與驗收方式。這是「已知限制」該有的形狀。"
   },
   "r-pty-user-proxy": {
    "lamp": "warn",
@@ -168,7 +168,7 @@
    },
    {
     "title": "Jaeger 對 session 裡的 agent 沒有邊界",
-    "text": "每個使用者的網路都接得到沒有認證的查詢介面；ADR 用人與人的信任來解釋，沒有處理容器裡那個不受信任 agent 的信任邊界。",
+    "text": "每個使用者的網路都接得到沒有認證的查詢介面。ADR 0016 已自陳並接受這個例外；我不同意的是那個接受的理由只涵蓋人與營運者，沒有涵蓋容器裡那個不受信任的 agent。",
     "node": "r-jaeger-compose"
    },
    {

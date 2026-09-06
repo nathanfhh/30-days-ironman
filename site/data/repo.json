@@ -4,19 +4,19 @@
   "name": "README.md",
   "path": "README.md",
   "group": "root",
-  "desc": "「文章談為什麼這樣選；這個 repo 放的是怎麼做的。」開頭就是連載 Day → 目錄對照表，並明寫兩個設計上接受的缺口：DNS 查詢名稱出得去、MITM 只涵蓋那一場 CLI 及其子行程。"
+  "desc": "「文章談的是為什麼這樣選；這個 repo 放的是怎麼做的。」開頭就是連載 Day → 目錄對照表，並明寫兩個設計上接受的缺口：DNS 查詢名稱出得去、MITM 只涵蓋那一場 CLI 及其子行程。"
  },
  {
   "id": "r-claude-md",
   "name": "CLAUDE.md",
   "path": "CLAUDE.md",
   "group": "root",
-  "desc": "給 AI 讀的專案手冊：symlink 上線中沒有暫存區、測試不得連外、掃描不得安裝、版本號 bump 規則、以及四組「設定上耦合」的檔案對（nginx 白名單 ↔ gitlab_api.py、SSH_AUTH_SOCK 兩處、GITLAB_SSH_HOST 不用 env、sudoers 鎖空參數）。"
+  "desc": "給 AI 讀的專案手冊：symlink 上線中沒有暫存區、測試不得連外、掃描不得安裝、版本號 bump 規則、以及五組「設定上耦合」的檔案對（nginx 白名單 ↔ gitlab_api.py、SSH_AUTH_SOCK 兩處、GITLAB_SSH_HOST 不用 env、NCR_MITM_WEB_PASSWORD 兩邊的 HMAC 公式與截斷長度要同一串（ADR 0021），sudoers 鎖空參數）。"
  },
  {
   "id": "r-arch-diagram",
   "name": "docs/architecture-overview.webp",
-  "path": "docs/architecture.drawio",
+  "path": "docs/architecture-overview.webp",
   "group": "root",
   "desc": "使用者 → claude-pty 控制平面 → 每場一顆容器 → iptables／GitLab 代理／MITM 出站 → OTel／Jaeger。橘色虛線框是安全邊界。"
  },
@@ -25,7 +25,7 @@
   "name": ".github/workflows/tests.yml",
   "path": ".github/workflows/tests.yml",
   "group": "root",
-  "desc": "CI：pytest、ruff format 閘、dev-container 與 ttyd 相關 job 的跳過閘。Day 13 那支 mtime 平手的測試就是在這裡第一次紅。"
+  "desc": "CI 五個 job：pytest（含 ruff format 閘）、deploy-image、golden-change、claude-pty、dev-container。「跳過清單只剩已知那些」的閘在 claude-pty 與 dev-container 兩個 job（沒有獨立的 ttyd job，C 版 ttyd 只是 dev-container 裡的一個安裝步驟）。Day 13 那支 mtime 平手的測試就是在這裡第一次紅。Day 13 那支 mtime 平手的測試就是在這裡第一次紅。"
  },
  {
   "id": "r-skill-md",
@@ -46,14 +46,14 @@
   "name": "review-dimensions.md",
   "path": "skills/nathan-code-review/references/review-dimensions.md",
   "group": "skill",
-  "desc": "九面向 A–I 的判準、嚴重度、豁免與 ★ 設定值；入口枚舉閘；Day 12 補進來的「需求文件也是被審對象」。"
+  "desc": "九面向 A–I 的判準、嚴重度、豁免與那組本地設定值（URL 用 dash、唯讀 package token 豁免、批次原子性）；入口枚舉閘；Day 12 補進來的「需求文件也是被審對象」。"
  },
  {
   "id": "r-ref-rereview",
   "name": "re-review.md",
   "path": "skills/nathan-code-review/references/re-review.md",
   "group": "skill",
-  "desc": "反蒙蔽協議本體：前次報告與作者留言封存到盲審結束才拆封；重編號；Q1／Q2 checklist；rejected_leads。"
+  "desc": "反蒙蔽協議本體：前次報告與作者留言封存到盲審結束才拆封；重編號；Q1／Q2 checklist；盲審沒浮出的前次 finding 分成兩種都留在報告裡當歷史：真的修好了是 resolved（常態），被 pushback 打回來才是 withdrawn（理由在 pushback[]）。cutoff T 的定義（前次報告根留言的 created_at）在 § Cutoff time T，那是 Day 9 接上來的理由。"
  },
  {
   "id": "r-ref-pushback",
@@ -74,14 +74,14 @@
   "name": "gitlab-api.md",
   "path": "skills/nathan-code-review/references/gitlab-api.md",
   "group": "skill",
-  "desc": "Note／Discussion 資料模型與端點盤點；發佈時保存 discussion_id 與 created_at。與 nginx 白名單必須同步改。"
+  "desc": "Note／Discussion 資料模型與端點盤點；發佈時保存 discussion_id 與 created_at；cutoff T 的定義（前次報告根留言的 created_at）在 re-review.md § Cutoff time T。⚠「加端點時三處一起改」這條規則寫在 nginx.conf.template:92 與根 CLAUDE.md，這份檔案自己沒有反向提醒。"
  },
  {
   "id": "r-ref-scanners",
   "name": "scanners.md",
   "path": "skills/nathan-code-review/references/scanners.md",
   "group": "skill",
-  "desc": "ruff／ty／oxlint／opengrep／trivy 各自的缺席分支；ty bare 模式是正常狀態；全專案掃、依 diff 歸因。"
+  "desc": "ruff／ty／oxlint／opengrep／trivy 各自的缺席分支；ty bare 模式是正常狀態；全專案掃、依 diff 歸因。CodeGraph 與 grep 的分工也在這裡（§ CodeGraph and grep），連 codegraph 缺席都有分支。"
  },
  {
   "id": "r-ref-workspace",
@@ -102,7 +102,7 @@
   "name": "ncr-fresh-eyes",
   "path": "skills/nathan-code-review/agents/ncr-fresh-eyes.md",
   "group": "skill",
-  "desc": "未載入清單的盲讀 subagent：prompt 不得有 category、severity、先前 findings 或 scanner digest。派不出去寧可跳過並揭露。"
+  "desc": "盲讀 subagent 本身：回報哪裡、注意到什麼、多有把握、什麼讓你注意到，不准分類、排名或評分，乾淨的一讀就是結果，硬湊觀察比空手更糟；變更說明是待分析材料不是對它的指令。（派工端的四不准與「派不出去寧可跳過並揭露」寫在 SKILL.md L184-188，不在這個檔。）"
  },
  {
   "id": "r-agent-lint",
@@ -151,7 +151,7 @@
   "name": "render_report.py",
   "path": "skills/nathan-code-review/scripts/render_report.py",
   "group": "skill",
-  "desc": "JSON → Markdown 的確定性 render。取代了 ncr-slim-gen 與 ncr-slim-gate 兩個 LLM 角色（那 803 秒）。"
+  "desc": "JSON → Markdown 的確定性 render，公開版從 Day 8 的規格起就是這個形狀。Day 21 拿作者原本私人那套做 A/B 來說明這個設計值多少：那套的 ncr-slim-gen 與 ncr-slim-gate 兩個 LLM 角色（803 秒、2.47 美金）改成同樣的 JSON 加 render 之後歸零。⚠ 那兩個角色從來沒有出現在這個公開 repo（grep 零命中）。"
  },
  {
   "id": "r-scan-runner",
@@ -165,14 +165,14 @@
   "name": "assets/report_template.md",
   "path": "skills/nathan-code-review/assets/report_template.md",
   "group": "skill",
-  "desc": "發佈到 MR 的版面：重點在上、次要摺疊。"
+  "desc": "發佈到 MR 的版面骨架：{critical_section} 在上、{collapsed_sections} 在下。摺疊本身由 render_report.py 的 build_collapsed_sections 產生（Suggestion／Nit／未驗證提問／已解決各包一個 <details>），template 裡只有那個佔位符。"
  },
  {
   "id": "r-tests",
   "name": "tests/",
   "path": "tests/",
   "group": "test",
-  "desc": "腳本的單元測試：conftest 的 in-process stub server，測試不連任何真實 GitLab。"
+  "desc": "腳本的單元測試：conftest 的 in-process stub server，測試不連任何真實 GitLab。tests/nathan-code-review/ 另放 skill 文件的行為回歸 case（Day 13 那四支 yaml 與 judge），那一半測的是文件不是程式。"
  },
  {
   "id": "r-test-gitlab-api",
@@ -235,7 +235,7 @@
   "name": "test_eval_cases.py",
   "path": "tests/test_eval_cases.py",
   "group": "test",
-  "desc": "守 YAML case 的結構，以及識別字不得抄自 skill 文件（燒掉鏡子之後的防線）。"
+  "desc": "守 YAML case 的結構。識別字那道防線只機械擋 scenario.project 不得出現在 skill 文件裡（test_eval_cases.py:134-137）；文章與鏡子事故講的函式名與路徑，測試沒碰，tests/nathan-code-review/README.md:112 自陳「要靠自律」。"
  },
  {
   "id": "r-bench",
@@ -249,7 +249,7 @@
   "name": "harness/*.py",
   "path": "benchmarks/code-review-bench/harness/",
   "group": "bench",
-  "desc": "fetch_pr、build_manifest、plan_jobs、build_claims、score、judge_agreement、upstream_baseline。選案規則在讀 golden 之前寫死。"
+  "desc": "fetch_pr → build_manifest → plan_jobs → build_claims → score 的流水線，另有 judge_agreement 與 upstream_baseline 兩支校準腳本，以及三支主線都 import 的 candidates 取值層與 export_inputs（共九支）。選案規則在讀 golden 之前寫死。"
  },
  {
   "id": "r-bench-prompts",
@@ -284,21 +284,21 @@
   "name": "Dockerfile",
   "path": "dev-container/Dockerfile",
   "group": "dc",
-  "desc": "ubuntu:24.04，掃描器版本釘死；ENV SSH_AUTH_SOCK=/ssh/ssh_sock；GITLAB_SSH_HOST 寫進 /etc/ncr/gitlab-ssh-host（root 0444）；sudoers 鎖空參數並 visudo -c。"
+  "desc": "ubuntu:24.04；ruff／ty／oxlint／opengrep 釘版本，trivy 與 codegraph 不釘；ENV SSH_AUTH_SOCK=/ssh/ssh_sock；GITLAB_SSH_HOST 寫進 /etc/ncr/gitlab-ssh-host（root 0444）；sudoers 鎖空參數並 visudo -c。"
  },
  {
   "id": "r-run-wrapper",
   "name": "run-ncr-dev-container.sh",
   "path": "dev-container/run-ncr-dev-container.sh",
   "group": "dc",
-  "desc": "每次啟動決定什麼可以搬進去：憑證三來源、semgrep-rules 唯讀、trivy DB volume、SSH_AUTH_SOCK :ro、代理 network、Jaeger 環境變數、OTEL_RESOURCE_ATTRIBUTES。"
+  "desc": "每次啟動決定什麼可以搬進去：憑證三來源、semgrep-rules 唯讀、trivy DB volume、SSH_AUTH_SOCK :ro、代理 network、Jaeger 環境變數、OTEL_RESOURCE_ATTRIBUTES；skill symlink 的目標目錄以同一絕對路徑 :ro 掛回（Day 17 斷鏈的修法就在這支）。"
  },
  {
   "id": "r-entrypoint",
   "name": "entrypoint.sh",
   "path": "dev-container/entrypoint.sh",
   "group": "dc",
-  "desc": "容器裡的第一個程序：憑證政策 → 三道選單（可用環境變數回答，嚴格加法）→ 防火牆 → mitmproxy → session id → 交棒 CLI。錄製時自己留在 PID 1。"
+  "desc": "容器裡的第一個程序：憑證政策 → 網路選單 →（限制模式當場套防火牆，失敗就 exit 1 不放 agent 進來）→ 錄製選單（開錄再多一題範圍）→ telemetry 選單（三題可用環境變數回答，嚴格加法）→ session id → mitmproxy（錄製目錄拿 session id 命名，所以順序不能反）→ 交棒 CLI。錄製時自己留在 PID 1。"
  },
  {
   "id": "r-init-firewall",
@@ -312,7 +312,7 @@
   "name": "firewall-counters.sh",
   "path": "dev-container/firewall-counters.sh",
   "group": "dc",
-  "desc": "收工時讀 iptables 累計計數寫成 firewall.txt：REJECT 那一行是流量紀錄看不到的那一半。"
+  "desc": "十六行，只做 iptables -L -v -n -x 列出累計計數，不帶改規則的能力；輸出落成 firewall.txt，REJECT 那幾行是流量紀錄看不到的那一半。"
  },
  {
   "id": "r-trust-ca",
@@ -326,14 +326,14 @@
   "name": "dev-container/README.md",
   "path": "dev-container/README.md",
   "group": "dc",
-  "desc": "與官方 devcontainer 的差異與理由、疑難排解、已知限制。"
+  "desc": "Build／Run 六段設定（憑證、SSH agent、Opengrep 規則、Trivy DB、Telemetry、錄製）、網路邊界、已知限制、疑難排解、這個容器不做的事。⚠「與官方的差異」在這份 README 裡只有 init-firewall.sh 與官方同名腳本的五列對照表，base image 與工具表的差異只在文章裡。"
  },
  {
   "id": "r-dns-notes",
   "name": "docs/dns-egress-notes.md",
   "path": "docs/dns-egress-notes.md",
   "group": "dc",
-  "desc": "四條收 DNS 出境的做法與各自的故障模式；本輪沒有實作。"
+  "desc": "文章列了四種收 DNS 出境的做法；這份文件裡正式評估的是兩條路（第 35 行標題就是「要收掉的話，有哪兩條路」：啟動時解析完再封 53、受控 resolver），各附故障模式與驗收條件。本輪決定揭露不實作。"
  },
  {
   "id": "r-dc-drawio",
@@ -361,7 +361,7 @@
   "name": "gitlab-proxy/README.md",
   "path": "gitlab-proxy/README.md",
   "group": "proxy",
-  "desc": "單機版與 claude-pty per-user 代理的覆蓋差異表。"
+  "desc": "七個子指令對到六條 location 的端點對照表、每條 burst 的理由；文末明寫 clone 沒走代理、token 仍得在 agent 手上。（單機版與 per-user 代理的覆蓋差異表在根目錄的 README.md，不在這裡。）"
  },
  {
   "id": "r-otel-report",
@@ -389,7 +389,7 @@
   "name": "jaeger-compose.yaml",
   "path": "opentelemetry/jaeger-compose.yaml",
   "group": "otel",
-  "desc": "Jaeger v2 all-in-one，OTLP gRPC 4317，與 gitlab-proxy 同一張 docker network。查詢介面沒有認證。"
+  "desc": "Jaeger v2 all-in-one，OTLP gRPC 4317，發佈的 port 只綁 loopback，查詢介面沒有認證。⚠ 這個檔案刻意不宣告任何 network（network_mode: bridge），檔頭把「去借別人的網」列成打叉的做法，理由是整台機器的 bridge network 只有 31 張；由要送 trace 的那一方把它接過去：dev-container 走 run-ncr-dev-container.sh:345 接到 gitlab-proxy 那張，claude-pty 走 user_proxy.attach_jaeger 接到每個使用者自己那張。"
  },
  {
   "id": "r-capture-addon",
@@ -480,7 +480,7 @@
   "name": "server/user_proxy.py",
   "path": "claude-pty/server/user_proxy.py",
   "group": "pty",
-  "desc": "每個設了 PAT 的使用者一顆 nginx；API 與 git smart HTTP 一併蓋章；insteadOf 改寫三種 GitLab 網址；不支援 git-lfs。"
+  "desc": "這支只管 docker 生命週期：每個開過 session 的使用者一張 docker network（ensure_network 無條件），設了 PAT 的再多一顆 nginx（create_or_adopt 才有 PAT 前提），nginx 設定是呼叫 gitlab_proxy.render_conf(pat) 塞進容器的。⚠ 白名單長什麼樣、API 與 git smart HTTP 三個端點一併蓋章、git-lfs 為什麼落到地板拿 403，全寫在 server/gitlab_proxy.py:28-44；三條 insteadOf 由 server/run_kwargs.py:330 產生。"
  },
  {
   "id": "r-pty-views",
@@ -501,7 +501,7 @@
   "name": "deploy/nginx.conf",
   "path": "claude-pty/deploy/nginx.conf",
   "group": "pty",
-  "desc": "auth_request /_auth_view；父請求先 set $session_id；resolver 127.0.0.11；frame-ancestors 'self' 由這裡掛。"
+  "desc": "auth_request /_auth_view；父請求先 set $claude_pty_session_id（$session_id 是文章的簡化名，檔案裡零命中）；resolver 127.0.0.11；frame-ancestors 'self' 由這裡掛。"
  },
  {
   "id": "r-adr-0001",
@@ -515,14 +515,14 @@
   "name": "ADR 0002 終端通道用 ttyd",
   "path": "claude-pty/docs/adr/0002-terminal-channel-ttyd.md",
   "group": "adr",
-  "desc": "資料面走 ttyd attach，不經過控制平面；後來由 Rust 版接手。"
+  "desc": "資料面走 ttyd attach，不經過控制平面；後來多一顆 Rust 版可切（per-user 的 A/B，config.py:263 的 TTYD_BIN_DEFAULT 仍是 C 版）。"
  },
  {
   "id": "r-adr-0003",
   "name": "ADR 0003 重連不做 server-side replay",
   "path": "claude-pty/docs/adr/0003-no-server-side-replay-on-reconnect.md",
   "group": "adr",
-  "desc": "留下的是對話紀錄不是完整畫面；靠 resize 讓 Claude Code 自己重繪。"
+  "desc": "不重播 docker logs、不引入 pyte 維護螢幕狀態；重連語意就是「從現在開始看」，重繪交給 TUI 自己（spike 實測自刷新型約 2 秒、等輸入型按一鍵）。⚠ 這份 ADR 全文零命中「對話／transcript／resume／SIGWINCH／resize」：留下的是對話紀錄那句屬 ADR 0007，靠 resize 觸發重繪的實作在 server/attach.py 的 _nudge_redraw()。"
  },
  {
   "id": "r-adr-0004",
@@ -564,7 +564,7 @@
   "name": "ADR 0010 Session 歷史與帳號退出",
   "path": "claude-pty/docs/adr/0010-session-history-and-account-exit.md",
   "group": "adr",
-  "desc": "歷史紀錄定位成永久稽核；改密碼切斷既有連線。"
+  "desc": "歷史紀錄定位成永久稽核；改密碼讓 password_version 遞增、既有 cookie 當場失效，並盡力切斷追蹤得到的互動終端（可能失敗、失敗會回報）。⚠ ADR 第 46 行記著一次自我更正：原本寫「這三件合起來與『停用』的效果相同」，作者 2026-08-23 判定那句不成立並刪除。改密碼不等於停用。"
  },
  {
   "id": "r-adr-0011",
@@ -634,7 +634,7 @@
   "name": "test_auth.py",
   "path": "claude-pty/tests/test_auth.py",
   "group": "ptytest",
-  "desc": "密碼版本號、假雜湊、隱形字元。"
+  "desc": "198 條斷言（跑一次就數得出來，全綠）：argon2id 與 salt、改密碼後舊 cookie 失效、讀別人的 session 回 404 不洩漏存在性、一般使用者提不了權。⚠ 隱形字元由 test_user_roster.py 守；假雜湊（server/auth.py 的 _DUMMY_HASH）目前沒有任何測試。"
  },
  {
   "id": "r-test-token-fd",
@@ -648,7 +648,7 @@
   "name": "test_upload.py",
   "path": "claude-pty/tests/test_upload.py",
   "group": "ptytest",
-  "desc": "上傳的四道閘：自訂標頭、副檔名白名單、三道大小上限、路徑穿越三層。"
+  "desc": "上傳的四道閘：自訂標頭、副檔名白名單、大小上限、路徑穿越三層。⚠ 大小上限實際有三道（逐檔 UPLOAD_MAX_BYTES、Flask 的 MAX_CONTENT_LENGTH、nginx 的 client_max_body_size），但這支測試只驗逐檔那一道。"
  },
  {
   "id": "r-test-attach-close",
@@ -662,7 +662,7 @@
   "name": "test_reconciler.py",
   "path": "claude-pty/tests/test_reconciler.py",
   "group": "ptytest",
-  "desc": "寬限期、label 判定、STUCK 隔離。"
+  "desc": "寬限期（孤兒、view 宣告）與 STUCK 隔離。⚠ 37 條斷言裡沒有一條在驗 label 判定：測試容器是帶著 label 建出來的，沒有斷言「不帶 label 的容器不被碰」。文章說兩個方向都得分開檢查，這支只守了一個方向。"
  },
  {
   "id": "r-test-network-isolation",
@@ -816,7 +816,7 @@
   "name": "benchmarks/…/data/",
   "path": "benchmarks/code-review-bench/data/",
   "group": "bench",
-  "desc": "50 個 PR 的原始輸出、驗證與配對的逐條判定、校準資料（prs／reviews／judgments／calibration／manifest.json）。每個數字都可以從這裡重算。"
+  "desc": "50 個 PR 的原始輸出、驗證與配對的逐條判定、校準資料（prs／reviews／judgments／calibration／manifest.json；首跑抽 19 個那版留在 manifest.19.json，是「19 補到 50」的原物證）。每個數字都可以從這裡重算。"
  },
  {
   "id": "r-bench-audit",
@@ -830,7 +830,7 @@
   "name": "build.sh",
   "path": "dev-container/build.sh",
   "group": "dc",
-  "desc": "建 ncr-dev-container image 的入口（buildx、GITLAB_SSH_HOST 等 build ARG）；CI 每次都重建，避免「image 比它的原始碼舊」。"
+  "desc": "build image 的入口：host 是 Linux 時自動帶 --build-arg NCR_UID=$(id -u)（Dockerfile 在 daemon 那側算不出這個值），其餘參數原樣透傳給 docker build；換成 buildx 的是 CI 那邊；CI 每次都重建，避免「image 比它的原始碼舊」。"
  },
  {
   "id": "r-test-bootstrap",

@@ -3,7 +3,7 @@
   "id": "c-suntzu",
   "name": "孫子兵法五段",
   "kind": "frame",
-  "desc": "先勝而後求戰／致人而不致於人／以正合以奇勝／令之以文齊之以武／上兵伐謀。Day 30 回看：前兩列講的是 Harness；最接近 Sandbox 的只有「齊之以武」那半句「環境要擋得下來」，而它講的仍是擋住，不是出錯之後怎麼把損害收住。"
+  "desc": "先勝而後求戰／致人而不致於人／以正合以奇勝／令之以文齊之以武／上兵伐謀。Day 30 回看：第一列與最後一列講的是 Harness；最接近 Sandbox 的只有「齊之以武」那半句「環境要擋得下來」，而它講的仍是擋住，不是出錯之後怎麼把損害收住。"
  },
  {
   "id": "c-five-normals",
@@ -51,7 +51,7 @@
   "id": "c-star-rules",
   "name": "★ 設定值型規則",
   "kind": "rule",
-  "desc": "換一家公司就不成立的判級、豁免、選型（URL 用 dash、唯讀 package token、批次原子性）。模型再強也不會憑空知道。"
+  "desc": "換一家公司就不一定成立的判級、豁免、選型（URL 用 dash、唯讀 package token、批次原子性）。模型再強也不會憑空知道。"
  },
  {
   "id": "c-entry-gate",
@@ -69,7 +69,7 @@
   "id": "c-ncr-tag",
   "name": "ncr-* 記號",
   "kind": "method",
-  "desc": "Day 7 為了「未來 grep」埋的 subagent_type 與 prompt 首行 tag；Day 21 成了遙測歸因的主路徑。"
+  "desc": "Day 7 埋了兩個記號：subagent_type 用 ncr-* 名稱、prompt 首行放 [ncr-*] tag。Day 21 前者成了結構化歸因的主路徑，後者是派遣退回 general-purpose 時的人工復原線索。"
  },
  {
   "id": "c-conclusion-mech",
@@ -219,7 +219,7 @@
   "id": "c-circular",
   "name": "循環論證",
   "kind": "incident",
-  "desc": "只錄自己允許的那條路，拿來證明沒有外洩。真正的答案在防火牆的 REJECT 計數器。形狀③。"
+  "desc": "只錄自己允許的那條路，拿來證明沒有外洩。證據要看防火牆的拒絕計數器，但它也只涵蓋經過那組規則與觀測位置的流量。形狀③。"
  },
  {
   "id": "c-one-session",
@@ -285,7 +285,7 @@
   "id": "c-40min",
   "name": "40 分鐘全站卡死",
   "kind": "incident",
-  "desc": "docker ps 秒回，列表端點打 logs 撞上 removing 的容器；60 秒 timeout × 15 秒輪詢，同時卡著約 4 條 thread。列表從此只讀 DB。"
+  "desc": "docker ps 秒回，列表端點打 logs 撞上 removing 的容器；60 秒 timeout × 15 秒輪詢，同時卡著約 4 條 thread（當時吃 docker-py 預設 60 秒；現在 config.py 的 DOCKER_TIMEOUT 預設是 15）。列表從此只讀 DB。"
  },
  {
   "id": "c-harness-sandbox",
