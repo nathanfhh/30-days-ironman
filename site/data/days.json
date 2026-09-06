@@ -690,7 +690,7 @@
   "id": "d30",
   "n": 30,
   "layer": "outro",
-  "title": "從 Code Review 到 Agent 治理",
+  "title": "換了場域還帶得走的那些",
   "sub": "逐條對帳跨日承諾（圖上收 20 條）；Harness vs Sandbox；積木與 3D 印表機",
   "summary": "逐條核對跨日承諾。Harness 讓它難犯錯，Sandbox 讓失敗代價可控。Opus 單價沒變，按 API 牌告價換算的每次等值成本約翻倍，Fable、流程變長與 tokenizer 各占多少還沒拆開量。儀器全部自架，被觀測的對象才綁廠商。Uncle Bob vs Grady Booch：多種儀器疊出信任。醫檢師訓練帶進軟體的三件事就是 transferable skills，也是 skill 的形體。",
   "repo": [
