@@ -56,7 +56,7 @@
   },
   "r-run-wrapper": {
    "lamp": "warn",
-   "text": "<code>--group-add 0</code> 的判斷在 <code>docker info</code> 失敗或逾時時往「加」的方向 fail-open（腳本 :245-247 自陳這是刻意的取捨：把「問不到」當成原生 Linux 會讓 Docker Desktop 使用者的 socket 靜默 Permission denied）；trivy DB 與 semgrep-rules 從外面拉進來沒有簽章或雜湊驗證，跟 token fd 那種 fail-closed 的紀律不在同一個水準。"
+   "text": "<code>--group-add 0</code> 的判斷在 <code>docker info</code> 失敗或逾時時往「加」的方向 fail-open（腳本 :245-247 自陳這是刻意的取捨：把「問不到」當成原生 Linux 會讓 Docker Desktop 使用者的 socket 靜默 Permission denied）；trivy DB 與 semgrep-rules 從外面拉進來沒有簽章或雜湊驗證，落地就直接用。"
   },
   "r-nginx-template": {
    "lamp": "warn",
@@ -182,8 +182,8 @@
     "node": "r-eval-cases"
    },
    {
-    "title": "fail-closed 的紀律沒有貫穿基礎設施",
-    "text": "token fd 與脫敏 addon 是 fail-closed，但 curl | sh 安裝器沒釘 hash、trivy DB 與規則沒驗簽、--group-add 0 在 docker info 失敗時 fail-open、redact 第三層自陳抓不到 AKIA／ghp_。",
+    "title": "外部拉進來的東西沒有一致的把關",
+    "text": "curl | sh 安裝器沒釘 hash、trivy DB 與規則沒驗簽、--group-add 0 在 docker info 失敗時 fail-open、redact 第三層自陳抓不到 AKIA／ghp_。憑證那條路也不是反例：ADR 0019 有一節就叫「為什麼不是 fail-closed」，憑證檔 rm 失敗改成清空內容並出聲，「這一場照常」。",
     "node": "r-run-wrapper"
    },
    {

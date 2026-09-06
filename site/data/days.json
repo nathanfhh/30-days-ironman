@@ -19,7 +19,7 @@
   "layer": "intro",
   "title": "為什麼從 Code Review 開始",
   "sub": "從工人智慧到 Skill 到 MCP 的六個階段",
-  "summary": "醫療環境資料不能出去，程式碼本來就不該有個資，所以第一個自動化的是 Code Review。手法演化：人工 → Python script → 網頁平台 → Agent → Skill → MCP。",
+  "summary": "醫療資料送出前要去識別化、去個資，作者不想第一個題目就扛這套流程，所以先做程式碼：程式碼本來就不該有個資。手法演化：人工 → Python script → 網頁平台 → Agent → Skill → MCP。",
   "repo": [],
   "concepts": []
  },
@@ -169,12 +169,26 @@
   "repo": [
    "r-ref-pushback",
    "r-report-model",
-   "r-skill-md"
+   "r-skill-md",
+   "r-gitlab-api",
+   "r-ref-workspace",
+   "r-ref-rereview",
+   "r-adr-0016",
+   "r-agent-fresh-eyes",
+   "r-scan-runner",
+   "r-render-report",
+   "r-report-template",
+   "r-ref-gitlab-api"
   ],
   "concepts": [
    "c-pushback",
    "c-version",
-   "c-conclusion-mech"
+   "c-conclusion-mech",
+   "c-anti-anchor",
+   "c-entry-gate",
+   "c-nine-dims",
+   "c-hitl",
+   "c-json-report"
   ]
  },
  {
@@ -193,11 +207,14 @@
    "r-install-sh",
    "r-agent-lint",
    "r-ref-scanners",
-   "r-ref-workspace"
+   "r-ref-workspace",
+   "r-agent-opengrep",
+   "r-render-report"
   ],
   "concepts": [
    "c-progressive",
-   "c-anti-anchor"
+   "c-anti-anchor",
+   "c-json-report"
   ]
  },
  {
@@ -287,7 +304,8 @@
    "r-bench",
    "r-bench-harness",
    "r-bench-audit",
-   "r-bench-prompts"
+   "r-bench-prompts",
+   "r-bench-data"
   ],
   "concepts": [
    "c-benchmark",
@@ -425,7 +443,8 @@
   "concepts": [
    "c-803s",
    "c-ncr-tag",
-   "c-json-report"
+   "c-json-report",
+   "c-version"
   ]
  },
  {
@@ -498,7 +517,9 @@
    "r-entrypoint",
    "r-pty-reconciler",
    "r-pty-models",
-   "r-arch-diagram"
+   "r-arch-diagram",
+   "r-adr-0005",
+   "r-pty-attach"
   ],
   "concepts": [
    "c-one-session",
@@ -528,7 +549,9 @@
    "r-adr-0020",
    "r-adr-0019",
    "r-pty-views",
-   "r-test-bootstrap"
+   "r-test-bootstrap",
+   "r-adr-0014",
+   "r-jaeger-compose"
   ],
   "concepts": [
    "c-isolation-limit",
@@ -641,7 +664,11 @@
    "r-eval-cases",
    "r-pty-sessions",
    "r-test-attach-close",
-   "r-jaeger-compose"
+   "r-jaeger-compose",
+   "r-test-ttyd-flag",
+   "r-pty-views",
+   "r-firewall-counters",
+   "r-pty-nginx"
   ],
   "concepts": [
    "c-false-green",
@@ -670,7 +697,10 @@
    "r-readme",
    "r-pty-sessions",
    "r-adr-0020",
-   "r-vue-journal"
+   "r-vue-journal",
+   "r-adr-0016",
+   "r-pty-user-proxy",
+   "r-bench-audit"
   ],
   "concepts": [
    "c-harness-sandbox",

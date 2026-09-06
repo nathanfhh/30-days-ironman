@@ -249,7 +249,7 @@
   "name": "harness/*.py",
   "path": "benchmarks/code-review-bench/harness/",
   "group": "bench",
-  "desc": "fetch_pr → build_manifest → plan_jobs → build_claims → score 的流水線，另有 judge_agreement 與 upstream_baseline 兩支校準腳本，以及三支主線都 import 的 candidates 取值層與 export_inputs（共九支）。選案規則在讀 golden 之前寫死。"
+  "desc": "build_manifest → fetch_pr → plan_jobs → build_claims → score 的流水線，另有 judge_agreement 與 upstream_baseline 兩支校準腳本，以及三支主線都 import 的 candidates 取值層與 export_inputs（共九支）。選案規則在讀 golden 之前寫死。"
  },
  {
   "id": "r-bench-prompts",
@@ -641,7 +641,7 @@
   "name": "test_token_fd.py",
   "path": "claude-pty/tests/test_token_fd.py",
   "group": "ptytest",
-  "desc": "token 不在 env、fd 是 pipe。"
+  "desc": "fd 4 是 anonymous pipe 不是 regular file，讀過一次就空。另外守憑證檔刪不掉時改清空並出聲（不是無聲降級、也不是弄死整場）、沒給憑證不算錯，以及 PID 1 那份 fd 要排在背景啟動 CLI 之後才關。⚠ 這支沒有呼叫 build_run_kwargs，token 值不進 env 是 test_credentials.py 在守。"
  },
  {
   "id": "r-test-upload",
@@ -662,7 +662,7 @@
   "name": "test_reconciler.py",
   "path": "claude-pty/tests/test_reconciler.py",
   "group": "ptytest",
-  "desc": "寬限期（孤兒、view 宣告）與 STUCK 隔離。⚠ 37 條斷言裡沒有一條在驗 label 判定：測試容器是帶著 label 建出來的，沒有斷言「不帶 label 的容器不被碰」。文章說兩個方向都得分開檢查，這支只守了一個方向。"
+  "desc": "寬限期（孤兒、view 宣告）與 STUCK 隔離。⚠ 沒有一條斷言在驗 label 判定：測試容器是帶著 label 建出來的，沒有斷言「不帶 label 的容器不被碰」。文章說兩個方向都得分開檢查，這支只守了一個方向。"
  },
  {
   "id": "r-test-network-isolation",
@@ -676,7 +676,7 @@
   "name": "test_ttyd_unknown_flag.py",
   "path": "claude-pty/tests/test_ttyd_unknown_flag.py",
   "group": "ptytest",
-  "desc": "對真 binary 釘住 C 版拿不到 Rust 專屬旗標，且未知旗標不會退出。"
+  "desc": "對真 binary 驗未知旗標：有喊 unrecognized option，但不退出，其餘旗標照常解析。帶值的 `--title VALUE` 更麻煩，VALUE 被當成要執行的命令、後面整串跟著被吞掉，於是指定的 port 根本沒人在聽。（釘住 C 版 argv 不含 Rust 專屬旗標的是 test_ttyd_identity.py，不是這支。）"
  },
  {
   "id": "r-test-ssh-gate",
@@ -690,7 +690,7 @@
   "name": "nathanfhh/ttyd",
   "path": "../ttyd/",
   "group": "ttyd",
-  "desc": "另一個 repo：ttyd 的 fork。C 版原始碼一行沒動，留作行為基準；相對上游 tsl0922/ttyd 的 45 個 commit 全落在 rust/ 與 README。claude-pty 釘選 main 上的特定 commit。"
+  "desc": "另一個 repo：ttyd 的 fork。C 版原始碼一行沒動，留作行為基準；相對同步的上游 tsl0922/ttyd 共 45 個 commit，落在 rust/、兩份 README 與根 .gitignore（多一條 build-*/）。claude-pty 釘選 main 上的特定 commit。"
  },
  {
   "id": "r-ttyd-rust",
@@ -704,7 +704,7 @@
   "name": "rust/tests/ 差異測試",
   "path": "../ttyd/rust/tests/",
   "group": "ttyd-tests",
-  "desc": "七個檔案：cli、http、ws、tls、lifecycle 的 parity 測試與 forward_auth，同一支測試同時打 C 版與 Rust 版，比的是行為不是實作。"
+  "desc": "cli／http／ws／tls／lifecycle 五組 parity 共 108 支，同一支測試用 TTYD_BIN 切 C 版與 Rust 版，比的是行為不是實作。forward_auth 另外 19 支只測 Rust：那是這個 port 新加的行為，19 支在 C 參考版上整支 early return，沒有對照組可打。目錄另有 common/mod.rs 輔助模組。"
  },
  {
   "id": "r-ttyd-parity",
@@ -774,7 +774,7 @@
   "name": "ADR 0018 Trivy DB 快取",
   "path": "claude-pty/docs/adr/0018-trivy-db-cache-and-update.md",
   "group": "adr",
-  "desc": "更新從 entrypoint 搬進控制平面帶租約（N 個容器同時下載會打架），cache 改 named volume 脫離 uid 鏈。"
+  "desc": "entrypoint 裡 trivy 出現次數是 0：網頁入口本來就沒有 DB 更新，全靠這台機器上曾經有人跑過 run script。現在補在控制平面並帶租約串行化，避免 N 場各下載一份 103.85 MiB；cache 改 named volume 脫離 uid 鏈。"
  },
  {
   "id": "r-pty-gitlab-proxy",
