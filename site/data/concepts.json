@@ -3,7 +3,7 @@
   "id": "c-suntzu",
   "name": "孫子兵法五段",
   "kind": "frame",
-  "desc": "先勝而後求戰／致人而不致於人／以正合以奇勝／令之以文齊之以武／上兵伐謀。Day 30 回看：前兩列講的是 Harness，沒有一列講 Sandbox。"
+  "desc": "先勝而後求戰／致人而不致於人／以正合以奇勝／令之以文齊之以武／上兵伐謀。Day 30 回看：前兩列講的是 Harness；最接近 Sandbox 的只有「齊之以武」那半句「環境要擋得下來」，而它講的仍是擋住，不是出錯之後怎麼把損害收住。"
  },
  {
   "id": "c-five-normals",
@@ -291,7 +291,7 @@
   "id": "c-harness-sandbox",
   "name": "Harness 與 Sandbox",
   "kind": "frame",
-  "desc": "Harness 設計 agent 怎麼工作；Sandbox 是不賭它永遠照規則走的保險。六月那張表沒有一列講 Sandbox。"
+  "desc": "Harness 設計 agent 怎麼工作；Sandbox 是不賭它永遠照規則走的保險。六月那張表最接近 Sandbox 的只有「環境要擋得下來」，講的仍是擋住，不是出錯之後怎麼收住。"
  },
  {
   "id": "c-flaky-label",
