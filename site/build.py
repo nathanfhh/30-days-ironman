@@ -24,6 +24,7 @@ import re
 import sys
 import webbrowser
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -263,6 +264,16 @@ def render(data: dict, template: Path = TEMPLATE) -> str:
     html = template.read_text(encoding="utf-8")
     if MARKER not in html:
         raise ValueError(f"template has no {MARKER} marker")
+    # 產生時間寫死在 UTC+8，不看跑的人在哪個時區：本機與 GitHub Actions（UTC）跑出來
+    # 才會是同一個牆上時間。台灣沒有日光節約時間，固定位移就是正確的，也不必依賴
+    # runner 上有沒有 tzdata。這一欄只在 render 加，load_data() 保持純資料，--check
+    # 才不會每次跑都長得不一樣。
+    data = {
+        **data,
+        "built": datetime.now(timezone(timedelta(hours=8))).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+    }
     # `</script>` inside a JSON string would end the inline script early.
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace(
         "</", "<\\/"

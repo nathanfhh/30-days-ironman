@@ -21,6 +21,8 @@ LLM 走 MITM 側錄 → 觀測落到 OpenTelemetry／Jaeger 與場次報表。�
 
 ## 跟著連載讀
 
+🗺️ **想自己挑題材、而不是照順序讀，先開這張圖**：[互動關聯圖](https://nathanfhh.github.io/30-days-ironman/) 把三十天、公開 repo、ADR、測試與反覆出現的機制接成一張網。點一個節點，就看得到它出現在哪幾天，以及它連到的檔案、測試與機制，再從那裡跳去 iThome 讀那一天。每個節點都有自己的網址，例如[假綠燈](https://nathanfhh.github.io/30-days-ironman/#c-false-green)。
+
 大部分人是從某一天的文章連過來的，所以對照表放前面：
 
 | 連載 | 那幾天在做什麼 | 這裡看 |

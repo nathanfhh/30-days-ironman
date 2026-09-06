@@ -49,14 +49,20 @@ button{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--day);outline-offset:2px}
 .wrap{max-width:1360px;margin:0 auto;padding:28px 24px 64px}
 
-.mast{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px 40px;align-items:end;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.mast{padding-bottom:20px;border-bottom:1px solid var(--line)}
+.mastbody{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px 40px;align-items:end}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
 .eyebrow a{color:inherit;text-decoration:none}
 .eyebrow .theme{font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:1px 9px;margin-left:2px;cursor:pointer;vertical-align:baseline;transition:background .15s,color .15s,border-color .15s}
 .eyebrow .theme:hover{color:var(--ink);border-color:var(--ink-3)}
 .eyebrow .theme .ic{margin-right:5px}
 .eyebrow a:hover{text-decoration:underline}
-h1{font-size:clamp(28px,4vw,40px);font-weight:700;line-height:1.2;margin-top:6px}
+h1{font-size:clamp(28px,4vw,40px);font-weight:700;line-height:1.2;margin-top:0}
+/* 標題與出處同一列：標題靠左、出處與配色鈕靠右，兩端對齊，文字基線對齊。窄螢幕
+   （<=640px）改回上下堆疊，出處回到標題上方，跟改版前的樣子一致。 */
+.titlerow{display:flex;justify-content:space-between;align-items:baseline;gap:6px 24px;flex-wrap:wrap;margin:6px 0 14px}
+.titlerow h1{flex:0 1 auto}
+.titlerow .eyebrow{flex:0 1 auto;text-align:right}
 .lede{color:var(--ink-2);margin-top:10px}
 .lede b{color:var(--ink);font-weight:500}
 .stats{display:flex;gap:22px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink-3);white-space:nowrap}
@@ -230,12 +236,16 @@ section.review .intro{color:var(--ink-2);margin-top:8px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
 
+@media (max-width:900px){
+  .titlerow{flex-direction:column-reverse;align-items:flex-start;gap:4px;margin-bottom:10px}
+  .titlerow .eyebrow{text-align:left}
+}
 @media (max-width:980px){
   .stage{grid-template-columns:1fr}
   .panel{position:static;max-height:none}
   .lamps{grid-template-columns:1fr}
   .vec .two{grid-template-columns:1fr} .vec .side{position:static}
-  .mast{grid-template-columns:1fr}
+  .mastbody{grid-template-columns:1fr}
   .search{margin-left:0}
 }
 /* 換配色時的同心圓擴散。預設的 view transition 是交叉淡出，這裡把它關掉，
@@ -255,14 +265,16 @@ try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.docu
 <body>
 <div class="wrap">
   <header class="mast">
-    <div>
-      <div class="eyebrow"><a id="series-link" href="#" target="_blank" rel="noopener">AI 的駕馭之道 · 30 天</a> × <a href="https://github.com/nathanfhh/30-days-ironman" target="_blank" rel="noopener">nathanfhh/30-days-ironman</a> <button id="theme" class="theme" type="button" aria-live="polite"></button></div>
+    <div class="titlerow">
       <h1>駕馭之道關聯圖</h1>
+      <div class="eyebrow"><a id="series-link" href="#" target="_blank" rel="noopener">AI 的駕馭之道 · 30 天</a> × <a href="https://github.com/nathanfhh/30-days-ironman" target="_blank" rel="noopener">nathanfhh/30-days-ironman</a> <button id="theme" class="theme" type="button" aria-live="polite"></button></div>
+    </div>
+    <div class="mastbody">
       <p class="lede">文章談的是<b>為什麼這樣選</b>，repo 放的是<b>怎麼做的</b>。這張圖把三十篇文章裡的 30 個日子、
       反覆出現的機制與事故，以及 repo 裡真正落地的檔案、ADR 與測試接在一起。點任何一個節點，右側會列出它連到誰、
       為什麼連、原文在哪一篇，以及哪支測試守著它。</p>
+      <div class="stats" id="stats"></div>
     </div>
-    <div class="stats" id="stats"></div>
   </header>
 
   <div class="controls">
@@ -319,6 +331,7 @@ try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.docu
       <div class="chips" id="daychips"><span class="lab">只亮：</span></div>
       <div class="chips"><button class="chip" id="jump" aria-pressed="true" title="關掉的話，點一個點只選中上面的那一天，畫面留在這裡">點了捲回關聯圖</button></div>
     </div>
+    <p class="cap" id="capdays"></p>
     <div class="card"><div class="chart" id="c3d" style="height:620px"></div></div>
     <p class="cap" id="cap3d"></p>
     <h3 class="sub">天與天有多像</h3>
@@ -656,7 +669,7 @@ try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.docu
   document.getElementById("about").textContent=REVIEW.about||"";
   document.getElementById("ptable").innerHTML = PROMISES.map(p=>{ const a=byId.get(p.from), b=byId.get(p.to); return `<tr><td class="d"><button onclick="__select('${a.id}')">Day ${a.n}</button></td><td class="d"><button onclick="__select('${b.id}')">Day ${b.n}</button></td><td>${esc(p.text)}</td></tr>`; }).join("");
   const unpub=DAYS.filter(d=>!d.url).map(d=>d.n);
-  document.getElementById("foot").textContent=`資料來源：文章全文（Day 1–30）與 repo 的 main（含 nathanfhh/ttyd）。節點的檔案路徑以當時的 checkout 為準。`+(unpub.length?` 尚未發佈的日子：${unpub.join("、")}。`:"")+` 資料在 site/data/，用 site/build.py 產生這一頁。`;
+  document.getElementById("foot").textContent=`資料來源：文章全文（Day 1–30）與 repo 的 main（含 nathanfhh/ttyd）。節點的檔案路徑以當時的 checkout 為準。`+(unpub.length?` 尚未發佈的日子：${unpub.join("、")}。`:"")+` 資料在 site/data/，用 site/build.py 產生這一頁`+(DATA.built?`，產生時間 ${DATA.built}（UTC+8）。`:"。");
 
 
   // ---- vectors: the same thirty days measured without reading them. Lives on this page so a
@@ -683,8 +696,24 @@ try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.docu
     let method="umap", only=null, c3d=null, heat=null, ready=false;
     const dc=document.getElementById("daychips");
     const allBtn=document.createElement("button"); allBtn.className="chip n"; allBtn.textContent="全部"; allBtn.setAttribute("aria-pressed","true"); allBtn.onclick=()=>setOnly(null); dc.appendChild(allBtn);
-    days.forEach(n=>{ const b=document.createElement("button"); b.className="chip n"; b.dataset.n=n; b.textContent=n; b.title=(byN.get(n)||{}).title||""; b.setAttribute("aria-pressed","false"); b.onclick=()=>setOnly(only&&only.size===1&&only.has(n)?null:new Set([n])); dc.appendChild(b); });
-    function setOnly(set){ only=set&&set.size?set:null; [...dc.querySelectorAll(".chip")].forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.n? !!(only&&only.has(+b.dataset.n)) : !only))); if(ready) build3d(); }
+    // 複選：修飾鍵是給滑鼠的捷徑，「多選」這顆是給觸控的（手機沒有 ⌘/Ctrl 可按）。
+    const MOD = /Mac|iPhone|iPad|iPod/.test(navigator.platform||navigator.userAgent) ? "\u2318" : "Ctrl";
+    let multi=false, anchor=null;
+    const multiBtn=document.createElement("button"); multiBtn.className="chip n multi"; multiBtn.textContent="多選";
+    multiBtn.setAttribute("aria-pressed","false"); multiBtn.title="開著的時候，直接點日期就是加選或取消";
+    multiBtn.onclick=()=>{ multi=!multi; multiBtn.setAttribute("aria-pressed",String(multi)); capDays(); }; dc.appendChild(multiBtn);
+    days.forEach(n=>{ const b=document.createElement("button"); b.className="chip n"; b.dataset.n=n; b.textContent=n; b.title=(byN.get(n)||{}).title||""; b.setAttribute("aria-pressed","false"); b.onclick=e=>pickDay(n,e); dc.appendChild(b); });
+    function pickDay(n,e){
+      const cur=new Set(only||[]);
+      if(e.shiftKey && anchor!=null){ const [a,b]=anchor<n?[anchor,n]:[n,anchor]; for(let i=a;i<=b;i++) if(byN.has(i)) cur.add(i); setOnly(cur); }
+      else if(multi||e.metaKey||e.ctrlKey){ cur.has(n)? cur.delete(n) : cur.add(n); setOnly(cur); }
+      else setOnly(only&&only.size===1&&only.has(n)? null : new Set([n]));
+      anchor=n;
+    }
+    function capDays(){ const c=document.getElementById("capdays"); const cnt=only?only.size:0;
+      c.textContent=(multi? "多選開著：直接點日期就是加選或取消。" : `直接點：只看那一天。${MOD} 點：加選或取消一天。Shift 點：選一段連續的日子。`)
+        + (cnt>1? ` 目前亮著 ${cnt} 天。` : ""); }
+    function setOnly(set){ only=set&&set.size?set:null; [...dc.querySelectorAll(".chip")].forEach(b=>{ if(b.classList.contains("multi")) return; b.setAttribute("aria-pressed",String(b.dataset.n? !!(only&&only.has(+b.dataset.n)) : !only)); }); capDays(); if(ready) build3d(); }
     // graph selection → which days to light: a day is itself, a concept or repo node is every day it links to
     window.__vecLight=n=>{ if(!n) return setOnly(null); if(n.kind==="day") return setOnly(new Set([n.n])); setOnly(new Set([...adj.get(n.id)].map(i=>byId.get(i)).filter(m=>m.kind==="day").map(m=>m.n))); };
     function tip3d(p){ const d=p.data; if(d.c){ const c=d.c, day=byN.get(c.day)||{}; return `<div style="max-width:320px;white-space:normal"><span class="mono" style="font-size:11px;opacity:.7">${c.id}${c.heading?" · "+esc(c.heading):""}</span><br><b>Day ${c.day}｜${esc(day.title||"")}</b><br><span style="opacity:.85">${esc(c.preview)}</span><br><span style="opacity:.6;font-size:11.5px">點一下回到關聯圖的 Day ${c.day}</span></div>`; }
