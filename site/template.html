@@ -344,6 +344,8 @@ try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.docu
     <div class="promises"><div class="scroll"><table><thead><tr><th>這一天</th><th>那一天</th><th>相似度</th><th>最相近的兩段</th></tr></thead><tbody id="pairs"></tbody></table></div></div>
     <h3 class="sub">每一天最近的鄰居</h3>
     <div class="nearest" id="nearest"></div>
+    <h3 class="sub">拿這把尺回頭量自己</h3>
+    <p class="intro" id="vec-finding"></p>
     <p class="cap" id="vec-foot"></p>
   </section>
 
@@ -687,6 +689,31 @@ try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.docu
     document.getElementById("intro3d").textContent=`每個點是一段文字，顏色是那一天所屬的層次，大的有數字的點是每一天所有段落的中心。UMAP 把 ${M.dims} 維裡的鄰居關係盡量保留到三維，團與團之間的距離是它設計上想保留的東西，但那是目標不是保證，${M.dims} 維壓到三維一定有東西掉了；所以靠在一起是「值得回頭看一眼」的線索，要看沒有降維的數字請往下捲那張熱圖。PCA 是線性投影，三個主成分只解釋了 ${(evr*100).toFixed(1)}% 的變異，看得出大方向，看不出細節。`;
     document.getElementById("cap3d").textContent=`拖曳旋轉、滾輪縮放；點圖例可以關掉整個層次。UMAP n_neighbors ${M.umap.n_neighbors}、min_dist ${M.umap.min_dist}、cosine、seed ${M.umap.seed}。`;
     document.getElementById("introheat").textContent=`每一天的向量是它所有段落向量的平均，格子是兩天向量的 cosine，不經降維。這個模型的相似度擠在很窄的一段（最低 ${M.scale.min}、中位數 ${M.scale.median}、最高 ${M.scale.max}），所以色階從最低值起算，不是從 0；顏色只表示相對遠近。對角線留白。`;
+    // 這一段的排名每次都從 sim 矩陣現算，重跑向量也不會變成謊話。下面那兩個反例
+    // （長度、引用）是 2026-09-07 對當時那份 embeddings 手算的，所以只有在冠軍
+    // 仍是 Day 30 時才講，換人了就只留排名並說明查核要重做。
+    (function(){
+      const N=E.days.length, num=E.days.map(d=>d.n);
+      const avg=num.map((_,i)=>E.sim[i].reduce((s,v,j)=>j===i?s:s+v,0)/(N-1));
+      const ord=num.map((n,i)=>[n,avg[i]]).sort((a,b)=>b[1]-a[1]);
+      const [t1,a1]=ord[0], [t2,a2]=ord[1], [tl,al]=ord[N-1];
+      const f=x=>x.toFixed(3);
+      let s=`把每一天對其餘 ${N-1} 天的相似度平均起來，最靠近全體中心的是 Day ${t1}（${f(a1)}），`
+          + `第二名 Day ${t2}（${f(a2)}），差 ${f(a1-a2)}；最外圍的是 Day ${tl}（${f(al)}）。`;
+      if(t1===30){
+        s+=`這個數字太順了，所以先當它是假的。第一個懷疑是長度：Day 30 段數最多，`
+          +`段數多了平均起來本來就會往中心靠。但段數與中心度的相關只有 +0.05，`
+          +`其他長篇分別排第 18、21、25，不成立。第二個懷疑是引用：Day 30 到處連回前面每一天，`
+          +`那當然像每一天。於是把它 38 段裡完全沒有引用他天的 16 段挑出來重算，它還是第一，`
+          +`而且那 16 段比其餘 22 段引用段落更靠近中心，也不成立。兩個解釋都被排除，這條才留下來。`
+          +`（兩個反例是 2026-09-07 手算的。）`;
+      } else {
+        s+=`原本這裡記著 Day 30 排第一，以及排除長度與引用兩個解釋的過程；資料換過之後排名變了，那份查核要重做。`;
+      }
+      s+=`要說清楚它不是什麼：這裡量的是題材位置，不是寫得好不好，也不是立場中不中立，`
+        +`而且是單一模型的說法。`;
+      document.getElementById("vec-finding").textContent=s;
+    })();
     document.getElementById("vec-foot").textContent=`${M.model} · ${M.dims} 維 · ${E.chunks.length} 段 · ${String(M.created).slice(0,10)} · 文章 ${String(M.article_sha256).slice(0,8)}`;
     document.getElementById("pairs").innerHTML=E.pairs.slice(0,25).map(p=>`<tr><td class="d">${dayBtn(p.a)}</td><td class="d">${dayBtn(p.b)}</td><td class="n">${p.sim.toFixed(3)}</td><td><span class="h">${esc(p.best.a.heading||"（開頭）")} ↔ ${esc(p.best.b.heading||"（開頭）")} · ${p.best.sim}</span><br>${esc(p.best.a.preview)}<br><span style="color:var(--ink-3)">↔</span> ${esc(p.best.b.preview)}</td></tr>`).join("");
     document.getElementById("nearest").innerHTML=E.days.map(d=>`<button onclick="__select('${pad(d.n)}')" title="${esc((byN.get(d.n)||{}).title||"")}"><b>Day ${d.n}</b> → Day ${d.nearest.day} <span style="opacity:.7">${d.nearest.sim.toFixed(3)}</span></button>`).join("");
