@@ -232,7 +232,8 @@
    "r-ref-scanners",
    "r-test-gitlab-api",
    "r-gitlab-api",
-   "r-report-template"
+   "r-report-template",
+   "r-scan-runner"
   ],
   "concepts": [
    "c-no-install",
@@ -362,7 +363,8 @@
   "repo_ext": [
    "r-security-scan",
    "r-adr-0022",
-   "r-pty-provision"
+   "r-pty-provision",
+   "r-adr-0018"
   ]
  },
  {
